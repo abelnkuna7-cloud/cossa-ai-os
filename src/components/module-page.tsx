@@ -1,12 +1,64 @@
 import type { ReactNode } from "react";
-import { ArrowRight, CheckCircle2, Sparkles, Wrench } from "lucide-react";
+import {
+  ArrowRight, CheckCircle2, Sparkles, Wrench,
+  BarChart3, Bot, Database, Gauge, Layers, LineChart, MessageSquare, Plug, ShieldCheck, Users, Workflow, Zap,
+} from "lucide-react";
 import { getModule, type ModuleItem } from "@/lib/modules";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
+import { PreviewGrid } from "@/components/widgets";
 
 interface Props {
   to: string;
   children?: ReactNode;
+}
+
+const CATEGORY_PREVIEWS: Record<string, { icon: typeof Bot; title: string; description: string }[]> = {
+  marketing: [
+    { icon: Sparkles, title: "AI content engine", description: "On-brand copy, images and videos generated in seconds." },
+    { icon: BarChart3, title: "Campaign analytics", description: "Cross-channel performance with attribution." },
+    { icon: Workflow, title: "Automations", description: "Trigger workflows from opens, clicks and replies." },
+    { icon: Users, title: "Audience builder", description: "Segments powered by AI intent signals." },
+    { icon: Plug, title: "Integrations", description: "Google, Meta, WhatsApp Business, email and SMS." },
+    { icon: ShieldCheck, title: "Brand safety", description: "AI checks every asset against brand guidelines." },
+  ],
+  sales: [
+    { icon: Users, title: "Unified contacts", description: "One record per person, enriched automatically." },
+    { icon: LineChart, title: "Pipeline & forecast", description: "AI-weighted deals and revenue prediction." },
+    { icon: MessageSquare, title: "Conversation intel", description: "Call notes, follow-ups and objection handling." },
+    { icon: Zap, title: "Next-best-action", description: "The AI tells reps what to do next, per deal." },
+    { icon: BarChart3, title: "Sales analytics", description: "Activity, conversion and velocity dashboards." },
+    { icon: Plug, title: "CRM sync", description: "Two-way sync with email, calendar and phone." },
+  ],
+  ai: [
+    { icon: Bot, title: "Contextual chat", description: "Agents grounded in your data, docs and history." },
+    { icon: Database, title: "Memory & knowledge", description: "Shared long-term memory across every agent." },
+    { icon: Workflow, title: "Tool use", description: "Agents call Cossa modules and third-party APIs." },
+    { icon: ShieldCheck, title: "Guardrails", description: "Policy, PII redaction and approval flows." },
+    { icon: Zap, title: "Automations", description: "Turn any chat into a repeatable workflow." },
+    { icon: Plug, title: "Model choice", description: "OpenAI, Grok and open models via one gateway." },
+  ],
+  operations: [
+    { icon: Layers, title: "Unified workspaces", description: "Projects, tasks, docs and files in one place." },
+    { icon: Gauge, title: "Live analytics", description: "Cross-module KPIs with AI diagnostics." },
+    { icon: Workflow, title: "Automations", description: "Rule-based and AI-powered flows." },
+    { icon: BarChart3, title: "Reports", description: "Scheduled, white-labelled and shareable." },
+    { icon: Plug, title: "Integrations", description: "Google Workspace, Microsoft 365 and more." },
+    { icon: ShieldCheck, title: "Audit trails", description: "Every action recorded for compliance." },
+  ],
+  default: [
+    { icon: Sparkles, title: "AI-native experience", description: "Built around Cossa AI from day one." },
+    { icon: Gauge, title: "Live insights", description: "Real-time metrics and diagnostics." },
+    { icon: Workflow, title: "Automations", description: "Automate repetitive work end-to-end." },
+    { icon: Plug, title: "Integrations", description: "Connects to the tools you already use." },
+    { icon: ShieldCheck, title: "Enterprise-grade", description: "POPIA-ready, secure and auditable." },
+    { icon: BarChart3, title: "Analytics", description: "Dashboards and reports out of the box." },
+  ],
+};
+
+function previewFor(to: string) {
+  const key = to.split("/")[1] ?? "default";
+  return CATEGORY_PREVIEWS[key] ?? CATEGORY_PREVIEWS.default;
 }
 
 export function ModulePage({ to, children }: Props) {
