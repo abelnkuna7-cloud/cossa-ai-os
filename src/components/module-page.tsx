@@ -145,6 +145,17 @@ export function ModulePage({ to, children }: Props) {
         </div>
       </section>
 
+      <section className="glass-card p-6">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <h3 className="font-display text-lg font-semibold">What you'll get</h3>
+          <span className="ml-auto text-[10px] uppercase tracking-widest text-muted-foreground">Preview</span>
+        </div>
+        <div className="mt-4">
+          <PreviewGrid items={previewFor(mod.to)} />
+        </div>
+      </section>
+
       {children}
     </div>
   );
