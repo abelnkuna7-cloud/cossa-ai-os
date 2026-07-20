@@ -108,11 +108,11 @@ function Dashboard() {
               <div className="text-[10px] uppercase tracking-widest text-primary/90">Growth Score</div>
               <div className="text-3xl font-semibold text-gradient-gold font-display">{overallScore}</div>
             </div>
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
-              <Brain className="mr-2 h-4 w-4" /> Ask Cossa AI
-            </Button>
-          </div>
-        </div>
+            <Link to="/ai/cossa">
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
+                <Brain className="mr-2 h-4 w-4" /> Ask Cossa AI
+              </Button>
+            </Link>
       </section>
 
       {/* KPIs */}
