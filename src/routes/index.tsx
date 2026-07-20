@@ -113,6 +113,8 @@ function Dashboard() {
                 <Brain className="mr-2 h-4 w-4" /> Ask Cossa AI
               </Button>
             </Link>
+          </div>
+        </div>
       </section>
 
       {/* KPIs */}
