@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as QuickActionsRouteImport } from './routes/quick-actions'
@@ -58,6 +59,11 @@ import { Route as AiConsultantRouteImport } from './routes/ai.consultant'
 import { Route as AiCeoRouteImport } from './routes/ai.ceo'
 import { Route as AiAutomationRouteImport } from './routes/ai.automation'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -308,6 +314,7 @@ export interface FileRoutesByFullPath {
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/consultant': typeof AiConsultantRoute
@@ -358,6 +365,7 @@ export interface FileRoutesByTo {
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/consultant': typeof AiConsultantRoute
@@ -409,6 +417,7 @@ export interface FileRoutesById {
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/consultant': typeof AiConsultantRoute
@@ -461,6 +470,7 @@ export interface FileRouteTypes {
     | '/quick-actions'
     | '/roadmap'
     | '/settings'
+    | '/sitemap.xml'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/consultant'
@@ -511,6 +521,7 @@ export interface FileRouteTypes {
     | '/quick-actions'
     | '/roadmap'
     | '/settings'
+    | '/sitemap.xml'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/consultant'
@@ -561,6 +572,7 @@ export interface FileRouteTypes {
     | '/quick-actions'
     | '/roadmap'
     | '/settings'
+    | '/sitemap.xml'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/consultant'
@@ -612,6 +624,7 @@ export interface RootRouteChildren {
   QuickActionsRoute: typeof QuickActionsRoute
   RoadmapRoute: typeof RoadmapRoute
   SettingsRoute: typeof SettingsRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AiAutomationRoute: typeof AiAutomationRoute
   AiCeoRoute: typeof AiCeoRoute
   AiConsultantRoute: typeof AiConsultantRoute
@@ -656,6 +669,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -1004,6 +1024,7 @@ const rootRouteChildren: RootRouteChildren = {
   QuickActionsRoute: QuickActionsRoute,
   RoadmapRoute: RoadmapRoute,
   SettingsRoute: SettingsRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   AiAutomationRoute: AiAutomationRoute,
   AiCeoRoute: AiCeoRoute,
   AiConsultantRoute: AiConsultantRoute,
