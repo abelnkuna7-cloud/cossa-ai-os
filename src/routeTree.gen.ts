@@ -15,6 +15,7 @@ import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as QuickActionsRouteImport } from './routes/quick-actions'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as MarketplaceRouteImport } from './routes/marketplace'
+import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as BusinessHealthRouteImport } from './routes/business-health'
 import { Route as AiRecommendationsRouteImport } from './routes/ai-recommendations'
 import { Route as IndexRouteImport } from './routes/index'
@@ -103,6 +104,11 @@ const NotificationsRoute = NotificationsRouteImport.update({
 const MarketplaceRoute = MarketplaceRouteImport.update({
   id: '/marketplace',
   path: '/marketplace',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntegrationsRoute = IntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BusinessHealthRoute = BusinessHealthRouteImport.update({
@@ -406,6 +412,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
   '/notifications': typeof NotificationsRoute
   '/quick-actions': typeof QuickActionsRoute
@@ -473,6 +480,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
   '/notifications': typeof NotificationsRoute
   '/quick-actions': typeof QuickActionsRoute
@@ -541,6 +549,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
   '/notifications': typeof NotificationsRoute
   '/quick-actions': typeof QuickActionsRoute
@@ -610,6 +619,7 @@ export interface FileRouteTypes {
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/integrations'
     | '/marketplace'
     | '/notifications'
     | '/quick-actions'
@@ -677,6 +687,7 @@ export interface FileRouteTypes {
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/integrations'
     | '/marketplace'
     | '/notifications'
     | '/quick-actions'
@@ -744,6 +755,7 @@ export interface FileRouteTypes {
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/integrations'
     | '/marketplace'
     | '/notifications'
     | '/quick-actions'
@@ -812,6 +824,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AiRecommendationsRoute: typeof AiRecommendationsRoute
   BusinessHealthRoute: typeof BusinessHealthRoute
+  IntegrationsRoute: typeof IntegrationsRoute
   MarketplaceRoute: typeof MarketplaceRoute
   NotificationsRoute: typeof NotificationsRoute
   QuickActionsRoute: typeof QuickActionsRoute
@@ -918,6 +931,13 @@ declare module '@tanstack/react-router' {
       path: '/marketplace'
       fullPath: '/marketplace'
       preLoaderRoute: typeof MarketplaceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/integrations': {
+      id: '/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof IntegrationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/business-health': {
@@ -1340,6 +1360,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AiRecommendationsRoute: AiRecommendationsRoute,
   BusinessHealthRoute: BusinessHealthRoute,
+  IntegrationsRoute: IntegrationsRoute,
   MarketplaceRoute: MarketplaceRoute,
   NotificationsRoute: NotificationsRoute,
   QuickActionsRoute: QuickActionsRoute,
