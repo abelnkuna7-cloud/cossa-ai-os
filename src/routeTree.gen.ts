@@ -15,17 +15,23 @@ import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as QuickActionsRouteImport } from './routes/quick-actions'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as MarketplaceRouteImport } from './routes/marketplace'
+import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as BusinessHealthRouteImport } from './routes/business-health'
 import { Route as AiRecommendationsRouteImport } from './routes/ai-recommendations'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SalesWinProbabilityRouteImport } from './routes/sales.win-probability'
 import { Route as SalesQuotationsRouteImport } from './routes/sales.quotations'
 import { Route as SalesPipelineRouteImport } from './routes/sales.pipeline'
+import { Route as SalesOpportunitiesRouteImport } from './routes/sales.opportunities'
 import { Route as SalesLeadsRouteImport } from './routes/sales.leads'
+import { Route as SalesLeadScoringRouteImport } from './routes/sales.lead-scoring'
 import { Route as SalesLeadFinderRouteImport } from './routes/sales.lead-finder'
 import { Route as SalesForecastRouteImport } from './routes/sales.forecast'
+import { Route as SalesFollowUpsRouteImport } from './routes/sales.follow-ups'
 import { Route as SalesCustomersRouteImport } from './routes/sales.customers'
 import { Route as SalesCrmRouteImport } from './routes/sales.crm'
 import { Route as SalesCompaniesRouteImport } from './routes/sales.companies'
+import { Route as SalesCoachingRouteImport } from './routes/sales.coaching'
 import { Route as SalesAppointmentsRouteImport } from './routes/sales.appointments'
 import { Route as SalesAnalyticsRouteImport } from './routes/sales.analytics'
 import { Route as OperationsTasksRouteImport } from './routes/operations.tasks'
@@ -34,16 +40,21 @@ import { Route as OperationsProjectsRouteImport } from './routes/operations.proj
 import { Route as OperationsNexdocsRouteImport } from './routes/operations.nexdocs'
 import { Route as OperationsDocumentsRouteImport } from './routes/operations.documents'
 import { Route as OperationsCalendarRouteImport } from './routes/operations.calendar'
+import { Route as OperationsBusinessIntelligenceRouteImport } from './routes/operations.business-intelligence'
 import { Route as OperationsAutomationRouteImport } from './routes/operations.automation'
 import { Route as OperationsAnalyticsRouteImport } from './routes/operations.analytics'
 import { Route as MarketingWhatsappRouteImport } from './routes/marketing.whatsapp'
+import { Route as MarketingTrendsRouteImport } from './routes/marketing.trends'
 import { Route as MarketingSocialRouteImport } from './routes/marketing.social'
 import { Route as MarketingSeoRouteImport } from './routes/marketing.seo'
+import { Route as MarketingMonitoringRouteImport } from './routes/marketing.monitoring'
 import { Route as MarketingMetaAdsRouteImport } from './routes/marketing.meta-ads'
 import { Route as MarketingLandingPagesRouteImport } from './routes/marketing.landing-pages'
+import { Route as MarketingKeywordsRouteImport } from './routes/marketing.keywords'
 import { Route as MarketingGoogleAdsRouteImport } from './routes/marketing.google-ads'
 import { Route as MarketingEmailRouteImport } from './routes/marketing.email'
 import { Route as MarketingContentStudioRouteImport } from './routes/marketing.content-studio'
+import { Route as MarketingCompetitorsRouteImport } from './routes/marketing.competitors'
 import { Route as MarketingCampaignsRouteImport } from './routes/marketing.campaigns'
 import { Route as MarketingBrandRouteImport } from './routes/marketing.brand'
 import { Route as MarketingAiDirectorRouteImport } from './routes/marketing.ai-director'
@@ -52,8 +63,14 @@ import { Route as AiVoiceRouteImport } from './routes/ai.voice'
 import { Route as AiSupportRouteImport } from './routes/ai.support'
 import { Route as AiSalesAssistantRouteImport } from './routes/ai.sales-assistant'
 import { Route as AiPromptsRouteImport } from './routes/ai.prompts'
+import { Route as AiProjectManagerRouteImport } from './routes/ai.project-manager'
+import { Route as AiOperationsManagerRouteImport } from './routes/ai.operations-manager'
 import { Route as AiMemoryRouteImport } from './routes/ai.memory'
 import { Route as AiKnowledgeRouteImport } from './routes/ai.knowledge'
+import { Route as AiHrRouteImport } from './routes/ai.hr'
+import { Route as AiFinanceRouteImport } from './routes/ai.finance'
+import { Route as AiDocumentAssistantRouteImport } from './routes/ai.document-assistant'
+import { Route as AiCrmSpecialistRouteImport } from './routes/ai.crm-specialist'
 import { Route as AiCossaRouteImport } from './routes/ai.cossa'
 import { Route as AiConsultantRouteImport } from './routes/ai.consultant'
 import { Route as AiCeoRouteImport } from './routes/ai.ceo'
@@ -89,6 +106,11 @@ const MarketplaceRoute = MarketplaceRouteImport.update({
   path: '/marketplace',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IntegrationsRoute = IntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BusinessHealthRoute = BusinessHealthRouteImport.update({
   id: '/business-health',
   path: '/business-health',
@@ -104,6 +126,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SalesWinProbabilityRoute = SalesWinProbabilityRouteImport.update({
+  id: '/sales/win-probability',
+  path: '/sales/win-probability',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SalesQuotationsRoute = SalesQuotationsRouteImport.update({
   id: '/sales/quotations',
   path: '/sales/quotations',
@@ -114,9 +141,19 @@ const SalesPipelineRoute = SalesPipelineRouteImport.update({
   path: '/sales/pipeline',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SalesOpportunitiesRoute = SalesOpportunitiesRouteImport.update({
+  id: '/sales/opportunities',
+  path: '/sales/opportunities',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SalesLeadsRoute = SalesLeadsRouteImport.update({
   id: '/sales/leads',
   path: '/sales/leads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesLeadScoringRoute = SalesLeadScoringRouteImport.update({
+  id: '/sales/lead-scoring',
+  path: '/sales/lead-scoring',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SalesLeadFinderRoute = SalesLeadFinderRouteImport.update({
@@ -127,6 +164,11 @@ const SalesLeadFinderRoute = SalesLeadFinderRouteImport.update({
 const SalesForecastRoute = SalesForecastRouteImport.update({
   id: '/sales/forecast',
   path: '/sales/forecast',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesFollowUpsRoute = SalesFollowUpsRouteImport.update({
+  id: '/sales/follow-ups',
+  path: '/sales/follow-ups',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SalesCustomersRoute = SalesCustomersRouteImport.update({
@@ -142,6 +184,11 @@ const SalesCrmRoute = SalesCrmRouteImport.update({
 const SalesCompaniesRoute = SalesCompaniesRouteImport.update({
   id: '/sales/companies',
   path: '/sales/companies',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesCoachingRoute = SalesCoachingRouteImport.update({
+  id: '/sales/coaching',
+  path: '/sales/coaching',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SalesAppointmentsRoute = SalesAppointmentsRouteImport.update({
@@ -184,6 +231,12 @@ const OperationsCalendarRoute = OperationsCalendarRouteImport.update({
   path: '/operations/calendar',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OperationsBusinessIntelligenceRoute =
+  OperationsBusinessIntelligenceRouteImport.update({
+    id: '/operations/business-intelligence',
+    path: '/operations/business-intelligence',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const OperationsAutomationRoute = OperationsAutomationRouteImport.update({
   id: '/operations/automation',
   path: '/operations/automation',
@@ -199,6 +252,11 @@ const MarketingWhatsappRoute = MarketingWhatsappRouteImport.update({
   path: '/marketing/whatsapp',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MarketingTrendsRoute = MarketingTrendsRouteImport.update({
+  id: '/marketing/trends',
+  path: '/marketing/trends',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MarketingSocialRoute = MarketingSocialRouteImport.update({
   id: '/marketing/social',
   path: '/marketing/social',
@@ -209,6 +267,11 @@ const MarketingSeoRoute = MarketingSeoRouteImport.update({
   path: '/marketing/seo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MarketingMonitoringRoute = MarketingMonitoringRouteImport.update({
+  id: '/marketing/monitoring',
+  path: '/marketing/monitoring',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MarketingMetaAdsRoute = MarketingMetaAdsRouteImport.update({
   id: '/marketing/meta-ads',
   path: '/marketing/meta-ads',
@@ -217,6 +280,11 @@ const MarketingMetaAdsRoute = MarketingMetaAdsRouteImport.update({
 const MarketingLandingPagesRoute = MarketingLandingPagesRouteImport.update({
   id: '/marketing/landing-pages',
   path: '/marketing/landing-pages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingKeywordsRoute = MarketingKeywordsRouteImport.update({
+  id: '/marketing/keywords',
+  path: '/marketing/keywords',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MarketingGoogleAdsRoute = MarketingGoogleAdsRouteImport.update({
@@ -232,6 +300,11 @@ const MarketingEmailRoute = MarketingEmailRouteImport.update({
 const MarketingContentStudioRoute = MarketingContentStudioRouteImport.update({
   id: '/marketing/content-studio',
   path: '/marketing/content-studio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingCompetitorsRoute = MarketingCompetitorsRouteImport.update({
+  id: '/marketing/competitors',
+  path: '/marketing/competitors',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MarketingCampaignsRoute = MarketingCampaignsRouteImport.update({
@@ -274,6 +347,16 @@ const AiPromptsRoute = AiPromptsRouteImport.update({
   path: '/ai/prompts',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AiProjectManagerRoute = AiProjectManagerRouteImport.update({
+  id: '/ai/project-manager',
+  path: '/ai/project-manager',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiOperationsManagerRoute = AiOperationsManagerRouteImport.update({
+  id: '/ai/operations-manager',
+  path: '/ai/operations-manager',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AiMemoryRoute = AiMemoryRouteImport.update({
   id: '/ai/memory',
   path: '/ai/memory',
@@ -282,6 +365,26 @@ const AiMemoryRoute = AiMemoryRouteImport.update({
 const AiKnowledgeRoute = AiKnowledgeRouteImport.update({
   id: '/ai/knowledge',
   path: '/ai/knowledge',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiHrRoute = AiHrRouteImport.update({
+  id: '/ai/hr',
+  path: '/ai/hr',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiFinanceRoute = AiFinanceRouteImport.update({
+  id: '/ai/finance',
+  path: '/ai/finance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiDocumentAssistantRoute = AiDocumentAssistantRouteImport.update({
+  id: '/ai/document-assistant',
+  path: '/ai/document-assistant',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiCrmSpecialistRoute = AiCrmSpecialistRouteImport.update({
+  id: '/ai/crm-specialist',
+  path: '/ai/crm-specialist',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AiCossaRoute = AiCossaRouteImport.update({
@@ -309,6 +412,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
   '/notifications': typeof NotificationsRoute
   '/quick-actions': typeof QuickActionsRoute
@@ -319,8 +423,14 @@ export interface FileRoutesByFullPath {
   '/ai/ceo': typeof AiCeoRoute
   '/ai/consultant': typeof AiConsultantRoute
   '/ai/cossa': typeof AiCossaRoute
+  '/ai/crm-specialist': typeof AiCrmSpecialistRoute
+  '/ai/document-assistant': typeof AiDocumentAssistantRoute
+  '/ai/finance': typeof AiFinanceRoute
+  '/ai/hr': typeof AiHrRoute
   '/ai/knowledge': typeof AiKnowledgeRoute
   '/ai/memory': typeof AiMemoryRoute
+  '/ai/operations-manager': typeof AiOperationsManagerRoute
+  '/ai/project-manager': typeof AiProjectManagerRoute
   '/ai/prompts': typeof AiPromptsRoute
   '/ai/sales-assistant': typeof AiSalesAssistantRoute
   '/ai/support': typeof AiSupportRoute
@@ -329,16 +439,21 @@ export interface FileRoutesByFullPath {
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
+  '/marketing/competitors': typeof MarketingCompetitorsRoute
   '/marketing/content-studio': typeof MarketingContentStudioRoute
   '/marketing/email': typeof MarketingEmailRoute
   '/marketing/google-ads': typeof MarketingGoogleAdsRoute
+  '/marketing/keywords': typeof MarketingKeywordsRoute
   '/marketing/landing-pages': typeof MarketingLandingPagesRoute
   '/marketing/meta-ads': typeof MarketingMetaAdsRoute
+  '/marketing/monitoring': typeof MarketingMonitoringRoute
   '/marketing/seo': typeof MarketingSeoRoute
   '/marketing/social': typeof MarketingSocialRoute
+  '/marketing/trends': typeof MarketingTrendsRoute
   '/marketing/whatsapp': typeof MarketingWhatsappRoute
   '/operations/analytics': typeof OperationsAnalyticsRoute
   '/operations/automation': typeof OperationsAutomationRoute
+  '/operations/business-intelligence': typeof OperationsBusinessIntelligenceRoute
   '/operations/calendar': typeof OperationsCalendarRoute
   '/operations/documents': typeof OperationsDocumentsRoute
   '/operations/nexdocs': typeof OperationsNexdocsRoute
@@ -347,19 +462,25 @@ export interface FileRoutesByFullPath {
   '/operations/tasks': typeof OperationsTasksRoute
   '/sales/analytics': typeof SalesAnalyticsRoute
   '/sales/appointments': typeof SalesAppointmentsRoute
+  '/sales/coaching': typeof SalesCoachingRoute
   '/sales/companies': typeof SalesCompaniesRoute
   '/sales/crm': typeof SalesCrmRoute
   '/sales/customers': typeof SalesCustomersRoute
+  '/sales/follow-ups': typeof SalesFollowUpsRoute
   '/sales/forecast': typeof SalesForecastRoute
   '/sales/lead-finder': typeof SalesLeadFinderRoute
+  '/sales/lead-scoring': typeof SalesLeadScoringRoute
   '/sales/leads': typeof SalesLeadsRoute
+  '/sales/opportunities': typeof SalesOpportunitiesRoute
   '/sales/pipeline': typeof SalesPipelineRoute
   '/sales/quotations': typeof SalesQuotationsRoute
+  '/sales/win-probability': typeof SalesWinProbabilityRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
   '/notifications': typeof NotificationsRoute
   '/quick-actions': typeof QuickActionsRoute
@@ -370,8 +491,14 @@ export interface FileRoutesByTo {
   '/ai/ceo': typeof AiCeoRoute
   '/ai/consultant': typeof AiConsultantRoute
   '/ai/cossa': typeof AiCossaRoute
+  '/ai/crm-specialist': typeof AiCrmSpecialistRoute
+  '/ai/document-assistant': typeof AiDocumentAssistantRoute
+  '/ai/finance': typeof AiFinanceRoute
+  '/ai/hr': typeof AiHrRoute
   '/ai/knowledge': typeof AiKnowledgeRoute
   '/ai/memory': typeof AiMemoryRoute
+  '/ai/operations-manager': typeof AiOperationsManagerRoute
+  '/ai/project-manager': typeof AiProjectManagerRoute
   '/ai/prompts': typeof AiPromptsRoute
   '/ai/sales-assistant': typeof AiSalesAssistantRoute
   '/ai/support': typeof AiSupportRoute
@@ -380,16 +507,21 @@ export interface FileRoutesByTo {
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
+  '/marketing/competitors': typeof MarketingCompetitorsRoute
   '/marketing/content-studio': typeof MarketingContentStudioRoute
   '/marketing/email': typeof MarketingEmailRoute
   '/marketing/google-ads': typeof MarketingGoogleAdsRoute
+  '/marketing/keywords': typeof MarketingKeywordsRoute
   '/marketing/landing-pages': typeof MarketingLandingPagesRoute
   '/marketing/meta-ads': typeof MarketingMetaAdsRoute
+  '/marketing/monitoring': typeof MarketingMonitoringRoute
   '/marketing/seo': typeof MarketingSeoRoute
   '/marketing/social': typeof MarketingSocialRoute
+  '/marketing/trends': typeof MarketingTrendsRoute
   '/marketing/whatsapp': typeof MarketingWhatsappRoute
   '/operations/analytics': typeof OperationsAnalyticsRoute
   '/operations/automation': typeof OperationsAutomationRoute
+  '/operations/business-intelligence': typeof OperationsBusinessIntelligenceRoute
   '/operations/calendar': typeof OperationsCalendarRoute
   '/operations/documents': typeof OperationsDocumentsRoute
   '/operations/nexdocs': typeof OperationsNexdocsRoute
@@ -398,20 +530,26 @@ export interface FileRoutesByTo {
   '/operations/tasks': typeof OperationsTasksRoute
   '/sales/analytics': typeof SalesAnalyticsRoute
   '/sales/appointments': typeof SalesAppointmentsRoute
+  '/sales/coaching': typeof SalesCoachingRoute
   '/sales/companies': typeof SalesCompaniesRoute
   '/sales/crm': typeof SalesCrmRoute
   '/sales/customers': typeof SalesCustomersRoute
+  '/sales/follow-ups': typeof SalesFollowUpsRoute
   '/sales/forecast': typeof SalesForecastRoute
   '/sales/lead-finder': typeof SalesLeadFinderRoute
+  '/sales/lead-scoring': typeof SalesLeadScoringRoute
   '/sales/leads': typeof SalesLeadsRoute
+  '/sales/opportunities': typeof SalesOpportunitiesRoute
   '/sales/pipeline': typeof SalesPipelineRoute
   '/sales/quotations': typeof SalesQuotationsRoute
+  '/sales/win-probability': typeof SalesWinProbabilityRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
   '/notifications': typeof NotificationsRoute
   '/quick-actions': typeof QuickActionsRoute
@@ -422,8 +560,14 @@ export interface FileRoutesById {
   '/ai/ceo': typeof AiCeoRoute
   '/ai/consultant': typeof AiConsultantRoute
   '/ai/cossa': typeof AiCossaRoute
+  '/ai/crm-specialist': typeof AiCrmSpecialistRoute
+  '/ai/document-assistant': typeof AiDocumentAssistantRoute
+  '/ai/finance': typeof AiFinanceRoute
+  '/ai/hr': typeof AiHrRoute
   '/ai/knowledge': typeof AiKnowledgeRoute
   '/ai/memory': typeof AiMemoryRoute
+  '/ai/operations-manager': typeof AiOperationsManagerRoute
+  '/ai/project-manager': typeof AiProjectManagerRoute
   '/ai/prompts': typeof AiPromptsRoute
   '/ai/sales-assistant': typeof AiSalesAssistantRoute
   '/ai/support': typeof AiSupportRoute
@@ -432,16 +576,21 @@ export interface FileRoutesById {
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
+  '/marketing/competitors': typeof MarketingCompetitorsRoute
   '/marketing/content-studio': typeof MarketingContentStudioRoute
   '/marketing/email': typeof MarketingEmailRoute
   '/marketing/google-ads': typeof MarketingGoogleAdsRoute
+  '/marketing/keywords': typeof MarketingKeywordsRoute
   '/marketing/landing-pages': typeof MarketingLandingPagesRoute
   '/marketing/meta-ads': typeof MarketingMetaAdsRoute
+  '/marketing/monitoring': typeof MarketingMonitoringRoute
   '/marketing/seo': typeof MarketingSeoRoute
   '/marketing/social': typeof MarketingSocialRoute
+  '/marketing/trends': typeof MarketingTrendsRoute
   '/marketing/whatsapp': typeof MarketingWhatsappRoute
   '/operations/analytics': typeof OperationsAnalyticsRoute
   '/operations/automation': typeof OperationsAutomationRoute
+  '/operations/business-intelligence': typeof OperationsBusinessIntelligenceRoute
   '/operations/calendar': typeof OperationsCalendarRoute
   '/operations/documents': typeof OperationsDocumentsRoute
   '/operations/nexdocs': typeof OperationsNexdocsRoute
@@ -450,14 +599,19 @@ export interface FileRoutesById {
   '/operations/tasks': typeof OperationsTasksRoute
   '/sales/analytics': typeof SalesAnalyticsRoute
   '/sales/appointments': typeof SalesAppointmentsRoute
+  '/sales/coaching': typeof SalesCoachingRoute
   '/sales/companies': typeof SalesCompaniesRoute
   '/sales/crm': typeof SalesCrmRoute
   '/sales/customers': typeof SalesCustomersRoute
+  '/sales/follow-ups': typeof SalesFollowUpsRoute
   '/sales/forecast': typeof SalesForecastRoute
   '/sales/lead-finder': typeof SalesLeadFinderRoute
+  '/sales/lead-scoring': typeof SalesLeadScoringRoute
   '/sales/leads': typeof SalesLeadsRoute
+  '/sales/opportunities': typeof SalesOpportunitiesRoute
   '/sales/pipeline': typeof SalesPipelineRoute
   '/sales/quotations': typeof SalesQuotationsRoute
+  '/sales/win-probability': typeof SalesWinProbabilityRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -465,6 +619,7 @@ export interface FileRouteTypes {
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/integrations'
     | '/marketplace'
     | '/notifications'
     | '/quick-actions'
@@ -475,8 +630,14 @@ export interface FileRouteTypes {
     | '/ai/ceo'
     | '/ai/consultant'
     | '/ai/cossa'
+    | '/ai/crm-specialist'
+    | '/ai/document-assistant'
+    | '/ai/finance'
+    | '/ai/hr'
     | '/ai/knowledge'
     | '/ai/memory'
+    | '/ai/operations-manager'
+    | '/ai/project-manager'
     | '/ai/prompts'
     | '/ai/sales-assistant'
     | '/ai/support'
@@ -485,16 +646,21 @@ export interface FileRouteTypes {
     | '/marketing/ai-director'
     | '/marketing/brand'
     | '/marketing/campaigns'
+    | '/marketing/competitors'
     | '/marketing/content-studio'
     | '/marketing/email'
     | '/marketing/google-ads'
+    | '/marketing/keywords'
     | '/marketing/landing-pages'
     | '/marketing/meta-ads'
+    | '/marketing/monitoring'
     | '/marketing/seo'
     | '/marketing/social'
+    | '/marketing/trends'
     | '/marketing/whatsapp'
     | '/operations/analytics'
     | '/operations/automation'
+    | '/operations/business-intelligence'
     | '/operations/calendar'
     | '/operations/documents'
     | '/operations/nexdocs'
@@ -503,19 +669,25 @@ export interface FileRouteTypes {
     | '/operations/tasks'
     | '/sales/analytics'
     | '/sales/appointments'
+    | '/sales/coaching'
     | '/sales/companies'
     | '/sales/crm'
     | '/sales/customers'
+    | '/sales/follow-ups'
     | '/sales/forecast'
     | '/sales/lead-finder'
+    | '/sales/lead-scoring'
     | '/sales/leads'
+    | '/sales/opportunities'
     | '/sales/pipeline'
     | '/sales/quotations'
+    | '/sales/win-probability'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/integrations'
     | '/marketplace'
     | '/notifications'
     | '/quick-actions'
@@ -526,8 +698,14 @@ export interface FileRouteTypes {
     | '/ai/ceo'
     | '/ai/consultant'
     | '/ai/cossa'
+    | '/ai/crm-specialist'
+    | '/ai/document-assistant'
+    | '/ai/finance'
+    | '/ai/hr'
     | '/ai/knowledge'
     | '/ai/memory'
+    | '/ai/operations-manager'
+    | '/ai/project-manager'
     | '/ai/prompts'
     | '/ai/sales-assistant'
     | '/ai/support'
@@ -536,16 +714,21 @@ export interface FileRouteTypes {
     | '/marketing/ai-director'
     | '/marketing/brand'
     | '/marketing/campaigns'
+    | '/marketing/competitors'
     | '/marketing/content-studio'
     | '/marketing/email'
     | '/marketing/google-ads'
+    | '/marketing/keywords'
     | '/marketing/landing-pages'
     | '/marketing/meta-ads'
+    | '/marketing/monitoring'
     | '/marketing/seo'
     | '/marketing/social'
+    | '/marketing/trends'
     | '/marketing/whatsapp'
     | '/operations/analytics'
     | '/operations/automation'
+    | '/operations/business-intelligence'
     | '/operations/calendar'
     | '/operations/documents'
     | '/operations/nexdocs'
@@ -554,19 +737,25 @@ export interface FileRouteTypes {
     | '/operations/tasks'
     | '/sales/analytics'
     | '/sales/appointments'
+    | '/sales/coaching'
     | '/sales/companies'
     | '/sales/crm'
     | '/sales/customers'
+    | '/sales/follow-ups'
     | '/sales/forecast'
     | '/sales/lead-finder'
+    | '/sales/lead-scoring'
     | '/sales/leads'
+    | '/sales/opportunities'
     | '/sales/pipeline'
     | '/sales/quotations'
+    | '/sales/win-probability'
   id:
     | '__root__'
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/integrations'
     | '/marketplace'
     | '/notifications'
     | '/quick-actions'
@@ -577,8 +766,14 @@ export interface FileRouteTypes {
     | '/ai/ceo'
     | '/ai/consultant'
     | '/ai/cossa'
+    | '/ai/crm-specialist'
+    | '/ai/document-assistant'
+    | '/ai/finance'
+    | '/ai/hr'
     | '/ai/knowledge'
     | '/ai/memory'
+    | '/ai/operations-manager'
+    | '/ai/project-manager'
     | '/ai/prompts'
     | '/ai/sales-assistant'
     | '/ai/support'
@@ -587,16 +782,21 @@ export interface FileRouteTypes {
     | '/marketing/ai-director'
     | '/marketing/brand'
     | '/marketing/campaigns'
+    | '/marketing/competitors'
     | '/marketing/content-studio'
     | '/marketing/email'
     | '/marketing/google-ads'
+    | '/marketing/keywords'
     | '/marketing/landing-pages'
     | '/marketing/meta-ads'
+    | '/marketing/monitoring'
     | '/marketing/seo'
     | '/marketing/social'
+    | '/marketing/trends'
     | '/marketing/whatsapp'
     | '/operations/analytics'
     | '/operations/automation'
+    | '/operations/business-intelligence'
     | '/operations/calendar'
     | '/operations/documents'
     | '/operations/nexdocs'
@@ -605,20 +805,26 @@ export interface FileRouteTypes {
     | '/operations/tasks'
     | '/sales/analytics'
     | '/sales/appointments'
+    | '/sales/coaching'
     | '/sales/companies'
     | '/sales/crm'
     | '/sales/customers'
+    | '/sales/follow-ups'
     | '/sales/forecast'
     | '/sales/lead-finder'
+    | '/sales/lead-scoring'
     | '/sales/leads'
+    | '/sales/opportunities'
     | '/sales/pipeline'
     | '/sales/quotations'
+    | '/sales/win-probability'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AiRecommendationsRoute: typeof AiRecommendationsRoute
   BusinessHealthRoute: typeof BusinessHealthRoute
+  IntegrationsRoute: typeof IntegrationsRoute
   MarketplaceRoute: typeof MarketplaceRoute
   NotificationsRoute: typeof NotificationsRoute
   QuickActionsRoute: typeof QuickActionsRoute
@@ -629,8 +835,14 @@ export interface RootRouteChildren {
   AiCeoRoute: typeof AiCeoRoute
   AiConsultantRoute: typeof AiConsultantRoute
   AiCossaRoute: typeof AiCossaRoute
+  AiCrmSpecialistRoute: typeof AiCrmSpecialistRoute
+  AiDocumentAssistantRoute: typeof AiDocumentAssistantRoute
+  AiFinanceRoute: typeof AiFinanceRoute
+  AiHrRoute: typeof AiHrRoute
   AiKnowledgeRoute: typeof AiKnowledgeRoute
   AiMemoryRoute: typeof AiMemoryRoute
+  AiOperationsManagerRoute: typeof AiOperationsManagerRoute
+  AiProjectManagerRoute: typeof AiProjectManagerRoute
   AiPromptsRoute: typeof AiPromptsRoute
   AiSalesAssistantRoute: typeof AiSalesAssistantRoute
   AiSupportRoute: typeof AiSupportRoute
@@ -639,16 +851,21 @@ export interface RootRouteChildren {
   MarketingAiDirectorRoute: typeof MarketingAiDirectorRoute
   MarketingBrandRoute: typeof MarketingBrandRoute
   MarketingCampaignsRoute: typeof MarketingCampaignsRoute
+  MarketingCompetitorsRoute: typeof MarketingCompetitorsRoute
   MarketingContentStudioRoute: typeof MarketingContentStudioRoute
   MarketingEmailRoute: typeof MarketingEmailRoute
   MarketingGoogleAdsRoute: typeof MarketingGoogleAdsRoute
+  MarketingKeywordsRoute: typeof MarketingKeywordsRoute
   MarketingLandingPagesRoute: typeof MarketingLandingPagesRoute
   MarketingMetaAdsRoute: typeof MarketingMetaAdsRoute
+  MarketingMonitoringRoute: typeof MarketingMonitoringRoute
   MarketingSeoRoute: typeof MarketingSeoRoute
   MarketingSocialRoute: typeof MarketingSocialRoute
+  MarketingTrendsRoute: typeof MarketingTrendsRoute
   MarketingWhatsappRoute: typeof MarketingWhatsappRoute
   OperationsAnalyticsRoute: typeof OperationsAnalyticsRoute
   OperationsAutomationRoute: typeof OperationsAutomationRoute
+  OperationsBusinessIntelligenceRoute: typeof OperationsBusinessIntelligenceRoute
   OperationsCalendarRoute: typeof OperationsCalendarRoute
   OperationsDocumentsRoute: typeof OperationsDocumentsRoute
   OperationsNexdocsRoute: typeof OperationsNexdocsRoute
@@ -657,14 +874,19 @@ export interface RootRouteChildren {
   OperationsTasksRoute: typeof OperationsTasksRoute
   SalesAnalyticsRoute: typeof SalesAnalyticsRoute
   SalesAppointmentsRoute: typeof SalesAppointmentsRoute
+  SalesCoachingRoute: typeof SalesCoachingRoute
   SalesCompaniesRoute: typeof SalesCompaniesRoute
   SalesCrmRoute: typeof SalesCrmRoute
   SalesCustomersRoute: typeof SalesCustomersRoute
+  SalesFollowUpsRoute: typeof SalesFollowUpsRoute
   SalesForecastRoute: typeof SalesForecastRoute
   SalesLeadFinderRoute: typeof SalesLeadFinderRoute
+  SalesLeadScoringRoute: typeof SalesLeadScoringRoute
   SalesLeadsRoute: typeof SalesLeadsRoute
+  SalesOpportunitiesRoute: typeof SalesOpportunitiesRoute
   SalesPipelineRoute: typeof SalesPipelineRoute
   SalesQuotationsRoute: typeof SalesQuotationsRoute
+  SalesWinProbabilityRoute: typeof SalesWinProbabilityRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -711,6 +933,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketplaceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/integrations': {
+      id: '/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof IntegrationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/business-health': {
       id: '/business-health'
       path: '/business-health'
@@ -732,6 +961,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sales/win-probability': {
+      id: '/sales/win-probability'
+      path: '/sales/win-probability'
+      fullPath: '/sales/win-probability'
+      preLoaderRoute: typeof SalesWinProbabilityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sales/quotations': {
       id: '/sales/quotations'
       path: '/sales/quotations'
@@ -746,11 +982,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SalesPipelineRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sales/opportunities': {
+      id: '/sales/opportunities'
+      path: '/sales/opportunities'
+      fullPath: '/sales/opportunities'
+      preLoaderRoute: typeof SalesOpportunitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sales/leads': {
       id: '/sales/leads'
       path: '/sales/leads'
       fullPath: '/sales/leads'
       preLoaderRoute: typeof SalesLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/lead-scoring': {
+      id: '/sales/lead-scoring'
+      path: '/sales/lead-scoring'
+      fullPath: '/sales/lead-scoring'
+      preLoaderRoute: typeof SalesLeadScoringRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sales/lead-finder': {
@@ -765,6 +1015,13 @@ declare module '@tanstack/react-router' {
       path: '/sales/forecast'
       fullPath: '/sales/forecast'
       preLoaderRoute: typeof SalesForecastRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/follow-ups': {
+      id: '/sales/follow-ups'
+      path: '/sales/follow-ups'
+      fullPath: '/sales/follow-ups'
+      preLoaderRoute: typeof SalesFollowUpsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sales/customers': {
@@ -786,6 +1043,13 @@ declare module '@tanstack/react-router' {
       path: '/sales/companies'
       fullPath: '/sales/companies'
       preLoaderRoute: typeof SalesCompaniesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/coaching': {
+      id: '/sales/coaching'
+      path: '/sales/coaching'
+      fullPath: '/sales/coaching'
+      preLoaderRoute: typeof SalesCoachingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sales/appointments': {
@@ -844,6 +1108,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperationsCalendarRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/operations/business-intelligence': {
+      id: '/operations/business-intelligence'
+      path: '/operations/business-intelligence'
+      fullPath: '/operations/business-intelligence'
+      preLoaderRoute: typeof OperationsBusinessIntelligenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/operations/automation': {
       id: '/operations/automation'
       path: '/operations/automation'
@@ -865,6 +1136,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketingWhatsappRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/marketing/trends': {
+      id: '/marketing/trends'
+      path: '/marketing/trends'
+      fullPath: '/marketing/trends'
+      preLoaderRoute: typeof MarketingTrendsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/marketing/social': {
       id: '/marketing/social'
       path: '/marketing/social'
@@ -879,6 +1157,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketingSeoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/marketing/monitoring': {
+      id: '/marketing/monitoring'
+      path: '/marketing/monitoring'
+      fullPath: '/marketing/monitoring'
+      preLoaderRoute: typeof MarketingMonitoringRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/marketing/meta-ads': {
       id: '/marketing/meta-ads'
       path: '/marketing/meta-ads'
@@ -891,6 +1176,13 @@ declare module '@tanstack/react-router' {
       path: '/marketing/landing-pages'
       fullPath: '/marketing/landing-pages'
       preLoaderRoute: typeof MarketingLandingPagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/keywords': {
+      id: '/marketing/keywords'
+      path: '/marketing/keywords'
+      fullPath: '/marketing/keywords'
+      preLoaderRoute: typeof MarketingKeywordsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/marketing/google-ads': {
@@ -912,6 +1204,13 @@ declare module '@tanstack/react-router' {
       path: '/marketing/content-studio'
       fullPath: '/marketing/content-studio'
       preLoaderRoute: typeof MarketingContentStudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/competitors': {
+      id: '/marketing/competitors'
+      path: '/marketing/competitors'
+      fullPath: '/marketing/competitors'
+      preLoaderRoute: typeof MarketingCompetitorsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/marketing/campaigns': {
@@ -970,6 +1269,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AiPromptsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ai/project-manager': {
+      id: '/ai/project-manager'
+      path: '/ai/project-manager'
+      fullPath: '/ai/project-manager'
+      preLoaderRoute: typeof AiProjectManagerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/operations-manager': {
+      id: '/ai/operations-manager'
+      path: '/ai/operations-manager'
+      fullPath: '/ai/operations-manager'
+      preLoaderRoute: typeof AiOperationsManagerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ai/memory': {
       id: '/ai/memory'
       path: '/ai/memory'
@@ -982,6 +1295,34 @@ declare module '@tanstack/react-router' {
       path: '/ai/knowledge'
       fullPath: '/ai/knowledge'
       preLoaderRoute: typeof AiKnowledgeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/hr': {
+      id: '/ai/hr'
+      path: '/ai/hr'
+      fullPath: '/ai/hr'
+      preLoaderRoute: typeof AiHrRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/finance': {
+      id: '/ai/finance'
+      path: '/ai/finance'
+      fullPath: '/ai/finance'
+      preLoaderRoute: typeof AiFinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/document-assistant': {
+      id: '/ai/document-assistant'
+      path: '/ai/document-assistant'
+      fullPath: '/ai/document-assistant'
+      preLoaderRoute: typeof AiDocumentAssistantRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/crm-specialist': {
+      id: '/ai/crm-specialist'
+      path: '/ai/crm-specialist'
+      fullPath: '/ai/crm-specialist'
+      preLoaderRoute: typeof AiCrmSpecialistRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ai/cossa': {
@@ -1019,6 +1360,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AiRecommendationsRoute: AiRecommendationsRoute,
   BusinessHealthRoute: BusinessHealthRoute,
+  IntegrationsRoute: IntegrationsRoute,
   MarketplaceRoute: MarketplaceRoute,
   NotificationsRoute: NotificationsRoute,
   QuickActionsRoute: QuickActionsRoute,
@@ -1029,8 +1371,14 @@ const rootRouteChildren: RootRouteChildren = {
   AiCeoRoute: AiCeoRoute,
   AiConsultantRoute: AiConsultantRoute,
   AiCossaRoute: AiCossaRoute,
+  AiCrmSpecialistRoute: AiCrmSpecialistRoute,
+  AiDocumentAssistantRoute: AiDocumentAssistantRoute,
+  AiFinanceRoute: AiFinanceRoute,
+  AiHrRoute: AiHrRoute,
   AiKnowledgeRoute: AiKnowledgeRoute,
   AiMemoryRoute: AiMemoryRoute,
+  AiOperationsManagerRoute: AiOperationsManagerRoute,
+  AiProjectManagerRoute: AiProjectManagerRoute,
   AiPromptsRoute: AiPromptsRoute,
   AiSalesAssistantRoute: AiSalesAssistantRoute,
   AiSupportRoute: AiSupportRoute,
@@ -1039,16 +1387,21 @@ const rootRouteChildren: RootRouteChildren = {
   MarketingAiDirectorRoute: MarketingAiDirectorRoute,
   MarketingBrandRoute: MarketingBrandRoute,
   MarketingCampaignsRoute: MarketingCampaignsRoute,
+  MarketingCompetitorsRoute: MarketingCompetitorsRoute,
   MarketingContentStudioRoute: MarketingContentStudioRoute,
   MarketingEmailRoute: MarketingEmailRoute,
   MarketingGoogleAdsRoute: MarketingGoogleAdsRoute,
+  MarketingKeywordsRoute: MarketingKeywordsRoute,
   MarketingLandingPagesRoute: MarketingLandingPagesRoute,
   MarketingMetaAdsRoute: MarketingMetaAdsRoute,
+  MarketingMonitoringRoute: MarketingMonitoringRoute,
   MarketingSeoRoute: MarketingSeoRoute,
   MarketingSocialRoute: MarketingSocialRoute,
+  MarketingTrendsRoute: MarketingTrendsRoute,
   MarketingWhatsappRoute: MarketingWhatsappRoute,
   OperationsAnalyticsRoute: OperationsAnalyticsRoute,
   OperationsAutomationRoute: OperationsAutomationRoute,
+  OperationsBusinessIntelligenceRoute: OperationsBusinessIntelligenceRoute,
   OperationsCalendarRoute: OperationsCalendarRoute,
   OperationsDocumentsRoute: OperationsDocumentsRoute,
   OperationsNexdocsRoute: OperationsNexdocsRoute,
@@ -1057,14 +1410,19 @@ const rootRouteChildren: RootRouteChildren = {
   OperationsTasksRoute: OperationsTasksRoute,
   SalesAnalyticsRoute: SalesAnalyticsRoute,
   SalesAppointmentsRoute: SalesAppointmentsRoute,
+  SalesCoachingRoute: SalesCoachingRoute,
   SalesCompaniesRoute: SalesCompaniesRoute,
   SalesCrmRoute: SalesCrmRoute,
   SalesCustomersRoute: SalesCustomersRoute,
+  SalesFollowUpsRoute: SalesFollowUpsRoute,
   SalesForecastRoute: SalesForecastRoute,
   SalesLeadFinderRoute: SalesLeadFinderRoute,
+  SalesLeadScoringRoute: SalesLeadScoringRoute,
   SalesLeadsRoute: SalesLeadsRoute,
+  SalesOpportunitiesRoute: SalesOpportunitiesRoute,
   SalesPipelineRoute: SalesPipelineRoute,
   SalesQuotationsRoute: SalesQuotationsRoute,
+  SalesWinProbabilityRoute: SalesWinProbabilityRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
