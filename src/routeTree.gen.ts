@@ -9,12 +9,88 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
+import { Route as QuickActionsRouteImport } from './routes/quick-actions'
+import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as MarketplaceRouteImport } from './routes/marketplace'
+import { Route as BusinessHealthRouteImport } from './routes/business-health'
+import { Route as AiRecommendationsRouteImport } from './routes/ai-recommendations'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SalesQuotationsRouteImport } from './routes/sales.quotations'
+import { Route as SalesPipelineRouteImport } from './routes/sales.pipeline'
+import { Route as SalesLeadsRouteImport } from './routes/sales.leads'
+import { Route as SalesLeadFinderRouteImport } from './routes/sales.lead-finder'
+import { Route as SalesForecastRouteImport } from './routes/sales.forecast'
+import { Route as SalesCustomersRouteImport } from './routes/sales.customers'
+import { Route as SalesCrmRouteImport } from './routes/sales.crm'
+import { Route as SalesCompaniesRouteImport } from './routes/sales.companies'
+import { Route as SalesAppointmentsRouteImport } from './routes/sales.appointments'
+import { Route as SalesAnalyticsRouteImport } from './routes/sales.analytics'
+import { Route as OperationsTasksRouteImport } from './routes/operations.tasks'
+import { Route as OperationsReportsRouteImport } from './routes/operations.reports'
+import { Route as OperationsProjectsRouteImport } from './routes/operations.projects'
+import { Route as OperationsNexdocsRouteImport } from './routes/operations.nexdocs'
+import { Route as OperationsDocumentsRouteImport } from './routes/operations.documents'
+import { Route as OperationsCalendarRouteImport } from './routes/operations.calendar'
+import { Route as OperationsAutomationRouteImport } from './routes/operations.automation'
+import { Route as OperationsAnalyticsRouteImport } from './routes/operations.analytics'
+import { Route as MarketingWhatsappRouteImport } from './routes/marketing.whatsapp'
+import { Route as MarketingSocialRouteImport } from './routes/marketing.social'
+import { Route as MarketingSeoRouteImport } from './routes/marketing.seo'
+import { Route as MarketingMetaAdsRouteImport } from './routes/marketing.meta-ads'
+import { Route as MarketingLandingPagesRouteImport } from './routes/marketing.landing-pages'
+import { Route as MarketingGoogleAdsRouteImport } from './routes/marketing.google-ads'
+import { Route as MarketingEmailRouteImport } from './routes/marketing.email'
+import { Route as MarketingContentStudioRouteImport } from './routes/marketing.content-studio'
+import { Route as MarketingCampaignsRouteImport } from './routes/marketing.campaigns'
+import { Route as MarketingBrandRouteImport } from './routes/marketing.brand'
+import { Route as MarketingAiDirectorRouteImport } from './routes/marketing.ai-director'
+import { Route as AiWorkflowRouteImport } from './routes/ai.workflow'
+import { Route as AiVoiceRouteImport } from './routes/ai.voice'
+import { Route as AiSupportRouteImport } from './routes/ai.support'
+import { Route as AiSalesAssistantRouteImport } from './routes/ai.sales-assistant'
+import { Route as AiPromptsRouteImport } from './routes/ai.prompts'
+import { Route as AiMemoryRouteImport } from './routes/ai.memory'
+import { Route as AiKnowledgeRouteImport } from './routes/ai.knowledge'
+import { Route as AiCossaRouteImport } from './routes/ai.cossa'
+import { Route as AiConsultantRouteImport } from './routes/ai.consultant'
+import { Route as AiCeoRouteImport } from './routes/ai.ceo'
+import { Route as AiAutomationRouteImport } from './routes/ai.automation'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RoadmapRoute = RoadmapRouteImport.update({
   id: '/roadmap',
   path: '/roadmap',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuickActionsRoute = QuickActionsRouteImport.update({
+  id: '/quick-actions',
+  path: '/quick-actions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketplaceRoute = MarketplaceRouteImport.update({
+  id: '/marketplace',
+  path: '/marketplace',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessHealthRoute = BusinessHealthRouteImport.update({
+  id: '/business-health',
+  path: '/business-health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiRecommendationsRoute = AiRecommendationsRouteImport.update({
+  id: '/ai-recommendations',
+  path: '/ai-recommendations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -22,40 +98,611 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SalesQuotationsRoute = SalesQuotationsRouteImport.update({
+  id: '/sales/quotations',
+  path: '/sales/quotations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesPipelineRoute = SalesPipelineRouteImport.update({
+  id: '/sales/pipeline',
+  path: '/sales/pipeline',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesLeadsRoute = SalesLeadsRouteImport.update({
+  id: '/sales/leads',
+  path: '/sales/leads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesLeadFinderRoute = SalesLeadFinderRouteImport.update({
+  id: '/sales/lead-finder',
+  path: '/sales/lead-finder',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesForecastRoute = SalesForecastRouteImport.update({
+  id: '/sales/forecast',
+  path: '/sales/forecast',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesCustomersRoute = SalesCustomersRouteImport.update({
+  id: '/sales/customers',
+  path: '/sales/customers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesCrmRoute = SalesCrmRouteImport.update({
+  id: '/sales/crm',
+  path: '/sales/crm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesCompaniesRoute = SalesCompaniesRouteImport.update({
+  id: '/sales/companies',
+  path: '/sales/companies',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesAppointmentsRoute = SalesAppointmentsRouteImport.update({
+  id: '/sales/appointments',
+  path: '/sales/appointments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesAnalyticsRoute = SalesAnalyticsRouteImport.update({
+  id: '/sales/analytics',
+  path: '/sales/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperationsTasksRoute = OperationsTasksRouteImport.update({
+  id: '/operations/tasks',
+  path: '/operations/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperationsReportsRoute = OperationsReportsRouteImport.update({
+  id: '/operations/reports',
+  path: '/operations/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperationsProjectsRoute = OperationsProjectsRouteImport.update({
+  id: '/operations/projects',
+  path: '/operations/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperationsNexdocsRoute = OperationsNexdocsRouteImport.update({
+  id: '/operations/nexdocs',
+  path: '/operations/nexdocs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperationsDocumentsRoute = OperationsDocumentsRouteImport.update({
+  id: '/operations/documents',
+  path: '/operations/documents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperationsCalendarRoute = OperationsCalendarRouteImport.update({
+  id: '/operations/calendar',
+  path: '/operations/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperationsAutomationRoute = OperationsAutomationRouteImport.update({
+  id: '/operations/automation',
+  path: '/operations/automation',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperationsAnalyticsRoute = OperationsAnalyticsRouteImport.update({
+  id: '/operations/analytics',
+  path: '/operations/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingWhatsappRoute = MarketingWhatsappRouteImport.update({
+  id: '/marketing/whatsapp',
+  path: '/marketing/whatsapp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingSocialRoute = MarketingSocialRouteImport.update({
+  id: '/marketing/social',
+  path: '/marketing/social',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingSeoRoute = MarketingSeoRouteImport.update({
+  id: '/marketing/seo',
+  path: '/marketing/seo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingMetaAdsRoute = MarketingMetaAdsRouteImport.update({
+  id: '/marketing/meta-ads',
+  path: '/marketing/meta-ads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingLandingPagesRoute = MarketingLandingPagesRouteImport.update({
+  id: '/marketing/landing-pages',
+  path: '/marketing/landing-pages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingGoogleAdsRoute = MarketingGoogleAdsRouteImport.update({
+  id: '/marketing/google-ads',
+  path: '/marketing/google-ads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingEmailRoute = MarketingEmailRouteImport.update({
+  id: '/marketing/email',
+  path: '/marketing/email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingContentStudioRoute = MarketingContentStudioRouteImport.update({
+  id: '/marketing/content-studio',
+  path: '/marketing/content-studio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingCampaignsRoute = MarketingCampaignsRouteImport.update({
+  id: '/marketing/campaigns',
+  path: '/marketing/campaigns',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingBrandRoute = MarketingBrandRouteImport.update({
+  id: '/marketing/brand',
+  path: '/marketing/brand',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingAiDirectorRoute = MarketingAiDirectorRouteImport.update({
+  id: '/marketing/ai-director',
+  path: '/marketing/ai-director',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiWorkflowRoute = AiWorkflowRouteImport.update({
+  id: '/ai/workflow',
+  path: '/ai/workflow',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiVoiceRoute = AiVoiceRouteImport.update({
+  id: '/ai/voice',
+  path: '/ai/voice',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiSupportRoute = AiSupportRouteImport.update({
+  id: '/ai/support',
+  path: '/ai/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiSalesAssistantRoute = AiSalesAssistantRouteImport.update({
+  id: '/ai/sales-assistant',
+  path: '/ai/sales-assistant',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiPromptsRoute = AiPromptsRouteImport.update({
+  id: '/ai/prompts',
+  path: '/ai/prompts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiMemoryRoute = AiMemoryRouteImport.update({
+  id: '/ai/memory',
+  path: '/ai/memory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiKnowledgeRoute = AiKnowledgeRouteImport.update({
+  id: '/ai/knowledge',
+  path: '/ai/knowledge',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiCossaRoute = AiCossaRouteImport.update({
+  id: '/ai/cossa',
+  path: '/ai/cossa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiConsultantRoute = AiConsultantRouteImport.update({
+  id: '/ai/consultant',
+  path: '/ai/consultant',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiCeoRoute = AiCeoRouteImport.update({
+  id: '/ai/ceo',
+  path: '/ai/ceo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiAutomationRoute = AiAutomationRouteImport.update({
+  id: '/ai/automation',
+  path: '/ai/automation',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai-recommendations': typeof AiRecommendationsRoute
+  '/business-health': typeof BusinessHealthRoute
+  '/marketplace': typeof MarketplaceRoute
+  '/notifications': typeof NotificationsRoute
+  '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
+  '/settings': typeof SettingsRoute
+  '/ai/automation': typeof AiAutomationRoute
+  '/ai/ceo': typeof AiCeoRoute
+  '/ai/consultant': typeof AiConsultantRoute
+  '/ai/cossa': typeof AiCossaRoute
+  '/ai/knowledge': typeof AiKnowledgeRoute
+  '/ai/memory': typeof AiMemoryRoute
+  '/ai/prompts': typeof AiPromptsRoute
+  '/ai/sales-assistant': typeof AiSalesAssistantRoute
+  '/ai/support': typeof AiSupportRoute
+  '/ai/voice': typeof AiVoiceRoute
+  '/ai/workflow': typeof AiWorkflowRoute
+  '/marketing/ai-director': typeof MarketingAiDirectorRoute
+  '/marketing/brand': typeof MarketingBrandRoute
+  '/marketing/campaigns': typeof MarketingCampaignsRoute
+  '/marketing/content-studio': typeof MarketingContentStudioRoute
+  '/marketing/email': typeof MarketingEmailRoute
+  '/marketing/google-ads': typeof MarketingGoogleAdsRoute
+  '/marketing/landing-pages': typeof MarketingLandingPagesRoute
+  '/marketing/meta-ads': typeof MarketingMetaAdsRoute
+  '/marketing/seo': typeof MarketingSeoRoute
+  '/marketing/social': typeof MarketingSocialRoute
+  '/marketing/whatsapp': typeof MarketingWhatsappRoute
+  '/operations/analytics': typeof OperationsAnalyticsRoute
+  '/operations/automation': typeof OperationsAutomationRoute
+  '/operations/calendar': typeof OperationsCalendarRoute
+  '/operations/documents': typeof OperationsDocumentsRoute
+  '/operations/nexdocs': typeof OperationsNexdocsRoute
+  '/operations/projects': typeof OperationsProjectsRoute
+  '/operations/reports': typeof OperationsReportsRoute
+  '/operations/tasks': typeof OperationsTasksRoute
+  '/sales/analytics': typeof SalesAnalyticsRoute
+  '/sales/appointments': typeof SalesAppointmentsRoute
+  '/sales/companies': typeof SalesCompaniesRoute
+  '/sales/crm': typeof SalesCrmRoute
+  '/sales/customers': typeof SalesCustomersRoute
+  '/sales/forecast': typeof SalesForecastRoute
+  '/sales/lead-finder': typeof SalesLeadFinderRoute
+  '/sales/leads': typeof SalesLeadsRoute
+  '/sales/pipeline': typeof SalesPipelineRoute
+  '/sales/quotations': typeof SalesQuotationsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai-recommendations': typeof AiRecommendationsRoute
+  '/business-health': typeof BusinessHealthRoute
+  '/marketplace': typeof MarketplaceRoute
+  '/notifications': typeof NotificationsRoute
+  '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
+  '/settings': typeof SettingsRoute
+  '/ai/automation': typeof AiAutomationRoute
+  '/ai/ceo': typeof AiCeoRoute
+  '/ai/consultant': typeof AiConsultantRoute
+  '/ai/cossa': typeof AiCossaRoute
+  '/ai/knowledge': typeof AiKnowledgeRoute
+  '/ai/memory': typeof AiMemoryRoute
+  '/ai/prompts': typeof AiPromptsRoute
+  '/ai/sales-assistant': typeof AiSalesAssistantRoute
+  '/ai/support': typeof AiSupportRoute
+  '/ai/voice': typeof AiVoiceRoute
+  '/ai/workflow': typeof AiWorkflowRoute
+  '/marketing/ai-director': typeof MarketingAiDirectorRoute
+  '/marketing/brand': typeof MarketingBrandRoute
+  '/marketing/campaigns': typeof MarketingCampaignsRoute
+  '/marketing/content-studio': typeof MarketingContentStudioRoute
+  '/marketing/email': typeof MarketingEmailRoute
+  '/marketing/google-ads': typeof MarketingGoogleAdsRoute
+  '/marketing/landing-pages': typeof MarketingLandingPagesRoute
+  '/marketing/meta-ads': typeof MarketingMetaAdsRoute
+  '/marketing/seo': typeof MarketingSeoRoute
+  '/marketing/social': typeof MarketingSocialRoute
+  '/marketing/whatsapp': typeof MarketingWhatsappRoute
+  '/operations/analytics': typeof OperationsAnalyticsRoute
+  '/operations/automation': typeof OperationsAutomationRoute
+  '/operations/calendar': typeof OperationsCalendarRoute
+  '/operations/documents': typeof OperationsDocumentsRoute
+  '/operations/nexdocs': typeof OperationsNexdocsRoute
+  '/operations/projects': typeof OperationsProjectsRoute
+  '/operations/reports': typeof OperationsReportsRoute
+  '/operations/tasks': typeof OperationsTasksRoute
+  '/sales/analytics': typeof SalesAnalyticsRoute
+  '/sales/appointments': typeof SalesAppointmentsRoute
+  '/sales/companies': typeof SalesCompaniesRoute
+  '/sales/crm': typeof SalesCrmRoute
+  '/sales/customers': typeof SalesCustomersRoute
+  '/sales/forecast': typeof SalesForecastRoute
+  '/sales/lead-finder': typeof SalesLeadFinderRoute
+  '/sales/leads': typeof SalesLeadsRoute
+  '/sales/pipeline': typeof SalesPipelineRoute
+  '/sales/quotations': typeof SalesQuotationsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ai-recommendations': typeof AiRecommendationsRoute
+  '/business-health': typeof BusinessHealthRoute
+  '/marketplace': typeof MarketplaceRoute
+  '/notifications': typeof NotificationsRoute
+  '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
+  '/settings': typeof SettingsRoute
+  '/ai/automation': typeof AiAutomationRoute
+  '/ai/ceo': typeof AiCeoRoute
+  '/ai/consultant': typeof AiConsultantRoute
+  '/ai/cossa': typeof AiCossaRoute
+  '/ai/knowledge': typeof AiKnowledgeRoute
+  '/ai/memory': typeof AiMemoryRoute
+  '/ai/prompts': typeof AiPromptsRoute
+  '/ai/sales-assistant': typeof AiSalesAssistantRoute
+  '/ai/support': typeof AiSupportRoute
+  '/ai/voice': typeof AiVoiceRoute
+  '/ai/workflow': typeof AiWorkflowRoute
+  '/marketing/ai-director': typeof MarketingAiDirectorRoute
+  '/marketing/brand': typeof MarketingBrandRoute
+  '/marketing/campaigns': typeof MarketingCampaignsRoute
+  '/marketing/content-studio': typeof MarketingContentStudioRoute
+  '/marketing/email': typeof MarketingEmailRoute
+  '/marketing/google-ads': typeof MarketingGoogleAdsRoute
+  '/marketing/landing-pages': typeof MarketingLandingPagesRoute
+  '/marketing/meta-ads': typeof MarketingMetaAdsRoute
+  '/marketing/seo': typeof MarketingSeoRoute
+  '/marketing/social': typeof MarketingSocialRoute
+  '/marketing/whatsapp': typeof MarketingWhatsappRoute
+  '/operations/analytics': typeof OperationsAnalyticsRoute
+  '/operations/automation': typeof OperationsAutomationRoute
+  '/operations/calendar': typeof OperationsCalendarRoute
+  '/operations/documents': typeof OperationsDocumentsRoute
+  '/operations/nexdocs': typeof OperationsNexdocsRoute
+  '/operations/projects': typeof OperationsProjectsRoute
+  '/operations/reports': typeof OperationsReportsRoute
+  '/operations/tasks': typeof OperationsTasksRoute
+  '/sales/analytics': typeof SalesAnalyticsRoute
+  '/sales/appointments': typeof SalesAppointmentsRoute
+  '/sales/companies': typeof SalesCompaniesRoute
+  '/sales/crm': typeof SalesCrmRoute
+  '/sales/customers': typeof SalesCustomersRoute
+  '/sales/forecast': typeof SalesForecastRoute
+  '/sales/lead-finder': typeof SalesLeadFinderRoute
+  '/sales/leads': typeof SalesLeadsRoute
+  '/sales/pipeline': typeof SalesPipelineRoute
+  '/sales/quotations': typeof SalesQuotationsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/roadmap'
+  fullPaths:
+    | '/'
+    | '/ai-recommendations'
+    | '/business-health'
+    | '/marketplace'
+    | '/notifications'
+    | '/quick-actions'
+    | '/roadmap'
+    | '/settings'
+    | '/ai/automation'
+    | '/ai/ceo'
+    | '/ai/consultant'
+    | '/ai/cossa'
+    | '/ai/knowledge'
+    | '/ai/memory'
+    | '/ai/prompts'
+    | '/ai/sales-assistant'
+    | '/ai/support'
+    | '/ai/voice'
+    | '/ai/workflow'
+    | '/marketing/ai-director'
+    | '/marketing/brand'
+    | '/marketing/campaigns'
+    | '/marketing/content-studio'
+    | '/marketing/email'
+    | '/marketing/google-ads'
+    | '/marketing/landing-pages'
+    | '/marketing/meta-ads'
+    | '/marketing/seo'
+    | '/marketing/social'
+    | '/marketing/whatsapp'
+    | '/operations/analytics'
+    | '/operations/automation'
+    | '/operations/calendar'
+    | '/operations/documents'
+    | '/operations/nexdocs'
+    | '/operations/projects'
+    | '/operations/reports'
+    | '/operations/tasks'
+    | '/sales/analytics'
+    | '/sales/appointments'
+    | '/sales/companies'
+    | '/sales/crm'
+    | '/sales/customers'
+    | '/sales/forecast'
+    | '/sales/lead-finder'
+    | '/sales/leads'
+    | '/sales/pipeline'
+    | '/sales/quotations'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/roadmap'
-  id: '__root__' | '/' | '/roadmap'
+  to:
+    | '/'
+    | '/ai-recommendations'
+    | '/business-health'
+    | '/marketplace'
+    | '/notifications'
+    | '/quick-actions'
+    | '/roadmap'
+    | '/settings'
+    | '/ai/automation'
+    | '/ai/ceo'
+    | '/ai/consultant'
+    | '/ai/cossa'
+    | '/ai/knowledge'
+    | '/ai/memory'
+    | '/ai/prompts'
+    | '/ai/sales-assistant'
+    | '/ai/support'
+    | '/ai/voice'
+    | '/ai/workflow'
+    | '/marketing/ai-director'
+    | '/marketing/brand'
+    | '/marketing/campaigns'
+    | '/marketing/content-studio'
+    | '/marketing/email'
+    | '/marketing/google-ads'
+    | '/marketing/landing-pages'
+    | '/marketing/meta-ads'
+    | '/marketing/seo'
+    | '/marketing/social'
+    | '/marketing/whatsapp'
+    | '/operations/analytics'
+    | '/operations/automation'
+    | '/operations/calendar'
+    | '/operations/documents'
+    | '/operations/nexdocs'
+    | '/operations/projects'
+    | '/operations/reports'
+    | '/operations/tasks'
+    | '/sales/analytics'
+    | '/sales/appointments'
+    | '/sales/companies'
+    | '/sales/crm'
+    | '/sales/customers'
+    | '/sales/forecast'
+    | '/sales/lead-finder'
+    | '/sales/leads'
+    | '/sales/pipeline'
+    | '/sales/quotations'
+  id:
+    | '__root__'
+    | '/'
+    | '/ai-recommendations'
+    | '/business-health'
+    | '/marketplace'
+    | '/notifications'
+    | '/quick-actions'
+    | '/roadmap'
+    | '/settings'
+    | '/ai/automation'
+    | '/ai/ceo'
+    | '/ai/consultant'
+    | '/ai/cossa'
+    | '/ai/knowledge'
+    | '/ai/memory'
+    | '/ai/prompts'
+    | '/ai/sales-assistant'
+    | '/ai/support'
+    | '/ai/voice'
+    | '/ai/workflow'
+    | '/marketing/ai-director'
+    | '/marketing/brand'
+    | '/marketing/campaigns'
+    | '/marketing/content-studio'
+    | '/marketing/email'
+    | '/marketing/google-ads'
+    | '/marketing/landing-pages'
+    | '/marketing/meta-ads'
+    | '/marketing/seo'
+    | '/marketing/social'
+    | '/marketing/whatsapp'
+    | '/operations/analytics'
+    | '/operations/automation'
+    | '/operations/calendar'
+    | '/operations/documents'
+    | '/operations/nexdocs'
+    | '/operations/projects'
+    | '/operations/reports'
+    | '/operations/tasks'
+    | '/sales/analytics'
+    | '/sales/appointments'
+    | '/sales/companies'
+    | '/sales/crm'
+    | '/sales/customers'
+    | '/sales/forecast'
+    | '/sales/lead-finder'
+    | '/sales/leads'
+    | '/sales/pipeline'
+    | '/sales/quotations'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AiRecommendationsRoute: typeof AiRecommendationsRoute
+  BusinessHealthRoute: typeof BusinessHealthRoute
+  MarketplaceRoute: typeof MarketplaceRoute
+  NotificationsRoute: typeof NotificationsRoute
+  QuickActionsRoute: typeof QuickActionsRoute
   RoadmapRoute: typeof RoadmapRoute
+  SettingsRoute: typeof SettingsRoute
+  AiAutomationRoute: typeof AiAutomationRoute
+  AiCeoRoute: typeof AiCeoRoute
+  AiConsultantRoute: typeof AiConsultantRoute
+  AiCossaRoute: typeof AiCossaRoute
+  AiKnowledgeRoute: typeof AiKnowledgeRoute
+  AiMemoryRoute: typeof AiMemoryRoute
+  AiPromptsRoute: typeof AiPromptsRoute
+  AiSalesAssistantRoute: typeof AiSalesAssistantRoute
+  AiSupportRoute: typeof AiSupportRoute
+  AiVoiceRoute: typeof AiVoiceRoute
+  AiWorkflowRoute: typeof AiWorkflowRoute
+  MarketingAiDirectorRoute: typeof MarketingAiDirectorRoute
+  MarketingBrandRoute: typeof MarketingBrandRoute
+  MarketingCampaignsRoute: typeof MarketingCampaignsRoute
+  MarketingContentStudioRoute: typeof MarketingContentStudioRoute
+  MarketingEmailRoute: typeof MarketingEmailRoute
+  MarketingGoogleAdsRoute: typeof MarketingGoogleAdsRoute
+  MarketingLandingPagesRoute: typeof MarketingLandingPagesRoute
+  MarketingMetaAdsRoute: typeof MarketingMetaAdsRoute
+  MarketingSeoRoute: typeof MarketingSeoRoute
+  MarketingSocialRoute: typeof MarketingSocialRoute
+  MarketingWhatsappRoute: typeof MarketingWhatsappRoute
+  OperationsAnalyticsRoute: typeof OperationsAnalyticsRoute
+  OperationsAutomationRoute: typeof OperationsAutomationRoute
+  OperationsCalendarRoute: typeof OperationsCalendarRoute
+  OperationsDocumentsRoute: typeof OperationsDocumentsRoute
+  OperationsNexdocsRoute: typeof OperationsNexdocsRoute
+  OperationsProjectsRoute: typeof OperationsProjectsRoute
+  OperationsReportsRoute: typeof OperationsReportsRoute
+  OperationsTasksRoute: typeof OperationsTasksRoute
+  SalesAnalyticsRoute: typeof SalesAnalyticsRoute
+  SalesAppointmentsRoute: typeof SalesAppointmentsRoute
+  SalesCompaniesRoute: typeof SalesCompaniesRoute
+  SalesCrmRoute: typeof SalesCrmRoute
+  SalesCustomersRoute: typeof SalesCustomersRoute
+  SalesForecastRoute: typeof SalesForecastRoute
+  SalesLeadFinderRoute: typeof SalesLeadFinderRoute
+  SalesLeadsRoute: typeof SalesLeadsRoute
+  SalesPipelineRoute: typeof SalesPipelineRoute
+  SalesQuotationsRoute: typeof SalesQuotationsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/roadmap': {
       id: '/roadmap'
       path: '/roadmap'
       fullPath: '/roadmap'
       preLoaderRoute: typeof RoadmapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/quick-actions': {
+      id: '/quick-actions'
+      path: '/quick-actions'
+      fullPath: '/quick-actions'
+      preLoaderRoute: typeof QuickActionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketplace': {
+      id: '/marketplace'
+      path: '/marketplace'
+      fullPath: '/marketplace'
+      preLoaderRoute: typeof MarketplaceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/business-health': {
+      id: '/business-health'
+      path: '/business-health'
+      fullPath: '/business-health'
+      preLoaderRoute: typeof BusinessHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-recommendations': {
+      id: '/ai-recommendations'
+      path: '/ai-recommendations'
+      fullPath: '/ai-recommendations'
+      preLoaderRoute: typeof AiRecommendationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -65,12 +712,338 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sales/quotations': {
+      id: '/sales/quotations'
+      path: '/sales/quotations'
+      fullPath: '/sales/quotations'
+      preLoaderRoute: typeof SalesQuotationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/pipeline': {
+      id: '/sales/pipeline'
+      path: '/sales/pipeline'
+      fullPath: '/sales/pipeline'
+      preLoaderRoute: typeof SalesPipelineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/leads': {
+      id: '/sales/leads'
+      path: '/sales/leads'
+      fullPath: '/sales/leads'
+      preLoaderRoute: typeof SalesLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/lead-finder': {
+      id: '/sales/lead-finder'
+      path: '/sales/lead-finder'
+      fullPath: '/sales/lead-finder'
+      preLoaderRoute: typeof SalesLeadFinderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/forecast': {
+      id: '/sales/forecast'
+      path: '/sales/forecast'
+      fullPath: '/sales/forecast'
+      preLoaderRoute: typeof SalesForecastRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/customers': {
+      id: '/sales/customers'
+      path: '/sales/customers'
+      fullPath: '/sales/customers'
+      preLoaderRoute: typeof SalesCustomersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/crm': {
+      id: '/sales/crm'
+      path: '/sales/crm'
+      fullPath: '/sales/crm'
+      preLoaderRoute: typeof SalesCrmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/companies': {
+      id: '/sales/companies'
+      path: '/sales/companies'
+      fullPath: '/sales/companies'
+      preLoaderRoute: typeof SalesCompaniesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/appointments': {
+      id: '/sales/appointments'
+      path: '/sales/appointments'
+      fullPath: '/sales/appointments'
+      preLoaderRoute: typeof SalesAppointmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/analytics': {
+      id: '/sales/analytics'
+      path: '/sales/analytics'
+      fullPath: '/sales/analytics'
+      preLoaderRoute: typeof SalesAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operations/tasks': {
+      id: '/operations/tasks'
+      path: '/operations/tasks'
+      fullPath: '/operations/tasks'
+      preLoaderRoute: typeof OperationsTasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operations/reports': {
+      id: '/operations/reports'
+      path: '/operations/reports'
+      fullPath: '/operations/reports'
+      preLoaderRoute: typeof OperationsReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operations/projects': {
+      id: '/operations/projects'
+      path: '/operations/projects'
+      fullPath: '/operations/projects'
+      preLoaderRoute: typeof OperationsProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operations/nexdocs': {
+      id: '/operations/nexdocs'
+      path: '/operations/nexdocs'
+      fullPath: '/operations/nexdocs'
+      preLoaderRoute: typeof OperationsNexdocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operations/documents': {
+      id: '/operations/documents'
+      path: '/operations/documents'
+      fullPath: '/operations/documents'
+      preLoaderRoute: typeof OperationsDocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operations/calendar': {
+      id: '/operations/calendar'
+      path: '/operations/calendar'
+      fullPath: '/operations/calendar'
+      preLoaderRoute: typeof OperationsCalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operations/automation': {
+      id: '/operations/automation'
+      path: '/operations/automation'
+      fullPath: '/operations/automation'
+      preLoaderRoute: typeof OperationsAutomationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operations/analytics': {
+      id: '/operations/analytics'
+      path: '/operations/analytics'
+      fullPath: '/operations/analytics'
+      preLoaderRoute: typeof OperationsAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/whatsapp': {
+      id: '/marketing/whatsapp'
+      path: '/marketing/whatsapp'
+      fullPath: '/marketing/whatsapp'
+      preLoaderRoute: typeof MarketingWhatsappRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/social': {
+      id: '/marketing/social'
+      path: '/marketing/social'
+      fullPath: '/marketing/social'
+      preLoaderRoute: typeof MarketingSocialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/seo': {
+      id: '/marketing/seo'
+      path: '/marketing/seo'
+      fullPath: '/marketing/seo'
+      preLoaderRoute: typeof MarketingSeoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/meta-ads': {
+      id: '/marketing/meta-ads'
+      path: '/marketing/meta-ads'
+      fullPath: '/marketing/meta-ads'
+      preLoaderRoute: typeof MarketingMetaAdsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/landing-pages': {
+      id: '/marketing/landing-pages'
+      path: '/marketing/landing-pages'
+      fullPath: '/marketing/landing-pages'
+      preLoaderRoute: typeof MarketingLandingPagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/google-ads': {
+      id: '/marketing/google-ads'
+      path: '/marketing/google-ads'
+      fullPath: '/marketing/google-ads'
+      preLoaderRoute: typeof MarketingGoogleAdsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/email': {
+      id: '/marketing/email'
+      path: '/marketing/email'
+      fullPath: '/marketing/email'
+      preLoaderRoute: typeof MarketingEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/content-studio': {
+      id: '/marketing/content-studio'
+      path: '/marketing/content-studio'
+      fullPath: '/marketing/content-studio'
+      preLoaderRoute: typeof MarketingContentStudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/campaigns': {
+      id: '/marketing/campaigns'
+      path: '/marketing/campaigns'
+      fullPath: '/marketing/campaigns'
+      preLoaderRoute: typeof MarketingCampaignsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/brand': {
+      id: '/marketing/brand'
+      path: '/marketing/brand'
+      fullPath: '/marketing/brand'
+      preLoaderRoute: typeof MarketingBrandRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/ai-director': {
+      id: '/marketing/ai-director'
+      path: '/marketing/ai-director'
+      fullPath: '/marketing/ai-director'
+      preLoaderRoute: typeof MarketingAiDirectorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/workflow': {
+      id: '/ai/workflow'
+      path: '/ai/workflow'
+      fullPath: '/ai/workflow'
+      preLoaderRoute: typeof AiWorkflowRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/voice': {
+      id: '/ai/voice'
+      path: '/ai/voice'
+      fullPath: '/ai/voice'
+      preLoaderRoute: typeof AiVoiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/support': {
+      id: '/ai/support'
+      path: '/ai/support'
+      fullPath: '/ai/support'
+      preLoaderRoute: typeof AiSupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/sales-assistant': {
+      id: '/ai/sales-assistant'
+      path: '/ai/sales-assistant'
+      fullPath: '/ai/sales-assistant'
+      preLoaderRoute: typeof AiSalesAssistantRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/prompts': {
+      id: '/ai/prompts'
+      path: '/ai/prompts'
+      fullPath: '/ai/prompts'
+      preLoaderRoute: typeof AiPromptsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/memory': {
+      id: '/ai/memory'
+      path: '/ai/memory'
+      fullPath: '/ai/memory'
+      preLoaderRoute: typeof AiMemoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/knowledge': {
+      id: '/ai/knowledge'
+      path: '/ai/knowledge'
+      fullPath: '/ai/knowledge'
+      preLoaderRoute: typeof AiKnowledgeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/cossa': {
+      id: '/ai/cossa'
+      path: '/ai/cossa'
+      fullPath: '/ai/cossa'
+      preLoaderRoute: typeof AiCossaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/consultant': {
+      id: '/ai/consultant'
+      path: '/ai/consultant'
+      fullPath: '/ai/consultant'
+      preLoaderRoute: typeof AiConsultantRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/ceo': {
+      id: '/ai/ceo'
+      path: '/ai/ceo'
+      fullPath: '/ai/ceo'
+      preLoaderRoute: typeof AiCeoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai/automation': {
+      id: '/ai/automation'
+      path: '/ai/automation'
+      fullPath: '/ai/automation'
+      preLoaderRoute: typeof AiAutomationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AiRecommendationsRoute: AiRecommendationsRoute,
+  BusinessHealthRoute: BusinessHealthRoute,
+  MarketplaceRoute: MarketplaceRoute,
+  NotificationsRoute: NotificationsRoute,
+  QuickActionsRoute: QuickActionsRoute,
   RoadmapRoute: RoadmapRoute,
+  SettingsRoute: SettingsRoute,
+  AiAutomationRoute: AiAutomationRoute,
+  AiCeoRoute: AiCeoRoute,
+  AiConsultantRoute: AiConsultantRoute,
+  AiCossaRoute: AiCossaRoute,
+  AiKnowledgeRoute: AiKnowledgeRoute,
+  AiMemoryRoute: AiMemoryRoute,
+  AiPromptsRoute: AiPromptsRoute,
+  AiSalesAssistantRoute: AiSalesAssistantRoute,
+  AiSupportRoute: AiSupportRoute,
+  AiVoiceRoute: AiVoiceRoute,
+  AiWorkflowRoute: AiWorkflowRoute,
+  MarketingAiDirectorRoute: MarketingAiDirectorRoute,
+  MarketingBrandRoute: MarketingBrandRoute,
+  MarketingCampaignsRoute: MarketingCampaignsRoute,
+  MarketingContentStudioRoute: MarketingContentStudioRoute,
+  MarketingEmailRoute: MarketingEmailRoute,
+  MarketingGoogleAdsRoute: MarketingGoogleAdsRoute,
+  MarketingLandingPagesRoute: MarketingLandingPagesRoute,
+  MarketingMetaAdsRoute: MarketingMetaAdsRoute,
+  MarketingSeoRoute: MarketingSeoRoute,
+  MarketingSocialRoute: MarketingSocialRoute,
+  MarketingWhatsappRoute: MarketingWhatsappRoute,
+  OperationsAnalyticsRoute: OperationsAnalyticsRoute,
+  OperationsAutomationRoute: OperationsAutomationRoute,
+  OperationsCalendarRoute: OperationsCalendarRoute,
+  OperationsDocumentsRoute: OperationsDocumentsRoute,
+  OperationsNexdocsRoute: OperationsNexdocsRoute,
+  OperationsProjectsRoute: OperationsProjectsRoute,
+  OperationsReportsRoute: OperationsReportsRoute,
+  OperationsTasksRoute: OperationsTasksRoute,
+  SalesAnalyticsRoute: SalesAnalyticsRoute,
+  SalesAppointmentsRoute: SalesAppointmentsRoute,
+  SalesCompaniesRoute: SalesCompaniesRoute,
+  SalesCrmRoute: SalesCrmRoute,
+  SalesCustomersRoute: SalesCustomersRoute,
+  SalesForecastRoute: SalesForecastRoute,
+  SalesLeadFinderRoute: SalesLeadFinderRoute,
+  SalesLeadsRoute: SalesLeadsRoute,
+  SalesPipelineRoute: SalesPipelineRoute,
+  SalesQuotationsRoute: SalesQuotationsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
