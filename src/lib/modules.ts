@@ -1,4 +1,5 @@
 import {
+  Rocket as RocketIcon, GraduationCap as CoachIcon, BookOpen, Factory, Crosshair,
   LayoutDashboard, Activity, Sparkles, Bell, Zap, Map,
   Megaphone, Search, MousePointerClick, Facebook, Share2, PenTool, Mail, MessageCircle, LayoutTemplate, Rocket, Palette,
   Users, UserPlus, GitBranch, UserCheck, Building2, CalendarDays, FileText, LineChart, BarChart3, Radar,
