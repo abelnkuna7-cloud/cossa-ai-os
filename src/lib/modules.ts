@@ -50,7 +50,7 @@ export const MODULES: ModuleGroup[] = [
         "One guided journey instead of ten scattered tools.",
         ["Goal-based missions", "AI-generated execution plan", "Cross-module orchestration", "Progress tracking"],
         ["Autonomous mission runs", "Team assignments", "Outcome-based reporting"]),
-      s("AI Business Coach", "/ai/coach", CoachIcon, "Design",
+      s("AI Business Coach", "/ai/coach", GraduationCap, "Design",
         "Your daily business coach",
         "A permanent AI coach that reviews your business every day and tells you exactly what to focus on next.",
         "Turn the AI from an assistant into a proactive coach.",
