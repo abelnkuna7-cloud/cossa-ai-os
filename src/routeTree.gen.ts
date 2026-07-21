@@ -13,9 +13,13 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as QuickActionsRouteImport } from './routes/quick-actions'
+import { Route as PlaybooksRouteImport } from './routes/playbooks'
+import { Route as OpportunityRadarRouteImport } from './routes/opportunity-radar'
 import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as MissionControlRouteImport } from './routes/mission-control'
 import { Route as MarketplaceRouteImport } from './routes/marketplace'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
+import { Route as IndustriesRouteImport } from './routes/industries'
 import { Route as BusinessHealthRouteImport } from './routes/business-health'
 import { Route as AiRecommendationsRouteImport } from './routes/ai-recommendations'
 import { Route as IndexRouteImport } from './routes/index'
@@ -73,6 +77,7 @@ import { Route as AiDocumentAssistantRouteImport } from './routes/ai.document-as
 import { Route as AiCrmSpecialistRouteImport } from './routes/ai.crm-specialist'
 import { Route as AiCossaRouteImport } from './routes/ai.cossa'
 import { Route as AiConsultantRouteImport } from './routes/ai.consultant'
+import { Route as AiCoachRouteImport } from './routes/ai.coach'
 import { Route as AiCeoRouteImport } from './routes/ai.ceo'
 import { Route as AiAutomationRouteImport } from './routes/ai.automation'
 
@@ -96,9 +101,24 @@ const QuickActionsRoute = QuickActionsRouteImport.update({
   path: '/quick-actions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlaybooksRoute = PlaybooksRouteImport.update({
+  id: '/playbooks',
+  path: '/playbooks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OpportunityRadarRoute = OpportunityRadarRouteImport.update({
+  id: '/opportunity-radar',
+  path: '/opportunity-radar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NotificationsRoute = NotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MissionControlRoute = MissionControlRouteImport.update({
+  id: '/mission-control',
+  path: '/mission-control',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MarketplaceRoute = MarketplaceRouteImport.update({
@@ -109,6 +129,11 @@ const MarketplaceRoute = MarketplaceRouteImport.update({
 const IntegrationsRoute = IntegrationsRouteImport.update({
   id: '/integrations',
   path: '/integrations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndustriesRoute = IndustriesRouteImport.update({
+  id: '/industries',
+  path: '/industries',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BusinessHealthRoute = BusinessHealthRouteImport.update({
@@ -397,6 +422,11 @@ const AiConsultantRoute = AiConsultantRouteImport.update({
   path: '/ai/consultant',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AiCoachRoute = AiCoachRouteImport.update({
+  id: '/ai/coach',
+  path: '/ai/coach',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AiCeoRoute = AiCeoRouteImport.update({
   id: '/ai/ceo',
   path: '/ai/ceo',
@@ -412,15 +442,20 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/industries': typeof IndustriesRoute
   '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
+  '/mission-control': typeof MissionControlRoute
   '/notifications': typeof NotificationsRoute
+  '/opportunity-radar': typeof OpportunityRadarRoute
+  '/playbooks': typeof PlaybooksRoute
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
+  '/ai/coach': typeof AiCoachRoute
   '/ai/consultant': typeof AiConsultantRoute
   '/ai/cossa': typeof AiCossaRoute
   '/ai/crm-specialist': typeof AiCrmSpecialistRoute
@@ -480,15 +515,20 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/industries': typeof IndustriesRoute
   '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
+  '/mission-control': typeof MissionControlRoute
   '/notifications': typeof NotificationsRoute
+  '/opportunity-radar': typeof OpportunityRadarRoute
+  '/playbooks': typeof PlaybooksRoute
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
+  '/ai/coach': typeof AiCoachRoute
   '/ai/consultant': typeof AiConsultantRoute
   '/ai/cossa': typeof AiCossaRoute
   '/ai/crm-specialist': typeof AiCrmSpecialistRoute
@@ -549,15 +589,20 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/industries': typeof IndustriesRoute
   '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
+  '/mission-control': typeof MissionControlRoute
   '/notifications': typeof NotificationsRoute
+  '/opportunity-radar': typeof OpportunityRadarRoute
+  '/playbooks': typeof PlaybooksRoute
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
+  '/ai/coach': typeof AiCoachRoute
   '/ai/consultant': typeof AiConsultantRoute
   '/ai/cossa': typeof AiCossaRoute
   '/ai/crm-specialist': typeof AiCrmSpecialistRoute
@@ -619,15 +664,20 @@ export interface FileRouteTypes {
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/industries'
     | '/integrations'
     | '/marketplace'
+    | '/mission-control'
     | '/notifications'
+    | '/opportunity-radar'
+    | '/playbooks'
     | '/quick-actions'
     | '/roadmap'
     | '/settings'
     | '/sitemap.xml'
     | '/ai/automation'
     | '/ai/ceo'
+    | '/ai/coach'
     | '/ai/consultant'
     | '/ai/cossa'
     | '/ai/crm-specialist'
@@ -687,15 +737,20 @@ export interface FileRouteTypes {
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/industries'
     | '/integrations'
     | '/marketplace'
+    | '/mission-control'
     | '/notifications'
+    | '/opportunity-radar'
+    | '/playbooks'
     | '/quick-actions'
     | '/roadmap'
     | '/settings'
     | '/sitemap.xml'
     | '/ai/automation'
     | '/ai/ceo'
+    | '/ai/coach'
     | '/ai/consultant'
     | '/ai/cossa'
     | '/ai/crm-specialist'
@@ -755,15 +810,20 @@ export interface FileRouteTypes {
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/industries'
     | '/integrations'
     | '/marketplace'
+    | '/mission-control'
     | '/notifications'
+    | '/opportunity-radar'
+    | '/playbooks'
     | '/quick-actions'
     | '/roadmap'
     | '/settings'
     | '/sitemap.xml'
     | '/ai/automation'
     | '/ai/ceo'
+    | '/ai/coach'
     | '/ai/consultant'
     | '/ai/cossa'
     | '/ai/crm-specialist'
@@ -824,15 +884,20 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AiRecommendationsRoute: typeof AiRecommendationsRoute
   BusinessHealthRoute: typeof BusinessHealthRoute
+  IndustriesRoute: typeof IndustriesRoute
   IntegrationsRoute: typeof IntegrationsRoute
   MarketplaceRoute: typeof MarketplaceRoute
+  MissionControlRoute: typeof MissionControlRoute
   NotificationsRoute: typeof NotificationsRoute
+  OpportunityRadarRoute: typeof OpportunityRadarRoute
+  PlaybooksRoute: typeof PlaybooksRoute
   QuickActionsRoute: typeof QuickActionsRoute
   RoadmapRoute: typeof RoadmapRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AiAutomationRoute: typeof AiAutomationRoute
   AiCeoRoute: typeof AiCeoRoute
+  AiCoachRoute: typeof AiCoachRoute
   AiConsultantRoute: typeof AiConsultantRoute
   AiCossaRoute: typeof AiCossaRoute
   AiCrmSpecialistRoute: typeof AiCrmSpecialistRoute
@@ -919,11 +984,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QuickActionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/playbooks': {
+      id: '/playbooks'
+      path: '/playbooks'
+      fullPath: '/playbooks'
+      preLoaderRoute: typeof PlaybooksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/opportunity-radar': {
+      id: '/opportunity-radar'
+      path: '/opportunity-radar'
+      fullPath: '/opportunity-radar'
+      preLoaderRoute: typeof OpportunityRadarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/notifications': {
       id: '/notifications'
       path: '/notifications'
       fullPath: '/notifications'
       preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mission-control': {
+      id: '/mission-control'
+      path: '/mission-control'
+      fullPath: '/mission-control'
+      preLoaderRoute: typeof MissionControlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/marketplace': {
@@ -938,6 +1024,13 @@ declare module '@tanstack/react-router' {
       path: '/integrations'
       fullPath: '/integrations'
       preLoaderRoute: typeof IntegrationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/industries': {
+      id: '/industries'
+      path: '/industries'
+      fullPath: '/industries'
+      preLoaderRoute: typeof IndustriesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/business-health': {
@@ -1339,6 +1432,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AiConsultantRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ai/coach': {
+      id: '/ai/coach'
+      path: '/ai/coach'
+      fullPath: '/ai/coach'
+      preLoaderRoute: typeof AiCoachRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ai/ceo': {
       id: '/ai/ceo'
       path: '/ai/ceo'
@@ -1360,15 +1460,20 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AiRecommendationsRoute: AiRecommendationsRoute,
   BusinessHealthRoute: BusinessHealthRoute,
+  IndustriesRoute: IndustriesRoute,
   IntegrationsRoute: IntegrationsRoute,
   MarketplaceRoute: MarketplaceRoute,
+  MissionControlRoute: MissionControlRoute,
   NotificationsRoute: NotificationsRoute,
+  OpportunityRadarRoute: OpportunityRadarRoute,
+  PlaybooksRoute: PlaybooksRoute,
   QuickActionsRoute: QuickActionsRoute,
   RoadmapRoute: RoadmapRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   AiAutomationRoute: AiAutomationRoute,
   AiCeoRoute: AiCeoRoute,
+  AiCoachRoute: AiCoachRoute,
   AiConsultantRoute: AiConsultantRoute,
   AiCossaRoute: AiCossaRoute,
   AiCrmSpecialistRoute: AiCrmSpecialistRoute,
