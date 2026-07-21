@@ -14,6 +14,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as QuickActionsRouteImport } from './routes/quick-actions'
 import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as MissionControlRouteImport } from './routes/mission-control'
 import { Route as MarketplaceRouteImport } from './routes/marketplace'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as BusinessHealthRouteImport } from './routes/business-health'
@@ -99,6 +100,11 @@ const QuickActionsRoute = QuickActionsRouteImport.update({
 const NotificationsRoute = NotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MissionControlRoute = MissionControlRouteImport.update({
+  id: '/mission-control',
+  path: '/mission-control',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MarketplaceRoute = MarketplaceRouteImport.update({
@@ -414,6 +420,7 @@ export interface FileRoutesByFullPath {
   '/business-health': typeof BusinessHealthRoute
   '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
+  '/mission-control': typeof MissionControlRoute
   '/notifications': typeof NotificationsRoute
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
@@ -482,6 +489,7 @@ export interface FileRoutesByTo {
   '/business-health': typeof BusinessHealthRoute
   '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
+  '/mission-control': typeof MissionControlRoute
   '/notifications': typeof NotificationsRoute
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
@@ -551,6 +559,7 @@ export interface FileRoutesById {
   '/business-health': typeof BusinessHealthRoute
   '/integrations': typeof IntegrationsRoute
   '/marketplace': typeof MarketplaceRoute
+  '/mission-control': typeof MissionControlRoute
   '/notifications': typeof NotificationsRoute
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
@@ -621,6 +630,7 @@ export interface FileRouteTypes {
     | '/business-health'
     | '/integrations'
     | '/marketplace'
+    | '/mission-control'
     | '/notifications'
     | '/quick-actions'
     | '/roadmap'
@@ -689,6 +699,7 @@ export interface FileRouteTypes {
     | '/business-health'
     | '/integrations'
     | '/marketplace'
+    | '/mission-control'
     | '/notifications'
     | '/quick-actions'
     | '/roadmap'
@@ -757,6 +768,7 @@ export interface FileRouteTypes {
     | '/business-health'
     | '/integrations'
     | '/marketplace'
+    | '/mission-control'
     | '/notifications'
     | '/quick-actions'
     | '/roadmap'
@@ -826,6 +838,7 @@ export interface RootRouteChildren {
   BusinessHealthRoute: typeof BusinessHealthRoute
   IntegrationsRoute: typeof IntegrationsRoute
   MarketplaceRoute: typeof MarketplaceRoute
+  MissionControlRoute: typeof MissionControlRoute
   NotificationsRoute: typeof NotificationsRoute
   QuickActionsRoute: typeof QuickActionsRoute
   RoadmapRoute: typeof RoadmapRoute
@@ -924,6 +937,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/notifications'
       preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mission-control': {
+      id: '/mission-control'
+      path: '/mission-control'
+      fullPath: '/mission-control'
+      preLoaderRoute: typeof MissionControlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/marketplace': {
@@ -1362,6 +1382,7 @@ const rootRouteChildren: RootRouteChildren = {
   BusinessHealthRoute: BusinessHealthRoute,
   IntegrationsRoute: IntegrationsRoute,
   MarketplaceRoute: MarketplaceRoute,
+  MissionControlRoute: MissionControlRoute,
   NotificationsRoute: NotificationsRoute,
   QuickActionsRoute: QuickActionsRoute,
   RoadmapRoute: RoadmapRoute,
