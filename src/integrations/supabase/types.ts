@@ -14,7 +14,146 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_conversations: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          pinned: boolean
+          title: string
+          updated_at: string
+          workspace_key: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          pinned?: boolean
+          title?: string
+          updated_at?: string
+          workspace_key?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          pinned?: boolean
+          title?: string
+          updated_at?: string
+          workspace_key?: string | null
+        }
+        Relationships: []
+      }
+      ai_knowledge_documents: {
+        Row: {
+          body: string
+          category: string | null
+          created_at: string
+          id: string
+          source: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+          workspace_key: string | null
+        }
+        Insert: {
+          body: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          source?: string | null
+          tags?: string[]
+          title: string
+          updated_at?: string
+          workspace_key?: string | null
+        }
+        Update: {
+          body?: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          source?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          workspace_key?: string | null
+        }
+        Relationships: []
+      }
+      ai_messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          role: string
+          tokens: number | null
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          role: string
+          tokens?: number | null
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          tokens?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_prompts: {
+        Row: {
+          body: string
+          category: string | null
+          created_at: string
+          id: string
+          pinned: boolean
+          tags: string[]
+          title: string
+          updated_at: string
+          usage_count: number
+          workspace_key: string | null
+        }
+        Insert: {
+          body: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          pinned?: boolean
+          tags?: string[]
+          title: string
+          updated_at?: string
+          usage_count?: number
+          workspace_key?: string | null
+        }
+        Update: {
+          body?: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          pinned?: boolean
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          usage_count?: number
+          workspace_key?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
