@@ -1,262 +1,372 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
-  Brain, Send, Paperclip, Mic, Sparkles, Plus, Search, Pin, Star, History,
-  Folder, Zap, FileText, TrendingUp, Users, Megaphone, Handshake, Workflow,
-  MessageSquare, Bot, ChevronRight,
+  Brain, Send, Sparkles, Plus, Search, Pin, MessageSquare, Bot, Trash2, Loader2, User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import {
+  listConversations, createConversation, updateConversation, deleteConversation,
+  listMessages, insertMessage, type AiConversation, type AiMessage,
+} from "@/lib/ai-data";
+import { streamChat } from "@/lib/ai-stream";
 
 export const Route = createFileRoute("/ai/cossa")({
   component: AiChatWorkspace,
   head: () => ({
     meta: [
       { title: "Cossa AI — AI Chat Workspace" },
-      { name: "description", content: "Chat with Cossa AI — the AI co-pilot for your business, with memory, tools and full context." },
+      { name: "description", content: "Chat with Cossa AI — your AI co-pilot for marketing, sales, operations and strategy." },
       { property: "og:title", content: "Cossa AI — AI Chat Workspace" },
+      { property: "og:description", content: "Real-time streaming AI chat with saved history, tuned to South African SMEs." },
     ],
   }),
 });
 
-const categories = [
-  { label: "Strategy", icon: Brain, count: 12 },
-  { label: "Marketing", icon: Megaphone, count: 28 },
-  { label: "Sales", icon: Handshake, count: 34 },
-  { label: "Operations", icon: Workflow, count: 15 },
-  { label: "Finance", icon: TrendingUp, count: 9 },
-  { label: "People", icon: Users, count: 6 },
-];
-
-const pinned = [
-  { title: "Q3 Growth Strategy", when: "Yesterday", cat: "Strategy" },
-  { title: "Winter Campaign Brief", when: "2 days ago", cat: "Marketing" },
-  { title: "Enterprise Pricing Model", when: "1 week ago", cat: "Sales" },
-];
-
-const recent = [
-  { title: "Draft proposal — Kruger Logistics", when: "12 min ago" },
-  { title: "Analyse last month's ad spend", when: "1 hr ago" },
-  { title: "Weekly leadership report", when: "3 hr ago" },
-  { title: "Follow-up sequence: dormant customers", when: "Yesterday" },
-  { title: "Job spec: Senior Sales Rep", when: "2 days ago" },
-  { title: "SEO plan for landing pages", when: "3 days ago" },
-];
-
-const suggested = [
-  { icon: TrendingUp, prompt: "Summarise this week's business performance and top 3 risks." },
-  { icon: Handshake, prompt: "Draft follow-up emails for every deal in Proposal stage." },
-  { icon: Megaphone, prompt: "Propose 5 marketing campaigns for the next 90 days." },
-  { icon: FileText, prompt: "Turn my last customer call into a proposal." },
-  { icon: Users, prompt: "Which customers are at risk of churning and why?" },
-  { icon: Workflow, prompt: "Build an automation for overdue invoice reminders." },
-];
-
-const workflows = [
-  { title: "Daily Business Briefing", desc: "Overnight scan + morning briefing on WhatsApp." },
-  { title: "Lead Follow-up Autopilot", desc: "AI drafts and sends follow-ups for every new lead." },
-  { title: "Weekly Board Pack", desc: "Auto-generated leadership review every Monday." },
-];
-
-const quickActions = [
-  { label: "New Chat", icon: Plus },
-  { label: "Upload Files", icon: Paperclip },
-  { label: "Voice Mode", icon: Mic },
-  { label: "Browse Prompts", icon: Sparkles },
+const starterPrompts = [
+  { icon: Sparkles, label: "Draft a WhatsApp follow-up for a hot lead" },
+  { icon: Brain, label: "Give me 3 growth ideas for this month" },
+  { icon: MessageSquare, label: "Write a professional quote email" },
+  { icon: Bot, label: "Summarise my business into a one-page brief" },
 ];
 
 function AiChatWorkspace() {
+  const qc = useQueryClient();
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const [input, setInput] = useState("");
+  const [streaming, setStreaming] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const convos = useQuery({ queryKey: ["ai-conversations"], queryFn: listConversations });
+  const messages = useQuery({
+    queryKey: ["ai-messages", activeId],
+    queryFn: () => (activeId ? listMessages(activeId) : Promise.resolve([] as AiMessage[])),
+    enabled: !!activeId,
+  });
+
+  // Auto-select the first conversation on load.
+  useEffect(() => {
+    if (!activeId && convos.data && convos.data.length > 0) setActiveId(convos.data[0].id);
+  }, [convos.data, activeId]);
+
+  // Autoscroll on new content.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages.data, streaming]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return convos.data ?? [];
+    return (convos.data ?? []).filter((c) => c.title.toLowerCase().includes(q));
+  }, [convos.data, search]);
+
+  async function handleNew() {
+    try {
+      const c = await createConversation();
+      await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+      setActiveId(c.id);
+    } catch (e) {
+      toast.error("Could not start a new chat", { description: (e as Error).message });
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this conversation?")) return;
+    try {
+      await deleteConversation(id);
+      await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+      if (id === activeId) setActiveId(null);
+    } catch (e) {
+      toast.error("Delete failed", { description: (e as Error).message });
+    }
+  }
+
+  async function handleTogglePin(c: AiConversation) {
+    try {
+      await updateConversation(c.id, { pinned: !c.pinned });
+      await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+    } catch (e) {
+      toast.error("Could not update", { description: (e as Error).message });
+    }
+  }
+
+  async function handleSend(text?: string) {
+    const content = (text ?? input).trim();
+    if (!content || sending) return;
+    setSending(true);
+    setInput("");
+    try {
+      // Ensure we have a conversation.
+      let convoId = activeId;
+      if (!convoId) {
+        const c = await createConversation(content.slice(0, 60));
+        convoId = c.id;
+        setActiveId(convoId);
+        await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+      }
+
+      // Persist user message.
+      await insertMessage(convoId, "user", content);
+      await qc.invalidateQueries({ queryKey: ["ai-messages", convoId] });
+
+      // Build model context from persisted history + the new user turn.
+      const prior = (await listMessages(convoId)).map((m) => ({ role: m.role, content: m.content }));
+
+      // Auto-title from first user turn.
+      const currentConvo = (convos.data ?? []).find((c) => c.id === convoId);
+      if (currentConvo && (currentConvo.title === "New conversation" || !currentConvo.title.trim())) {
+        await updateConversation(convoId, { title: content.slice(0, 60) });
+        await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+      }
+
+      // Stream the assistant reply.
+      abortRef.current = new AbortController();
+      setStreaming("");
+      const final = await streamChat(
+        prior,
+        (chunk) => setStreaming((s) => (s ?? "") + chunk),
+        abortRef.current.signal,
+      );
+
+      await insertMessage(convoId, "assistant", final);
+      setStreaming(null);
+      await qc.invalidateQueries({ queryKey: ["ai-messages", convoId] });
+      await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+    } catch (e) {
+      setStreaming(null);
+      const msg = (e as Error).message;
+      if (msg.includes("402")) {
+        toast.error("AI credits exhausted", { description: "Add credits to your Lovable workspace to continue." });
+      } else if (msg.includes("429")) {
+        toast.error("Rate limited", { description: "Please try again in a moment." });
+      } else {
+        toast.error("AI request failed", { description: msg });
+      }
+    } finally {
+      setSending(false);
+      abortRef.current = null;
+    }
+  }
+
+  const activeConvo = (convos.data ?? []).find((c) => c.id === activeId) ?? null;
+  const hasMessages = (messages.data?.length ?? 0) > 0 || streaming !== null;
+
   return (
-    <div className="mx-auto grid max-w-[1600px] gap-4 lg:grid-cols-[280px_1fr_320px]">
-      {/* LEFT: History + categories */}
-      <aside className="glass-card flex h-[calc(100vh-9rem)] min-h-[640px] flex-col p-4">
-        <Button className="w-full justify-start gap-2 bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
-          <Plus className="h-4 w-4" /> New chat
-        </Button>
-        <div className="mt-3 flex items-center gap-2 rounded-lg border border-border/60 bg-card/40 px-2.5 py-1.5 text-xs text-muted-foreground">
-          <Search className="h-3.5 w-3.5" /> <span>Search conversations…</span>
-        </div>
-
-        <div className="mt-5">
-          <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            <Folder className="h-3 w-3" /> Categories
-          </div>
-          <ul className="space-y-0.5">
-            {categories.map((c) => (
-              <li key={c.label}>
-                <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground/90 hover:bg-primary/10">
-                  <c.icon className="h-3.5 w-3.5 text-primary" />
-                  <span className="flex-1 text-left">{c.label}</span>
-                  <span className="text-[10px] text-muted-foreground">{c.count}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="mt-5">
-          <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            <Pin className="h-3 w-3" /> Pinned
-          </div>
-          <ul className="space-y-1">
-            {pinned.map((p) => (
-              <li key={p.title} className="rounded-md border border-border/60 bg-card/40 px-2.5 py-2 text-xs">
-                <div className="truncate font-medium">{p.title}</div>
-                <div className="mt-0.5 flex items-center justify-between text-[10px] text-muted-foreground">
-                  <span>{p.cat}</span><span>{p.when}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="mt-5 min-h-0 flex-1">
-          <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            <History className="h-3 w-3" /> Recent
-          </div>
-          <ul className="space-y-0.5 overflow-y-auto pr-1">
-            {recent.map((r) => (
-              <li key={r.title}>
-                <button className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-primary/10">
-                  <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate">{r.title}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </aside>
-
-      {/* CENTER: Chat surface */}
-      <section className="glass-card flex h-[calc(100vh-9rem)] min-h-[640px] flex-col">
-        <header className="flex items-center gap-3 border-b border-border/60 px-6 py-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
-            <Brain className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="font-display text-base font-semibold">Cossa AI</h1>
-              <StatusBadge status="Development" />
+    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-[1600px] flex-col gap-4">
+      {/* Header */}
+      <section className="glass-card relative overflow-hidden p-5 md:p-6">
+        <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
+              <Brain className="h-5 w-5" />
             </div>
-            <p className="text-xs text-muted-foreground">Context: Cossa Nexus Holdings · Business memory active</p>
-          </div>
-          <div className="ml-auto hidden sm:flex items-center gap-1.5 rounded-md border border-border/60 bg-card/40 px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground">
-            <Bot className="h-3 w-3 text-primary" /> Model: Cossa-Gold
-          </div>
-        </header>
-
-        <div className="flex-1 overflow-y-auto px-6 py-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary gold-glow">
-              <Sparkles className="h-6 w-6" />
-            </div>
-            <h2 className="mt-5 font-display text-2xl font-semibold">
-              How can I help run your business today?
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Ask about revenue, marketing, sales, operations or people. Attach files, upload data, or run a saved workflow.
-            </p>
-
-            <div className="mt-6 grid gap-3 text-left sm:grid-cols-2">
-              {suggested.map((s) => (
-                <button key={s.prompt} className="flex items-start gap-3 rounded-xl border border-border/60 bg-card/40 p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5">
-                  <s.icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  <span className="text-sm text-foreground/90">{s.prompt}</span>
-                </button>
-              ))}
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-display text-xl md:text-2xl font-semibold">
+                  Cossa <span className="text-gradient-gold">AI</span>
+                </h1>
+                <StatusBadge status="Live" />
+              </div>
+              <p className="text-xs text-muted-foreground">Your AI co-pilot — streaming, with memory across chats.</p>
             </div>
           </div>
-        </div>
-
-        <div className="border-t border-border/60 p-4">
-          <div className="mx-auto max-w-3xl">
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {quickActions.map((q) => (
-                <button key={q.label} className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/40 px-3 py-1 text-[11px] text-muted-foreground hover:border-primary/40 hover:text-primary">
-                  <q.icon className="h-3 w-3" /> {q.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-end gap-2 rounded-2xl border border-border/60 bg-card/60 p-2 focus-within:border-primary/50">
-              <button className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary" aria-label="Attach">
-                <Paperclip className="h-4 w-4" />
-              </button>
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Message Cossa AI…  (functionality coming soon)"
-                rows={1}
-                className="min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none placeholder:text-muted-foreground"
-              />
-              <button className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary" aria-label="Voice">
-                <Mic className="h-4 w-4" />
-              </button>
-              <Button size="icon" className="h-9 w-9 bg-primary text-primary-foreground hover:bg-primary/90 gold-glow" aria-label="Send">
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-            <p className="mt-2 text-center text-[10px] text-muted-foreground">
-              Cossa AI can access your business data, files and integrations. Guardrails and approvals coming soon.
-            </p>
-          </div>
+          <Button onClick={handleNew} className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
+            <Plus className="mr-1.5 h-4 w-4" /> New chat
+          </Button>
         </div>
       </section>
 
-      {/* RIGHT: Business context + workflows */}
-      <aside className="glass-card flex h-[calc(100vh-9rem)] min-h-[640px] flex-col gap-5 p-5">
-        <div>
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Business Context</div>
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-            <div className="text-sm font-semibold">Cossa Nexus Holdings</div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              South African SME · Multi-brand · 42 team members · R48M ARR target · Growth stage.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1">
-              {["Strategy", "Marketing", "Sales", "Ops"].map((t) => (
-                <span key={t} className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">{t}</span>
-              ))}
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[300px_1fr]">
+        {/* Sidebar */}
+        <aside className="glass-card flex min-h-0 flex-col p-3">
+          <div className="relative mb-3">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search chats"
+              className="w-full rounded-lg border border-border/60 bg-background/50 py-2 pl-8 pr-2 text-xs outline-none focus:border-primary/50"
+            />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            {convos.isLoading ? (
+              <div className="p-3 text-xs text-muted-foreground">Loading…</div>
+            ) : filtered.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
+                No chats yet. Start one to see it here.
+              </div>
+            ) : (
+              <ul className="space-y-1">
+                {filtered.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      onClick={() => setActiveId(c.id)}
+                      className={cn(
+                        "group flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors",
+                        c.id === activeId
+                          ? "border-primary/40 bg-primary/10"
+                          : "border-transparent hover:border-border/60 hover:bg-card/40",
+                      )}
+                    >
+                      <MessageSquare className={cn("h-3.5 w-3.5 shrink-0", c.pinned ? "text-primary" : "text-muted-foreground")} />
+                      <span className="min-w-0 flex-1 truncate">{c.title}</span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); handleTogglePin(c); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleTogglePin(c); } }}
+                        className="opacity-0 group-hover:opacity-100 hover:text-primary"
+                        aria-label={c.pinned ? "Unpin" : "Pin"}
+                      >
+                        <Pin className={cn("h-3 w-3", c.pinned && "fill-primary text-primary opacity-100")} />
+                      </span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleDelete(c.id); } }}
+                        className="opacity-0 group-hover:opacity-100 hover:text-destructive"
+                        aria-label="Delete"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
+
+        {/* Chat pane */}
+        <section className="glass-card flex min-h-0 flex-col">
+          <div className="flex items-center justify-between border-b border-border/40 px-5 py-3">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold">
+                {activeConvo?.title ?? "New chat"}
+              </div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Powered by Lovable AI • google/gemini-3.6-flash
+              </div>
             </div>
           </div>
-        </div>
 
-        <div>
-          <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            <Zap className="h-3 w-3" /> Recommended Workflows
-          </div>
-          <ul className="space-y-2">
-            {workflows.map((w) => (
-              <li key={w.title} className="rounded-xl border border-border/60 bg-card/40 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-sm font-medium">{w.title}</div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{w.desc}</p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8">
+            {!hasMessages ? (
+              <div className="mx-auto flex max-w-2xl flex-col items-center gap-6 py-8 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary gold-glow">
+                  <Sparkles className="h-6 w-6" />
                 </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div>
-          <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            <Star className="h-3 w-3" /> Recent AI Tasks
+                <div>
+                  <h2 className="font-display text-2xl font-semibold">
+                    How can Cossa <span className="text-gradient-gold">help</span> today?
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Ask anything — strategy, marketing copy, sales follow-ups, quotes, or business analysis.
+                  </p>
+                </div>
+                <div className="grid w-full max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
+                  {starterPrompts.map((p) => (
+                    <button
+                      key={p.label}
+                      onClick={() => handleSend(p.label)}
+                      className="flex items-start gap-2 rounded-xl border border-border/60 bg-card/40 p-3 text-left text-xs transition-colors hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      <p.icon className="mt-0.5 h-4 w-4 text-primary" />
+                      <span>{p.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mx-auto flex max-w-3xl flex-col gap-6">
+                {(messages.data ?? []).map((m) => (
+                  <ChatBubble key={m.id} role={m.role} content={m.content} />
+                ))}
+                {streaming !== null && (
+                  <ChatBubble role="assistant" content={streaming || "…"} streaming />
+                )}
+              </div>
+            )}
           </div>
-          <ul className="space-y-1.5 text-xs">
-            <li className={cn("rounded-lg border border-border/60 bg-card/40 p-2")}>
-              <div className="flex items-center justify-between"><span>Drafted 12 follow-up emails</span><span className="text-success">Done</span></div>
-            </li>
-            <li className="rounded-lg border border-border/60 bg-card/40 p-2">
-              <div className="flex items-center justify-between"><span>Analysed Q2 ad performance</span><span className="text-success">Done</span></div>
-            </li>
-            <li className="rounded-lg border border-border/60 bg-card/40 p-2">
-              <div className="flex items-center justify-between"><span>Generated 5 landing page variants</span><span className="text-primary">Review</span></div>
-            </li>
-          </ul>
+
+          {/* Composer */}
+          <div className="border-t border-border/40 p-3 md:p-4">
+            <form
+              onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+              className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-border/60 bg-background/50 p-2 focus-within:border-primary/50"
+            >
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                }}
+                rows={1}
+                placeholder="Message Cossa AI… (Enter to send, Shift+Enter for newline)"
+                className="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
+                disabled={sending}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={sending || !input.trim()}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+                aria-label="Send"
+              >
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </form>
+            <p className="mx-auto mt-2 max-w-3xl text-center text-[10px] text-muted-foreground">
+              Cossa AI can make mistakes. Verify important information.
+            </p>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function ChatBubble({ role, content, streaming }: { role: string; content: string; streaming?: boolean }) {
+  const isUser = role === "user";
+  return (
+    <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
+      {!isUser && (
+        <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+          <Brain className="h-3.5 w-3.5" />
         </div>
-      </aside>
+      )}
+      <div
+        className={cn(
+          "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm",
+          isUser
+            ? "bg-primary/15 border border-primary/30 text-foreground"
+            : "border border-border/60 bg-card/40",
+        )}
+      >
+        {isUser ? (
+          <div className="whitespace-pre-wrap">{content}</div>
+        ) : (
+          <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-pre:my-2 prose-headings:font-display">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            {streaming && <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-primary align-middle" />}
+          </div>
+        )}
+      </div>
+      {isUser && (
+        <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+          <User className="h-3.5 w-3.5" />
+        </div>
+      )}
     </div>
   );
 }

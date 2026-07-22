@@ -62,6 +62,7 @@ import { Route as MarketingCompetitorsRouteImport } from './routes/marketing.com
 import { Route as MarketingCampaignsRouteImport } from './routes/marketing.campaigns'
 import { Route as MarketingBrandRouteImport } from './routes/marketing.brand'
 import { Route as MarketingAiDirectorRouteImport } from './routes/marketing.ai-director'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as AiWorkflowRouteImport } from './routes/ai.workflow'
 import { Route as AiVoiceRouteImport } from './routes/ai.voice'
 import { Route as AiSupportRouteImport } from './routes/ai.support'
@@ -347,6 +348,11 @@ const MarketingAiDirectorRoute = MarketingAiDirectorRouteImport.update({
   path: '/marketing/ai-director',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AiWorkflowRoute = AiWorkflowRouteImport.update({
   id: '/ai/workflow',
   path: '/ai/workflow',
@@ -471,6 +477,7 @@ export interface FileRoutesByFullPath {
   '/ai/support': typeof AiSupportRoute
   '/ai/voice': typeof AiVoiceRoute
   '/ai/workflow': typeof AiWorkflowRoute
+  '/api/chat': typeof ApiChatRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
@@ -544,6 +551,7 @@ export interface FileRoutesByTo {
   '/ai/support': typeof AiSupportRoute
   '/ai/voice': typeof AiVoiceRoute
   '/ai/workflow': typeof AiWorkflowRoute
+  '/api/chat': typeof ApiChatRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
@@ -618,6 +626,7 @@ export interface FileRoutesById {
   '/ai/support': typeof AiSupportRoute
   '/ai/voice': typeof AiVoiceRoute
   '/ai/workflow': typeof AiWorkflowRoute
+  '/api/chat': typeof ApiChatRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
@@ -693,6 +702,7 @@ export interface FileRouteTypes {
     | '/ai/support'
     | '/ai/voice'
     | '/ai/workflow'
+    | '/api/chat'
     | '/marketing/ai-director'
     | '/marketing/brand'
     | '/marketing/campaigns'
@@ -766,6 +776,7 @@ export interface FileRouteTypes {
     | '/ai/support'
     | '/ai/voice'
     | '/ai/workflow'
+    | '/api/chat'
     | '/marketing/ai-director'
     | '/marketing/brand'
     | '/marketing/campaigns'
@@ -839,6 +850,7 @@ export interface FileRouteTypes {
     | '/ai/support'
     | '/ai/voice'
     | '/ai/workflow'
+    | '/api/chat'
     | '/marketing/ai-director'
     | '/marketing/brand'
     | '/marketing/campaigns'
@@ -913,6 +925,7 @@ export interface RootRouteChildren {
   AiSupportRoute: typeof AiSupportRoute
   AiVoiceRoute: typeof AiVoiceRoute
   AiWorkflowRoute: typeof AiWorkflowRoute
+  ApiChatRoute: typeof ApiChatRoute
   MarketingAiDirectorRoute: typeof MarketingAiDirectorRoute
   MarketingBrandRoute: typeof MarketingBrandRoute
   MarketingCampaignsRoute: typeof MarketingCampaignsRoute
@@ -1327,6 +1340,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketingAiDirectorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ai/workflow': {
       id: '/ai/workflow'
       path: '/ai/workflow'
@@ -1489,6 +1509,7 @@ const rootRouteChildren: RootRouteChildren = {
   AiSupportRoute: AiSupportRoute,
   AiVoiceRoute: AiVoiceRoute,
   AiWorkflowRoute: AiWorkflowRoute,
+  ApiChatRoute: ApiChatRoute,
   MarketingAiDirectorRoute: MarketingAiDirectorRoute,
   MarketingBrandRoute: MarketingBrandRoute,
   MarketingCampaignsRoute: MarketingCampaignsRoute,
@@ -1532,13 +1553,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
