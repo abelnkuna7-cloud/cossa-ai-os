@@ -154,6 +154,438 @@ export type Database = {
         }
         Relationships: []
       }
+      ops_documents: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          title: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          title: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          title?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
+      ops_projects: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          due_date: string | null
+          id: string
+          name: string
+          notes: string | null
+          priority: string
+          progress: number
+          start_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          due_date?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          priority?: string
+          progress?: number
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          due_date?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          priority?: string
+          progress?: number
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ops_projects_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "sales_customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ops_tasks: {
+        Row: {
+          assignee: string | null
+          created_at: string
+          due_at: string | null
+          id: string
+          notes: string | null
+          priority: string
+          project_id: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          notes?: string | null
+          priority?: string
+          project_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee?: string | null
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          notes?: string | null
+          priority?: string
+          project_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ops_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "ops_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_appointments: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          ends_at: string | null
+          id: string
+          location: string | null
+          notes: string | null
+          starts_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          ends_at?: string | null
+          id?: string
+          location?: string | null
+          notes?: string | null
+          starts_at: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          ends_at?: string | null
+          id?: string
+          location?: string | null
+          notes?: string | null
+          starts_at?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_appointments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "sales_customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_companies: {
+        Row: {
+          created_at: string
+          id: string
+          industry: string | null
+          name: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          industry?: string | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          industry?: string | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      sales_customers: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_customers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "sales_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_follow_ups: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          due_at: string
+          id: string
+          notes: string | null
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          due_at?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          due_at?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_follow_ups_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "sales_customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_leads: {
+        Row: {
+          company: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          score: number
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          score?: number
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          score?: number
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sales_opportunities: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          expected_close: string | null
+          id: string
+          notes: string | null
+          probability: number
+          stage: string
+          title: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          expected_close?: string | null
+          id?: string
+          notes?: string | null
+          probability?: number
+          stage?: string
+          title: string
+          updated_at?: string
+          value?: number
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          expected_close?: string | null
+          id?: string
+          notes?: string | null
+          probability?: number
+          stage?: string
+          title?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_opportunities_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "sales_customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_quotations: {
+        Row: {
+          amount: number
+          created_at: string
+          customer_id: string | null
+          id: string
+          notes: string | null
+          number: string
+          opportunity_id: string | null
+          status: string
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          notes?: string | null
+          number: string
+          opportunity_id?: string | null
+          status?: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          notes?: string | null
+          number?: string
+          opportunity_id?: string | null
+          status?: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_quotations_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "sales_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_quotations_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "sales_opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
