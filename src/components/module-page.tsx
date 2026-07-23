@@ -95,22 +95,6 @@ export function ModulePage({ to, children }: Props) {
         </div>
       </section>
 
-      {!isLive && (
-        <section className="glass-card flex items-start gap-4 border-warning/40 p-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning">
-            <Wrench className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold">🚧 Coming Soon</h3>
-              <StatusBadge status={mod.status} />
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              This module is on the Cossa AI roadmap. When shipped, it will {mod.description.replace(/^./, (c) => c.toLowerCase())}
-            </p>
-          </div>
-        </section>
-      )}
 
       <div className="grid gap-5 md:grid-cols-3">
         <section className="glass-card p-6 md:col-span-1">
