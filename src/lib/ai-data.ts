@@ -50,21 +50,23 @@ export type AiKnowledgeDoc = {
 };
 
 // Conversations
-export async function listConversations(): Promise<AiConversation[]> {
-  const { data, error } = await db
+export async function listConversations(category?: string | null): Promise<AiConversation[]> {
+  let q = db
     .from("ai_conversations")
     .select("*")
     .order("pinned", { ascending: false })
     .order("updated_at", { ascending: false })
     .limit(100);
+  if (category !== undefined) q = q.eq("category", category);
+  const { data, error } = await q;
   if (error) throw error;
   return (data ?? []) as AiConversation[];
 }
 
-export async function createConversation(title = "New conversation"): Promise<AiConversation> {
+export async function createConversation(title = "New conversation", category: string | null = null): Promise<AiConversation> {
   const { data, error } = await db
     .from("ai_conversations")
-    .insert({ title })
+    .insert({ title, category })
     .select("*")
     .single();
   if (error) throw error;
