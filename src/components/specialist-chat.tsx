@@ -1,10 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  Brain, Send, Sparkles, Plus, Search, Pin, MessageSquare, Bot, Trash2, Loader2, User,
+  Send, Sparkles, Plus, Search, Pin, MessageSquare, Bot, Trash2, Loader2, User,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
@@ -15,27 +15,17 @@ import {
   listMessages, insertMessage, type AiConversation, type AiMessage,
 } from "@/lib/ai-data";
 import { streamChat } from "@/lib/ai-stream";
+import { getModule } from "@/lib/modules";
+import { specialistFor } from "@/lib/specialists";
 
-export const Route = createFileRoute("/ai/cossa")({
-  component: AiChatWorkspace,
-  head: () => ({
-    meta: [
-      { title: "Cossa AI — AI Chat Workspace" },
-      { name: "description", content: "Chat with Cossa AI — your AI co-pilot for marketing, sales, operations and strategy." },
-      { property: "og:title", content: "Cossa AI — AI Chat Workspace" },
-      { property: "og:description", content: "Real-time streaming AI chat with saved history, tuned to South African SMEs." },
-    ],
-  }),
-});
+interface Props { to: string }
 
-const starterPrompts = [
-  { icon: Sparkles, label: "Draft a WhatsApp follow-up for a hot lead" },
-  { icon: Brain, label: "Give me 3 growth ideas for this month" },
-  { icon: MessageSquare, label: "Write a professional quote email" },
-  { icon: Bot, label: "Summarise my business into a one-page brief" },
-];
+export function SpecialistChat({ to }: Props) {
+  const mod = getModule(to);
+  const spec = specialistFor(to);
+  const Icon: LucideIcon = mod?.icon ?? Bot;
+  const category = `specialist:${to}`;
 
-function AiChatWorkspace() {
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -45,19 +35,20 @@ function AiChatWorkspace() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const convos = useQuery({ queryKey: ["ai-conversations"], queryFn: () => listConversations() });
+  const convos = useQuery({
+    queryKey: ["ai-conversations", category],
+    queryFn: () => listConversations(category),
+  });
   const messages = useQuery({
     queryKey: ["ai-messages", activeId],
     queryFn: () => (activeId ? listMessages(activeId) : Promise.resolve([] as AiMessage[])),
     enabled: !!activeId,
   });
 
-  // Auto-select the first conversation on load.
   useEffect(() => {
     if (!activeId && convos.data && convos.data.length > 0) setActiveId(convos.data[0].id);
   }, [convos.data, activeId]);
 
-  // Autoscroll on new content.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.data, streaming]);
@@ -70,32 +61,26 @@ function AiChatWorkspace() {
 
   async function handleNew() {
     try {
-      const c = await createConversation();
-      await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+      const c = await createConversation("New conversation", category);
+      await qc.invalidateQueries({ queryKey: ["ai-conversations", category] });
       setActiveId(c.id);
-    } catch (e) {
-      toast.error("Could not start a new chat", { description: (e as Error).message });
-    }
+    } catch (e) { toast.error("Could not start a new chat", { description: (e as Error).message }); }
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this conversation?")) return;
     try {
       await deleteConversation(id);
-      await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+      await qc.invalidateQueries({ queryKey: ["ai-conversations", category] });
       if (id === activeId) setActiveId(null);
-    } catch (e) {
-      toast.error("Delete failed", { description: (e as Error).message });
-    }
+    } catch (e) { toast.error("Delete failed", { description: (e as Error).message }); }
   }
 
   async function handleTogglePin(c: AiConversation) {
     try {
       await updateConversation(c.id, { pinned: !c.pinned });
-      await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
-    } catch (e) {
-      toast.error("Could not update", { description: (e as Error).message });
-    }
+      await qc.invalidateQueries({ queryKey: ["ai-conversations", category] });
+    } catch (e) { toast.error("Could not update", { description: (e as Error).message }); }
   }
 
   async function handleSend(text?: string) {
@@ -104,52 +89,42 @@ function AiChatWorkspace() {
     setSending(true);
     setInput("");
     try {
-      // Ensure we have a conversation.
       let convoId = activeId;
       if (!convoId) {
-        const c = await createConversation(content.slice(0, 60));
+        const c = await createConversation(content.slice(0, 60), category);
         convoId = c.id;
         setActiveId(convoId);
-        await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+        await qc.invalidateQueries({ queryKey: ["ai-conversations", category] });
       }
-
-      // Persist user message.
       await insertMessage(convoId, "user", content);
       await qc.invalidateQueries({ queryKey: ["ai-messages", convoId] });
 
-      // Build model context from persisted history + the new user turn.
       const prior = (await listMessages(convoId)).map((m) => ({ role: m.role, content: m.content }));
-
-      // Auto-title from first user turn.
       const currentConvo = (convos.data ?? []).find((c) => c.id === convoId);
       if (currentConvo && (currentConvo.title === "New conversation" || !currentConvo.title.trim())) {
         await updateConversation(convoId, { title: content.slice(0, 60) });
-        await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+        await qc.invalidateQueries({ queryKey: ["ai-conversations", category] });
       }
 
-      // Stream the assistant reply.
       abortRef.current = new AbortController();
       setStreaming("");
       const final = await streamChat(
         prior,
         (chunk) => setStreaming((s) => (s ?? "") + chunk),
         abortRef.current.signal,
+        spec?.system,
       );
 
       await insertMessage(convoId, "assistant", final);
       setStreaming(null);
       await qc.invalidateQueries({ queryKey: ["ai-messages", convoId] });
-      await qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+      await qc.invalidateQueries({ queryKey: ["ai-conversations", category] });
     } catch (e) {
       setStreaming(null);
       const msg = (e as Error).message;
-      if (msg.includes("402")) {
-        toast.error("AI credits exhausted", { description: "Add credits to your Lovable workspace to continue." });
-      } else if (msg.includes("429")) {
-        toast.error("Rate limited", { description: "Please try again in a moment." });
-      } else {
-        toast.error("AI request failed", { description: msg });
-      }
+      if (msg.includes("402")) toast.error("AI credits exhausted", { description: "Add credits to your Lovable workspace to continue." });
+      else if (msg.includes("429")) toast.error("Rate limited", { description: "Please try again in a moment." });
+      else toast.error("AI request failed", { description: msg });
     } finally {
       setSending(false);
       abortRef.current = null;
@@ -158,25 +133,25 @@ function AiChatWorkspace() {
 
   const activeConvo = (convos.data ?? []).find((c) => c.id === activeId) ?? null;
   const hasMessages = (messages.data?.length ?? 0) > 0 || streaming !== null;
+  const title = mod?.title ?? spec?.title ?? "Specialist";
+  const tagline = spec?.tagline ?? mod?.tagline ?? "";
+  const starters = spec?.starters ?? [];
 
   return (
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-[1600px] flex-col gap-4">
-      {/* Header */}
       <section className="glass-card relative overflow-hidden p-5 md:p-6">
         <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
-              <Brain className="h-5 w-5" />
+              <Icon className="h-5 w-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-display text-xl md:text-2xl font-semibold">
-                  Cossa <span className="text-gradient-gold">AI</span>
-                </h1>
+                <h1 className="font-display text-xl md:text-2xl font-semibold">{title}</h1>
                 <StatusBadge status="Live" />
               </div>
-              <p className="text-xs text-muted-foreground">Your AI co-pilot — streaming, with memory across chats.</p>
+              <p className="text-xs text-muted-foreground">{tagline}</p>
             </div>
           </div>
           <Button onClick={handleNew} className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
@@ -186,7 +161,6 @@ function AiChatWorkspace() {
       </section>
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[300px_1fr]">
-        {/* Sidebar */}
         <aside className="glass-card flex min-h-0 flex-col p-3">
           <div className="relative mb-3">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -212,16 +186,13 @@ function AiChatWorkspace() {
                       onClick={() => setActiveId(c.id)}
                       className={cn(
                         "group flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors",
-                        c.id === activeId
-                          ? "border-primary/40 bg-primary/10"
-                          : "border-transparent hover:border-border/60 hover:bg-card/40",
+                        c.id === activeId ? "border-primary/40 bg-primary/10" : "border-transparent hover:border-border/60 hover:bg-card/40",
                       )}
                     >
                       <MessageSquare className={cn("h-3.5 w-3.5 shrink-0", c.pinned ? "text-primary" : "text-muted-foreground")} />
                       <span className="min-w-0 flex-1 truncate">{c.title}</span>
                       <span
-                        role="button"
-                        tabIndex={0}
+                        role="button" tabIndex={0}
                         onClick={(e) => { e.stopPropagation(); handleTogglePin(c); }}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleTogglePin(c); } }}
                         className="opacity-0 group-hover:opacity-100 hover:text-primary"
@@ -230,8 +201,7 @@ function AiChatWorkspace() {
                         <Pin className={cn("h-3 w-3", c.pinned && "fill-primary text-primary opacity-100")} />
                       </span>
                       <span
-                        role="button"
-                        tabIndex={0}
+                        role="button" tabIndex={0}
                         onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleDelete(c.id); } }}
                         className="opacity-0 group-hover:opacity-100 hover:text-destructive"
@@ -247,15 +217,12 @@ function AiChatWorkspace() {
           </div>
         </aside>
 
-        {/* Chat pane */}
         <section className="glass-card flex min-h-0 flex-col">
           <div className="flex items-center justify-between border-b border-border/40 px-5 py-3">
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">
-                {activeConvo?.title ?? "New chat"}
-              </div>
+              <div className="truncate text-sm font-semibold">{activeConvo?.title ?? "New chat"}</div>
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Powered by Lovable AI • google/gemini-3.6-flash
+                Powered by Cossa AI • google/gemini-3.6-flash
               </div>
             </div>
           </div>
@@ -268,21 +235,19 @@ function AiChatWorkspace() {
                 </div>
                 <div>
                   <h2 className="font-display text-2xl font-semibold">
-                    How can Cossa <span className="text-gradient-gold">help</span> today?
+                    Talk to <span className="text-gradient-gold">{title}</span>
                   </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Ask anything — strategy, marketing copy, sales follow-ups, quotes, or business analysis.
-                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">{tagline}</p>
                 </div>
                 <div className="grid w-full max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
-                  {starterPrompts.map((p) => (
+                  {starters.map((label) => (
                     <button
-                      key={p.label}
-                      onClick={() => handleSend(p.label)}
+                      key={label}
+                      onClick={() => handleSend(label)}
                       className="flex items-start gap-2 rounded-xl border border-border/60 bg-card/40 p-3 text-left text-xs transition-colors hover:border-primary/40 hover:bg-primary/5"
                     >
-                      <p.icon className="mt-0.5 h-4 w-4 text-primary" />
-                      <span>{p.label}</span>
+                      <Sparkles className="mt-0.5 h-4 w-4 text-primary" />
+                      <span>{label}</span>
                     </button>
                   ))}
                 </div>
@@ -290,16 +255,13 @@ function AiChatWorkspace() {
             ) : (
               <div className="mx-auto flex max-w-3xl flex-col gap-6">
                 {(messages.data ?? []).map((m) => (
-                  <ChatBubble key={m.id} role={m.role} content={m.content} />
+                  <ChatBubble key={m.id} role={m.role} content={m.content} Icon={Icon} />
                 ))}
-                {streaming !== null && (
-                  <ChatBubble role="assistant" content={streaming || "…"} streaming />
-                )}
+                {streaming !== null && <ChatBubble role="assistant" content={streaming || "…"} streaming Icon={Icon} />}
               </div>
             )}
           </div>
 
-          {/* Composer */}
           <div className="border-t border-border/40 p-3 md:p-4">
             <form
               onSubmit={(e) => { e.preventDefault(); handleSend(); }}
@@ -308,17 +270,14 @@ function AiChatWorkspace() {
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
-                }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 rows={1}
-                placeholder="Message Cossa AI… (Enter to send, Shift+Enter for newline)"
+                placeholder={`Message ${title}… (Enter to send, Shift+Enter for newline)`}
                 className="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
                 disabled={sending}
               />
               <Button
-                type="submit"
-                size="sm"
+                type="submit" size="sm"
                 disabled={sending || !input.trim()}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
                 aria-label="Send"
@@ -336,21 +295,19 @@ function AiChatWorkspace() {
   );
 }
 
-function ChatBubble({ role, content, streaming }: { role: string; content: string; streaming?: boolean }) {
+function ChatBubble({ role, content, streaming, Icon }: { role: string; content: string; streaming?: boolean; Icon: LucideIcon }) {
   const isUser = role === "user";
   return (
     <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
       {!isUser && (
         <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-          <Brain className="h-3.5 w-3.5" />
+          <Icon className="h-3.5 w-3.5" />
         </div>
       )}
       <div
         className={cn(
           "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm",
-          isUser
-            ? "bg-primary/15 border border-primary/30 text-foreground"
-            : "border border-border/60 bg-card/40",
+          isUser ? "bg-primary/15 border border-primary/30 text-foreground" : "border border-border/60 bg-card/40",
         )}
       >
         {isUser ? (

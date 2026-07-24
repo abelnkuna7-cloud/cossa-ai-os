@@ -4,11 +4,12 @@ export async function streamChat(
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   onToken: (chunk: string) => void,
   signal?: AbortSignal,
+  system?: string,
 ): Promise<string> {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, system }),
     signal,
   });
 

@@ -11,7 +11,7 @@ export const Route = createFileRoute("/api/chat")({
           return new Response("Missing LOVABLE_API_KEY", { status: 500 });
         }
 
-        let payload: { messages?: Array<{ role: string; content: string }>; model?: string };
+        let payload: { messages?: Array<{ role: string; content: string }>; model?: string; system?: string };
         try {
           payload = (await request.json()) as typeof payload;
         } catch {
@@ -21,10 +21,12 @@ export const Route = createFileRoute("/api/chat")({
           return new Response("messages required", { status: 400 });
         }
 
+        const baseSystem =
+          "You are Cossa AI — the AI co-pilot inside the Cossa AI Business Operating System, built by Cossa Nexus Holdings for South African SMEs. You help owners with marketing, sales, operations, and strategy. Be concise, practical, and action-oriented. Use markdown when it improves clarity (bullet lists, short headings, tables). Currency is South African Rand (R). Never invent data you don't have; ask for it if needed.";
+
         const systemPreamble = {
           role: "system" as const,
-          content:
-            "You are Cossa AI — the AI co-pilot inside the Cossa AI Business Operating System, built by Cossa Nexus Holdings for South African SMEs. You help owners with marketing, sales, operations, and strategy. Be concise, practical, and action-oriented. Use markdown when it improves clarity (bullet lists, short headings, tables). Currency is South African Rand (R). Never invent data you don't have; ask for it if needed.",
+          content: payload.system ? `${baseSystem}\n\n${payload.system}` : baseSystem,
         };
 
         const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
