@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ModulePage } from "@/components/module-page";
+import { SpecialistChat } from "@/components/specialist-chat";
 import { getModule } from "@/lib/modules";
 
 const TO = "/marketing/brand";
 const mod = getModule(TO)!;
 
 export const Route = createFileRoute("/marketing/brand")({
-  component: () => <ModulePage to={TO} />,
+  component: () => <SpecialistChat to={TO} />,
   head: () => ({
     meta: [
       { title: `${mod.title} — Cossa AI` },
