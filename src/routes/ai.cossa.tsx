@@ -45,7 +45,7 @@ function AiChatWorkspace() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const convos = useQuery({ queryKey: ["ai-conversations"], queryFn: listConversations });
+  const convos = useQuery({ queryKey: ["ai-conversations"], queryFn: () => listConversations() });
   const messages = useQuery({
     queryKey: ["ai-messages", activeId],
     queryFn: () => (activeId ? listMessages(activeId) : Promise.resolve([] as AiMessage[])),
