@@ -2,6 +2,7 @@
 // Tables live in Supabase; policies are currently open to anon because auth is not
 // enabled yet. When auth ships, tighten policies to auth.uid() and remove anon grants.
 import { supabase } from "@/integrations/supabase/client";
+import { COSSA_ORGANISATION_ID } from "@/lib/workforce-data";
 
 // The generated Database types are still empty until Supabase regenerates them,
 // so we work with a locally-typed client cast to avoid TS friction.
@@ -54,6 +55,7 @@ export async function listConversations(category?: string | null): Promise<AiCon
   let q = db
     .from("ai_conversations")
     .select("*")
+    .eq("organisation_id", COSSA_ORGANISATION_ID)
     .order("pinned", { ascending: false })
     .order("updated_at", { ascending: false })
     .limit(100);
@@ -63,10 +65,13 @@ export async function listConversations(category?: string | null): Promise<AiCon
   return (data ?? []) as AiConversation[];
 }
 
-export async function createConversation(title = "New conversation", category: string | null = null): Promise<AiConversation> {
+export async function createConversation(
+  title = "New conversation",
+  category: string | null = null,
+): Promise<AiConversation> {
   const { data, error } = await db
     .from("ai_conversations")
-    .insert({ title, category })
+    .insert({ organisation_id: COSSA_ORGANISATION_ID, title, category })
     .select("*")
     .single();
   if (error) throw error;
@@ -91,6 +96,7 @@ export async function listMessages(conversationId: string): Promise<AiMessage[]>
   const { data, error } = await db
     .from("ai_messages")
     .select("*")
+    .eq("organisation_id", COSSA_ORGANISATION_ID)
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -104,12 +110,20 @@ export async function insertMessage(
 ): Promise<AiMessage> {
   const { data, error } = await db
     .from("ai_messages")
-    .insert({ conversation_id: conversationId, role, content })
+    .insert({
+      organisation_id: COSSA_ORGANISATION_ID,
+      conversation_id: conversationId,
+      role,
+      content,
+    })
     .select("*")
     .single();
   if (error) throw error;
   // Bump conversation updated_at so ordering reflects activity.
-  await db.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId);
+  await db
+    .from("ai_conversations")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", conversationId);
   return data as AiMessage;
 }
 
@@ -118,6 +132,7 @@ export async function listPrompts(): Promise<AiPrompt[]> {
   const { data, error } = await db
     .from("ai_prompts")
     .select("*")
+    .eq("organisation_id", COSSA_ORGANISATION_ID)
     .order("pinned", { ascending: false })
     .order("updated_at", { ascending: false });
   if (error) throw error;
@@ -133,6 +148,7 @@ export async function upsertPrompt(input: {
   pinned?: boolean;
 }): Promise<AiPrompt> {
   const payload = {
+    organisation_id: COSSA_ORGANISATION_ID,
     title: input.title,
     body: input.body,
     category: input.category ?? null,
@@ -148,7 +164,10 @@ export async function upsertPrompt(input: {
 }
 
 export async function incrementPromptUsage(id: string, current: number): Promise<void> {
-  await db.from("ai_prompts").update({ usage_count: current + 1 }).eq("id", id);
+  await db
+    .from("ai_prompts")
+    .update({ usage_count: current + 1 })
+    .eq("id", id);
 }
 
 export async function deletePrompt(id: string): Promise<void> {
@@ -161,6 +180,7 @@ export async function listKnowledge(): Promise<AiKnowledgeDoc[]> {
   const { data, error } = await db
     .from("ai_knowledge_documents")
     .select("*")
+    .eq("organisation_id", COSSA_ORGANISATION_ID)
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as AiKnowledgeDoc[];
@@ -175,6 +195,7 @@ export async function upsertKnowledge(input: {
   source?: string | null;
 }): Promise<AiKnowledgeDoc> {
   const payload = {
+    organisation_id: COSSA_ORGANISATION_ID,
     title: input.title,
     body: input.body,
     category: input.category ?? null,
