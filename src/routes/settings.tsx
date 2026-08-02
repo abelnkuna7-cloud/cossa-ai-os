@@ -47,7 +47,7 @@ const DEFAULTS: SettingsShape = {
   address: "",
   currency: "ZAR",
   timezone: "Africa/Johannesburg",
-  brandPrimary: "#0A1F44",
+  brandPrimary: "#000000",
   brandAccent: "#D4AF37",
   brandVoice: "",
   aiTone: "professional",
@@ -133,7 +133,7 @@ function SettingsPage() {
       <Section icon={Palette} title="Brand">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Primary color">
-            <Input value={state.brandPrimary} onChange={(e) => set("brandPrimary", e.target.value)} placeholder="#0A1F44" />
+            <Input value={state.brandPrimary} onChange={(e) => set("brandPrimary", e.target.value)} placeholder="#000000" />
           </Field>
           <Field label="Accent color">
             <Input value={state.brandAccent} onChange={(e) => set("brandAccent", e.target.value)} placeholder="#D4AF37" />

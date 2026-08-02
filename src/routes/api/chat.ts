@@ -1,14 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-// Streams from Lovable AI Gateway (OpenAI-compatible) as newline-delimited text tokens.
+// Streams from Groq (OpenAI-compatible) as newline-delimited text tokens.
 // Body: { messages: [{ role, content }], model?: string }
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const apiKey = process.env.LOVABLE_API_KEY;
-        if (!apiKey) {
-          return new Response("Missing LOVABLE_API_KEY", { status: 500 });
+        const apiKey = process.env.GROQ_API_KEY;
+        // The Supabase publishable/anon key is intentionally safe for client use.
+        // Prefer the browser pair when both are configured so the API validates the
+        // same Supabase session that the signed-in browser created. This also keeps
+        // Preview deployments resilient while Vercel variables are being migrated.
+        const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+        const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+        if (!apiKey || !supabaseUrl || !supabaseKey) {
+          return new Response("AI service is not configured", { status: 503 });
+        }
+
+        const authorization = request.headers.get("authorization");
+        if (!authorization?.startsWith("Bearer ")) return new Response("Unauthorized", { status: 401 });
+        const token = authorization.slice(7);
+        const userResponse = await fetch(`${supabaseUrl.replace(/\/$/, "")}/auth/v1/user`, {
+          headers: { apikey: supabaseKey, Authorization: `Bearer ${token}` },
+        });
+        if (!userResponse.ok) {
+          return new Response("Your Cossa AI session could not be verified. Please sign out and sign in again.", { status: 401 });
         }
 
         let payload: { messages?: Array<{ role: string; content: string }>; model?: string; system?: string };
@@ -21,22 +37,29 @@ export const Route = createFileRoute("/api/chat")({
           return new Response("messages required", { status: 400 });
         }
 
+        const knowledgeResponse = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/ai_knowledge_documents?verification_status=eq.verified&select=title,body,source,source_url,updated_at&order=updated_at.desc&limit=12`, {
+          headers: { apikey: supabaseKey, Authorization: `Bearer ${token}` },
+        });
+        const knowledge = knowledgeResponse.ok ? await knowledgeResponse.json() as Array<{ title: string; body: string; source: string | null; source_url: string | null }> : [];
+        const verifiedContext = knowledge.length
+          ? knowledge.map((doc) => `SOURCE: ${doc.title}${doc.source ? ` (${doc.source})` : ""}\n${doc.body}`).join("\n\n---\n\n").slice(0, 18_000)
+          : "No verified company knowledge was retrieved for this request.";
         const baseSystem =
-          "You are Cossa AI — the AI co-pilot inside the Cossa AI Business Operating System, built by Cossa Nexus Holdings for South African SMEs. You help owners with marketing, sales, operations, and strategy. Be concise, practical, and action-oriented. Use markdown when it improves clarity (bullet lists, short headings, tables). Currency is South African Rand (R). Never invent data you don't have; ask for it if needed.";
+          `You are Cossa AI — the AI co-pilot inside the Cossa AI Business Operating System, built by Cossa Nexus Holdings for South African SMEs. You help owners with marketing, sales, operations, and strategy. Be concise, practical, and action-oriented. Use markdown when it improves clarity. Currency is South African Rand (R). Never invent Cossa Nexus Holdings facts. Use only the verified knowledge below for company-specific claims. If it is insufficient, say so and request a verified source. Cite the knowledge document title in every company-specific answer. High-risk or irreversible actions require human approval.\n\nVERIFIED KNOWLEDGE\n${verifiedContext}`;
 
         const systemPreamble = {
           role: "system" as const,
           content: payload.system ? `${baseSystem}\n\n${payload.system}` : baseSystem,
         };
 
-        const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Lovable-API-Key": apiKey,
+            Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            model: payload.model ?? "google/gemini-3.6-flash",
+            model: "llama-3.3-70b-versatile",
             stream: true,
             messages: [systemPreamble, ...payload.messages],
           }),

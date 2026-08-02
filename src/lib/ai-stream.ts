@@ -1,14 +1,17 @@
 // Streams a chat completion from /api/chat. Calls onToken for every text chunk
 // received; resolves with the accumulated assistant text when the stream ends.
+import { supabase } from "@/integrations/supabase/client";
 export async function streamChat(
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   onToken: (chunk: string) => void,
   signal?: AbortSignal,
   system?: string,
 ): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Your session has expired. Please sign in again.");
   const response = await fetch("/api/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
     body: JSON.stringify({ messages, system }),
     signal,
   });

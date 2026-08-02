@@ -4,14 +4,15 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "@/components/app-shell";
+import { AuthGate } from "@/components/auth-gate";
 
 function NotFoundComponent() {
   return (
@@ -27,7 +28,7 @@ function NotFoundComponent() {
             to="/"
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground gold-glow transition-colors hover:bg-primary/90"
           >
-            Back to Command Center
+            Back to website
           </Link>
         </div>
       </div>
@@ -38,9 +39,6 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
-  useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -55,7 +53,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             Try again
           </button>
           <a href="/" className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent">
-            Command Center
+            Website home
           </a>
         </div>
       </div>
@@ -68,14 +66,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Cossa AI — The AI Business Operating System" },
+      { title: "Cossa AI — Cossa Nexus Holdings Command Centre" },
       { name: "description", content: "Cossa AI is the AI Business Operating System for South African SMEs — marketing, sales, operations and automation, powered by one AI engine." },
       { name: "author", content: "Cossa Nexus Holdings" },
-      { property: "og:title", content: "Cossa AI — The AI Business Operating System" },
-      { property: "og:description", content: "Marketing, sales, operations and automation, powered by one AI engine. Built for South African SMEs." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -103,13 +96,31 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function GoogleTagManager() {
+  useEffect(() => {
+    const containerId = import.meta.env.VITE_GTM_CONTAINER_ID;
+    if (!containerId || document.getElementById("cossa-gtm")) return;
+    const dataLayer = ((window as Window & { dataLayer?: unknown[] }).dataLayer ??= []);
+    dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
+    const script = document.createElement("script");
+    script.id = "cossa-gtm";
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(containerId)}`;
+    document.head.appendChild(script);
+  }, []);
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const publicRoute = ["/", "/construction-growth", "/facility-services-growth", "/sme-growth", "/login", "/sitemap.xml"].includes(pathname);
   return (
     <QueryClientProvider client={queryClient}>
-      <AppShell>
-        <Outlet />
-      </AppShell>
+      {publicRoute && <GoogleTagManager />}
+      {publicRoute
+        ? <Outlet />
+        : <AuthGate><AppShell><Outlet /></AppShell></AuthGate>}
     </QueryClientProvider>
   );
 }

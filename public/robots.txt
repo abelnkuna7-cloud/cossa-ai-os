@@ -1,2 +1,4 @@
 User-agent: *
 Allow: /
+
+Sitemap: https://growth.cossanexusholdings.co.za/sitemap.xml
