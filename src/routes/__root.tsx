@@ -8,7 +8,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { AppShell } from "@/components/app-shell";
@@ -28,7 +28,7 @@ function NotFoundComponent() {
             to="/"
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground gold-glow transition-colors hover:bg-primary/90"
           >
-            Back to Command Center
+            Back to website
           </Link>
         </div>
       </div>
@@ -53,7 +53,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             Try again
           </button>
           <a href="/" className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent">
-            Command Center
+            Website home
           </a>
         </div>
       </div>
@@ -69,7 +69,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Cossa AI — Cossa Nexus Holdings Command Centre" },
       { name: "description", content: "Cossa AI is the AI Business Operating System for South African SMEs — marketing, sales, operations and automation, powered by one AI engine." },
       { name: "author", content: "Cossa Nexus Holdings" },
-      { name: "robots", content: "noindex, nofollow, noarchive, nosnippet" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -97,12 +96,31 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function GoogleTagManager() {
+  useEffect(() => {
+    const containerId = import.meta.env.VITE_GTM_CONTAINER_ID;
+    if (!containerId || document.getElementById("cossa-gtm")) return;
+    const dataLayer = ((window as Window & { dataLayer?: unknown[] }).dataLayer ??= []);
+    dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
+    const script = document.createElement("script");
+    script.id = "cossa-gtm";
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(containerId)}`;
+    document.head.appendChild(script);
+  }, []);
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const publicRoute = ["/", "/construction-growth", "/facility-services-growth", "/sme-growth", "/login", "/sitemap.xml"].includes(pathname);
   return (
     <QueryClientProvider client={queryClient}>
-      {pathname === "/login" ? <Outlet /> : <AuthGate><AppShell><Outlet /></AppShell></AuthGate>}
+      {publicRoute && <GoogleTagManager />}
+      {publicRoute
+        ? <Outlet />
+        : <AuthGate><AppShell><Outlet /></AppShell></AuthGate>}
     </QueryClientProvider>
   );
 }

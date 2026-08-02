@@ -23,7 +23,7 @@ function LoginPage() {
     else setAuthenticated(true);
   }
 
-  if (authenticated) return <Navigate to="/" replace />;
+  if (authenticated) return <Navigate to="/command-center" replace />;
   return (
     <main className="grid min-h-screen place-items-center bg-background px-4">
       <section className="w-full max-w-md rounded-2xl border border-primary/25 bg-card p-7 shadow-2xl">

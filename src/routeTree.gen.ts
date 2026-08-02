@@ -12,6 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AiRecommendationsRouteImport } from './routes/ai-recommendations'
 import { Route as BusinessHealthRouteImport } from './routes/business-health'
+import { Route as CommandCenterRouteImport } from './routes/command-center'
+import { Route as ConstructionGrowthRouteImport } from './routes/construction-growth'
+import { Route as FacilityServicesGrowthRouteImport } from './routes/facility-services-growth'
 import { Route as IndustriesRouteImport } from './routes/industries'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as LoginRouteImport } from './routes/login'
@@ -24,6 +27,7 @@ import { Route as QuickActionsRouteImport } from './routes/quick-actions'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SmeGrowthRouteImport } from './routes/sme-growth'
 import { Route as AiAutomationRouteImport } from './routes/ai.automation'
 import { Route as AiCeoRouteImport } from './routes/ai.ceo'
 import { Route as AiCoachRouteImport } from './routes/ai.coach'
@@ -98,6 +102,21 @@ const BusinessHealthRoute = BusinessHealthRouteImport.update({
   path: '/business-health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CommandCenterRoute = CommandCenterRouteImport.update({
+  id: '/command-center',
+  path: '/command-center',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConstructionGrowthRoute = ConstructionGrowthRouteImport.update({
+  id: '/construction-growth',
+  path: '/construction-growth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FacilityServicesGrowthRoute = FacilityServicesGrowthRouteImport.update({
+  id: '/facility-services-growth',
+  path: '/facility-services-growth',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndustriesRoute = IndustriesRouteImport.update({
   id: '/industries',
   path: '/industries',
@@ -156,6 +175,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SmeGrowthRoute = SmeGrowthRouteImport.update({
+  id: '/sme-growth',
+  path: '/sme-growth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AiAutomationRoute = AiAutomationRouteImport.update({
@@ -454,6 +478,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/command-center': typeof CommandCenterRoute
+  '/construction-growth': typeof ConstructionGrowthRoute
+  '/facility-services-growth': typeof FacilityServicesGrowthRoute
   '/industries': typeof IndustriesRoute
   '/integrations': typeof IntegrationsRoute
   '/login': typeof LoginRoute
@@ -466,6 +493,7 @@ export interface FileRoutesByFullPath {
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/sme-growth': typeof SmeGrowthRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/coach': typeof AiCoachRoute
@@ -529,6 +557,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/command-center': typeof CommandCenterRoute
+  '/construction-growth': typeof ConstructionGrowthRoute
+  '/facility-services-growth': typeof FacilityServicesGrowthRoute
   '/industries': typeof IndustriesRoute
   '/integrations': typeof IntegrationsRoute
   '/login': typeof LoginRoute
@@ -541,6 +572,7 @@ export interface FileRoutesByTo {
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/sme-growth': typeof SmeGrowthRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/coach': typeof AiCoachRoute
@@ -605,6 +637,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/ai-recommendations': typeof AiRecommendationsRoute
   '/business-health': typeof BusinessHealthRoute
+  '/command-center': typeof CommandCenterRoute
+  '/construction-growth': typeof ConstructionGrowthRoute
+  '/facility-services-growth': typeof FacilityServicesGrowthRoute
   '/industries': typeof IndustriesRoute
   '/integrations': typeof IntegrationsRoute
   '/login': typeof LoginRoute
@@ -617,6 +652,7 @@ export interface FileRoutesById {
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/sme-growth': typeof SmeGrowthRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/coach': typeof AiCoachRoute
@@ -682,6 +718,9 @@ export interface FileRouteTypes {
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/command-center'
+    | '/construction-growth'
+    | '/facility-services-growth'
     | '/industries'
     | '/integrations'
     | '/login'
@@ -694,6 +733,7 @@ export interface FileRouteTypes {
     | '/roadmap'
     | '/settings'
     | '/sitemap.xml'
+    | '/sme-growth'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/coach'
@@ -757,6 +797,9 @@ export interface FileRouteTypes {
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/command-center'
+    | '/construction-growth'
+    | '/facility-services-growth'
     | '/industries'
     | '/integrations'
     | '/login'
@@ -769,6 +812,7 @@ export interface FileRouteTypes {
     | '/roadmap'
     | '/settings'
     | '/sitemap.xml'
+    | '/sme-growth'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/coach'
@@ -832,6 +876,9 @@ export interface FileRouteTypes {
     | '/'
     | '/ai-recommendations'
     | '/business-health'
+    | '/command-center'
+    | '/construction-growth'
+    | '/facility-services-growth'
     | '/industries'
     | '/integrations'
     | '/login'
@@ -844,6 +891,7 @@ export interface FileRouteTypes {
     | '/roadmap'
     | '/settings'
     | '/sitemap.xml'
+    | '/sme-growth'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/coach'
@@ -908,6 +956,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AiRecommendationsRoute: typeof AiRecommendationsRoute
   BusinessHealthRoute: typeof BusinessHealthRoute
+  CommandCenterRoute: typeof CommandCenterRoute
+  ConstructionGrowthRoute: typeof ConstructionGrowthRoute
+  FacilityServicesGrowthRoute: typeof FacilityServicesGrowthRoute
   IndustriesRoute: typeof IndustriesRoute
   IntegrationsRoute: typeof IntegrationsRoute
   LoginRoute: typeof LoginRoute
@@ -920,6 +971,7 @@ export interface RootRouteChildren {
   RoadmapRoute: typeof RoadmapRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  SmeGrowthRoute: typeof SmeGrowthRoute
   AiAutomationRoute: typeof AiAutomationRoute
   AiCeoRoute: typeof AiCeoRoute
   AiCoachRoute: typeof AiCoachRoute
@@ -1001,6 +1053,27 @@ declare module '@tanstack/react-router' {
       path: '/business-health'
       fullPath: '/business-health'
       preLoaderRoute: typeof BusinessHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/command-center': {
+      id: '/command-center'
+      path: '/command-center'
+      fullPath: '/command-center'
+      preLoaderRoute: typeof CommandCenterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/construction-growth': {
+      id: '/construction-growth'
+      path: '/construction-growth'
+      fullPath: '/construction-growth'
+      preLoaderRoute: typeof ConstructionGrowthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/facility-services-growth': {
+      id: '/facility-services-growth'
+      path: '/facility-services-growth'
+      fullPath: '/facility-services-growth'
+      preLoaderRoute: typeof FacilityServicesGrowthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/industries': {
@@ -1085,6 +1158,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sme-growth': {
+      id: '/sme-growth'
+      path: '/sme-growth'
+      fullPath: '/sme-growth'
+      preLoaderRoute: typeof SmeGrowthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ai/automation': {
@@ -1500,6 +1580,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AiRecommendationsRoute: AiRecommendationsRoute,
   BusinessHealthRoute: BusinessHealthRoute,
+  CommandCenterRoute: CommandCenterRoute,
+  ConstructionGrowthRoute: ConstructionGrowthRoute,
+  FacilityServicesGrowthRoute: FacilityServicesGrowthRoute,
   IndustriesRoute: IndustriesRoute,
   IntegrationsRoute: IntegrationsRoute,
   LoginRoute: LoginRoute,
@@ -1512,6 +1595,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoadmapRoute: RoadmapRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  SmeGrowthRoute: SmeGrowthRoute,
   AiAutomationRoute: AiAutomationRoute,
   AiCeoRoute: AiCeoRoute,
   AiCoachRoute: AiCoachRoute,

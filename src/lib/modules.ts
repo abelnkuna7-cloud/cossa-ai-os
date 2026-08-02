@@ -37,7 +37,7 @@ const s = (
   // Keep the navigation honest until each module has data, authorization,
   // evidence/audit logging and an end-to-end production test.
   const foundationRoutes = new Set([
-    "/", "/ai/cossa", "/sales/leads", "/sales/customers", "/sales/appointments",
+    "/command-center", "/ai/cossa", "/sales/leads", "/sales/customers", "/sales/appointments",
     "/sales/quotations", "/operations/projects", "/operations/tasks",
   ]);
 
@@ -58,7 +58,7 @@ export const MODULES: ModuleGroup[] = [
   {
     label: "Command Center",
     items: [
-      s("Dashboard", "/", LayoutDashboard, "Live",
+      s("Dashboard", "/command-center", LayoutDashboard, "Live",
         "Your AI Business Command Center",
         "A single pane of glass across marketing, sales, operations and AI insights — powered by the Cossa AI engine.",
         "See the entire business at a glance and act on what matters most, first.",
