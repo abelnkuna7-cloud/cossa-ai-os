@@ -4,14 +4,15 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "@/components/app-shell";
+import { AuthGate } from "@/components/auth-gate";
 
 function NotFoundComponent() {
   return (
@@ -38,9 +39,6 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
-  useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -68,14 +66,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Cossa AI — The AI Business Operating System" },
+      { title: "Cossa AI — Cossa Nexus Holdings Command Centre" },
       { name: "description", content: "Cossa AI is the AI Business Operating System for South African SMEs — marketing, sales, operations and automation, powered by one AI engine." },
       { name: "author", content: "Cossa Nexus Holdings" },
-      { property: "og:title", content: "Cossa AI — The AI Business Operating System" },
-      { property: "og:description", content: "Marketing, sales, operations and automation, powered by one AI engine. Built for South African SMEs." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "robots", content: "noindex, nofollow, noarchive, nosnippet" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -105,11 +99,10 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
     <QueryClientProvider client={queryClient}>
-      <AppShell>
-        <Outlet />
-      </AppShell>
+      {pathname === "/login" ? <Outlet /> : <AuthGate><AppShell><Outlet /></AppShell></AuthGate>}
     </QueryClientProvider>
   );
 }

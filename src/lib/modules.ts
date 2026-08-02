@@ -32,7 +32,27 @@ export interface ModuleGroup {
 const s = (
   title: string, to: string, icon: LucideIcon, status: ModuleStatus,
   tagline: string, description: string, value: string, benefits: string[], roadmap: string[],
-): ModuleItem => ({ title, to, icon, status, tagline, description, value, benefits, roadmap });
+): ModuleItem => {
+  // A screen existing is not the same as a production integration existing.
+  // Keep the navigation honest until each module has data, authorization,
+  // evidence/audit logging and an end-to-end production test.
+  const foundationRoutes = new Set([
+    "/", "/ai/cossa", "/sales/leads", "/sales/customers", "/sales/appointments",
+    "/sales/quotations", "/operations/projects", "/operations/tasks",
+  ]);
+
+  return {
+    title,
+    to,
+    icon,
+    status: status === "Live" ? (foundationRoutes.has(to) ? "Testing" : "Development") : status,
+    tagline,
+    description,
+    value,
+    benefits,
+    roadmap,
+  };
+};
 
 export const MODULES: ModuleGroup[] = [
   {

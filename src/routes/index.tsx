@@ -15,15 +15,9 @@ export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Command Center — Cossa AI" }] }),
 });
 
-const healthCategories = [
-  { name: "Marketing", score: 78 },
-  { name: "Sales", score: 84 },
-  { name: "Customer Service", score: 71 },
-  { name: "Operations", score: 66 },
-  { name: "Finance", score: 89 },
-  { name: "Online Presence", score: 74 },
-  { name: "Automation", score: 58 },
-];
+// Health is deliberately empty until it is calculated from verified source
+// data. A polished invented score is worse than an honest pending state.
+const healthCategories: { name: string; score: number }[] = [];
 
 const quickActions = [
   { label: "New Lead", icon: Users, to: "/sales/leads" as const },
@@ -42,7 +36,6 @@ function scoreTone(v: number) {
 }
 
 function Dashboard() {
-  const overallScore = Math.round(healthCategories.reduce((a, c) => a + c.score, 0) / healthCategories.length);
   const { data: stats } = useQuery({ queryKey: ["dashboard-stats"], queryFn: dashboardStats });
   const tasks = useQuery({ queryKey: ["ops-tasks"], queryFn: opsTasks.list });
   const appts = useQuery({ queryKey: ["sales-appointments"], queryFn: salesAppointments.list });
@@ -71,13 +64,13 @@ function Dashboard() {
               Welcome back. <span className="text-gradient-gold">Here's your business today.</span>
             </h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              Every metric on this page is live from your Cossa AI workspace.
+              CRM, projects, quotes and appointments are connected to the Cossa AI workspace. AI health analysis starts only after verified knowledge is loaded.
             </p>
           </div>
           <div className="flex flex-col items-start gap-3 md:items-end">
             <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-right gold-glow">
-              <div className="text-[10px] uppercase tracking-widest text-primary/90">Growth Score</div>
-              <div className="text-3xl font-semibold text-gradient-gold font-display">{overallScore}</div>
+              <div className="text-[10px] uppercase tracking-widest text-primary/90">Business Health</div>
+              <div className="text-sm font-semibold text-gradient-gold font-display">Awaiting verified inputs</div>
             </div>
             <Link to="/ai/cossa">
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
@@ -114,17 +107,23 @@ function Dashboard() {
               View details <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            {healthCategories.map((c) => (
-              <div key={c.name}>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{c.name}</span>
-                  <span className={`font-semibold ${scoreTone(c.score)}`}>{c.score}</span>
+          {healthCategories.length === 0 ? (
+            <p className="mt-5 rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+              No health score has been calculated yet. Cossa AI will calculate one only from verified CRM, financial, operational and marketing evidence.
+            </p>
+          ) : (
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              {healthCategories.map((c) => (
+                <div key={c.name}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{c.name}</span>
+                    <span className={`font-semibold ${scoreTone(c.score)}`}>{c.score}</span>
+                  </div>
+                  <Progress value={c.score} className="mt-1.5 h-1.5" />
                 </div>
-                <Progress value={c.score} className="mt-1.5 h-1.5" />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="glass-card p-6">

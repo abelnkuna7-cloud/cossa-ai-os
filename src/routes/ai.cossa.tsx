@@ -144,7 +144,7 @@ function AiChatWorkspace() {
       setStreaming(null);
       const msg = (e as Error).message;
       if (msg.includes("402")) {
-        toast.error("AI credits exhausted", { description: "Add credits to your Lovable workspace to continue." });
+        toast.error("AI service unavailable", { description: "The inference service needs attention. Please try again later." });
       } else if (msg.includes("429")) {
         toast.error("Rate limited", { description: "Please try again in a moment." });
       } else {
@@ -255,7 +255,7 @@ function AiChatWorkspace() {
                 {activeConvo?.title ?? "New chat"}
               </div>
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Powered by Lovable AI • google/gemini-3.6-flash
+                Cossa Nexus AI • Groq inference
               </div>
             </div>
           </div>
