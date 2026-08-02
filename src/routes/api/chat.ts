@@ -7,8 +7,12 @@ export const Route = createFileRoute("/api/chat")({
     handlers: {
       POST: async ({ request }) => {
         const apiKey = process.env.GROQ_API_KEY;
-        const supabaseUrl = process.env.SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+        // The Supabase publishable/anon key is intentionally safe for client use.
+        // Prefer the browser pair when both are configured so the API validates the
+        // same Supabase session that the signed-in browser created. This also keeps
+        // Preview deployments resilient while Vercel variables are being migrated.
+        const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+        const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
         if (!apiKey || !supabaseUrl || !supabaseKey) {
           return new Response("AI service is not configured", { status: 503 });
         }
@@ -19,7 +23,9 @@ export const Route = createFileRoute("/api/chat")({
         const userResponse = await fetch(`${supabaseUrl.replace(/\/$/, "")}/auth/v1/user`, {
           headers: { apikey: supabaseKey, Authorization: `Bearer ${token}` },
         });
-        if (!userResponse.ok) return new Response("Unauthorized", { status: 401 });
+        if (!userResponse.ok) {
+          return new Response("Your Cossa AI session could not be verified. Please sign out and sign in again.", { status: 401 });
+        }
 
         let payload: { messages?: Array<{ role: string; content: string }>; model?: string; system?: string };
         try {

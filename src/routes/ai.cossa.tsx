@@ -41,6 +41,7 @@ function AiChatWorkspace() {
   const [search, setSearch] = useState("");
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -102,6 +103,7 @@ function AiChatWorkspace() {
     const content = (text ?? input).trim();
     if (!content || sending) return;
     setSending(true);
+    setErrorMessage(null);
     setInput("");
     try {
       // Ensure we have a conversation.
@@ -143,6 +145,7 @@ function AiChatWorkspace() {
     } catch (e) {
       setStreaming(null);
       const msg = (e as Error).message;
+      setErrorMessage(msg);
       if (msg.includes("402")) {
         toast.error("AI service unavailable", { description: "The inference service needs attention. Please try again later." });
       } else if (msg.includes("429")) {
@@ -174,9 +177,9 @@ function AiChatWorkspace() {
                 <h1 className="font-display text-xl md:text-2xl font-semibold">
                   Cossa <span className="text-gradient-gold">AI</span>
                 </h1>
-                <StatusBadge status="Live" />
+                <StatusBadge status="Testing" />
               </div>
-              <p className="text-xs text-muted-foreground">Your AI co-pilot — streaming, with memory across chats.</p>
+              <p className="text-xs text-muted-foreground">Your AI co-pilot — verified knowledge and inference are checked before it is marked live.</p>
             </div>
           </div>
           <Button onClick={handleNew} className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
@@ -261,6 +264,12 @@ function AiChatWorkspace() {
           </div>
 
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8">
+            {errorMessage && (
+              <div className="mx-auto mb-5 max-w-3xl rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive-foreground">
+                <p className="font-semibold">Cossa AI could not reply</p>
+                <p className="mt-1 text-xs opacity-90">{errorMessage}</p>
+              </div>
+            )}
             {!hasMessages ? (
               <div className="mx-auto flex max-w-2xl flex-col items-center gap-6 py-8 text-center">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary gold-glow">
