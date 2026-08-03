@@ -68,6 +68,13 @@ export const Route = createFileRoute("/api/chat")({
           role: "system" as const,
           content: payload.system ? `${baseSystem}\n\n${payload.system}` : baseSystem,
         };
+        const needsRecordSafeSupport = /\b(no|without|missing|cannot find|couldn['’]t find)\b[\s\S]{0,100}\b(order|payment|courier|delivery|tracking)\s+(record|details?|information)\b/i.test(latestUserMessage);
+        const requestGuard = needsRecordSafeSupport
+          ? {
+              role: "system" as const,
+              content: "MANDATORY CUSTOMER-SUPPORT SAFETY RULE FOR THIS RESPONSE: No order, payment, courier, delivery or tracking record is available. Do not say or imply that you, a team, or anyone will investigate, flag, contact, respond, follow up, locate the order, or get back to the customer. Do not promise a timeframe. State only what cannot be confirmed, ask the customer to provide an order reference and payment proof for human review, and say the request can be prepared for review once those details are supplied. Keep the wording warm, plain and honest.",
+            }
+          : null;
 
         const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
@@ -78,7 +85,7 @@ export const Route = createFileRoute("/api/chat")({
           body: JSON.stringify({
             model: "llama-3.3-70b-versatile",
             stream: true,
-            messages: [systemPreamble, ...payload.messages],
+            messages: [systemPreamble, ...payload.messages, ...(requestGuard ? [requestGuard] : [])],
           }),
         });
 
