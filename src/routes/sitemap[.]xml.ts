@@ -4,7 +4,9 @@ export const Route = createFileRoute("/sitemap.xml")({
   server: {
     handlers: {
       GET: async () => {
-        const baseUrl = (process.env.PUBLIC_SITE_URL ?? "https://growth.cossanexusholdings.co.za").replace(/\/$/, "");
+        const baseUrl = (process.env.PUBLIC_SITE_URL ?? "https://growth.cossanexusholdings.co.za")
+          .replace(/^http:\/\//i, "https://")
+          .replace(/\/$/, "");
         const publicPages = ["/", "/construction-growth", "/facility-services-growth", "/sme-growth"];
         const urls = publicPages.map((path) => {
           const priority = path === "/" ? "1.0" : "0.8";
