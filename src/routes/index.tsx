@@ -12,8 +12,15 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Cossa AI | Business Growth Operating System" },
       { property: "og:description", content: "An evidence-led AI operating system built by Cossa Nexus Holdings for growth-focused businesses." },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://growth.cossanexusholdings.co.za/" },
+      { property: "og:site_name", content: "Cossa AI" },
+      { property: "og:locale", content: "en_ZA" },
+      { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "Cossa AI | Business Growth Operating System" },
+      { name: "twitter:description", content: "An evidence-led AI operating system built by Cossa Nexus Holdings for growth-focused businesses." },
       { name: "robots", content: "index, follow" },
     ],
+    links: [{ rel: "canonical", href: "https://growth.cossanexusholdings.co.za/" }],
   }),
 });
 
