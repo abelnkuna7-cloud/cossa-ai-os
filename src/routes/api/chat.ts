@@ -37,15 +37,32 @@ export const Route = createFileRoute("/api/chat")({
           return new Response("messages required", { status: 400 });
         }
 
-        const knowledgeResponse = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/ai_knowledge_documents?verification_status=eq.verified&select=title,body,source,source_url,updated_at&order=updated_at.desc&limit=12`, {
+        const knowledgeResponse = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/ai_knowledge_documents?verification_status=eq.verified&select=title,body,source,source_url,updated_at&order=updated_at.desc&limit=100`, {
           headers: { apikey: supabaseKey, Authorization: `Bearer ${token}` },
         });
         const knowledge = knowledgeResponse.ok ? await knowledgeResponse.json() as Array<{ title: string; body: string; source: string | null; source_url: string | null }> : [];
-        const verifiedContext = knowledge.length
-          ? knowledge.map((doc) => `SOURCE: ${doc.title}${doc.source ? ` (${doc.source})` : ""}\n${doc.body}`).join("\n\n---\n\n").slice(0, 18_000)
+        const latestUserMessage = [...payload.messages].reverse().find((message) => message.role === "user")?.content ?? "";
+        const queryTerms = new Set(
+          latestUserMessage.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [],
+        );
+        const coreKnowledgeTitles = ["constitution", "approval authority", "memory and knowledge", "mission, vision"];
+        const selectedKnowledge = knowledge
+          .map((doc) => {
+            const searchable = `${doc.title} ${doc.body}`.toLowerCase();
+            const relevance = [...queryTerms].reduce(
+              (score, term) => score + (searchable.includes(term) ? 1 : 0),
+              0,
+            );
+            const isCore = coreKnowledgeTitles.some((title) => doc.title.toLowerCase().includes(title));
+            return { doc, relevance, isCore };
+          })
+          .sort((a, b) => Number(b.isCore) - Number(a.isCore) || b.relevance - a.relevance)
+          .map(({ doc }) => doc);
+        const verifiedContext = selectedKnowledge.length
+          ? selectedKnowledge.map((doc) => `SOURCE: ${doc.title}${doc.source ? ` (${doc.source})` : ""}\n${doc.body}`).join("\n\n---\n\n").slice(0, 18_000)
           : "No verified company knowledge was retrieved for this request.";
         const baseSystem =
-          `You are Cossa AI — the AI co-pilot inside the Cossa AI Business Operating System, built by Cossa Nexus Holdings for South African SMEs. You help owners with marketing, sales, operations, and strategy. Be concise, practical, and action-oriented. Use markdown when it improves clarity. Currency is South African Rand (R). Never invent Cossa Nexus Holdings facts. Use only the verified knowledge below for company-specific claims. If it is insufficient, say so and request a verified source. Cite the knowledge document title in every company-specific answer. High-risk or irreversible actions require human approval.\n\nVERIFIED KNOWLEDGE\n${verifiedContext}`;
+          `You are Cossa AI — the AI co-pilot inside the Cossa AI Business Operating System, built by Cossa Nexus Holdings for South African SMEs. You help owners with marketing, sales, operations, and strategy. Be concise, practical, and action-oriented. Use markdown when it improves clarity. Currency is South African Rand (R). Never invent Cossa Nexus Holdings facts. Use only the verified knowledge below for company-specific claims. If it is insufficient, say so and request a verified source. Cite the knowledge document title in every company-specific answer. A statement made in chat is unverified unless a verified record confirms it; never call it approved or use it for a customer commitment. High-risk or irreversible actions require human approval.\n\nVERIFIED KNOWLEDGE\n${verifiedContext}`;
 
         const systemPreamble = {
           role: "system" as const,
