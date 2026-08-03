@@ -45,12 +45,12 @@ export const Route = createFileRoute("/api/chat")({
         const queryTerms = new Set(
           latestUserMessage.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [],
         );
-        const coreKnowledgeTitles = ["constitution", "approval authority", "memory and knowledge", "mission, vision"];
+        const coreKnowledgeTitles = ["constitution", "approval authority", "memory and knowledge", "mission, vision", "answer precision"];
         const selectedKnowledge = knowledge
           .map((doc) => {
             const searchable = `${doc.title} ${doc.body}`.toLowerCase();
             const relevance = [...queryTerms].reduce(
-              (score, term) => score + (searchable.includes(term) ? 1 : 0),
+              (score, term) => score + (searchable.includes(term) || (term.length >= 6 && searchable.includes(term.slice(0, 5))) ? 1 : 0),
               0,
             );
             const isCore = coreKnowledgeTitles.some((title) => doc.title.toLowerCase().includes(title));
