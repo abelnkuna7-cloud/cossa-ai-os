@@ -72,7 +72,7 @@ export const Route = createFileRoute("/api/chat")({
         const requestGuard = needsRecordSafeSupport
           ? {
               role: "system" as const,
-              content: "MANDATORY CUSTOMER-SUPPORT SAFETY RULE FOR THIS RESPONSE: No order, payment, courier, delivery or tracking record is available. Do not say or imply that you, a team, or anyone will investigate, flag, contact, respond, follow up, locate the order, or get back to the customer. Do not promise a timeframe. State only what cannot be confirmed, ask the customer to provide an order reference and payment proof for human review, and say the request can be prepared for review once those details are supplied. Keep the wording warm, plain and honest.",
+              content: "MANDATORY CUSTOMER-SUPPORT SAFETY RULE FOR THIS RESPONSE: No order, payment, courier, delivery or tracking record is available. Do not say or imply that you, a team, or anyone will investigate, flag, contact, respond, follow up, locate the order, review the case, or get back to the customer. Do not promise a timeframe, outcome or future action. Do not use phrases such as ‘I will make sure’, ‘we will’, ‘we’ll do our best’, ‘our team’, ‘we will be in touch’ or ‘it will be reviewed’. Use this structure: acknowledge the concern; say order, payment, courier status and delivery date cannot be confirmed; ask the customer to supply the order reference and payment proof; say those details are required before a human review request can be prepared. Keep the wording warm, plain and honest.",
             }
           : null;
 
