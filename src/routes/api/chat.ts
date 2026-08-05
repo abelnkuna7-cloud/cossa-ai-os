@@ -427,7 +427,7 @@ async function loadOperationalContext({
       table: "contact_messages",
       query: new URLSearchParams({
         select: includeContactFields
-          ? "id,name,email,phone,subject,message,status,created_at"
+          ? "id,name,email,call phone,subject,message,status,created_at"
           : "id,name,subject,message,status,created_at",
         order: "created_at.desc",
         limit: "20",
