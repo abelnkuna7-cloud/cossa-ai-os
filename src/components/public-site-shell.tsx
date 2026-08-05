@@ -16,7 +16,7 @@ import {
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { CossaReceptionist } from "@/components/cossa-receptionist";
 
 const phoneNumber = "067 801 1907";
 const phoneHref = "tel:+27678011907";
@@ -143,9 +143,11 @@ export function PublicSiteShell({
                 className="border-primary/40 text-primary hover:bg-primary/10"
               >
                 <LockKeyhole className="mr-1.5 h-3.5 w-3.5" />
+
                 <span className="hidden sm:inline">
                   Workspace
                 </span>
+
                 <span className="sm:hidden">
                   Login
                 </span>
@@ -246,9 +248,9 @@ export function PublicSiteShell({
             </h2>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Call, WhatsApp, email or submit a
-              quote request. Your enquiry will
-              be recorded in our customer
+              Call, WhatsApp, email or use the
+              Cossa Receptionist. Your enquiry
+              will be recorded in our customer
               follow-up system.
             </p>
           </div>
@@ -440,39 +442,7 @@ export function PublicSiteShell({
         </div>
       </footer>
 
-      <FloatingContactActions />
-    </div>
-  );
-}
-
-function FloatingContactActions() {
-  return (
-    <div className="fixed bottom-4 right-4 z-40 flex flex-col gap-2">
-      <a
-        href={whatsappHref}
-        target="_blank"
-        rel="noreferrer"
-        aria-label="Chat with Cossa on WhatsApp"
-        className={cn(
-          "grid h-12 w-12 place-items-center rounded-full",
-          "border border-primary/40 bg-primary text-primary-foreground",
-          "shadow-lg transition-transform hover:scale-105",
-        )}
-      >
-        <MessageCircle className="h-5 w-5" />
-      </a>
-
-      <a
-        href="/#contact"
-        aria-label="Request a quote from Cossa"
-        className={cn(
-          "grid h-12 w-12 place-items-center rounded-full",
-          "border border-border/60 bg-background text-primary",
-          "shadow-lg transition-transform hover:scale-105",
-        )}
-      >
-        <ArrowRight className="h-5 w-5" />
-      </a>
+      <CossaReceptionist />
     </div>
   );
 }
