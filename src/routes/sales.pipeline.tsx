@@ -1,108 +1,799 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { GitBranch, ArrowRight } from "lucide-react";
+import {
+  createFileRoute,
+  Link,
+} from "@tanstack/react-router";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  GitBranch,
+  Loader2,
+  RotateCcw,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
+
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import { salesOpportunities, type SalesOpportunity } from "@/lib/business-data";
-import { fmtCurrency, fmtDate } from "@/components/crud-workspace";
+import {
+  salesOpportunities,
+  type SalesOpportunity,
+} from "@/lib/business-data";
+import {
+  fmtCurrency,
+  fmtDate,
+} from "@/components/crud-workspace";
 
-export const Route = createFileRoute("/sales/pipeline")({
+export const Route = createFileRoute(
+  "/sales/pipeline",
+)({
   component: PipelinePage,
   head: () => ({
     meta: [
-      { title: "Sales Pipeline — Cossa AI" },
-      { name: "description", content: "Kanban view of every open opportunity, with drag-forward stage moves." },
-      { property: "og:title", content: "Sales Pipeline — Cossa AI" },
-      { property: "og:description", content: "Cossa AI sales pipeline." },
+      {
+        title:
+          "Sales Pipeline — Cossa AI",
+      },
+      {
+        name: "description",
+        content:
+          "Manage live sales opportunities through prospecting, qualification, proposal, negotiation and closing stages.",
+      },
+      {
+        property: "og:title",
+        content:
+          "Sales Pipeline — Cossa AI",
+      },
+      {
+        property: "og:description",
+        content:
+          "Production sales pipeline for Cossa Nexus Holdings.",
+      },
     ],
   }),
 });
 
-const STAGES = ["prospect", "qualified", "proposal", "negotiation", "won", "lost"] as const;
+const ACTIVE_STAGES = [
+  "prospect",
+  "qualified",
+  "proposal",
+  "negotiation",
+] as const;
+
+const CLOSED_STAGES = [
+  "won",
+  "lost",
+] as const;
+
+const STAGES = [
+  ...ACTIVE_STAGES,
+  ...CLOSED_STAGES,
+] as const;
+
+type PipelineStage =
+  (typeof STAGES)[number];
+
+interface StageDefinition {
+  stage: PipelineStage;
+  label: string;
+  description: string;
+}
+
+const STAGE_DEFINITIONS: StageDefinition[] = [
+  {
+    stage: "prospect",
+    label: "Prospect",
+    description:
+      "Potential opportunity identified but not yet qualified.",
+  },
+  {
+    stage: "qualified",
+    label: "Qualified",
+    description:
+      "Need, fit and contact route have been confirmed.",
+  },
+  {
+    stage: "proposal",
+    label: "Proposal",
+    description:
+      "A quotation, proposal or solution has been prepared.",
+  },
+  {
+    stage: "negotiation",
+    label: "Negotiation",
+    description:
+      "Scope, price, timing or commercial terms are under discussion.",
+  },
+  {
+    stage: "won",
+    label: "Won",
+    description:
+      "The customer accepted the opportunity.",
+  },
+  {
+    stage: "lost",
+    label: "Lost",
+    description:
+      "The opportunity did not proceed.",
+  },
+];
+
+function normaliseStage(
+  value: unknown,
+): PipelineStage {
+  const stage = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    STAGES.includes(
+      stage as PipelineStage,
+    )
+  ) {
+    return stage as PipelineStage;
+  }
+
+  return "prospect";
+}
+
+function getStageLabel(
+  stage: PipelineStage,
+): string {
+  return (
+    STAGE_DEFINITIONS.find(
+      (definition) =>
+        definition.stage === stage,
+    )?.label ?? stage
+  );
+}
+
+function getPreviousStage(
+  stage: PipelineStage,
+): PipelineStage | null {
+  const index =
+    ACTIVE_STAGES.indexOf(
+      stage as (typeof ACTIVE_STAGES)[number],
+    );
+
+  if (index <= 0) {
+    return null;
+  }
+
+  return ACTIVE_STAGES[index - 1];
+}
+
+function getNextStage(
+  stage: PipelineStage,
+): PipelineStage | null {
+  const index =
+    ACTIVE_STAGES.indexOf(
+      stage as (typeof ACTIVE_STAGES)[number],
+    );
+
+  if (
+    index < 0 ||
+    index >= ACTIVE_STAGES.length - 1
+  ) {
+    return null;
+  }
+
+  return ACTIVE_STAGES[index + 1];
+}
 
 function PipelinePage() {
-  const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["sales-opportunities"], queryFn: salesOpportunities.list });
-  const rows = data ?? [];
-  const mut = useMutation({
-    mutationFn: ({ id, stage }: { id: string; stage: string }) => salesOpportunities.update(id, { stage }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sales-opportunities"] });
-      qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      toast.success("Stage updated");
-    },
-    onError: (e: Error) => toast.error(e.message),
+  const queryClient = useQueryClient();
+
+  const opportunitiesQuery = useQuery({
+    queryKey: ["sales-opportunities"],
+    queryFn: salesOpportunities.list,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 
-  const byStage = STAGES.map((stage) => ({
-    stage,
-    rows: rows.filter((r) => r.stage === stage),
-    value: rows.filter((r) => r.stage === stage).reduce((s, o) => s + Number(o.value ?? 0), 0),
+  const stageMutation = useMutation({
+    mutationFn: async ({
+      opportunityId,
+      stage,
+    }: {
+      opportunityId: string;
+      stage: PipelineStage;
+    }) => {
+      await salesOpportunities.update(
+        opportunityId,
+        {
+          stage,
+        },
+      );
+
+      return {
+        opportunityId,
+        stage,
+      };
+    },
+
+    onSuccess: async ({ stage }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [
+            "sales-opportunities",
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [
+            "dashboard-stats",
+          ],
+        }),
+      ]);
+
+      toast.success(
+        `Opportunity moved to ${getStageLabel(
+          stage,
+        )}`,
+      );
+    },
+
+    onError: (error) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "The opportunity stage could not be updated.";
+
+      toast.error(
+        "Pipeline update failed",
+        {
+          description: message,
+        },
+      );
+    },
+  });
+
+  const rows = (
+    opportunitiesQuery.data ?? []
+  ).map((opportunity) => ({
+    ...opportunity,
+    stage: normaliseStage(
+      opportunity.stage,
+    ),
   }));
 
-  function advance(o: SalesOpportunity) {
-    const idx = STAGES.indexOf(o.stage as typeof STAGES[number]);
-    if (idx < 0 || idx >= STAGES.length - 2) return;
-    mut.mutate({ id: o.id, stage: STAGES[idx + 1] });
+  const columns = STAGE_DEFINITIONS.map(
+    (definition) => {
+      const stageRows = rows.filter(
+        (opportunity) =>
+          opportunity.stage ===
+          definition.stage,
+      );
+
+      return {
+        ...definition,
+        rows: stageRows,
+        value: stageRows.reduce(
+          (total, opportunity) =>
+            total +
+            Number(
+              opportunity.value ?? 0,
+            ),
+          0,
+        ),
+      };
+    },
+  );
+
+  const openPipelineValue = rows
+    .filter(
+      (opportunity) =>
+        opportunity.stage !== "won" &&
+        opportunity.stage !== "lost",
+    )
+    .reduce(
+      (total, opportunity) =>
+        total +
+        Number(
+          opportunity.value ?? 0,
+        ),
+      0,
+    );
+
+  const openOpportunityCount =
+    rows.filter(
+      (opportunity) =>
+        opportunity.stage !== "won" &&
+        opportunity.stage !== "lost",
+    ).length;
+
+  function updateStage(
+    opportunity: SalesOpportunity,
+    targetStage: PipelineStage,
+  ) {
+    if (stageMutation.isPending) {
+      return;
+    }
+
+    const currentStage =
+      normaliseStage(
+        opportunity.stage,
+      );
+
+    if (currentStage === targetStage) {
+      return;
+    }
+
+    if (
+      targetStage === "won" ||
+      targetStage === "lost"
+    ) {
+      const confirmed =
+        window.confirm(
+          targetStage === "won"
+            ? `Mark "${opportunity.title}" as won? This will count toward confirmed pipeline revenue calculations.`
+            : `Mark "${opportunity.title}" as lost?`,
+        );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    stageMutation.mutate({
+      opportunityId:
+        opportunity.id,
+      stage: targetStage,
+    });
+  }
+
+  function advanceOpportunity(
+    opportunity: SalesOpportunity,
+  ) {
+    const currentStage =
+      normaliseStage(
+        opportunity.stage,
+      );
+
+    const nextStage =
+      getNextStage(currentStage);
+
+    if (!nextStage) {
+      return;
+    }
+
+    updateStage(
+      opportunity,
+      nextStage,
+    );
+  }
+
+  function moveOpportunityBack(
+    opportunity: SalesOpportunity,
+  ) {
+    const currentStage =
+      normaliseStage(
+        opportunity.stage,
+      );
+
+    const previousStage =
+      getPreviousStage(currentStage);
+
+    if (!previousStage) {
+      return;
+    }
+
+    updateStage(
+      opportunity,
+      previousStage,
+    );
+  }
+
+  function reopenOpportunity(
+    opportunity: SalesOpportunity,
+  ) {
+    const confirmed =
+      window.confirm(
+        `Reopen "${opportunity.title}" and return it to Negotiation?`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    updateStage(
+      opportunity,
+      "negotiation",
+    );
   }
 
   return (
     <div className="mx-auto flex max-w-[1600px] flex-col gap-6">
       <section className="glass-card relative overflow-hidden p-6 md:p-8">
-        <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-        <div className="relative flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow">
                 <GitBranch className="h-5 w-5" />
               </div>
-              <StatusBadge status="Live" />
+
+              <StatusBadge status="Production" />
             </div>
-            <h1 className="mt-3 font-display text-3xl md:text-4xl font-semibold">Sales Pipeline</h1>
-            <p className="mt-1 text-muted-foreground text-sm">Move deals forward stage by stage.</p>
+
+            <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
+              Sales Pipeline
+            </h1>
+
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              Move every opportunity through a controlled sales process:
+              Prospect, Qualified, Proposal, Negotiation, then Won or Lost.
+            </p>
           </div>
-          <Link to="/sales/opportunities">
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
-              Manage opportunities
-            </Button>
-          </Link>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link to="/sales/opportunities">
+              <Button
+                variant="outline"
+                className="w-full border-primary/40 text-primary hover:bg-primary/10"
+              >
+                Manage opportunities
+              </Button>
+            </Link>
+
+            <Link to="/sales/leads">
+              <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
+                View leads
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
 
-      {isLoading ? (
-        <div className="glass-card p-8 text-center text-muted-foreground">Loading pipeline…</div>
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="glass-card p-5">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Open opportunities
+          </div>
+
+          <div className="mt-2 font-display text-2xl font-semibold">
+            {opportunitiesQuery.isLoading
+              ? "—"
+              : openOpportunityCount}
+          </div>
+
+          <p className="mt-1 text-xs text-muted-foreground">
+            Opportunities not marked won or lost.
+          </p>
+        </div>
+
+        <div className="glass-card p-5">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Open pipeline value
+          </div>
+
+          <div className="mt-2 font-display text-2xl font-semibold text-primary">
+            {opportunitiesQuery.isLoading
+              ? "—"
+              : fmtCurrency(
+                  openPipelineValue,
+                )}
+          </div>
+
+          <p className="mt-1 text-xs text-muted-foreground">
+            Estimated value of active opportunities.
+          </p>
+        </div>
+
+        <div className="glass-card p-5">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Data status
+          </div>
+
+          <div className="mt-2 font-display text-lg font-semibold">
+            {opportunitiesQuery.isLoading
+              ? "Loading"
+              : opportunitiesQuery.isError
+                ? "Query failed"
+                : "Live from database"}
+          </div>
+
+          <p className="mt-1 text-xs text-muted-foreground">
+            Pipeline records refresh every 60 seconds.
+          </p>
+        </div>
+      </section>
+
+      {opportunitiesQuery.isError && (
+        <section
+          role="alert"
+          className="flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4"
+        >
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+
+          <div>
+            <h2 className="text-sm font-semibold">
+              Pipeline records could not be loaded
+            </h2>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              No records were changed. Retry the query or inspect Supabase permissions and the opportunities table.
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                opportunitiesQuery.refetch()
+              }
+              className="mt-3 text-xs font-semibold text-primary hover:underline"
+            >
+              Retry pipeline query
+            </button>
+          </div>
+        </section>
+      )}
+
+      {opportunitiesQuery.isLoading ? (
+        <div className="glass-card flex items-center justify-center gap-2 p-10 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading live pipeline…
+        </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {byStage.map((col) => (
-            <div key={col.stage} className="glass-card flex min-h-[420px] flex-col p-3">
-              <div className="mb-2 flex items-center justify-between border-b border-border/60 pb-2">
-                <div className="text-xs font-semibold uppercase tracking-widest text-primary">{col.stage}</div>
-                <div className="text-[10px] text-muted-foreground">{col.rows.length} · {fmtCurrency(col.value)}</div>
-              </div>
-              <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
-                {col.rows.length === 0 ? (
-                  <div className="mt-4 text-center text-xs text-muted-foreground">No deals</div>
-                ) : col.rows.map((o) => (
-                  <div key={o.id} className="rounded-lg border border-border/60 bg-card/40 p-3 text-sm">
-                    <div className="font-medium">{o.title}</div>
-                    <div className="mt-1 text-xs text-primary">{fmtCurrency(o.value)} · {o.probability}%</div>
-                    {o.expected_close && <div className="text-[10px] text-muted-foreground">Close {fmtDate(o.expected_close)}</div>}
-                    {col.stage !== "won" && col.stage !== "lost" && (
-                      <Button
-                        onClick={() => advance(o)} size="sm" variant="ghost"
-                        className="mt-2 h-7 w-full justify-center text-primary hover:bg-primary/10"
-                      >
-                        Advance <ArrowRight className="ml-1 h-3 w-3" />
-                      </Button>
-                    )}
+          {columns.map((column) => (
+            <section
+              key={column.stage}
+              className="glass-card flex min-h-[460px] flex-col p-3"
+            >
+              <header className="mb-3 border-b border-border/60 pb-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h2 className="text-xs font-semibold uppercase tracking-widest text-primary">
+                      {column.label}
+                    </h2>
+
+                    <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
+                      {column.description}
+                    </p>
                   </div>
-                ))}
+
+                  <div className="shrink-0 text-right">
+                    <div className="font-display text-lg font-semibold">
+                      {column.rows.length}
+                    </div>
+
+                    <div className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                      deals
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-2 text-xs font-semibold text-primary">
+                  {fmtCurrency(
+                    column.value,
+                  )}
+                </div>
+              </header>
+
+              <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
+                {column.rows.length === 0 ? (
+                  <div className="mt-6 rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
+                    No opportunities in this stage.
+                  </div>
+                ) : (
+                  column.rows.map(
+                    (opportunity) => (
+                      <OpportunityCard
+                        key={opportunity.id}
+                        opportunity={
+                          opportunity
+                        }
+                        stage={
+                          column.stage
+                        }
+                        mutationPending={
+                          stageMutation.isPending
+                        }
+                        onAdvance={() =>
+                          advanceOpportunity(
+                            opportunity,
+                          )
+                        }
+                        onBack={() =>
+                          moveOpportunityBack(
+                            opportunity,
+                          )
+                        }
+                        onWon={() =>
+                          updateStage(
+                            opportunity,
+                            "won",
+                          )
+                        }
+                        onLost={() =>
+                          updateStage(
+                            opportunity,
+                            "lost",
+                          )
+                        }
+                        onReopen={() =>
+                          reopenOpportunity(
+                            opportunity,
+                          )
+                        }
+                      />
+                    ),
+                  )
+                )}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function OpportunityCard({
+  opportunity,
+  stage,
+  mutationPending,
+  onAdvance,
+  onBack,
+  onWon,
+  onLost,
+  onReopen,
+}: {
+  opportunity: SalesOpportunity;
+  stage: PipelineStage;
+  mutationPending: boolean;
+  onAdvance: () => void;
+  onBack: () => void;
+  onWon: () => void;
+  onLost: () => void;
+  onReopen: () => void;
+}) {
+  const previousStage =
+    getPreviousStage(stage);
+
+  const nextStage =
+    getNextStage(stage);
+
+  const isClosed =
+    stage === "won" ||
+    stage === "lost";
+
+  return (
+    <article className="rounded-xl border border-border/60 bg-card/40 p-3 text-sm">
+      <div className="font-medium leading-5">
+        {opportunity.title ||
+          "Untitled opportunity"}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-semibold text-primary">
+          {fmtCurrency(
+            opportunity.value ?? 0,
+          )}
+        </span>
+
+        <span className="text-muted-foreground">
+          {Number(
+            opportunity.probability ?? 0,
+          )}
+          % probability
+        </span>
+      </div>
+
+      {opportunity.expected_close && (
+        <div className="mt-1 text-[10px] text-muted-foreground">
+          Expected close:{" "}
+          {fmtDate(
+            opportunity.expected_close,
+          )}
+        </div>
+      )}
+
+      {opportunity.notes && (
+        <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted-foreground">
+          {opportunity.notes}
+        </p>
+      )}
+
+      {!isClosed && (
+        <div className="mt-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={
+                mutationPending ||
+                !previousStage
+              }
+              onClick={onBack}
+              className="h-8 border-border/70 text-xs"
+            >
+              <ArrowLeft className="mr-1 h-3 w-3" />
+              Back
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={
+                mutationPending ||
+                !nextStage
+              }
+              onClick={onAdvance}
+              className="h-8 border-primary/40 text-xs text-primary hover:bg-primary/10"
+            >
+              Advance
+              <ArrowRight className="ml-1 h-3 w-3" />
+            </Button>
+          </div>
+
+          {stage === "negotiation" && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={mutationPending}
+              onClick={onWon}
+              className="h-8 w-full bg-primary text-xs text-primary-foreground hover:bg-primary/90"
+            >
+              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+              Mark as won
+            </Button>
+          )}
+
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={mutationPending}
+            onClick={onLost}
+            className="h-8 w-full text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <XCircle className="mr-1 h-3.5 w-3.5" />
+            Mark as lost
+          </Button>
+        </div>
+      )}
+
+      {isClosed && (
+        <div className="mt-3">
+          <div
+            className={
+              stage === "won"
+                ? "flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success"
+                : "flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+            }
+          >
+            {stage === "won" ? (
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            ) : (
+              <XCircle className="h-3.5 w-3.5" />
+            )}
+
+            Opportunity marked{" "}
+            {stage}.
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={mutationPending}
+            onClick={onReopen}
+            className="mt-2 h-8 w-full border-border/70 text-xs"
+          >
+            <RotateCcw className="mr-1 h-3.5 w-3.5" />
+            Reopen in negotiation
+          </Button>
+        </div>
+      )}
+    </article>
   );
 }
