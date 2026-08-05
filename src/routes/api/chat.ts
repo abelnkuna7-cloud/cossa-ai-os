@@ -427,7 +427,7 @@ async function loadOperationalContext({
       table: "contact_messages",
       query: new URLSearchParams({
         select: includeContactFields
-          ? "id,name,email,call phone,subject,message,status,created_at"
+          ? "id,name,email,phone,subject,message,status,created_at"
           : "id,name,subject,message,status,created_at",
         order: "created_at.desc",
         limit: "20",
@@ -490,4 +490,419 @@ async function loadOperationalContext({
       supabaseKey,
     }),
 
-   
+    restSelect<Record<string, unknown>>({
+      table: "appointments",
+      query: new URLSearchParams({
+        select:
+          "id,title,service,location,status,scheduled_at,appointment_date,ends_at,created_at,updated_at",
+        order: "created_at.desc",
+        limit: "25",
+      }).toString(),
+      token,
+      supabaseUrl,
+      supabaseKey,
+    }),
+  ]);
+
+  return [
+    `LIVE OPERATIONAL DATA CHECKED AT: ${new Date().toISOString()}`,
+    "",
+    `LEADS (${leads.length})`,
+    JSON.stringify(leads, null, 2),
+    "",
+    `QUOTE REQUESTS (${quoteRequests.length})`,
+    JSON.stringify(quoteRequests, null, 2),
+    "",
+    `CONTACT MESSAGES (${contactMessages.length})`,
+    JSON.stringify(contactMessages, null, 2),
+    "",
+    `OPPORTUNITIES (${opportunities.length})`,
+    JSON.stringify(opportunities, null, 2),
+    "",
+    `QUOTATIONS (${quotations.length})`,
+    JSON.stringify(quotations, null, 2),
+    "",
+    `CUSTOMERS (${customers.length})`,
+    JSON.stringify(customers, null, 2),
+    "",
+    `PROJECTS (${projects.length})`,
+    JSON.stringify(projects, null, 2),
+    "",
+    `APPOINTMENTS (${appointments.length})`,
+    JSON.stringify(appointments, null, 2),
+  ]
+    .join("\n")
+    .slice(0, MAX_OPERATIONAL_CONTEXT_LENGTH);
+}
+
+function buildSystemPrompt({
+  verifiedContext,
+  operationalContext,
+  customSystem,
+}: {
+  verifiedContext: string;
+  operationalContext: string;
+  customSystem?: string;
+}): string {
+  return `
+You are Cossa AI, the internal AI business operating partner of Cossa Nexus Holdings.
+
+Your responsibilities include business strategy, sales, marketing, operations, CRM analysis and practical execution support.
+
+OPERATING RULES
+
+1. Use verified company knowledge for company-specific facts.
+2. Use live operational records for CRM, lead, customer, quotation, opportunity, project and appointment facts.
+3. Clearly distinguish:
+   - verified company knowledge;
+   - live database records;
+   - recommendations or analysis.
+4. Never invent leads, revenue, customers, quotations, opportunities, website traffic, completed work or employee actions.
+5. When a requested record is not present, say that it was not found.
+6. Never claim an email, call, WhatsApp message, quotation, booking or campaign was sent unless a verified system record confirms it.
+7. High-risk, financial, legal, external communication and irreversible actions require human approval.
+8. Currency is South African Rand (R).
+9. Be practical, direct and action-oriented.
+10. Do not claim to have searched the live internet unless an authorised web-search tool actually supplied results.
+11. When asked to find real-world prospects, explain that verified public prospect research requires the Lead Hunter search workflow. Do not fabricate businesses, phone numbers, emails, websites or locations.
+12. Cite the relevant knowledge-document title for company-specific claims.
+13. For live CRM information, mention the applicable record category and record date where useful.
+14. Protect private contact information. Only show phone numbers and email addresses when the authenticated user explicitly requests contact or outreach details.
+15. When live operational context contains a clear count, answer directly with the exact count. Do not claim that CRM access is unavailable.
+16. Do not ask the user to manually check the CRM when the requested records are already present in the live operational context.
+
+VERIFIED COMPANY KNOWLEDGE
+
+${verifiedContext}
+
+LIVE OPERATIONAL CONTEXT
+
+${operationalContext}
+${
+  customSystem?.trim()
+    ? `\nADDITIONAL APPROVED INSTRUCTIONS\n\n${customSystem.trim()}`
+    : ""
+}
+`.trim();
+}
+
+function needsRecordSafeSupport(message: string): boolean {
+  return /\b(no|without|missing|cannot find|couldn['’]t find)\b[\s\S]{0,100}\b(order|payment|courier|delivery|tracking)\s+(record|details?|information)\b/i.test(
+    message,
+  );
+}
+
+function createPlainTextStream(
+  upstreamBody: ReadableStream<Uint8Array>,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const reader = upstreamBody.getReader();
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      let buffer = "";
+      let streamClosed = false;
+
+      function closeStream() {
+        if (streamClosed) {
+          return;
+        }
+
+        streamClosed = true;
+        controller.close();
+      }
+
+      function processSseLine(line: string) {
+        if (!line.startsWith("data:")) {
+          return;
+        }
+
+        const data = line.slice(5).trim();
+
+        if (!data) {
+          return;
+        }
+
+        if (data === "[DONE]") {
+          closeStream();
+          return;
+        }
+
+        try {
+          const parsed = JSON.parse(data) as {
+            choices?: Array<{
+              delta?: {
+                content?: string;
+              };
+            }>;
+          };
+
+          const token =
+            parsed.choices?.[0]?.delta?.content;
+
+          if (token && !streamClosed) {
+            controller.enqueue(encoder.encode(token));
+          }
+        } catch {
+          console.warn(
+            "Ignored malformed Groq streaming chunk.",
+          );
+        }
+      }
+
+      async function pump() {
+        try {
+          while (!streamClosed) {
+            const { value, done } = await reader.read();
+
+            if (done) {
+              buffer += decoder.decode();
+
+              if (buffer.trim()) {
+                processSseLine(buffer.trim());
+              }
+
+              closeStream();
+              return;
+            }
+
+            buffer += decoder.decode(value, {
+              stream: true,
+            });
+
+            let lineBreakIndex = buffer.indexOf("\n");
+
+            while (lineBreakIndex !== -1) {
+              const line = buffer
+                .slice(0, lineBreakIndex)
+                .trim();
+
+              buffer = buffer.slice(lineBreakIndex + 1);
+
+              if (line) {
+                processSseLine(line);
+              }
+
+              if (streamClosed) {
+                return;
+              }
+
+              lineBreakIndex = buffer.indexOf("\n");
+            }
+          }
+        } catch (error) {
+          if (!streamClosed) {
+            controller.error(error);
+          }
+        }
+      }
+
+      void pump();
+    },
+
+    cancel() {
+      void reader.cancel();
+    },
+  });
+}
+
+export const Route = createFileRoute("/api/chat")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const environment = getEnvironment();
+
+        if (!environment) {
+          return new Response(
+            "Cossa AI is not fully configured.",
+            { status: 503 },
+          );
+        }
+
+        const token = getBearerToken(request);
+
+        if (!token) {
+          return new Response("Unauthorized", {
+            status: 401,
+          });
+        }
+
+        const user = await verifySupabaseUser({
+          token,
+          supabaseUrl: environment.supabaseUrl,
+          supabaseKey: environment.supabaseKey,
+        });
+
+        if (!user) {
+          return new Response(
+            "Your Cossa AI session could not be verified. Sign out and sign in again.",
+            { status: 401 },
+          );
+        }
+
+        const isOrganisationMember =
+          await verifyOrganisationMembership({
+            token,
+            userId: user.id,
+            organisationId: environment.organisationId,
+            supabaseUrl: environment.supabaseUrl,
+            supabaseKey: environment.supabaseKey,
+          });
+
+        if (!isOrganisationMember) {
+          return new Response(
+            "You are not authorised to use this Cossa AI workspace.",
+            { status: 403 },
+          );
+        }
+
+        let payload: ChatPayload;
+
+        try {
+          payload =
+            (await request.json()) as ChatPayload;
+        } catch {
+          return new Response("Invalid JSON body.", {
+            status: 400,
+          });
+        }
+
+        const validation = validateMessages(
+          payload.messages,
+        );
+
+        if (!validation.valid) {
+          return new Response(validation.error, {
+            status: 400,
+          });
+        }
+
+        const messages = validation.messages;
+
+        const latestUserMessage =
+          [...messages]
+            .reverse()
+            .find(
+              (message) =>
+                message.role === "user",
+            )?.content ?? "";
+
+        const knowledge =
+          await restSelect<KnowledgeDocument>({
+            table: "ai_knowledge_documents",
+            query: new URLSearchParams({
+              select:
+                "title,body,source,source_url,updated_at",
+              organisation_id:
+                `eq.${environment.organisationId}`,
+              verification_status: "eq.verified",
+              order: "updated_at.desc",
+              limit: "100",
+            }).toString(),
+            token,
+            supabaseUrl: environment.supabaseUrl,
+            supabaseKey: environment.supabaseKey,
+          });
+
+        const selectedKnowledge =
+          selectRelevantKnowledge(
+            knowledge,
+            latestUserMessage,
+          );
+
+        const verifiedContext =
+          formatKnowledgeContext(selectedKnowledge);
+
+        const operationalContext =
+          await loadOperationalContext({
+            latestUserMessage,
+            token,
+            supabaseUrl: environment.supabaseUrl,
+            supabaseKey: environment.supabaseKey,
+          });
+
+        const systemPreamble: ChatMessage = {
+          role: "system",
+          content: buildSystemPrompt({
+            verifiedContext,
+            operationalContext,
+            customSystem: payload.system,
+          }),
+        };
+
+        const safetyGuard: ChatMessage | null =
+          needsRecordSafeSupport(latestUserMessage)
+            ? {
+                role: "system",
+                content:
+                  "No verified order, payment, courier, delivery or tracking record is available. Do not promise an investigation, follow-up, response, delivery date or future action. Ask for the order reference and payment proof before preparing a human review request.",
+              }
+            : null;
+
+        const groqMessages: ChatMessage[] = [
+          systemPreamble,
+          ...(safetyGuard ? [safetyGuard] : []),
+          ...messages,
+        ];
+
+        const upstream = await fetch(
+          "https://api.groq.com/openai/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization:
+                `Bearer ${environment.groqApiKey}`,
+            },
+            body: JSON.stringify({
+              model: GROQ_MODEL,
+              stream: true,
+              temperature: 0.2,
+              messages: groqMessages,
+            }),
+            signal: request.signal,
+          },
+        );
+
+        if (!upstream.ok || !upstream.body) {
+          const errorText =
+            await upstream.text().catch(() => "");
+
+          console.error(
+            "Groq request failed:",
+            upstream.status,
+            errorText,
+          );
+
+          const responseStatus =
+            upstream.status === 402 ||
+            upstream.status === 429
+              ? upstream.status
+              : 502;
+
+          return new Response(
+            errorText || "Cossa AI gateway error.",
+            {
+              status: responseStatus,
+            },
+          );
+        }
+
+        const responseStream =
+          createPlainTextStream(upstream.body);
+
+        return new Response(responseStream, {
+          headers: {
+            "Content-Type":
+              "text/plain; charset=utf-8",
+            "Cache-Control":
+              "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "X-Content-Type-Options": "nosniff",
+          },
+        });
+      },
+    },
+  },
+});
