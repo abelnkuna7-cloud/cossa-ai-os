@@ -187,7 +187,7 @@ type DatabaseOpportunityType =
   (typeof DATABASE_OPPORTUNITY_TYPES)[number];
 
 const UI_STAGE_MARKER_PATTERN =
-  /cossa_ui_stage:(prospect|qualified|proposal|negotiation|won|lost)/i;
+  /\[cossa_ui_stage:(prospect|qualified|proposal|negotiation|won|lost)\]/i;
 
 const OPPORTUNITY_SELECT = [
   "id",
@@ -1200,4 +1200,534 @@ export const opsProjects =
       "project_name",
       "name",
       "service",
-      "location
+      "location",
+      "budget",
+      "status",
+      "priority",
+      "progress",
+      "start_date",
+      "end_date",
+      "notes",
+      "created_at",
+      "updated_at",
+    ].join(","),
+
+    fromRow: (row) => ({
+      id: row.id,
+
+      name:
+        row.project_name ??
+        row.name ??
+        "Unnamed project",
+
+      customer_id:
+        row.customer_id ?? null,
+
+      status: lower(
+        row.status,
+        "planning",
+      ),
+
+      priority: lower(
+        row.priority,
+        "medium",
+      ),
+
+      progress: safeNumber(
+        row.progress,
+        0,
+      ),
+
+      start_date:
+        row.start_date ?? null,
+
+      due_date:
+        row.end_date ?? null,
+
+      notes:
+        row.notes ?? null,
+
+      created_at:
+        row.created_at,
+
+      updated_at:
+        row.updated_at,
+    }),
+
+    toRow: (value) => {
+      const row: Record<
+        string,
+        unknown
+      > = {
+        updated_at:
+          new Date().toISOString(),
+      };
+
+      if (value.name !== undefined) {
+        const projectName =
+          requiredText(
+            value.name,
+            "Project name",
+          );
+
+        row.name = projectName;
+        row.project_name =
+          projectName;
+      }
+
+      if (
+        value.customer_id !== undefined
+      ) {
+        row.customer_id =
+          value.customer_id;
+      }
+
+      if (value.status !== undefined) {
+        row.status = lower(
+          value.status,
+          "planning",
+        );
+      }
+
+      if (value.priority !== undefined) {
+        row.priority = lower(
+          value.priority,
+          "medium",
+        );
+      }
+
+      if (value.progress !== undefined) {
+        row.progress = Math.min(
+          100,
+          Math.max(
+            0,
+            Math.round(
+              safeNumber(
+                value.progress,
+                0,
+              ),
+            ),
+          ),
+        );
+      }
+
+      if (
+        value.start_date !== undefined
+      ) {
+        row.start_date =
+          value.start_date || null;
+      }
+
+      if (
+        value.due_date !== undefined
+      ) {
+        row.end_date =
+          value.due_date || null;
+      }
+
+      if (value.notes !== undefined) {
+        row.notes = optionalText(
+          value.notes,
+        );
+      }
+
+      return row;
+    },
+  });
+
+export const opsTasks =
+  plainCrud<OpsTask>(
+    "ops_tasks",
+    "due_at",
+    true,
+    true,
+  );
+
+export const opsDocuments =
+  adaptedCrud<OpsDocument>({
+    table: "ops_documents",
+    organisationScoped: true,
+
+    fromRow: (row) => ({
+      ...row,
+      url:
+        row.source_url ?? null,
+    }),
+
+    toRow: (value) => ({
+      ...(value.title !== undefined && {
+        title: requiredText(
+          value.title,
+          "Document title",
+        ),
+      }),
+
+      ...(value.category !==
+        undefined && {
+        category: optionalText(
+          value.category,
+        ),
+      }),
+
+      ...(value.url !== undefined && {
+        source_url: optionalText(
+          value.url,
+        ),
+      }),
+
+      ...(value.notes !== undefined && {
+        notes: optionalText(
+          value.notes,
+        ),
+      }),
+
+      updated_at:
+        new Date().toISOString(),
+    }),
+  });
+
+/**
+ * Creates a project from a won opportunity.
+ *
+ * The Pipeline page must explicitly call this after the user confirms
+ * that the opportunity was won.
+ */
+export async function createProjectFromOpportunity(
+  opportunity: SalesOpportunity,
+): Promise<OpsProject> {
+  if (
+    normaliseUiOpportunityStage(
+      opportunity.stage,
+    ) !== "won"
+  ) {
+    throw new Error(
+      "Only a won opportunity can be converted into a project.",
+    );
+  }
+
+  const opportunityId =
+    requiredText(
+      opportunity.id,
+      "Opportunity ID",
+    );
+
+  const projectName =
+    requiredText(
+      opportunity.title,
+      "Opportunity title",
+    );
+
+  const sourceMarker =
+    `[source_opportunity_id:${opportunityId}]`;
+
+  const {
+    data: existingProjects,
+    error: existingProjectError,
+  } = await db
+    .from("projects")
+    .select(
+      "id,customer_id,project_name,name,status,priority,progress,start_date,end_date,notes,created_at,updated_at",
+    )
+    .ilike(
+      "notes",
+      `%${sourceMarker}%`,
+    )
+    .limit(1);
+
+  if (existingProjectError) {
+    throw databaseError(
+      "Unable to check for an existing project",
+      existingProjectError,
+    );
+  }
+
+  if (
+    Array.isArray(existingProjects) &&
+    existingProjects.length > 0
+  ) {
+    const projects =
+      await opsProjects.list();
+
+    const existing =
+      projects.find(
+        (project) =>
+          project.id ===
+          existingProjects[0].id,
+      );
+
+    if (!existing) {
+      throw new Error(
+        "The project already exists but could not be reloaded.",
+      );
+    }
+
+    return existing;
+  }
+
+  const projectNotes = [
+    sourceMarker,
+    "Created from a won sales opportunity.",
+    `Opportunity value: R${safeNumber(
+      opportunity.value,
+      0,
+    ).toFixed(2)}`,
+    opportunity.expected_close
+      ? `Original expected close: ${opportunity.expected_close}`
+      : null,
+    opportunity.notes
+      ? `Opportunity notes:\n${opportunity.notes}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const { data, error } = await db
+    .from("projects")
+    .insert({
+      name: projectName,
+      project_name: projectName,
+      budget: safeNumber(
+        opportunity.value,
+        0,
+      ),
+      status: "planning",
+      priority: "high",
+      progress: 0,
+      start_date: null,
+      end_date: null,
+      notes: projectNotes,
+      updated_at:
+        new Date().toISOString(),
+    })
+    .select(
+      "id,customer_id,project_name,name,status,priority,progress,start_date,end_date,notes,created_at,updated_at",
+    )
+    .single();
+
+  if (error) {
+    throw databaseError(
+      "Unable to create a project from the won opportunity",
+      error,
+    );
+  }
+
+  if (!data) {
+    throw new Error(
+      "The project could not be created because Supabase returned no saved record.",
+    );
+  }
+
+  const projects =
+    await opsProjects.list();
+
+  const created =
+    projects.find(
+      (project) =>
+        project.id === data.id,
+    );
+
+  if (!created) {
+    throw new Error(
+      "The project was created but could not be reloaded.",
+    );
+  }
+
+  return created;
+}
+
+export async function dashboardStats() {
+  const [
+    leads,
+    opportunities,
+    quotations,
+    projects,
+    tasks,
+    customers,
+  ] = await Promise.all([
+    salesLeads.list(),
+    salesOpportunities.list(),
+    salesQuotations.list(),
+    opsProjects.list(),
+    opsTasks.list(),
+    salesCustomers.list(),
+  ]);
+
+  const pipelineValue =
+    opportunities
+      .filter(
+        (opportunity) =>
+          !["won", "lost"].includes(
+            normaliseUiOpportunityStage(
+              opportunity.stage,
+            ),
+          ),
+      )
+      .reduce(
+        (total, opportunity) =>
+          total +
+          safeNumber(
+            opportunity.value,
+            0,
+          ),
+        0,
+      );
+
+  const wonValue =
+    opportunities
+      .filter(
+        (opportunity) =>
+          normaliseUiOpportunityStage(
+            opportunity.stage,
+          ) === "won",
+      )
+      .reduce(
+        (total, opportunity) =>
+          total +
+          safeNumber(
+            opportunity.value,
+            0,
+          ),
+        0,
+      );
+
+  const acceptedRevenue =
+    quotations
+      .filter(
+        (quotation) =>
+          lower(
+            quotation.status,
+            "draft",
+          ) === "accepted",
+      )
+      .reduce(
+        (total, quotation) =>
+          total +
+          safeNumber(
+            quotation.amount,
+            0,
+          ),
+        0,
+      );
+
+  const stages = [
+    "prospect",
+    "qualified",
+    "proposal",
+    "negotiation",
+    "won",
+  ] as const;
+
+  const pipelineByStage =
+    stages.map((stage) => {
+      const stageRows =
+        opportunities.filter(
+          (opportunity) =>
+            normaliseUiOpportunityStage(
+              opportunity.stage,
+            ) === stage,
+        );
+
+      return {
+        stage,
+        count: stageRows.length,
+        value: stageRows.reduce(
+          (total, opportunity) =>
+            total +
+            safeNumber(
+              opportunity.value,
+              0,
+            ),
+          0,
+        ),
+      };
+    });
+
+  const now = Date.now();
+
+  return {
+    revenueMTD:
+      wonValue +
+      acceptedRevenue,
+
+    newLeads: leads.filter(
+      (lead) => {
+        const createdAt =
+          new Date(
+            lead.created_at,
+          ).getTime();
+
+        return (
+          Number.isFinite(createdAt) &&
+          now - createdAt <
+            7 * 86_400_000
+        );
+      },
+    ).length,
+
+    totalLeads: leads.length,
+
+    pipelineValue,
+
+    pipelineByStage,
+
+    customers:
+      customers.length,
+
+    activeProjects:
+      projects.filter(
+        (project) =>
+          !["done", "archived"].includes(
+            lower(
+              project.status,
+              "planning",
+            ),
+          ),
+      ).length,
+
+    projectCount:
+      projects.length,
+
+    openTasks:
+      tasks.filter(
+        (task) =>
+          lower(
+            task.status,
+            "open",
+          ) !== "done",
+      ).length,
+
+    overdueTasks:
+      tasks.filter((task) => {
+        if (
+          lower(
+            task.status,
+            "open",
+          ) === "done" ||
+          !task.due_at
+        ) {
+          return false;
+        }
+
+        const dueAt =
+          new Date(
+            task.due_at,
+          ).getTime();
+
+        return (
+          Number.isFinite(dueAt) &&
+          dueAt < now
+        );
+      }).length,
+
+    quotesOpen:
+      quotations.filter(
+        (quotation) =>
+          ["draft", "sent"].includes(
+            lower(
+              quotation.status,
+              "draft",
+            ),
+          ),
+      ).length,
+  };
+}
