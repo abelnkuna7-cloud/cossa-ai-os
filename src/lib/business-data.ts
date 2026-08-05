@@ -1,10 +1,15 @@
 // Production CRM + Operations data access.
-// The UI model is translated to the existing Growth schema so current website
-// records remain the source of truth and no duplicate sales tables are needed.
+//
+// The UI models below are translated into the existing Growth Supabase schema.
+// Existing production tables remain the source of truth. This file must not
+// create duplicate sales or operations tables.
+
 import { supabase } from "@/integrations/supabase/client";
 import { COSSA_ORGANISATION_ID } from "@/lib/workforce-data";
 
-const db = supabase as unknown as { from: (table: string) => any };
+const db = supabase as unknown as {
+  from: (table: string) => any;
+};
 
 export interface SalesCompany {
   id: string;
@@ -16,6 +21,7 @@ export interface SalesCompany {
   created_at: string;
   updated_at: string;
 }
+
 export interface SalesCustomer {
   id: string;
   name: string;
@@ -27,6 +33,7 @@ export interface SalesCustomer {
   created_at: string;
   updated_at: string;
 }
+
 export interface SalesLead {
   id: string;
   name: string;
@@ -40,6 +47,7 @@ export interface SalesLead {
   created_at: string;
   updated_at: string;
 }
+
 export interface SalesOpportunity {
   id: string;
   title: string;
@@ -52,6 +60,7 @@ export interface SalesOpportunity {
   created_at: string;
   updated_at: string;
 }
+
 export interface SalesQuotation {
   id: string;
   number: string;
@@ -64,6 +73,7 @@ export interface SalesQuotation {
   created_at: string;
   updated_at: string;
 }
+
 export interface SalesAppointment {
   id: string;
   title: string;
@@ -75,6 +85,7 @@ export interface SalesAppointment {
   created_at: string;
   updated_at: string;
 }
+
 export interface SalesFollowUp {
   id: string;
   subject: string;
@@ -85,6 +96,7 @@ export interface SalesFollowUp {
   created_at: string;
   updated_at: string;
 }
+
 export interface OpsProject {
   id: string;
   name: string;
@@ -98,6 +110,7 @@ export interface OpsProject {
   created_at: string;
   updated_at: string;
 }
+
 export interface OpsTask {
   id: string;
   title: string;
@@ -110,6 +123,7 @@ export interface OpsTask {
   created_at: string;
   updated_at: string;
 }
+
 export interface OpsDocument {
   id: string;
   title: string;
@@ -119,6 +133,13 @@ export interface OpsDocument {
   created_at: string;
   updated_at: string;
 }
+
+type DatabaseErrorLike = {
+  message?: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+};
 
 type Adapter<T> = {
   table: string;
@@ -130,38 +151,232 @@ type Adapter<T> = {
   toRow: (value: Partial<T>) => Record<string, unknown>;
 };
 
-const lower = (value: unknown, fallback: string) =>
-  typeof value === "string" && value ? value.toLowerCase() : fallback;
+const OPPORTUNITY_STAGES = [
+  "prospect",
+  "qualified",
+  "proposal",
+  "negotiation",
+  "won",
+  "lost",
+] as const;
 
-function adaptedCrud<T>(adapter: Adapter<T>) {
+function lower(
+  value: unknown,
+  fallback: string,
+): string {
+  return typeof value === "string" && value.trim()
+    ? value.trim().toLowerCase()
+    : fallback;
+}
+
+function optionalText(
+  value: unknown,
+): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const cleaned = value.trim();
+
+  return cleaned || null;
+}
+
+function requiredText(
+  value: unknown,
+  fieldName: string,
+): string {
+  const cleaned = optionalText(value);
+
+  if (!cleaned) {
+    throw new Error(`${fieldName} is required.`);
+  }
+
+  return cleaned;
+}
+
+function safeNumber(
+  value: unknown,
+  fallback = 0,
+): number {
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : fallback;
+}
+
+function clampProbability(
+  value: unknown,
+): number {
+  return Math.min(
+    100,
+    Math.max(0, Math.round(safeNumber(value, 20))),
+  );
+}
+
+function databaseError(
+  operation: string,
+  error: unknown,
+): Error {
+  if (error instanceof Error) {
+    return new Error(`${operation}: ${error.message}`);
+  }
+
+  const typedError =
+    error as DatabaseErrorLike | null;
+
+  if (typedError?.message) {
+    const additionalInformation = [
+      typedError.details,
+      typedError.hint,
+      typedError.code
+        ? `Code: ${typedError.code}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return new Error(
+      `${operation}: ${typedError.message}${
+        additionalInformation
+          ? ` ${additionalInformation}`
+          : ""
+      }`,
+    );
+  }
+
+  return new Error(
+    `${operation}: Unknown Supabase error.`,
+  );
+}
+
+function adaptedCrud<T>(
+  adapter: Adapter<T>,
+) {
   return {
     list: async (): Promise<T[]> => {
-      let query = db.from(adapter.table).select(adapter.select ?? "*");
-      if (adapter.organisationScoped) query = query.eq("organisation_id", COSSA_ORGANISATION_ID);
-      const { data, error } = await query.order(adapter.orderBy ?? "created_at", {
-        ascending: adapter.ascending ?? false,
-      });
-      if (error) throw error;
-      return (data ?? []).map(adapter.fromRow);
+      let query = db
+        .from(adapter.table)
+        .select(adapter.select ?? "*");
+
+      if (adapter.organisationScoped) {
+        query = query.eq(
+          "organisation_id",
+          COSSA_ORGANISATION_ID,
+        );
+      }
+
+      const { data, error } = await query.order(
+        adapter.orderBy ?? "created_at",
+        {
+          ascending:
+            adapter.ascending ?? false,
+        },
+      );
+
+      if (error) {
+        throw databaseError(
+          `Unable to load ${adapter.table}`,
+          error,
+        );
+      }
+
+      return (data ?? []).map(
+        adapter.fromRow,
+      );
     },
-    create: async (payload: Partial<T>): Promise<T> => {
+
+    create: async (
+      payload: Partial<T>,
+    ): Promise<T> => {
       const row = adapter.toRow(payload);
-      if (adapter.organisationScoped) row.organisation_id = COSSA_ORGANISATION_ID;
+
+      if (adapter.organisationScoped) {
+        row.organisation_id =
+          COSSA_ORGANISATION_ID;
+      }
+
       const { data, error } = await db
         .from(adapter.table)
         .insert(row)
         .select(adapter.select ?? "*")
         .single();
-      if (error) throw error;
+
+      if (error) {
+        throw databaseError(
+          `Unable to create ${adapter.table} record`,
+          error,
+        );
+      }
+
+      if (!data) {
+        throw new Error(
+          `Unable to create ${adapter.table} record: Supabase returned no saved row.`,
+        );
+      }
+
       return adapter.fromRow(data);
     },
-    update: async (id: string, patch: Partial<T>): Promise<void> => {
-      const { error } = await db.from(adapter.table).update(adapter.toRow(patch)).eq("id", id);
-      if (error) throw error;
+
+    update: async (
+      id: string,
+      patch: Partial<T>,
+    ): Promise<void> => {
+      const cleanId = requiredText(
+        id,
+        "Record ID",
+      );
+
+      const row = adapter.toRow(patch);
+
+      const { data, error } = await db
+        .from(adapter.table)
+        .update(row)
+        .eq("id", cleanId)
+        .select("id")
+        .maybeSingle();
+
+      if (error) {
+        throw databaseError(
+          `Unable to update ${adapter.table} record`,
+          error,
+        );
+      }
+
+      if (!data) {
+        throw new Error(
+          `Unable to update ${adapter.table} record: the row was not found or access was denied.`,
+        );
+      }
     },
-    remove: async (id: string): Promise<void> => {
-      const { error } = await db.from(adapter.table).delete().eq("id", id);
-      if (error) throw error;
+
+    remove: async (
+      id: string,
+    ): Promise<void> => {
+      const cleanId = requiredText(
+        id,
+        "Record ID",
+      );
+
+      const { data, error } = await db
+        .from(adapter.table)
+        .delete()
+        .eq("id", cleanId)
+        .select("id")
+        .maybeSingle();
+
+      if (error) {
+        throw databaseError(
+          `Unable to delete ${adapter.table} record`,
+          error,
+        );
+      }
+
+      if (!data) {
+        throw new Error(
+          `Unable to delete ${adapter.table} record: the row was not found or access was denied.`,
+        );
+      }
     },
   };
 }
@@ -178,190 +393,218 @@ function plainCrud<T>(
     ascending,
     organisationScoped,
     fromRow: (row) => row as T,
-    toRow: (value) => value,
+    toRow: (value) => ({
+      ...value,
+      updated_at: new Date().toISOString(),
+    }),
   });
 }
 
-export const salesCompanies = plainCrud<SalesCompany>("sales_companies", "created_at", false, true);
+export const salesCompanies =
+  plainCrud<SalesCompany>(
+    "sales_companies",
+    "created_at",
+    false,
+    true,
+  );
 
-export const salesCustomers = adaptedCrud<SalesCustomer>({
-  table: "customers",
-  fromRow: (r) => ({ ...r, status: lower(r.status, "active"), company_id: null }),
-  toRow: (v) => ({
-    ...(v.name !== undefined && { name: v.name }),
-    ...(v.email !== undefined && { email: v.email }),
-    ...(v.phone !== undefined && { phone: v.phone }),
-    ...(v.status !== undefined && { status: v.status }),
-    ...(v.notes !== undefined && { notes: v.notes }),
-    updated_at: new Date().toISOString(),
-  }),
-});
+export const salesCustomers =
+  adaptedCrud<SalesCustomer>({
+    table: "customers",
 
-export const salesLeads = adaptedCrud<SalesLead>({
-  table: "leads",
-  fromRow: (r) => ({
-    ...r,
-    name: r.name ?? r.full_name ?? "Unnamed lead",
-    status: lower(r.stage ?? r.status, "new"),
-    score: r.score ?? 0,
-  }),
-  toRow: (v) => ({
-    ...(v.name !== undefined && { name: v.name, full_name: v.name }),
-    ...(v.email !== undefined && { email: v.email }),
-    ...(v.phone !== undefined && { phone: v.phone }),
-    ...(v.company !== undefined && { company: v.company }),
-    ...(v.source !== undefined && { source: v.source }),
-    ...(v.status !== undefined && { status: v.status, stage: v.status }),
-    ...(v.score !== undefined && { score: v.score }),
-    ...(v.notes !== undefined && { notes: v.notes }),
-    updated_at: new Date().toISOString(),
-  }),
-});
+    fromRow: (row) => ({
+      ...row,
+      name:
+        row.name ??
+        row.full_name ??
+        "Unnamed customer",
+      status: lower(
+        row.status,
+        "active",
+      ),
+      company_id: null,
+    }),
 
-export const salesOpportunities = adaptedCrud<SalesOpportunity>({
-  table: "opportunities",
-  fromRow: (r) => ({
-    ...r,
-    title: r.organization_name,
-    value: Number(r.estimated_value ?? 0),
-    stage: lower(r.status, "prospect"),
-    probability: r.probability ?? 20,
-    expected_close: r.expected_close ?? null,
-    customer_id: null,
-  }),
-  toRow: (v) => ({
-    ...(v.title !== undefined && { organization_name: v.title, opportunity_type: "general" }),
-    ...(v.value !== undefined && { estimated_value: v.value }),
-    ...(v.stage !== undefined && { status: v.stage }),
-    ...(v.probability !== undefined && { probability: v.probability }),
-    ...(v.expected_close !== undefined && { expected_close: v.expected_close }),
-    ...(v.notes !== undefined && { notes: v.notes }),
-    updated_at: new Date().toISOString(),
-  }),
-});
+    toRow: (value) => ({
+      ...(value.name !== undefined && {
+        name: requiredText(
+          value.name,
+          "Customer name",
+        ),
+      }),
 
-export const salesQuotations = adaptedCrud<SalesQuotation>({
-  table: "quotations",
-  fromRow: (r) => ({
-    ...r,
-    number: r.quote_number ?? "Unnumbered",
-    status: lower(r.status, "draft"),
-    opportunity_id: null,
-  }),
-  toRow: (v) => ({
-    ...(v.number !== undefined && { quote_number: v.number }),
-    ...(v.customer_id !== undefined && { customer_id: v.customer_id }),
-    ...(v.amount !== undefined && { amount: v.amount }),
-    ...(v.status !== undefined && { status: v.status }),
-    ...(v.valid_until !== undefined && { valid_until: v.valid_until }),
-    ...(v.notes !== undefined && { notes: v.notes }),
-    updated_at: new Date().toISOString(),
-  }),
-});
+      ...(value.email !== undefined && {
+        email: optionalText(value.email),
+      }),
 
-export const salesAppointments = adaptedCrud<SalesAppointment>({
-  table: "appointments",
-  orderBy: "scheduled_at",
-  ascending: true,
-  fromRow: (r) => ({
-    ...r,
-    title: r.title ?? r.service ?? "Appointment",
-    starts_at: r.scheduled_at ?? r.appointment_date,
-    ends_at: r.ends_at ?? null,
-  }),
-  toRow: (v) => ({
-    ...(v.title !== undefined && { title: v.title }),
-    ...(v.customer_id !== undefined && { customer_id: v.customer_id }),
-    ...(v.starts_at !== undefined && { scheduled_at: v.starts_at, appointment_date: v.starts_at }),
-    ...(v.ends_at !== undefined && { ends_at: v.ends_at }),
-    ...(v.location !== undefined && { location: v.location }),
-    ...(v.notes !== undefined && { notes: v.notes }),
-    updated_at: new Date().toISOString(),
-  }),
-});
+      ...(value.phone !== undefined && {
+        phone: optionalText(value.phone),
+      }),
 
-export const salesFollowUps = plainCrud<SalesFollowUp>("sales_follow_ups", "due_at", true, true);
+      ...(value.status !== undefined && {
+        status: lower(
+          value.status,
+          "active",
+        ),
+      }),
 
-export const opsProjects = adaptedCrud<OpsProject>({
-  table: "projects",
-  fromRow: (r) => ({
-    ...r,
-    name: r.name ?? r.project_name ?? "Unnamed project",
-    status: lower(r.status, "planning"),
-    priority: r.priority ?? "medium",
-    progress: r.progress ?? 0,
-    due_date: r.end_date ?? null,
-  }),
-  toRow: (v) => ({
-    ...(v.name !== undefined && { name: v.name, project_name: v.name }),
-    ...(v.customer_id !== undefined && { customer_id: v.customer_id }),
-    ...(v.status !== undefined && { status: v.status }),
-    ...(v.priority !== undefined && { priority: v.priority }),
-    ...(v.progress !== undefined && { progress: v.progress }),
-    ...(v.start_date !== undefined && { start_date: v.start_date }),
-    ...(v.due_date !== undefined && { end_date: v.due_date }),
-    ...(v.notes !== undefined && { notes: v.notes }),
-    updated_at: new Date().toISOString(),
-  }),
-});
+      ...(value.notes !== undefined && {
+        notes: optionalText(value.notes),
+      }),
 
-export const opsTasks = plainCrud<OpsTask>("ops_tasks", "due_at", true, true);
-export const opsDocuments = adaptedCrud<OpsDocument>({
-  table: "ops_documents",
-  organisationScoped: true,
-  fromRow: (row) => ({ ...row, url: row.source_url ?? null }),
-  toRow: (value) => ({
-    ...(value.title !== undefined && { title: value.title }),
-    ...(value.category !== undefined && { category: value.category }),
-    ...(value.url !== undefined && { source_url: value.url }),
-    ...(value.notes !== undefined && { notes: value.notes }),
-    updated_at: new Date().toISOString(),
-  }),
-});
-
-export async function dashboardStats() {
-  const [leads, opps, quotes, projects, tasks, customers] = await Promise.all([
-    salesLeads.list(),
-    salesOpportunities.list(),
-    salesQuotations.list(),
-    opsProjects.list(),
-    opsTasks.list(),
-    salesCustomers.list(),
-  ]);
-  const pipelineValue = opps
-    .filter((o) => !["won", "lost"].includes(o.stage))
-    .reduce((sum, o) => sum + Number(o.value ?? 0), 0);
-  const wonValue = opps
-    .filter((o) => o.stage === "won")
-    .reduce((sum, o) => sum + Number(o.value ?? 0), 0);
-  const acceptedRevenue = quotes
-    .filter((q) => q.status === "accepted")
-    .reduce((sum, q) => sum + Number(q.amount ?? 0), 0);
-  const stages = ["prospect", "qualified", "proposal", "negotiation", "won"] as const;
-  const pipelineByStage = stages.map((stage) => {
-    const rows = opps.filter((o) => o.stage === stage);
-    return {
-      stage,
-      count: rows.length,
-      value: rows.reduce((sum, o) => sum + Number(o.value ?? 0), 0),
-    };
+      updated_at: new Date().toISOString(),
+    }),
   });
-  const now = Date.now();
-  return {
-    revenueMTD: wonValue + acceptedRevenue,
-    newLeads: leads.filter((lead) => now - new Date(lead.created_at).getTime() < 7 * 86_400_000)
-      .length,
-    totalLeads: leads.length,
-    pipelineValue,
-    pipelineByStage,
-    customers: customers.length,
-    activeProjects: projects.filter((project) => !["done", "archived"].includes(project.status))
-      .length,
-    projectCount: projects.length,
-    openTasks: tasks.filter((task) => task.status !== "done").length,
-    overdueTasks: tasks.filter(
-      (task) => task.status !== "done" && task.due_at && new Date(task.due_at).getTime() < now,
-    ).length,
-    quotesOpen: quotes.filter((quote) => ["draft", "sent"].includes(quote.status)).length,
-  };
-}
+
+export const salesLeads =
+  adaptedCrud<SalesLead>({
+    table: "leads",
+
+    fromRow: (row) => ({
+      ...row,
+      name:
+        row.name ??
+        row.full_name ??
+        "Unnamed lead",
+      status: lower(
+        row.stage ?? row.status,
+        "new",
+      ),
+      score: safeNumber(
+        row.score,
+        0,
+      ),
+    }),
+
+    toRow: (value) => ({
+      ...(value.name !== undefined && {
+        name: requiredText(
+          value.name,
+          "Lead name",
+        ),
+        full_name: requiredText(
+          value.name,
+          "Lead name",
+        ),
+      }),
+
+      ...(value.email !== undefined && {
+        email: optionalText(value.email),
+      }),
+
+      ...(value.phone !== undefined && {
+        phone: optionalText(value.phone),
+      }),
+
+      ...(value.company !== undefined && {
+        company: optionalText(value.company),
+      }),
+
+      ...(value.source !== undefined && {
+        source: optionalText(value.source),
+      }),
+
+      ...(value.status !== undefined && {
+        status: lower(
+          value.status,
+          "new",
+        ),
+        stage: lower(
+          value.status,
+          "new",
+        ),
+      }),
+
+      ...(value.score !== undefined && {
+        score: safeNumber(
+          value.score,
+          0,
+        ),
+      }),
+
+      ...(value.notes !== undefined && {
+        notes: optionalText(value.notes),
+      }),
+
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+/**
+ * Opportunities use the existing Growth schema:
+ *
+ * UI title          → organization_name
+ * UI value          → estimated_value
+ * UI stage          → status
+ * UI probability    → probability
+ * UI expected close → expected_close
+ */
+export const salesOpportunities =
+  adaptedCrud<SalesOpportunity>({
+    table: "opportunities",
+
+    select: [
+      "id",
+      "organization_name",
+      "opportunity_type",
+      "contact_name",
+      "contact_phone",
+      "contact_email",
+      "location",
+      "estimated_value",
+      "status",
+      "last_contact_date",
+      "notes",
+      "probability",
+      "expected_close",
+      "created_at",
+      "updated_at",
+    ].join(","),
+
+    fromRow: (row) => ({
+      id: row.id,
+      title:
+        row.organization_name ??
+        "Untitled opportunity",
+      customer_id: null,
+      value: safeNumber(
+        row.estimated_value,
+        0,
+      ),
+      stage: lower(
+        row.status,
+        "prospect",
+      ),
+      probability:
+        clampProbability(
+          row.probability,
+        ),
+      expected_close:
+        row.expected_close ?? null,
+      notes:
+        row.notes ?? null,
+      created_at:
+        row.created_at,
+      updated_at:
+        row.updated_at,
+    }),
+
+    toRow: (value) => {
+      const row: Record<
+        string,
+        unknown
+      > = {
+        updated_at:
+          new Date().toISOString(),
+      };
+
+      if (value.title !== undefined) {
+        row.organization_name =
+          requiredText(
+            value.title,
+            "Opportunity title",
+          );
+
+        // opportunity_type is required in the existing table.
+        row.opportunity_type =
+          "general";
