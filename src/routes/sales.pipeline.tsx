@@ -889,4 +889,222 @@ function MetricCard({
       <div
         className={
           primary
-            ?
+            ? "mt-2 font-display text-2xl font-semibold text-primary"
+            : "mt-2 font-display text-2xl font-semibold"
+        }
+      >
+        {value}
+      </div>
+
+      <p className="mt-1 text-xs text-muted-foreground">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function OpportunityCard({
+  opportunity,
+  stage,
+  mutationPending,
+  onAdvance,
+  onBack,
+  onWon,
+  onLost,
+  onReopen,
+  onCreateProject,
+}: {
+  opportunity: SalesOpportunity;
+  stage: PipelineStage;
+  mutationPending: boolean;
+  onAdvance: () => void;
+  onBack: () => void;
+  onWon: () => void;
+  onLost: () => void;
+  onReopen: () => void;
+  onCreateProject: () => void;
+}) {
+  const previousStage =
+    getPreviousStage(stage);
+
+  const nextStage =
+    getNextStage(stage);
+
+  const isClosed =
+    stage === "won" ||
+    stage === "lost";
+
+  return (
+    <article className="rounded-xl border border-border/60 bg-card/40 p-3 text-sm">
+      <div className="font-medium leading-5">
+        {opportunity.title ||
+          "Untitled opportunity"}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-semibold text-primary">
+          {fmtCurrency(
+            opportunity.value ?? 0,
+          )}
+        </span>
+
+        <span className="text-muted-foreground">
+          {Number(
+            opportunity.probability ?? 0,
+          )}
+          % probability
+        </span>
+      </div>
+
+      {opportunity.expected_close && (
+        <div className="mt-1 text-[10px] text-muted-foreground">
+          Expected close:{" "}
+          {fmtDate(
+            opportunity.expected_close,
+          )}
+        </div>
+      )}
+
+      {opportunity.notes && (
+        <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted-foreground">
+          {opportunity.notes}
+        </p>
+      )}
+
+      {!isClosed && (
+        <div className="mt-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={
+                mutationPending ||
+                !previousStage
+              }
+              onClick={onBack}
+              className="h-8 border-border/70 text-xs"
+            >
+              <ArrowLeft className="mr-1 h-3 w-3" />
+              Back
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={
+                mutationPending ||
+                !nextStage
+              }
+              onClick={onAdvance}
+              className="h-8 border-primary/40 text-xs text-primary hover:bg-primary/10"
+            >
+              Advance
+              <ArrowRight className="ml-1 h-3 w-3" />
+            </Button>
+          </div>
+
+          {stage === "negotiation" && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={mutationPending}
+              onClick={onWon}
+              className="h-8 w-full bg-primary text-xs text-primary-foreground hover:bg-primary/90"
+            >
+              {mutationPending ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <BriefcaseBusiness className="mr-1 h-3.5 w-3.5" />
+              )}
+              Win and create project
+            </Button>
+          )}
+
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={mutationPending}
+            onClick={onLost}
+            className="h-8 w-full text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <XCircle className="mr-1 h-3.5 w-3.5" />
+            Mark as lost
+          </Button>
+        </div>
+      )}
+
+      {stage === "won" && (
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Opportunity marked won
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={mutationPending}
+            onClick={onCreateProject}
+            className="h-8 w-full border-primary/40 text-xs text-primary hover:bg-primary/10"
+          >
+            {mutationPending ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1 h-3.5 w-3.5" />
+            )}
+            Create or recover project
+          </Button>
+
+          <Link to="/operations/projects">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 w-full text-xs text-primary hover:bg-primary/10"
+            >
+              <FolderKanban className="mr-1 h-3.5 w-3.5" />
+              Open projects
+            </Button>
+          </Link>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={mutationPending}
+            onClick={onReopen}
+            className="h-8 w-full border-border/70 text-xs"
+          >
+            <RotateCcw className="mr-1 h-3.5 w-3.5" />
+            Reopen in negotiation
+          </Button>
+        </div>
+      )}
+
+      {stage === "lost" && (
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <XCircle className="h-3.5 w-3.5" />
+            Opportunity marked lost
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={mutationPending}
+            onClick={onReopen}
+            className="h-8 w-full border-border/70 text-xs"
+          >
+            <RotateCcw className="mr-1 h-3.5 w-3.5" />
+            Reopen in negotiation
+          </Button>
+        </div>
+      )}
+    </article>
+  );
+}
