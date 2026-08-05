@@ -1,7 +1,7 @@
 // Production CRM + Operations data access.
 //
 // The UI models below are translated into the existing Growth Supabase schema.
-// Existing production tables remain the source of truth. This file must not
+// Existing production tables remain the source of truth. This file does not
 // create duplicate sales or operations tables.
 
 import { supabase } from "@/integrations/supabase/client";
@@ -151,7 +151,7 @@ type Adapter<T> = {
   toRow: (value: Partial<T>) => Record<string, unknown>;
 };
 
-const OPPORTUNITY_STAGES = [
+const UI_OPPORTUNITY_STAGES = [
   "prospect",
   "qualified",
   "proposal",
@@ -159,6 +159,53 @@ const OPPORTUNITY_STAGES = [
   "won",
   "lost",
 ] as const;
+
+type UiOpportunityStage =
+  (typeof UI_OPPORTUNITY_STAGES)[number];
+
+const DATABASE_OPPORTUNITY_STATUSES = [
+  "prospect",
+  "qualified",
+  "engaged",
+  "won",
+  "lost",
+] as const;
+
+type DatabaseOpportunityStatus =
+  (typeof DATABASE_OPPORTUNITY_STATUSES)[number];
+
+const DATABASE_OPPORTUNITY_TYPES = [
+  "property_manager",
+  "school",
+  "church",
+  "office_park",
+  "shopping_centre",
+  "estate_agent",
+] as const;
+
+type DatabaseOpportunityType =
+  (typeof DATABASE_OPPORTUNITY_TYPES)[number];
+
+const UI_STAGE_MARKER_PATTERN =
+  /cossa_ui_stage:(prospect|qualified|proposal|negotiation|won|lost)/i;
+
+const OPPORTUNITY_SELECT = [
+  "id",
+  "organization_name",
+  "opportunity_type",
+  "contact_name",
+  "contact_phone",
+  "contact_email",
+  "location",
+  "estimated_value",
+  "status",
+  "last_contact_date",
+  "notes",
+  "probability",
+  "expected_close",
+  "created_at",
+  "updated_at",
+].join(",");
 
 function lower(
   value: unknown,
@@ -210,7 +257,10 @@ function clampProbability(
 ): number {
   return Math.min(
     100,
-    Math.max(0, Math.round(safeNumber(value, 20))),
+    Math.max(
+      0,
+      Math.round(safeNumber(value, 20)),
+    ),
   );
 }
 
@@ -219,14 +269,16 @@ function databaseError(
   error: unknown,
 ): Error {
   if (error instanceof Error) {
-    return new Error(`${operation}: ${error.message}`);
+    return new Error(
+      `${operation}: ${error.message}`,
+    );
   }
 
   const typedError =
     error as DatabaseErrorLike | null;
 
   if (typedError?.message) {
-    const additionalInformation = [
+    const details = [
       typedError.details,
       typedError.hint,
       typedError.code
@@ -238,9 +290,7 @@ function databaseError(
 
     return new Error(
       `${operation}: ${typedError.message}${
-        additionalInformation
-          ? ` ${additionalInformation}`
-          : ""
+        details ? ` ${details}` : ""
       }`,
     );
   }
@@ -248,6 +298,177 @@ function databaseError(
   return new Error(
     `${operation}: Unknown Supabase error.`,
   );
+}
+
+function normaliseUiOpportunityStage(
+  value: unknown,
+): UiOpportunityStage {
+  const stage = lower(value, "prospect");
+
+  if (
+    UI_OPPORTUNITY_STAGES.includes(
+      stage as UiOpportunityStage,
+    )
+  ) {
+    return stage as UiOpportunityStage;
+  }
+
+  if (stage === "engaged") {
+    return "proposal";
+  }
+
+  return "prospect";
+}
+
+function toDatabaseOpportunityStatus(
+  stage: UiOpportunityStage,
+): DatabaseOpportunityStatus {
+  switch (stage) {
+    case "proposal":
+    case "negotiation":
+      return "engaged";
+
+    case "prospect":
+    case "qualified":
+    case "won":
+    case "lost":
+      return stage;
+  }
+}
+
+function readUiStageFromNotes(
+  notes: unknown,
+  databaseStatus: unknown,
+): UiOpportunityStage {
+  const text =
+    typeof notes === "string" ? notes : "";
+
+  const match =
+    text.match(UI_STAGE_MARKER_PATTERN);
+
+  if (match?.[1]) {
+    return normaliseUiOpportunityStage(
+      match[1],
+    );
+  }
+
+  return normaliseUiOpportunityStage(
+    databaseStatus,
+  );
+}
+
+function removeUiStageMarker(
+  notes: unknown,
+): string | null {
+  if (typeof notes !== "string") {
+    return null;
+  }
+
+  const cleaned = notes
+    .replace(UI_STAGE_MARKER_PATTERN, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return cleaned || null;
+}
+
+function addUiStageMarker(
+  notes: unknown,
+  stage: UiOpportunityStage,
+): string {
+  const cleanNotes =
+    removeUiStageMarker(notes);
+
+  return [
+    `[cossa_ui_stage:${stage}]`,
+    cleanNotes,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function inferOpportunityType(
+  title: unknown,
+  notes: unknown,
+): DatabaseOpportunityType {
+  const searchable =
+    `${String(title ?? "")} ${String(
+      notes ?? "",
+    )}`.toLowerCase();
+
+  if (
+    searchable.includes("school") ||
+    searchable.includes("college") ||
+    searchable.includes("academy")
+  ) {
+    return "school";
+  }
+
+  if (
+    searchable.includes("church") ||
+    searchable.includes("ministry") ||
+    searchable.includes("congregation")
+  ) {
+    return "church";
+  }
+
+  if (
+    searchable.includes("shopping centre") ||
+    searchable.includes("shopping center") ||
+    searchable.includes("mall") ||
+    searchable.includes("retail centre") ||
+    searchable.includes("retail center")
+  ) {
+    return "shopping_centre";
+  }
+
+  if (
+    searchable.includes("estate agent") ||
+    searchable.includes("real estate") ||
+    searchable.includes("property agency")
+  ) {
+    return "estate_agent";
+  }
+
+  if (
+    searchable.includes("office") ||
+    searchable.includes("business park") ||
+    searchable.includes("corporate")
+  ) {
+    return "office_park";
+  }
+
+  return "property_manager";
+}
+
+function mapOpportunityRow(
+  row: any,
+): SalesOpportunity {
+  return {
+    id: row.id,
+    title:
+      row.organization_name ??
+      "Untitled opportunity",
+    customer_id: null,
+    value: safeNumber(
+      row.estimated_value,
+      0,
+    ),
+    stage: readUiStageFromNotes(
+      row.notes,
+      row.status,
+    ),
+    probability: clampProbability(
+      row.probability,
+    ),
+    expected_close:
+      row.expected_close ?? null,
+    notes: removeUiStageMarker(
+      row.notes,
+    ),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }
 
 function adaptedCrud<T>(
@@ -266,13 +487,14 @@ function adaptedCrud<T>(
         );
       }
 
-      const { data, error } = await query.order(
-        adapter.orderBy ?? "created_at",
-        {
-          ascending:
-            adapter.ascending ?? false,
-        },
-      );
+      const { data, error } =
+        await query.order(
+          adapter.orderBy ?? "created_at",
+          {
+            ascending:
+              adapter.ascending ?? false,
+          },
+        );
 
       if (error) {
         throw databaseError(
@@ -392,10 +614,13 @@ function plainCrud<T>(
     orderBy,
     ascending,
     organisationScoped,
+
     fromRow: (row) => row as T,
+
     toRow: (value) => ({
       ...value,
-      updated_at: new Date().toISOString(),
+      updated_at:
+        new Date().toISOString(),
     }),
   });
 }
@@ -452,7 +677,8 @@ export const salesCustomers =
         notes: optionalText(value.notes),
       }),
 
-      updated_at: new Date().toISOString(),
+      updated_at:
+        new Date().toISOString(),
     }),
   });
 
@@ -497,11 +723,15 @@ export const salesLeads =
       }),
 
       ...(value.company !== undefined && {
-        company: optionalText(value.company),
+        company: optionalText(
+          value.company,
+        ),
       }),
 
       ...(value.source !== undefined && {
-        source: optionalText(value.source),
+        source: optionalText(
+          value.source,
+        ),
       }),
 
       ...(value.status !== undefined && {
@@ -523,154 +753,309 @@ export const salesLeads =
       }),
 
       ...(value.notes !== undefined && {
-        notes: optionalText(value.notes),
+        notes: optionalText(
+          value.notes,
+        ),
       }),
 
-      updated_at: new Date().toISOString(),
+      updated_at:
+        new Date().toISOString(),
     }),
   });
 
 /**
- * Opportunities use the existing Growth schema:
+ * The existing opportunities table only supports:
  *
- * UI title          → organization_name
- * UI value          → estimated_value
- * UI stage          → status
- * UI probability    → probability
- * UI expected close → expected_close
+ * Database status:
+ * prospect, qualified, engaged, won, lost
+ *
+ * The UI needs:
+ * prospect, qualified, proposal, negotiation, won, lost
+ *
+ * Proposal and Negotiation are therefore stored as database status "engaged".
+ * Their detailed UI stage is preserved in a controlled marker inside notes.
  */
-export const salesOpportunities =
-  adaptedCrud<SalesOpportunity>({
-    table: "opportunities",
+export const salesOpportunities = {
+  list: async (): Promise<
+    SalesOpportunity[]
+  > => {
+    const { data, error } = await db
+      .from("opportunities")
+      .select(OPPORTUNITY_SELECT)
+      .order("created_at", {
+        ascending: false,
+      });
 
-    select: [
-      "id",
-      "organization_name",
-      "opportunity_type",
-      "contact_name",
-      "contact_phone",
-      "contact_email",
-      "location",
-      "estimated_value",
-      "status",
-      "last_contact_date",
-      "notes",
-      "probability",
-      "expected_close",
-      "created_at",
-      "updated_at",
-    ].join(","),
+    if (error) {
+      throw databaseError(
+        "Unable to load opportunities",
+        error,
+      );
+    }
 
-    fromRow: (row) => ({
-      id: row.id,
-      title:
-        row.organization_name ??
-        "Untitled opportunity",
-      customer_id: null,
-      value: safeNumber(
-        row.estimated_value,
-        0,
-      ),
-      stage: lower(
-        row.status,
-        "prospect",
-      ),
+    return (data ?? []).map(
+      mapOpportunityRow,
+    );
+  },
+
+  create: async (
+    payload: Partial<SalesOpportunity>,
+  ): Promise<SalesOpportunity> => {
+    const title = requiredText(
+      payload.title,
+      "Opportunity title",
+    );
+
+    const value = safeNumber(
+      payload.value,
+      0,
+    );
+
+    if (value < 0) {
+      throw new Error(
+        "Opportunity value cannot be negative.",
+      );
+    }
+
+    const stage =
+      normaliseUiOpportunityStage(
+        payload.stage,
+      );
+
+    const cleanNotes =
+      optionalText(payload.notes);
+
+    const row = {
+      organization_name: title,
+
+      opportunity_type:
+        inferOpportunityType(
+          title,
+          cleanNotes,
+        ),
+
+      estimated_value: value,
+
+      status:
+        toDatabaseOpportunityStatus(
+          stage,
+        ),
+
       probability:
         clampProbability(
-          row.probability,
+          payload.probability,
         ),
+
       expected_close:
-        row.expected_close ?? null,
-      notes:
-        row.notes ?? null,
-      created_at:
-        row.created_at,
+        payload.expected_close || null,
+
+      notes: addUiStageMarker(
+        cleanNotes,
+        stage,
+      ),
+
       updated_at:
-        row.updated_at,
-    }),
+        new Date().toISOString(),
+    };
 
-    toRow: (value) => {
-      const row: Record<
-        string,
-        unknown
-      > = {
-        updated_at:
-          new Date().toISOString(),
-      };
+    const { data, error } = await db
+      .from("opportunities")
+      .insert(row)
+      .select(OPPORTUNITY_SELECT)
+      .single();
 
-      if (value.title !== undefined) {
-        row.organization_name =
-          requiredText(
-            value.title,
+    if (error) {
+      throw databaseError(
+        "Unable to create opportunity",
+        error,
+      );
+    }
+
+    if (!data) {
+      throw new Error(
+        "Unable to create opportunity: Supabase returned no saved record.",
+      );
+    }
+
+    return mapOpportunityRow(data);
+  },
+
+  update: async (
+    id: string,
+    patch: Partial<SalesOpportunity>,
+  ): Promise<void> => {
+    const cleanId = requiredText(
+      id,
+      "Opportunity ID",
+    );
+
+    const {
+      data: existing,
+      error: existingError,
+    } = await db
+      .from("opportunities")
+      .select(OPPORTUNITY_SELECT)
+      .eq("id", cleanId)
+      .maybeSingle();
+
+    if (existingError) {
+      throw databaseError(
+        "Unable to load the opportunity before updating",
+        existingError,
+      );
+    }
+
+    if (!existing) {
+      throw new Error(
+        "The opportunity was not found or access was denied.",
+      );
+    }
+
+    const current =
+      mapOpportunityRow(existing);
+
+    const nextTitle =
+      patch.title !== undefined
+        ? requiredText(
+            patch.title,
             "Opportunity title",
-          );
-
-        // opportunity_type is required in the existing table.
-        row.opportunity_type =
-          "general";
-      }
-
-      if (value.value !== undefined) {
-        const amount = safeNumber(
-          value.value,
-          0,
-        );
-
-        if (amount < 0) {
-          throw new Error(
-            "Opportunity value cannot be negative.",
-          );
-        }
-
-        row.estimated_value =
-          amount;
-      }
-
-      if (value.stage !== undefined) {
-        const stage = lower(
-          value.stage,
-          "prospect",
-        );
-
-        if (
-          !OPPORTUNITY_STAGES.includes(
-            stage as
-              (typeof OPPORTUNITY_STAGES)[number],
           )
-        ) {
-          throw new Error(
-            `Unsupported opportunity stage: ${stage}.`,
+        : current.title;
+
+    const nextStage =
+      patch.stage !== undefined
+        ? normaliseUiOpportunityStage(
+            patch.stage,
+          )
+        : normaliseUiOpportunityStage(
+            current.stage,
           );
-        }
 
-        row.status = stage;
+    const nextNotes =
+      patch.notes !== undefined
+        ? optionalText(patch.notes)
+        : current.notes;
+
+    const updateRow: Record<
+      string,
+      unknown
+    > = {
+      updated_at:
+        new Date().toISOString(),
+    };
+
+    if (patch.title !== undefined) {
+      updateRow.organization_name =
+        nextTitle;
+
+      updateRow.opportunity_type =
+        inferOpportunityType(
+          nextTitle,
+          nextNotes,
+        );
+    }
+
+    if (patch.value !== undefined) {
+      const amount = safeNumber(
+        patch.value,
+        0,
+      );
+
+      if (amount < 0) {
+        throw new Error(
+          "Opportunity value cannot be negative.",
+        );
       }
 
-      if (
-        value.probability !== undefined
-      ) {
-        row.probability =
-          clampProbability(
-            value.probability,
-          );
-      }
+      updateRow.estimated_value =
+        amount;
+    }
 
-      if (
-        value.expected_close !==
-        undefined
-      ) {
-        row.expected_close =
-          value.expected_close || null;
-      }
+    if (patch.stage !== undefined) {
+      updateRow.status =
+        toDatabaseOpportunityStatus(
+          nextStage,
+        );
+    }
 
-      if (value.notes !== undefined) {
-        row.notes =
-          optionalText(value.notes);
-      }
+    if (
+      patch.probability !== undefined
+    ) {
+      updateRow.probability =
+        clampProbability(
+          patch.probability,
+        );
+    }
 
-      return row;
-    },
-  });
+    if (
+      patch.expected_close !==
+      undefined
+    ) {
+      updateRow.expected_close =
+        patch.expected_close || null;
+    }
+
+    if (
+      patch.notes !== undefined ||
+      patch.stage !== undefined
+    ) {
+      updateRow.notes =
+        addUiStageMarker(
+          nextNotes,
+          nextStage,
+        );
+    }
+
+    const { data, error } = await db
+      .from("opportunities")
+      .update(updateRow)
+      .eq("id", cleanId)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      throw databaseError(
+        "Unable to update opportunity",
+        error,
+      );
+    }
+
+    if (!data) {
+      throw new Error(
+        "Unable to update opportunity: the row was not found or access was denied.",
+      );
+    }
+  },
+
+  remove: async (
+    id: string,
+  ): Promise<void> => {
+    const cleanId = requiredText(
+      id,
+      "Opportunity ID",
+    );
+
+    const { data, error } = await db
+      .from("opportunities")
+      .delete()
+      .eq("id", cleanId)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      throw databaseError(
+        "Unable to delete opportunity",
+        error,
+      );
+    }
+
+    if (!data) {
+      throw new Error(
+        "Unable to delete opportunity: the row was not found or access was denied.",
+      );
+    }
+  },
+};
 
 export const salesQuotations =
   adaptedCrud<SalesQuotation>({
@@ -724,10 +1109,13 @@ export const salesQuotations =
       }),
 
       ...(value.notes !== undefined && {
-        notes: optionalText(value.notes),
+        notes: optionalText(
+          value.notes,
+        ),
       }),
 
-      updated_at: new Date().toISOString(),
+      updated_at:
+        new Date().toISOString(),
     }),
   });
 
@@ -778,15 +1166,19 @@ export const salesAppointments =
       }),
 
       ...(value.location !== undefined && {
-        location:
-          optionalText(value.location),
+        location: optionalText(
+          value.location,
+        ),
       }),
 
       ...(value.notes !== undefined && {
-        notes: optionalText(value.notes),
+        notes: optionalText(
+          value.notes,
+        ),
       }),
 
-      updated_at: new Date().toISOString(),
+      updated_at:
+        new Date().toISOString(),
     }),
   });
 
@@ -808,530 +1200,4 @@ export const opsProjects =
       "project_name",
       "name",
       "service",
-      "location",
-      "budget",
-      "status",
-      "priority",
-      "progress",
-      "start_date",
-      "end_date",
-      "notes",
-      "created_at",
-      "updated_at",
-    ].join(","),
-
-    fromRow: (row) => ({
-      id: row.id,
-      name:
-        row.project_name ??
-        row.name ??
-        "Unnamed project",
-      customer_id:
-        row.customer_id ?? null,
-      status: lower(
-        row.status,
-        "planning",
-      ),
-      priority:
-        lower(
-          row.priority,
-          "medium",
-        ),
-      progress: safeNumber(
-        row.progress,
-        0,
-      ),
-      start_date:
-        row.start_date ?? null,
-      due_date:
-        row.end_date ?? null,
-      notes:
-        row.notes ?? null,
-      created_at:
-        row.created_at,
-      updated_at:
-        row.updated_at,
-    }),
-
-    toRow: (value) => {
-      const row: Record<
-        string,
-        unknown
-      > = {
-        updated_at:
-          new Date().toISOString(),
-      };
-
-      if (value.name !== undefined) {
-        const projectName =
-          requiredText(
-            value.name,
-            "Project name",
-          );
-
-        row.name = projectName;
-        row.project_name =
-          projectName;
-      }
-
-      if (
-        value.customer_id !== undefined
-      ) {
-        row.customer_id =
-          value.customer_id;
-      }
-
-      if (value.status !== undefined) {
-        row.status = lower(
-          value.status,
-          "planning",
-        );
-      }
-
-      if (value.priority !== undefined) {
-        row.priority = lower(
-          value.priority,
-          "medium",
-        );
-      }
-
-      if (value.progress !== undefined) {
-        row.progress = Math.min(
-          100,
-          Math.max(
-            0,
-            Math.round(
-              safeNumber(
-                value.progress,
-                0,
-              ),
-            ),
-          ),
-        );
-      }
-
-      if (
-        value.start_date !== undefined
-      ) {
-        row.start_date =
-          value.start_date || null;
-      }
-
-      if (
-        value.due_date !== undefined
-      ) {
-        row.end_date =
-          value.due_date || null;
-      }
-
-      if (value.notes !== undefined) {
-        row.notes =
-          optionalText(value.notes);
-      }
-
-      return row;
-    },
-  });
-
-export const opsTasks =
-  plainCrud<OpsTask>(
-    "ops_tasks",
-    "due_at",
-    true,
-    true,
-  );
-
-export const opsDocuments =
-  adaptedCrud<OpsDocument>({
-    table: "ops_documents",
-    organisationScoped: true,
-
-    fromRow: (row) => ({
-      ...row,
-      url:
-        row.source_url ?? null,
-    }),
-
-    toRow: (value) => ({
-      ...(value.title !== undefined && {
-        title: requiredText(
-          value.title,
-          "Document title",
-        ),
-      }),
-
-      ...(value.category !==
-        undefined && {
-        category:
-          optionalText(
-            value.category,
-          ),
-      }),
-
-      ...(value.url !== undefined && {
-        source_url:
-          optionalText(value.url),
-      }),
-
-      ...(value.notes !== undefined && {
-        notes:
-          optionalText(value.notes),
-      }),
-
-      updated_at: new Date().toISOString(),
-    }),
-  });
-
-/**
- * Creates a project from a won opportunity.
- *
- * This function is not called automatically merely because it exists.
- * The Pipeline page must call it after the user confirms a Won stage.
- *
- * A marker is stored in project notes to prevent accidental duplicates.
- */
-export async function createProjectFromOpportunity(
-  opportunity: SalesOpportunity,
-): Promise<OpsProject> {
-  if (
-    lower(
-      opportunity.stage,
-      "prospect",
-    ) !== "won"
-  ) {
-    throw new Error(
-      "Only a won opportunity can be converted into a project.",
-    );
-  }
-
-  const opportunityId =
-    requiredText(
-      opportunity.id,
-      "Opportunity ID",
-    );
-
-  const projectName =
-    requiredText(
-      opportunity.title,
-      "Opportunity title",
-    );
-
-  const sourceMarker =
-    `[source_opportunity_id:${opportunityId}]`;
-
-  const { data: existingProjects, error:
-      existingProjectError } =
-    await db
-      .from("projects")
-      .select(
-        "id,customer_id,project_name,name,status,priority,progress,start_date,end_date,notes,created_at,updated_at",
-      )
-      .ilike(
-        "notes",
-        `%${sourceMarker}%`,
-      )
-      .limit(1);
-
-  if (existingProjectError) {
-    throw databaseError(
-      "Unable to check for an existing project",
-      existingProjectError,
-    );
-  }
-
-  if (
-    Array.isArray(existingProjects) &&
-    existingProjects.length > 0
-  ) {
-    return opsProjects
-      .list()
-      .then((projects) => {
-        const existing =
-          projects.find(
-            (project) =>
-              project.id ===
-              existingProjects[0].id,
-          );
-
-        if (!existing) {
-          throw new Error(
-            "The project already exists but could not be reloaded.",
-          );
-        }
-
-        return existing;
-      });
-  }
-
-  const projectNotes = [
-    sourceMarker,
-    "Created from a won sales opportunity.",
-    `Opportunity value: R${safeNumber(
-      opportunity.value,
-      0,
-    ).toFixed(2)}`,
-    opportunity.expected_close
-      ? `Original expected close: ${opportunity.expected_close}`
-      : null,
-    opportunity.notes
-      ? `Opportunity notes:\n${opportunity.notes}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  const { data, error } = await db
-    .from("projects")
-    .insert({
-      name: projectName,
-      project_name:
-        projectName,
-      budget: safeNumber(
-        opportunity.value,
-        0,
-      ),
-      status: "planning",
-      priority: "high",
-      progress: 0,
-      start_date: null,
-      end_date: null,
-      notes: projectNotes,
-      updated_at:
-        new Date().toISOString(),
-    })
-    .select(
-      "id,customer_id,project_name,name,status,priority,progress,start_date,end_date,notes,created_at,updated_at",
-    )
-    .single();
-
-  if (error) {
-    throw databaseError(
-      "Unable to create a project from the won opportunity",
-      error,
-    );
-  }
-
-  if (!data) {
-    throw new Error(
-      "The project could not be created because Supabase returned no saved record.",
-    );
-  }
-
-  return opsProjects
-    .list()
-    .then((projects) => {
-      const created =
-        projects.find(
-          (project) =>
-            project.id === data.id,
-        );
-
-      if (!created) {
-        throw new Error(
-          "The project was created but could not be reloaded.",
-        );
-      }
-
-      return created;
-    });
-}
-
-export async function dashboardStats() {
-  const [
-    leads,
-    opportunities,
-    quotations,
-    projects,
-    tasks,
-    customers,
-  ] = await Promise.all([
-    salesLeads.list(),
-    salesOpportunities.list(),
-    salesQuotations.list(),
-    opsProjects.list(),
-    opsTasks.list(),
-    salesCustomers.list(),
-  ]);
-
-  const pipelineValue =
-    opportunities
-      .filter(
-        (opportunity) =>
-          !["won", "lost"].includes(
-            lower(
-              opportunity.stage,
-              "prospect",
-            ),
-          ),
-      )
-      .reduce(
-        (total, opportunity) =>
-          total +
-          safeNumber(
-            opportunity.value,
-            0,
-          ),
-        0,
-      );
-
-  const wonValue =
-    opportunities
-      .filter(
-        (opportunity) =>
-          lower(
-            opportunity.stage,
-            "prospect",
-          ) === "won",
-      )
-      .reduce(
-        (total, opportunity) =>
-          total +
-          safeNumber(
-            opportunity.value,
-            0,
-          ),
-        0,
-      );
-
-  const acceptedRevenue =
-    quotations
-      .filter(
-        (quotation) =>
-          lower(
-            quotation.status,
-            "draft",
-          ) === "accepted",
-      )
-      .reduce(
-        (total, quotation) =>
-          total +
-          safeNumber(
-            quotation.amount,
-            0,
-          ),
-        0,
-      );
-
-  const stages = [
-    "prospect",
-    "qualified",
-    "proposal",
-    "negotiation",
-    "won",
-  ] as const;
-
-  const pipelineByStage =
-    stages.map((stage) => {
-      const stageRows =
-        opportunities.filter(
-          (opportunity) =>
-            lower(
-              opportunity.stage,
-              "prospect",
-            ) === stage,
-        );
-
-      return {
-        stage,
-        count: stageRows.length,
-        value: stageRows.reduce(
-          (total, opportunity) =>
-            total +
-            safeNumber(
-              opportunity.value,
-              0,
-            ),
-          0,
-        ),
-      };
-    });
-
-  const now = Date.now();
-
-  return {
-    revenueMTD:
-      wonValue +
-      acceptedRevenue,
-
-    newLeads: leads.filter(
-      (lead) => {
-        const createdAt =
-          new Date(
-            lead.created_at,
-          ).getTime();
-
-        return (
-          Number.isFinite(createdAt) &&
-          now - createdAt <
-            7 * 86_400_000
-        );
-      },
-    ).length,
-
-    totalLeads: leads.length,
-
-    pipelineValue,
-
-    pipelineByStage,
-
-    customers:
-      customers.length,
-
-    activeProjects:
-      projects.filter(
-        (project) =>
-          !["done", "archived"].includes(
-            lower(
-              project.status,
-              "planning",
-            ),
-          ),
-      ).length,
-
-    projectCount:
-      projects.length,
-
-    openTasks:
-      tasks.filter(
-        (task) =>
-          lower(
-            task.status,
-            "open",
-          ) !== "done",
-      ).length,
-
-    overdueTasks:
-      tasks.filter((task) => {
-        if (
-          lower(
-            task.status,
-            "open",
-          ) === "done" ||
-          !task.due_at
-        ) {
-          return false;
-        }
-
-        const dueAt =
-          new Date(
-            task.due_at,
-          ).getTime();
-
-        return (
-          Number.isFinite(dueAt) &&
-          dueAt < now
-        );
-      }).length,
-
-    quotesOpen:
-      quotations.filter(
-        (quotation) =>
-          ["draft", "sent"].includes(
-            lower(
-              quotation.status,
-              "draft",
-            ),
-          ),
-      ).length,
-  };
-}
+      "location
