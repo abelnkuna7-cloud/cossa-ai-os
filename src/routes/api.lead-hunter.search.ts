@@ -17,18 +17,17 @@ import type {
 const DEFAULT_COSSA_ORGANISATION_ID =
   "00000000-0000-4000-8000-000000000001";
 
-const TAVILY_SEARCH_URL =
-  "https://api.tavily.com/search";
+const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
+const SERPAPI_SEARCH_URL = "https://serpapi.com/search.json";
+const NEWS_API_URL = "https://newsapi.org/v2/everything";
 
 const MAX_REQUEST_RESULTS = 50;
 const MAX_SEARCH_QUERIES = 12;
 const MAX_RESULTS_PER_QUERY = 10;
 const MAX_SOURCE_PAGES_TO_INSPECT = 40;
 const MAX_SOURCE_CONTENT_LENGTH = 30_000;
-
 const SEARCH_TIMEOUT_MS = 25_000;
 const PAGE_TIMEOUT_MS = 12_000;
-
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 5;
 
@@ -73,7 +72,7 @@ const DIRECTORY_TEXT_PATTERN =
   /\b(directory|business listings?|find the best|top \d+|compare quotes?|submit a request|get \d+ quotes?|service providers? near me|browse companies|popular listings?)\b/i;
 
 const INFORMATIONAL_PAGE_PATTERN =
-  /\b(career guide|careers?|qualification|registered qualifications?|learnership|course|training programme|employment opportunities|recommended subjects|blog|news article|useful information|industry overview|what is|how to become)\b/i;
+  /\b(career guide|careers?|qualification|registered qualifications?|learnership|course|training programme|employment opportunities|recommended subjects|blog|useful information|industry overview|what is|how to become)\b/i;
 
 const PROCUREMENT_PATTERN =
   /\b(request for quotation|request for proposal|invitation to bid|invitation to tender|request for bid|request for tender|\bRFQ\b|\bRFP\b|\bRFB\b|\bRFT\b|tender number|bid number|closing date|compulsory briefing|non-compulsory briefing|submission deadline|procurement notice)\b/i;
@@ -82,55 +81,35 @@ const SUPPLIER_REGISTRATION_PATTERN =
   /\b(supplier registration|supplier database|vendor registration|register as a supplier|supplier invitation|expression of interest|call for suppliers)\b/i;
 
 const EXPANSION_PATTERN =
-  /\b(new branch|opening soon|new development|expansion|new premises|new office|new warehouse|new facility|relocation|property development|construction underway)\b/i;
+  /\b(new branch|opening soon|new development|expansion|new premises|new office|new warehouse|new facility|relocation|property development|construction underway|development approved|capital project|infrastructure programme)\b/i;
 
 const BUYER_NEED_PATTERN =
-  /\b(seeking|requires?|required|appoint(?:ment|ing)?|looking for|invites?|procure(?:ment|ing)?|requesting|contract for|service provider for|maintenance contract|cleaning contract|upgrade project|renovation project|refurbishment project|building works|minor works|repair works)\b/i;
+  /\b(seeking|requires?|required|appoint(?:ment|ing)?|looking for|invites?|procure(?:ment|ing)?|requesting|contract for|service provider for|maintenance contract|cleaning contract|upgrade project|renovation project|refurbishment project|building works|minor works|repair works|panel of service providers|framework agreement)\b/i;
 
 const SERVICE_OFFERING_PATTERN =
   /\b(we offer|we provide|our services|call us today|get a free quote|request a free quote|professional services|specialists in|experts in|affordable services|same day service|book our service)\b/i;
 
 const PUBLIC_BUYER_ROLE_PATTERN =
-  /\b(procurement manager|supply chain manager|facilities manager|facility manager|property manager|estate manager|operations manager|school principal|administrator|marketing manager|it manager|project manager|business owner|managing director)\b/i;
+  /\b(procurement manager|supply chain manager|facilities manager|facility manager|property manager|estate manager|operations manager|school principal|administrator|marketing manager|it manager|project manager|business owner|managing director|bid manager|contracts manager)\b/i;
+
+const GOVERNMENT_MISSION_PATTERN =
+  /\b(government|municipality|municipal|department|public sector|tender|rfq|rfp|bid|procurement|etender|supplier database|vendor database)\b/i;
+
+const DIGITAL_AUDIT_MISSION_PATTERN =
+  /\b(website|web design|redesign|logo|branding|seo|google business|google profile|online presence|social media|digital marketing|crm|automation|ecommerce|e-commerce)\b/i;
+
+type SearchProvider = "Tavily" | "SerpAPI" | "NewsAPI";
 
 type Environment = {
-  tavilyApiKey: string;
+  tavilyApiKey: string | null;
+  serpApiKey: string | null;
+  newsApiKey: string | null;
   supabaseUrl: string;
   supabaseKey: string;
   organisationId: string;
 };
 
-type SupabaseUser = {
-  id: string;
-  email?: string;
-};
-
-type RestRequestOptions = {
-  table: string;
-  query: string;
-  token: string;
-  supabaseUrl: string;
-  supabaseKey: string;
-};
-
-type TavilySearchResult = {
-  title?: string;
-  url?: string;
-  content?: string;
-  score?: number;
-  published_date?: string;
-  raw_content?: string | null;
-};
-
-type TavilySearchResponse = {
-  query?: string;
-  results?: TavilySearchResult[];
-  response_time?: number | string;
-  request_id?: string;
-  usage?: {
-    credits?: number;
-  };
-};
+type SupabaseUser = { id: string; email?: string };
 
 type SearchPurpose =
   | "buyer_discovery"
@@ -147,6 +126,7 @@ type SearchPlan = {
 };
 
 type SearchCandidate = {
+  provider: SearchProvider;
   query: string;
   purpose: SearchPurpose;
   targetDescription: string;
@@ -155,7 +135,7 @@ type SearchCandidate = {
   url: string;
   snippet: string;
   publishedAt: string | null;
-  tavilyScore: number;
+  providerScore: number;
 };
 
 type PageInspection = {
@@ -189,11 +169,6 @@ type CandidateAssessment = {
   competitorForServices: LeadHunterServiceCategory[];
 };
 
-type RateLimitEntry = {
-  count: number;
-  resetAt: number;
-};
-
 type ScoreBreakdown = {
   fitScore: number;
   intentScore: number;
@@ -203,164 +178,113 @@ type ScoreBreakdown = {
   totalScore: number;
 };
 
-const rateLimits =
-  new Map<string, RateLimitEntry>();
+type RateLimitEntry = { count: number; resetAt: number };
+const rateLimits = new Map<string, RateLimitEntry>();
 
-function trimTrailingSlash(
-  value: string,
-): string {
-  return value.replace(/\/+$/, "");
-}
-
-function decodeHtmlEntities(
-  value: string,
-): string {
-  return value
+function cleanText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const cleaned = value
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&apos;/gi, "'")
+    .replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
-    .replace(/&#8211;/gi, "–")
-    .replace(/&#8212;/gi, "—")
-    .replace(/&#8216;/gi, "'")
-    .replace(/&#8217;/gi, "'")
-    .replace(/&#8220;/gi, '"')
-    .replace(/&#8221;/gi, '"');
-}
-
-function cleanText(
-  value: unknown,
-): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const cleaned = decodeHtmlEntities(value)
     .replace(/\u00a0/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-
   return cleaned || null;
 }
 
-function lowerText(
-  value: unknown,
-): string {
+function lowerText(value: unknown): string {
   return cleanText(value)?.toLowerCase() ?? "";
 }
 
-function clampScore(
-  value: unknown,
-): number {
+function clampScore(value: unknown): number {
   const parsed = Number(value);
-
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-
-  return Math.max(
-    0,
-    Math.min(100, Math.round(parsed)),
-  );
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
-function getEnvironment():
-  Environment | null {
-  const tavilyApiKey =
-    process.env.TAVILY_API_KEY;
+function normaliseProviderScore(value: unknown, fallback = 0.5): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed)
+    ? Math.max(0, Math.min(1, parsed))
+    : fallback;
+}
 
+function getEnvironment(): Environment | null {
+  const tavilyApiKey = cleanText(process.env.TAVILY_API_KEY);
+  const serpApiKey =
+    cleanText(process.env.SERPAPI_API_KEY) ||
+    cleanText(process.env.SERP_API_KEY) ||
+    cleanText(process.env.SERPAPI_KEY);
+  const newsApiKey =
+    cleanText(process.env.NEWS_API_KEY) ||
+    cleanText(process.env.NEWSAPI_KEY);
   const supabaseUrl =
-    process.env.VITE_SUPABASE_URL ||
-    process.env.SUPABASE_URL;
-
+    cleanText(process.env.VITE_SUPABASE_URL) ||
+    cleanText(process.env.SUPABASE_URL);
   const supabaseKey =
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_ANON_KEY;
-
+    cleanText(process.env.VITE_SUPABASE_PUBLISHABLE_KEY) ||
+    cleanText(process.env.VITE_SUPABASE_ANON_KEY) ||
+    cleanText(process.env.SUPABASE_PUBLISHABLE_KEY) ||
+    cleanText(process.env.SUPABASE_ANON_KEY);
   const organisationId =
-    process.env.COSSA_ORGANISATION_ID ||
-    process.env.VITE_COSSA_ORGANISATION_ID ||
+    cleanText(process.env.COSSA_ORGANISATION_ID) ||
+    cleanText(process.env.VITE_COSSA_ORGANISATION_ID) ||
     DEFAULT_COSSA_ORGANISATION_ID;
 
-  if (
-    !tavilyApiKey ||
-    !supabaseUrl ||
-    !supabaseKey
-  ) {
-    return null;
-  }
+  if (!supabaseUrl || !supabaseKey) return null;
+  if (!tavilyApiKey && !serpApiKey && !newsApiKey) return null;
 
   return {
     tavilyApiKey,
-    supabaseUrl:
-      trimTrailingSlash(supabaseUrl),
+    serpApiKey,
+    newsApiKey,
+    supabaseUrl: supabaseUrl.replace(/\/+$/, ""),
     supabaseKey,
     organisationId,
   };
 }
 
-function getBearerToken(
-  request: Request,
-): string | null {
-  const authorization =
-    request.headers.get("authorization");
-
-  if (
-    !authorization?.startsWith(
-      "Bearer ",
-    )
-  ) {
-    return null;
-  }
-
+function getBearerToken(request: Request): string | null {
+  const authorization = request.headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) return null;
   return authorization.slice(7).trim() || null;
 }
 
-async function verifySupabaseUser({
-  token,
-  supabaseUrl,
-  supabaseKey,
-}: {
-  token: string;
-  supabaseUrl: string;
-  supabaseKey: string;
-}): Promise<SupabaseUser | null> {
-  const response = await fetch(
-    `${supabaseUrl}/auth/v1/user`,
-    {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${token}`,
-      },
+async function verifySupabaseUser(
+  token: string,
+  environment: Environment,
+): Promise<SupabaseUser | null> {
+  const response = await fetch(`${environment.supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: environment.supabaseKey,
+      Authorization: `Bearer ${token}`,
     },
-  );
-
-  if (!response.ok) {
-    return null;
-  }
-
-  return (
-    (await response.json()) as SupabaseUser
-  );
+  });
+  return response.ok ? ((await response.json()) as SupabaseUser) : null;
 }
 
-async function restSelect<T>({
-  table,
-  query,
-  token,
-  supabaseUrl,
-  supabaseKey,
-}: RestRequestOptions): Promise<T[]> {
+async function verifyOrganisationMembership(
+  token: string,
+  userId: string,
+  environment: Environment,
+): Promise<boolean> {
+  const query = new URLSearchParams({
+    select: "user_id,status,role",
+    organisation_id: `eq.${environment.organisationId}`,
+    user_id: `eq.${userId}`,
+    status: "eq.active",
+    limit: "1",
+  });
+
   const response = await fetch(
-    `${supabaseUrl}/rest/v1/${table}?${query}`,
+    `${environment.supabaseUrl}/rest/v1/organisation_members?${query}`,
     {
       headers: {
-        apikey: supabaseKey,
+        apikey: environment.supabaseKey,
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
       },
@@ -368,3550 +292,673 @@ async function restSelect<T>({
   );
 
   if (!response.ok) {
-    const text = await response
-      .text()
-      .catch(() => "");
-
-    console.error(
-      `Supabase query failed for ${table}:`,
-      response.status,
-      text,
-    );
-
-    return [];
+    console.error("Membership query failed:", response.status, await response.text().catch(() => ""));
+    return false;
   }
 
-  return (await response.json()) as T[];
-}
-
-async function verifyOrganisationMembership({
-  token,
-  userId,
-  organisationId,
-  supabaseUrl,
-  supabaseKey,
-}: {
-  token: string;
-  userId: string;
-  organisationId: string;
-  supabaseUrl: string;
-  supabaseKey: string;
-}): Promise<boolean> {
-  const rows = await restSelect<{
-    user_id: string;
-    status: string;
-    role: string;
-  }>({
-    table: "organisation_members",
-    query: new URLSearchParams({
-      select: "user_id,status,role",
-      organisation_id:
-        `eq.${organisationId}`,
-      user_id: `eq.${userId}`,
-      status: "eq.active",
-      limit: "1",
-    }).toString(),
-    token,
-    supabaseUrl,
-    supabaseKey,
-  });
-
+  const rows = (await response.json()) as unknown[];
   return rows.length === 1;
 }
 
-function enforceRateLimit(
-  userId: string,
-): {
-  allowed: boolean;
-  retryAfterSeconds: number;
-} {
+function enforceRateLimit(userId: string) {
   const now = Date.now();
-  const current =
-    rateLimits.get(userId);
-
-  if (
-    !current ||
-    current.resetAt <= now
-  ) {
-    rateLimits.set(userId, {
-      count: 1,
-      resetAt:
-        now + RATE_LIMIT_WINDOW_MS,
-    });
-
-    return {
-      allowed: true,
-      retryAfterSeconds: 0,
-    };
+  const current = rateLimits.get(userId);
+  if (!current || current.resetAt <= now) {
+    rateLimits.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, retryAfterSeconds: 0 };
   }
-
-  if (
-    current.count >=
-    RATE_LIMIT_REQUESTS
-  ) {
+  if (current.count >= RATE_LIMIT_REQUESTS) {
     return {
       allowed: false,
-      retryAfterSeconds:
-        Math.max(
-          1,
-          Math.ceil(
-            (current.resetAt - now) /
-              1000,
-          ),
-        ),
+      retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000)),
     };
   }
-
   current.count += 1;
-  rateLimits.set(userId, current);
-
-  return {
-    allowed: true,
-    retryAfterSeconds: 0,
-  };
+  return { allowed: true, retryAfterSeconds: 0 };
 }
 
-function validateRequest(
-  value: unknown,
-):
-  | {
-      valid: true;
-      request: LeadHunterSearchRequest;
-    }
-  | {
-      valid: false;
-      error: string;
-    } {
-  if (
-    typeof value !== "object" ||
-    value === null
-  ) {
-    return {
-      valid: false,
-      error:
-        "Invalid Lead Hunter request.",
-    };
+function validateRequest(value: unknown):
+  | { valid: true; request: LeadHunterSearchRequest }
+  | { valid: false; error: string } {
+  if (typeof value !== "object" || value === null) {
+    return { valid: false, error: "Invalid Lead Hunter request." };
   }
 
-  const candidate =
-    value as Partial<LeadHunterSearchRequest>;
+  const candidate = value as Partial<LeadHunterSearchRequest>;
+  const services = Array.isArray(candidate.services)
+    ? [...new Set(candidate.services)].slice(0, 20)
+    : [];
+  const companies = Array.isArray(candidate.companies)
+    ? [...new Set(candidate.companies)].slice(0, 10)
+    : [];
 
-  const resultCount = Math.min(
-    MAX_REQUEST_RESULTS,
-    Math.max(
-      1,
-      Math.round(
-        Number(
-          candidate.result_count ?? 15,
-        ),
-      ),
-    ),
-  );
+  if (!services.length) return { valid: false, error: "Choose at least one service." };
+  if (!companies.length) return { valid: false, error: "Choose at least one Cossa company." };
 
-  const locations =
-    Array.isArray(candidate.locations)
-      ? candidate.locations
-          .map(cleanText)
-          .filter(
-            (item): item is string =>
-              Boolean(item),
-          )
-          .slice(0, 12)
+  const cleanArray = (input: unknown, max: number) =>
+    Array.isArray(input)
+      ? input.map(cleanText).filter((v): v is string => Boolean(v)).slice(0, max)
       : [];
 
-  const industries =
-    Array.isArray(candidate.industries)
-      ? candidate.industries
-          .map(cleanText)
-          .filter(
-            (item): item is string =>
-              Boolean(item),
-          )
-          .slice(0, 12)
-      : [];
-
-  const organisationTypes =
-    Array.isArray(
-      candidate.organisation_types,
-    )
-      ? candidate.organisation_types
-          .map(cleanText)
-          .filter(
-            (item): item is string =>
-              Boolean(item),
-          )
-          .slice(0, 12)
-      : [];
-
-  const services =
-    Array.isArray(candidate.services)
-      ? candidate.services.slice(0, 20)
-      : [];
-
-  const companies =
-    Array.isArray(candidate.companies)
-      ? candidate.companies.slice(0, 10)
-      : [];
-
-  if (services.length === 0) {
-    return {
-      valid: false,
-      error:
-        "Choose at least one service.",
-    };
-  }
-
-  if (companies.length === 0) {
-    return {
-      valid: false,
-      error:
-        "Choose at least one Cossa company.",
-    };
-  }
+  const notes = cleanText(candidate.notes) ?? "";
+  const missionGovernment = GOVERNMENT_MISSION_PATTERN.test(notes);
+  const missionDigital = DIGITAL_AUDIT_MISSION_PATTERN.test(notes);
+  const rawCount = Number(candidate.result_count ?? 15);
 
   return {
     valid: true,
     request: {
-      sector:
-        candidate.sector ?? "mixed",
-
+      sector: candidate.sector ?? "mixed",
       companies,
       services,
-
-      locations:
-        locations.length > 0
-          ? locations
-          : ["Gauteng"],
-
-      industries,
-      organisation_types:
-        organisationTypes,
-
-      result_count: resultCount,
-
-      minimum_score: clampScore(
-        candidate.minimum_score ?? 60,
+      locations: cleanArray(candidate.locations, 12).length
+        ? cleanArray(candidate.locations, 12)
+        : ["Gauteng"],
+      industries: cleanArray(candidate.industries, 12),
+      organisation_types: cleanArray(candidate.organisation_types, 12),
+      result_count: Number.isFinite(rawCount)
+        ? Math.min(MAX_REQUEST_RESULTS, Math.max(1, Math.round(rawCount)))
+        : 15,
+      minimum_score: clampScore(candidate.minimum_score ?? 60),
+      minimum_evidence_sources: Math.max(
+        1,
+        Math.min(5, Math.round(Number(candidate.minimum_evidence_sources ?? 1))),
       ),
-
-      minimum_evidence_sources:
-        Math.max(
-          1,
-          Math.min(
-            5,
-            Math.round(
-              Number(
-                candidate.minimum_evidence_sources ??
-                  1,
-              ),
-            ),
-          ),
-        ),
-
-      include_small_projects:
-        candidate.include_small_projects !==
-        false,
-
-      include_large_projects:
-        candidate.include_large_projects !==
-        false,
-
+      include_small_projects: candidate.include_small_projects !== false,
+      include_large_projects: candidate.include_large_projects !== false,
       include_private_sector:
-        candidate.include_private_sector !==
-        false,
-
+        candidate.include_private_sector !== false ||
+        candidate.sector === "private" ||
+        missionDigital,
       include_government_sector:
-        candidate.include_government_sector ===
-        true,
-
-      include_nonprofits:
-        candidate.include_nonprofits ===
-        true,
-
-      require_public_phone_or_email:
-        candidate.require_public_phone_or_email ===
-        true,
-
-      require_website:
-        candidate.require_website ===
-        true,
-
-      require_opportunity_signal:
-        candidate.require_opportunity_signal !==
-        false,
-
-      tender_keywords:
-        Array.isArray(
-          candidate.tender_keywords,
-        )
-          ? candidate.tender_keywords
-              .map(cleanText)
-              .filter(
-                (item): item is string =>
-                  Boolean(item),
-              )
-              .slice(0, 20)
-          : [],
-
-      prospect_keywords:
-        Array.isArray(
-          candidate.prospect_keywords,
-        )
-          ? candidate.prospect_keywords
-              .map(cleanText)
-              .filter(
-                (item): item is string =>
-                  Boolean(item),
-              )
-              .slice(0, 25)
-          : [],
-
-      verified_sources_only:
-        candidate.verified_sources_only !==
-        false,
-
-      exclude_existing_crm_leads:
-        candidate.exclude_existing_crm_leads !==
-        false,
-
-      notes:
-        cleanText(candidate.notes),
+        candidate.include_government_sector === true ||
+        candidate.sector === "government" ||
+        missionGovernment,
+      include_nonprofits: candidate.include_nonprofits === true,
+      require_public_phone_or_email: candidate.require_public_phone_or_email === true,
+      require_website: candidate.require_website === true,
+      require_opportunity_signal: candidate.require_opportunity_signal !== false,
+      tender_keywords: cleanArray(candidate.tender_keywords, 20),
+      prospect_keywords: cleanArray(candidate.prospect_keywords, 25),
+      verified_sources_only: candidate.verified_sources_only !== false,
+      exclude_existing_crm_leads: candidate.exclude_existing_crm_leads !== false,
+      notes: notes || null,
     },
   };
 }
 
-function serviceLabel(
-  service: LeadHunterServiceCategory,
-): string {
-  const labels: Record<
-    LeadHunterServiceCategory,
-    string
-  > = {
-    construction:
-      "construction services",
-    renovation:
-      "renovation services",
-    property_maintenance:
-      "property maintenance",
-    painting:
-      "painting services",
-    tiling:
-      "tiling services",
-    ceilings:
-      "ceiling installation and repair",
-    roofing:
-      "roofing services",
-    plumbing:
-      "plumbing services",
-    facility_management:
-      "facility management",
-    commercial_cleaning:
-      "commercial cleaning",
-    deep_cleaning:
-      "deep cleaning",
-    hygiene:
-      "hygiene and sanitation",
-    landscaping:
-      "landscaping",
-    waste_management:
-      "waste management",
-    website_design:
-      "website design",
-    seo:
-      "SEO services",
-    digital_marketing:
-      "digital marketing",
-    lead_generation:
-      "lead generation",
-    crm:
-      "CRM implementation",
-    ai_automation:
-      "AI and business automation",
-    business_documents:
-      "business documents",
-    quotations:
-      "quotation systems",
-    proposals:
-      "proposal development",
-    contracts:
-      "contract document systems",
-    ecommerce:
-      "e-commerce services",
-    general:
-      "business services",
-  };
+const SERVICE_LABELS: Record<LeadHunterServiceCategory, string> = {
+  construction: "construction services",
+  renovation: "renovation services",
+  property_maintenance: "property maintenance",
+  painting: "painting services",
+  tiling: "tiling services",
+  ceilings: "ceiling installation and repair",
+  roofing: "roofing services",
+  plumbing: "plumbing services",
+  facility_management: "facility management",
+  commercial_cleaning: "commercial cleaning",
+  deep_cleaning: "deep cleaning",
+  hygiene: "hygiene and sanitation",
+  landscaping: "landscaping",
+  waste_management: "waste management",
+  website_design: "website design",
+  seo: "SEO services",
+  digital_marketing: "digital marketing",
+  lead_generation: "lead generation",
+  crm: "CRM implementation",
+  ai_automation: "AI and business automation",
+  business_documents: "business documents",
+  quotations: "quotation systems",
+  proposals: "proposal development",
+  contracts: "contract document systems",
+  ecommerce: "e-commerce services",
+  general: "business services",
+};
 
-  return labels[service];
+function serviceLabel(service: LeadHunterServiceCategory) {
+  return SERVICE_LABELS[service];
 }
 
-function buyerTargetsForService(
-  service: LeadHunterServiceCategory,
-): string[] {
-  const targets: Partial<
-    Record<
-      LeadHunterServiceCategory,
-      string[]
-    >
-  > = {
-    construction: [
-      "property developers",
-      "schools",
-      "commercial property owners",
-      "churches",
-      "retail property owners",
-      "industrial property owners",
-    ],
-
-    renovation: [
-      "property management companies",
-      "office parks",
-      "schools",
-      "churches",
-      "hotels",
-      "retail stores",
-    ],
-
-    property_maintenance: [
-      "property management companies",
-      "body corporate managing agents",
-      "estate management companies",
-      "office parks",
-      "shopping centres",
-      "warehouses",
-    ],
-
-    painting: [
-      "property managers",
-      "schools",
-      "office parks",
-      "shopping centres",
-      "churches",
-      "warehouses",
-    ],
-
-    tiling: [
-      "property managers",
-      "retail stores",
-      "restaurants",
-      "schools",
-      "churches",
-      "commercial property owners",
-    ],
-
-    ceilings: [
-      "property managers",
-      "office parks",
-      "schools",
-      "retail property owners",
-      "churches",
-      "commercial landlords",
-    ],
-
-    roofing: [
-      "property management companies",
-      "schools",
-      "warehouses",
-      "factories",
-      "churches",
-      "commercial property owners",
-    ],
-
-    plumbing: [
-      "property managers",
-      "estate managers",
-      "schools",
-      "office parks",
-      "shopping centres",
-      "warehouses",
-    ],
-
-    facility_management: [
-      "office parks",
-      "shopping centres",
-      "property management companies",
-      "industrial parks",
-      "schools",
-      "healthcare facilities",
-    ],
-
-    commercial_cleaning: [
-      "property management companies",
-      "office parks",
-      "shopping centres",
-      "warehouses",
-      "schools",
-      "healthcare facilities",
-    ],
-
-    deep_cleaning: [
-      "offices",
-      "schools",
-      "churches",
-      "restaurants",
-      "property managers",
-      "retail stores",
-    ],
-
-    hygiene: [
-      "schools",
-      "healthcare facilities",
-      "office parks",
-      "shopping centres",
-      "warehouses",
-      "restaurants",
-    ],
-
-    landscaping: [
-      "estate managers",
-      "office parks",
-      "schools",
-      "shopping centres",
-      "property managers",
-      "hospitality venues",
-    ],
-
-    waste_management: [
-      "shopping centres",
-      "office parks",
-      "warehouses",
-      "factories",
-      "schools",
-      "property management companies",
-    ],
-
-    website_design: [
-      "small businesses",
-      "property companies",
-      "construction companies",
-      "schools",
-      "churches",
-      "professional services firms",
-    ],
-
-    seo: [
-      "local businesses",
-      "professional services firms",
-      "property companies",
-      "retail businesses",
-      "hospitality businesses",
-      "contractors",
-    ],
-
-    digital_marketing: [
-      "local businesses",
-      "retail businesses",
-      "property companies",
-      "hospitality businesses",
-      "professional services firms",
-      "training providers",
-    ],
-
-    lead_generation: [
-      "service businesses",
-      "property companies",
-      "construction companies",
-      "professional services firms",
-      "technology companies",
-      "training providers",
-    ],
-
-    crm: [
-      "growing service businesses",
-      "property management companies",
-      "sales teams",
-      "training providers",
-      "logistics companies",
-      "professional services firms",
-    ],
-
-    ai_automation: [
-      "growing SMEs",
-      "property management companies",
-      "logistics companies",
-      "professional services firms",
-      "retail businesses",
-      "training providers",
-    ],
-
-    business_documents: [
-      "construction companies",
-      "facility service companies",
-      "consulting firms",
-      "contractors",
-      "small businesses",
-      "professional services firms",
-    ],
-
-    quotations: [
-      "contractors",
-      "construction companies",
-      "service businesses",
-      "maintenance companies",
-      "cleaning companies",
-      "professional services firms",
-    ],
-
-    proposals: [
-      "consulting firms",
-      "contractors",
-      "construction companies",
-      "service businesses",
-      "training providers",
-      "professional services firms",
-    ],
-
-    contracts: [
-      "small businesses",
-      "contractors",
-      "construction companies",
-      "service businesses",
-      "consulting firms",
-      "property companies",
-    ],
-
-    ecommerce: [
-      "retail businesses",
-      "product businesses",
-      "fashion businesses",
-      "food businesses",
-      "manufacturers",
-      "wholesalers",
-    ],
-
-    general: [
-      "small businesses",
-      "property companies",
-      "schools",
-      "office parks",
-      "warehouses",
-      "retail businesses",
-    ],
+function buyerTargetsForService(service: LeadHunterServiceCategory): string[] {
+  const common = ["small businesses", "property companies", "schools", "office parks", "warehouses", "retail businesses"];
+  const map: Partial<Record<LeadHunterServiceCategory, string[]>> = {
+    construction: ["property developers", "schools", "commercial property owners", "churches", "retail property owners", "industrial property owners"],
+    renovation: ["property management companies", "office parks", "schools", "churches", "hotels", "retail stores"],
+    property_maintenance: ["property management companies", "body corporate managing agents", "estate management companies", "office parks", "shopping centres", "warehouses"],
+    painting: ["property managers", "schools", "office parks", "shopping centres", "churches", "warehouses"],
+    tiling: ["property managers", "retail stores", "restaurants", "schools", "churches", "commercial property owners"],
+    ceilings: ["property managers", "office parks", "schools", "retail property owners", "churches", "commercial landlords"],
+    roofing: ["property management companies", "schools", "warehouses", "factories", "churches", "commercial property owners"],
+    plumbing: ["property managers", "estate managers", "schools", "office parks", "shopping centres", "warehouses"],
+    facility_management: ["office parks", "shopping centres", "property management companies", "industrial parks", "schools", "healthcare facilities"],
+    commercial_cleaning: ["property management companies", "office parks", "shopping centres", "warehouses", "schools", "healthcare facilities"],
+    deep_cleaning: ["offices", "schools", "churches", "restaurants", "property managers", "retail stores"],
+    hygiene: ["schools", "healthcare facilities", "office parks", "shopping centres", "warehouses", "restaurants"],
+    landscaping: ["estate managers", "office parks", "schools", "shopping centres", "property managers", "hospitality venues"],
+    waste_management: ["shopping centres", "office parks", "warehouses", "factories", "schools", "property management companies"],
+    website_design: ["small businesses", "property companies", "construction companies", "schools", "churches", "professional services firms"],
+    seo: ["local businesses", "professional services firms", "property companies", "retail businesses", "hospitality businesses", "contractors"],
+    digital_marketing: ["local businesses", "retail businesses", "property companies", "hospitality businesses", "professional services firms", "training providers"],
+    lead_generation: ["service businesses", "property companies", "construction companies", "professional services firms", "technology companies", "training providers"],
+    crm: ["growing service businesses", "property management companies", "sales teams", "training providers", "logistics companies", "professional services firms"],
+    ai_automation: ["growing SMEs", "property management companies", "logistics companies", "professional services firms", "retail businesses", "training providers"],
+    business_documents: ["construction companies", "facility service companies", "consulting firms", "contractors", "small businesses", "professional services firms"],
+    quotations: ["contractors", "construction companies", "service businesses", "maintenance companies", "cleaning companies", "professional services firms"],
+    proposals: ["consulting firms", "contractors", "construction companies", "service businesses", "training providers", "professional services firms"],
+    contracts: ["small businesses", "contractors", "construction companies", "service businesses", "consulting firms", "property companies"],
+    ecommerce: ["retail businesses", "product businesses", "fashion businesses", "food businesses", "manufacturers", "wholesalers"],
+    general: common,
   };
-
-  return (
-    targets[service] ?? targets.general ?? []
-  );
+  return map[service] ?? common;
 }
 
-function competitorPatternsForService(
-  service: LeadHunterServiceCategory,
-): RegExp[] {
-  const commonAgencyPattern =
-    /\b(agency|consultancy|specialists?|service provider|contractors?)\b/i;
-
-  const patterns: Partial<
-    Record<
-      LeadHunterServiceCategory,
-      RegExp[]
-    >
-  > = {
-    construction: [
-      /\bconstruction company\b/i,
-      /\bbuilding contractor\b/i,
-      /\bcivil contractor\b/i,
-      /\bwe build\b/i,
-    ],
-
-    renovation: [
-      /\brenovation company\b/i,
-      /\brenovation contractor\b/i,
-      /\bhome improvement company\b/i,
-    ],
-
-    property_maintenance: [
-      /\bproperty maintenance company\b/i,
-      /\bmaintenance contractor\b/i,
-      /\bhandyman services\b/i,
-    ],
-
-    painting: [
-      /\bpainting contractor\b/i,
-      /\bpainters? in\b/i,
-      /\bpainting services\b/i,
-    ],
-
-    tiling: [
-      /\btiling contractor\b/i,
-      /\btiling services\b/i,
-      /\bprofessional tilers?\b/i,
-    ],
-
-    ceilings: [
-      /\bceiling installer\b/i,
-      /\bceiling contractor\b/i,
-      /\bceiling services\b/i,
-    ],
-
-    roofing: [
-      /\broofing contractor\b/i,
-      /\broofing company\b/i,
-      /\broof repair services\b/i,
-    ],
-
-    plumbing: [
-      /\bplumbing company\b/i,
-      /\bprofessional plumbers?\b/i,
-      /\bplumbing services\b/i,
-    ],
-
-    facility_management: [
-      /\bfacilities management company\b/i,
-      /\bfacility management services\b/i,
-    ],
-
-    commercial_cleaning: [
-      /\bcleaning company\b/i,
-      /\bcommercial cleaning services\b/i,
-      /\bprofessional cleaners?\b/i,
-      /\bcarpet cleaning\b/i,
-      /\bwindow cleaning services\b/i,
-    ],
-
-    deep_cleaning: [
-      /\bdeep cleaning services\b/i,
-      /\bcleaning company\b/i,
-      /\bprofessional cleaners?\b/i,
-    ],
-
-    hygiene: [
-      /\bhygiene services\b/i,
-      /\bsanitation services\b/i,
-      /\bcleaning company\b/i,
-    ],
-
-    landscaping: [
-      /\blandscaping company\b/i,
-      /\bgarden services\b/i,
-      /\blandscape contractor\b/i,
-    ],
-
-    waste_management: [
-      /\bwaste management company\b/i,
-      /\bwaste collection services\b/i,
-    ],
-
-    website_design: [
-      /\bweb design company\b/i,
-      /\bwebsite design agency\b/i,
-      /\bweb development agency\b/i,
-      /\bwebsites? from r\d+/i,
-      /\bweb designer\b/i,
-    ],
-
-    seo: [
-      /\bseo agency\b/i,
-      /\bseo company\b/i,
-      /\bsearch marketing agency\b/i,
-    ],
-
-    digital_marketing: [
-      /\bdigital marketing agency\b/i,
-      /\bmarketing agency\b/i,
-      /\bsocial media agency\b/i,
-    ],
-
-    lead_generation: [
-      /\blead generation agency\b/i,
-      /\bappointment setting company\b/i,
-    ],
-
-    crm: [
-      /\bcrm consultancy\b/i,
-      /\bcrm implementation partner\b/i,
-      /\bcrm software company\b/i,
-    ],
-
-    ai_automation: [
-      /\bai automation agency\b/i,
-      /\bautomation consultancy\b/i,
-      /\bai solutions provider\b/i,
-    ],
-
-    business_documents: [
-      /\bdocument drafting services\b/i,
-      /\bbusiness plan writer\b/i,
-      /\btender writing services\b/i,
-    ],
-
-    quotations: [
-      /\bquotation software\b/i,
-      /\binvoicing software\b/i,
-    ],
-
-    proposals: [
-      /\bproposal writing services\b/i,
-      /\btender writing company\b/i,
-    ],
-
-    contracts: [
-      /\blegal document services\b/i,
-      /\bcontract drafting services\b/i,
-    ],
-
-    ecommerce: [
-      /\becommerce agency\b/i,
-      /\bshopify agency\b/i,
-      /\bonline store developers?\b/i,
-    ],
-  };
-
-  return [
-    ...(patterns[service] ?? []),
-    commonAgencyPattern,
-  ];
-}
-
-function createSearchQueries(
-  request: LeadHunterSearchRequest,
-): SearchPlan[] {
+function createSearchQueries(request: LeadHunterSearchRequest): SearchPlan[] {
   const plans: SearchPlan[] = [];
+  const location = request.locations[0] ?? "South Africa";
+  const notes = cleanText(request.notes) ?? "";
+  const targetsFromRequest = [...request.organisation_types, ...request.industries].filter(Boolean);
+  const extraTerms = [...request.tender_keywords, ...request.prospect_keywords].slice(0, 5);
+  const extra = extraTerms.length ? ` (${extraTerms.map((v) => `"${v}"`).join(" OR ")})` : "";
+  const shouldGovernment =
+    request.sector === "government" ||
+    request.include_government_sector ||
+    GOVERNMENT_MISSION_PATTERN.test(notes) ||
+    (request.sector === "mixed" && !notes);
+  const shouldPrivate =
+    request.sector !== "government" &&
+    (request.include_private_sector || DIGITAL_AUDIT_MISSION_PATTERN.test(notes));
 
-  const locations =
-    request.locations.length > 0
-      ? request.locations
-      : ["South Africa"];
+  if (notes) {
+    plans.push({
+      query: `${notes} ${location}`,
+      purpose: GOVERNMENT_MISSION_PATTERN.test(notes) ? "active_procurement" : "buyer_discovery",
+      targetDescription: request.organisation_types[0] || request.industries[0] || "custom mission target",
+      service: request.services[0] ?? "general",
+    });
+  }
 
-  const requestedTargets = [
-    ...request.organisation_types,
-    ...request.industries,
-  ]
-    .map((item) => item.trim())
-    .filter(Boolean);
+  for (const service of request.services.slice(0, 6)) {
+    const targets = targetsFromRequest.length
+      ? [...new Set([...targetsFromRequest, ...buyerTargetsForService(service)])].slice(0, 6)
+      : buyerTargetsForService(service).slice(0, 6);
+    const target1 = targets[0] ?? "business";
+    const target2 = targets[1] ?? target1;
+    const label = serviceLabel(service);
 
-  for (
-    const service of request.services.slice(0, 6)
-  ) {
-    const defaultTargets =
-      buyerTargetsForService(service);
+    if (shouldPrivate) {
+      plans.push(
+        { query: `"${target1}" "${location}" official website contact${extra}`, purpose: "buyer_discovery", targetDescription: target1, service },
+        { query: `"${target2}" "${location}" official company contact${extra}`, purpose: "buyer_discovery", targetDescription: target2, service },
+        { query: `"${location}" "${target1}" ("new branch" OR expansion OR development OR refurbishment OR upgrade OR investment) "${label}"`, purpose: "growth_signal", targetDescription: target1, service },
+      );
 
-    const targets =
-      requestedTargets.length > 0
-        ? [
-            ...new Set([
-              ...requestedTargets,
-              ...defaultTargets,
-            ]),
-          ].slice(0, 6)
-        : defaultTargets.slice(0, 6);
-
-    if (
-      request.include_private_sector
-    ) {
-      for (
-        let index = 0;
-        index <
-        Math.min(
-          2,
-          targets.length,
-          locations.length,
-        );
-        index += 1
-      ) {
-        const target =
-          targets[index % targets.length];
-
-        const location =
-          locations[index % locations.length];
-
-        plans.push({
-          purpose: "buyer_discovery",
-          service,
-          targetDescription: target,
-          query:
-            `"${target}" "${location}" official website contact`,
-        });
-      }
-
-      plans.push({
-        purpose: "growth_signal",
-        service,
-        targetDescription:
-          targets[0] ?? "business",
-        query:
-          `"${targets[0] ?? "business"}" "${locations[0]}" ("new branch" OR expansion OR development OR refurbishment OR upgrade)`,
-      });
-
-      if (
-        [
-          "website_design",
-          "seo",
-          "digital_marketing",
-          "lead_generation",
-          "crm",
-          "ai_automation",
-        ].includes(service)
-      ) {
-        plans.push({
-          purpose: "website_gap",
-          service,
-          targetDescription:
-            targets[0] ?? "small business",
-          query:
-            `"${targets[0] ?? "small business"}" "${locations[0]}" official website contact`,
-        });
+      if (["website_design", "seo", "digital_marketing", "lead_generation", "crm", "ai_automation", "ecommerce"].includes(service)) {
+        plans.push({ query: `"${target1}" "${location}" official website contact (website OR online OR digital)`, purpose: "website_gap", targetDescription: target1, service });
       }
     }
 
-    if (
-      request.include_nonprofits
-    ) {
-      plans.push({
-        purpose: "buyer_discovery",
-        service,
-        targetDescription:
-          "churches and nonprofit organisations",
-        query:
-          `church OR nonprofit OR community centre "${locations[0]}" official website contact`,
-      });
+    if (request.include_nonprofits) {
+      plans.push({ query: `(church OR nonprofit OR NGO OR "community centre") "${location}" official website contact "${label}"`, purpose: "buyer_discovery", targetDescription: "churches and nonprofit organisations", service });
     }
 
-    if (
-      request.include_government_sector
-    ) {
-      const serviceText =
-        serviceLabel(service);
-
-      plans.push({
-        purpose: "active_procurement",
-        service,
-        targetDescription:
-          "South African government procurement",
-        query:
-          `site:etenders.gov.za "${serviceText}" ("closing date" OR "tender number" OR "bid number")`,
-      });
-
-      plans.push({
-        purpose: "active_procurement",
-        service,
-        targetDescription:
-          "Government and municipal procurement",
-        query:
-          `site:gov.za "${serviceText}" (RFQ OR RFP OR tender OR "request for quotation")`,
-      });
-
-      plans.push({
-        purpose: "supplier_registration",
-        service,
-        targetDescription:
-          "Government supplier registration",
-        query:
-          `"${locations[0]}" government OR municipality "${serviceText}" ("supplier registration" OR "supplier database")`,
-      });
+    if (shouldGovernment) {
+      plans.push(
+        { query: `site:etenders.gov.za "${label}" ("closing date" OR "tender number" OR "bid number" OR RFQ)${extra}`, purpose: "active_procurement", targetDescription: "South African government procurement", service },
+        { query: `(site:gov.za OR site:gauteng.gov.za OR site:tshwane.gov.za) "${label}" (RFQ OR RFP OR tender OR bid)${extra}`, purpose: "active_procurement", targetDescription: "Government and municipal procurement", service },
+        { query: `"${location}" (government OR municipality OR department) "${label}" ("supplier registration" OR "supplier database" OR "vendor registration")`, purpose: "supplier_registration", targetDescription: "Government supplier registration", service },
+      );
     }
   }
 
-  const unique =
-    new Map<string, SearchPlan>();
-
+  const unique = new Map<string, SearchPlan>();
   for (const plan of plans) {
-    const query = plan.query
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!query) {
-      continue;
-    }
-
-    const key = query.toLowerCase();
-
-    if (!unique.has(key)) {
-      unique.set(key, {
-        ...plan,
-        query,
-      });
-    }
+    const query = plan.query.replace(/\s+/g, " ").trim();
+    const key = `${plan.purpose}:${query.toLowerCase()}`;
+    if (query && !unique.has(key)) unique.set(key, { ...plan, query });
   }
-
-  return [...unique.values()].slice(
-    0,
-    MAX_SEARCH_QUERIES,
-  );
+  return [...unique.values()].slice(0, MAX_SEARCH_QUERIES);
 }
 
-async function fetchWithTimeout(
-  input: string,
-  init: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
-  const controller =
-    new AbortController();
-
-  const timeout = setTimeout(
-    () => controller.abort(),
-    timeoutMs,
-  );
-
-  const externalSignal =
-    init.signal;
-
-  if (externalSignal) {
-    externalSignal.addEventListener(
-      "abort",
-      () => controller.abort(),
-      {
-        once: true,
-      },
-    );
-  }
-
+async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(input, {
-      ...init,
-      signal: controller.signal,
-    });
+    return await fetch(input, { ...init, signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }
 }
 
-async function tavilySearch({
-  plan,
-  apiKey,
-}: {
-  plan: SearchPlan;
-  apiKey: string;
-}): Promise<SearchCandidate[]> {
-  const response =
-    await fetchWithTimeout(
-      TAVILY_SEARCH_URL,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json",
-          Authorization:
-            `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          query: plan.query,
-          topic: "general",
-          search_depth: "basic",
-          country: "south africa",
-          max_results:
-            MAX_RESULTS_PER_QUERY,
-          include_answer: false,
-          include_images: false,
-          include_raw_content: false,
-          exclude_domains:
-            PRIVATE_SOURCE_DOMAINS_TO_EXCLUDE,
-        }),
-      },
-      SEARCH_TIMEOUT_MS,
-    );
-
-  if (!response.ok) {
-    const message = await response
-      .text()
-      .catch(() => "");
-
-    throw new Error(
-      message ||
-        `Search provider failed (${response.status}).`,
-    );
-  }
-
-  const payload =
-    (await response.json()) as TavilySearchResponse;
-
-  return (payload.results ?? [])
-    .map((result) => {
-      const title =
-        cleanText(result.title);
-
-      const url =
-        normaliseUrl(result.url);
-
-      const snippet =
-        cleanText(result.content);
-
-      if (
-        !title ||
-        !url ||
-        !snippet
-      ) {
-        return null;
-      }
-
-      return {
-        query: plan.query,
-        purpose: plan.purpose,
-        targetDescription:
-          plan.targetDescription,
-        searchedService:
-          plan.service,
-        title,
-        url,
-        snippet,
-        publishedAt:
-          cleanText(
-            result.published_date,
-          ),
-        tavilyScore:
-          Math.max(
-            0,
-            Math.min(
-              1,
-              Number(result.score ?? 0),
-            ),
-          ),
-      };
-    })
-    .filter(
-      (
-        candidate,
-      ): candidate is SearchCandidate =>
-        Boolean(candidate),
-    );
-}
-
-function normaliseUrl(
-  value: unknown,
-): string | null {
+function normaliseUrl(value: unknown): string | null {
   const text = cleanText(value);
-
-  if (!text) {
-    return null;
-  }
-
+  if (!text) return null;
   try {
-    const url = new URL(
-      text.startsWith("http")
-        ? text
-        : `https://${text}`,
-    );
-
-    if (
-      !["http:", "https:"].includes(
-        url.protocol,
-      )
-    ) {
-      return null;
-    }
-
+    const url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
     url.hash = "";
-
+    ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid"].forEach((key) => url.searchParams.delete(key));
     return url.toString();
   } catch {
     return null;
   }
 }
 
-function getHostname(
-  value: string,
-): string {
-  try {
-    return new URL(value)
-      .hostname
-      .replace(/^www\./, "")
-      .toLowerCase();
-  } catch {
-    return "";
-  }
+async function tavilySearch(plan: SearchPlan, apiKey: string): Promise<SearchCandidate[]> {
+  const response = await fetchWithTimeout(TAVILY_SEARCH_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      query: plan.query,
+      topic: plan.purpose === "growth_signal" ? "news" : "general",
+      search_depth: "basic",
+      country: plan.purpose === "growth_signal" ? undefined : "south africa",
+      time_range: plan.purpose === "growth_signal" ? "month" : undefined,
+      max_results: MAX_RESULTS_PER_QUERY,
+      include_answer: false,
+      include_images: false,
+      include_raw_content: false,
+      exclude_domains: PRIVATE_SOURCE_DOMAINS_TO_EXCLUDE,
+    }),
+  }, SEARCH_TIMEOUT_MS);
+
+  if (!response.ok) throw new Error(await response.text().catch(() => `Tavily ${response.status}`));
+  const payload = (await response.json()) as { results?: Array<{ title?: string; url?: string; content?: string; score?: number; published_date?: string }> };
+  return (payload.results ?? []).map((r) => {
+    const title = cleanText(r.title), url = normaliseUrl(r.url), snippet = cleanText(r.content);
+    if (!title || !url || !snippet) return null;
+    return { provider: "Tavily" as const, query: plan.query, purpose: plan.purpose, targetDescription: plan.targetDescription, searchedService: plan.service, title, url, snippet, publishedAt: cleanText(r.published_date), providerScore: normaliseProviderScore(r.score, 0.6) };
+  }).filter((v): v is SearchCandidate => Boolean(v));
 }
 
-function rootDomainKey(
-  value: string,
-): string {
-  const hostname =
-    getHostname(value);
-
-  return hostname || value.toLowerCase();
+async function serpApiSearch(plan: SearchPlan, apiKey: string): Promise<SearchCandidate[]> {
+  const params = new URLSearchParams({ engine: "google", q: plan.query, api_key: apiKey, google_domain: "google.co.za", gl: "za", hl: "en", num: String(MAX_RESULTS_PER_QUERY), safe: "active" });
+  if (["growth_signal", "active_procurement"].includes(plan.purpose)) params.set("tbs", "qdr:m");
+  const response = await fetchWithTimeout(`${SERPAPI_SEARCH_URL}?${params}`, { headers: { Accept: "application/json" } }, SEARCH_TIMEOUT_MS);
+  if (!response.ok) throw new Error(await response.text().catch(() => `SerpAPI ${response.status}`));
+  const payload = (await response.json()) as { error?: string; organic_results?: Array<{ position?: number; title?: string; link?: string; snippet?: string; date?: string }> };
+  if (payload.error) throw new Error(payload.error);
+  return (payload.organic_results ?? []).slice(0, MAX_RESULTS_PER_QUERY).map((r, i) => {
+    const title = cleanText(r.title), url = normaliseUrl(r.link), snippet = cleanText(r.snippet);
+    if (!title || !url || !snippet) return null;
+    const pos = Number(r.position ?? i + 1);
+    return { provider: "SerpAPI" as const, query: plan.query, purpose: plan.purpose, targetDescription: plan.targetDescription, searchedService: plan.service, title, url, snippet, publishedAt: cleanText(r.date), providerScore: Math.max(0.35, Math.min(0.95, 1 - Math.max(0, pos - 1) * 0.06)) };
+  }).filter((v): v is SearchCandidate => Boolean(v));
 }
 
-function deduplicateCandidates(
-  candidates: SearchCandidate[],
-): SearchCandidate[] {
-  const byPage =
-    new Map<string, SearchCandidate>();
+async function newsApiSearch(plan: SearchPlan, apiKey: string): Promise<SearchCandidate[]> {
+  if (!["growth_signal", "active_procurement", "supplier_registration"].includes(plan.purpose)) return [];
+  const from = new Date(Date.now() - 45 * 86400000).toISOString().slice(0, 10);
+  const q = `${plan.query.replace(/\bsite:[^\s)]+/gi, " ").replace(/[()]/g, " ")} AND ("South Africa" OR Gauteng OR Pretoria OR Johannesburg)`.replace(/\s+/g, " ").slice(0, 500);
+  const params = new URLSearchParams({ q, searchIn: "title,description,content", language: "en", sortBy: "publishedAt", pageSize: String(MAX_RESULTS_PER_QUERY), page: "1", from });
+  const response = await fetchWithTimeout(`${NEWS_API_URL}?${params}`, { headers: { Accept: "application/json", "X-Api-Key": apiKey } }, SEARCH_TIMEOUT_MS);
+  if (!response.ok) throw new Error(await response.text().catch(() => `NewsAPI ${response.status}`));
+  const payload = (await response.json()) as { status?: string; message?: string; articles?: Array<{ title?: string | null; description?: string | null; content?: string | null; url?: string | null; publishedAt?: string | null }> };
+  if (payload.status === "error") throw new Error(payload.message || "NewsAPI error");
+  return (payload.articles ?? []).map((a, i) => {
+    const title = cleanText(a.title), url = normaliseUrl(a.url), snippet = cleanText(a.description) || cleanText(a.content);
+    if (!title || !url || !snippet) return null;
+    return { provider: "NewsAPI" as const, query: plan.query, purpose: plan.purpose, targetDescription: plan.targetDescription, searchedService: plan.service, title, url, snippet, publishedAt: cleanText(a.publishedAt), providerScore: Math.max(0.45, 0.8 - i * 0.035) };
+  }).filter((v): v is SearchCandidate => Boolean(v));
+}
 
+async function executePlan(plan: SearchPlan, environment: Environment) {
+  const jobs: Array<Promise<{ provider: SearchProvider; candidates: SearchCandidate[]; warning?: string }>> = [];
+  const wrap = (provider: SearchProvider, promise: Promise<SearchCandidate[]>) =>
+    promise.then((candidates) => ({ provider, candidates })).catch((error: unknown) => ({ provider, candidates: [], warning: `${provider} failed for "${plan.query}": ${error instanceof Error ? error.message : "Unknown error"}` }));
+  if (environment.tavilyApiKey) jobs.push(wrap("Tavily", tavilySearch(plan, environment.tavilyApiKey)));
+  if (environment.serpApiKey) jobs.push(wrap("SerpAPI", serpApiSearch(plan, environment.serpApiKey)));
+  if (environment.newsApiKey) jobs.push(wrap("NewsAPI", newsApiSearch(plan, environment.newsApiKey)));
+  return Promise.all(jobs);
+}
+
+function getHostname(value: string) {
+  try { return new URL(value).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; }
+}
+
+function deduplicateCandidates(candidates: SearchCandidate[]) {
+  const map = new Map<string, SearchCandidate>();
+  const priority = (p: SearchProvider) => p === "Tavily" ? 3 : p === "SerpAPI" ? 2 : 1;
   for (const candidate of candidates) {
-    const key =
-      candidate.url
-        .replace(/\/+$/, "")
-        .toLowerCase();
-
-    const existing =
-      byPage.get(key);
-
-    if (
-      !existing ||
-      candidate.tavilyScore >
-        existing.tavilyScore
-    ) {
-      byPage.set(key, candidate);
-    }
+    const key = candidate.url.replace(/\/+$/, "").toLowerCase();
+    const existing = map.get(key);
+    if (!existing || candidate.providerScore * 100 + priority(candidate.provider) > existing.providerScore * 100 + priority(existing.provider)) map.set(key, candidate);
   }
-
-  return [...byPage.values()].sort(
-    (first, second) =>
-      second.tavilyScore -
-      first.tavilyScore,
-  );
+  return [...map.values()].sort((a, b) => b.providerScore - a.providerScore);
 }
 
-function htmlToText(
-  html: string,
-): string {
-  return cleanText(
-    html
-      .replace(
-        /<script\b[^>]*>[\s\S]*?<\/script>/gi,
-        " ",
-      )
-      .replace(
-        /<style\b[^>]*>[\s\S]*?<\/style>/gi,
-        " ",
-      )
-      .replace(
-        /<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi,
-        " ",
-      )
-      .replace(/<[^>]+>/g, " "),
-  )?.slice(
-    0,
-    MAX_SOURCE_CONTENT_LENGTH,
-  ) ?? "";
+function htmlToText(html: string) {
+  return cleanText(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ").replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, " ").replace(/<[^>]+>/g, " "))?.slice(0, MAX_SOURCE_CONTENT_LENGTH) ?? "";
 }
 
-function extractHtmlTitle(
-  html: string,
-): string | null {
-  const match = html.match(
-    /<title[^>]*>([\s\S]*?)<\/title>/i,
-  );
-
-  return cleanText(
-    match?.[1]?.replace(/<[^>]+>/g, " "),
-  );
+function extractEmails(text: string) {
+  return [...new Set((text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? []).map((v) => v.toLowerCase()).filter((v) => !v.includes("example.com") && !v.includes("sentry.io") && !v.includes("wixpress.com")))].slice(0, 8);
 }
 
-function extractEmails(
-  text: string,
-): string[] {
-  const matches =
-    text.match(
-      /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,
-    ) ?? [];
-
-  return [
-    ...new Set(
-      matches
-        .map((email) =>
-          email.toLowerCase(),
-        )
-        .filter(
-          (email) =>
-            !email.endsWith(
-              "@example.com",
-            ) &&
-            !email.includes(
-              "sentry.io",
-            ) &&
-            !email.includes(
-              "wixpress.com",
-            ),
-        ),
-    ),
-  ].slice(0, 8);
+function extractPhones(text: string) {
+  return [...new Set((text.match(/(?:\+27|0)\s?\d{2}[\s().-]?\d{3}[\s.-]?\d{4}/g) ?? []).map((v) => v.replace(/[^\d+]/g, "")).filter((v) => /^\+27\d{9}$/.test(v) || /^0\d{9}$/.test(v)))].slice(0, 8);
 }
 
-function extractPhones(
-  text: string,
-): string[] {
-  const matches =
-    text.match(
-      /(?:\+27|0)\s?\d{2}[\s()-]?\d{3}[\s-]?\d{4}/g,
-    ) ?? [];
-
-  return [
-    ...new Set(
-      matches.map((phone) =>
-        phone
-          .replace(/[^\d+]/g, "")
-          .trim(),
-      ),
-    ),
-  ].slice(0, 8);
-}
-
-function findContactPageUrl(
-  html: string,
-  baseUrl: string,
-): string | null {
-  const links = [
-    ...html.matchAll(
-      /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
-    ),
-  ];
-
-  for (const link of links) {
-    const href =
-      cleanText(link[1]);
-
-    const label = lowerText(
-      link[2]?.replace(
-        /<[^>]+>/g,
-        " ",
-      ),
-    );
-
-    if (
-      !href ||
-      !/(contact|enquir|procurement|supplier|tender)/i.test(
-        `${href} ${label}`,
-      )
-    ) {
-      continue;
-    }
-
-    try {
-      const url = new URL(
-        href,
-        baseUrl,
-      );
-
-      if (
-        ["http:", "https:"].includes(
-          url.protocol,
-        )
-      ) {
-        return url.toString();
-      }
-    } catch {
-      // Ignore invalid links.
-    }
+function findContactPageUrl(html: string, baseUrl: string) {
+  for (const match of html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const href = cleanText(match[1]);
+    const label = lowerText(match[2]?.replace(/<[^>]+>/g, " "));
+    if (!href || !/(contact|enquir|procurement|supplier|tender|vendor)/i.test(`${href} ${label}`)) continue;
+    try { const url = new URL(href, baseUrl); if (["http:", "https:"].includes(url.protocol)) return url.toString(); } catch { /* ignore */ }
   }
-
   return null;
 }
 
-async function inspectSourcePage(
-  sourceUrl: string,
-): Promise<PageInspection> {
-  const inspectedAt =
-    new Date().toISOString();
-
+async function inspectSourcePage(sourceUrl: string): Promise<PageInspection> {
+  const inspectedAt = new Date().toISOString();
   try {
-    const response =
-      await fetchWithTimeout(
-        sourceUrl,
-        {
-          method: "GET",
-          headers: {
-            Accept:
-              "text/html,application/xhtml+xml",
-            "User-Agent":
-              "CossaLeadHunter/2.0 (+https://growth.cossanexusholdings.co.za)",
-          },
-          redirect: "follow",
-        },
-        PAGE_TIMEOUT_MS,
-      );
-
-    if (!response.ok) {
-      return {
-        url: sourceUrl,
-        finalUrl:
-          response.url || sourceUrl,
-        title: null,
-        text: "",
-        emails: [],
-        phones: [],
-        contactPageUrl: null,
-        inspectedAt,
-        fetchSucceeded: false,
-      };
-    }
-
-    const contentType =
-      response.headers.get(
-        "content-type",
-      ) ?? "";
-
-    if (
-      !contentType.includes(
-        "text/html",
-      )
-    ) {
-      return {
-        url: sourceUrl,
-        finalUrl:
-          response.url || sourceUrl,
-        title: null,
-        text: "",
-        emails: [],
-        phones: [],
-        contactPageUrl: null,
-        inspectedAt,
-        fetchSucceeded: false,
-      };
-    }
-
-    const html =
-      await response.text();
-
-    const text =
-      htmlToText(html);
-
-    return {
-      url: sourceUrl,
-      finalUrl:
-        response.url || sourceUrl,
-      title:
-        extractHtmlTitle(html),
-      text,
-      emails:
-        extractEmails(text),
-      phones:
-        extractPhones(text),
-      contactPageUrl:
-        findContactPageUrl(
-          html,
-          response.url || sourceUrl,
-        ),
-      inspectedAt,
-      fetchSucceeded: true,
-    };
+    const response = await fetchWithTimeout(sourceUrl, { headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "CossaLeadHunter/3.0 (+https://growth.cossanexusholdings.co.za)" }, redirect: "follow" }, PAGE_TIMEOUT_MS);
+    if (!response.ok || !(response.headers.get("content-type") ?? "").toLowerCase().includes("text/html")) throw new Error("unavailable");
+    const html = await response.text();
+    const text = htmlToText(html);
+    const finalUrl = response.url || sourceUrl;
+    return { url: sourceUrl, finalUrl, title: cleanText(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, " ")), text, emails: extractEmails(text), phones: extractPhones(text), contactPageUrl: findContactPageUrl(html, finalUrl), inspectedAt, fetchSucceeded: true };
   } catch {
-    return {
-      url: sourceUrl,
-      finalUrl: sourceUrl,
-      title: null,
-      text: "",
-      emails: [],
-      phones: [],
-      contactPageUrl: null,
-      inspectedAt,
-      fetchSucceeded: false,
-    };
+    return { url: sourceUrl, finalUrl: sourceUrl, title: null, text: "", emails: [], phones: [], contactPageUrl: null, inspectedAt, fetchSucceeded: false };
   }
 }
 
-function isGovernmentSource(
-  url: string,
-): boolean {
-  const hostname =
-    getHostname(url);
-
-  return (
-    hostname.endsWith(".gov.za") ||
-    HIGH_TRUST_GOVERNMENT_DOMAINS.some(
-      (domain) =>
-        hostname === domain ||
-        hostname.endsWith(
-          `.${domain}`,
-        ),
-    )
-  );
+function isGovernmentSource(url: string) {
+  const host = getHostname(url);
+  return host.endsWith(".gov.za") || HIGH_TRUST_GOVERNMENT_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
 }
 
-function isDirectorySource(
-  url: string,
-  content: string,
-): boolean {
-  const hostname =
-    getHostname(url);
-
-  return (
-    DIRECTORY_HOST_PATTERNS.some(
-      (pattern) =>
-        hostname.includes(pattern),
-    ) ||
-    DIRECTORY_TEXT_PATTERN.test(
-      content,
-    )
-  );
+function isDirectorySource(url: string, content: string) {
+  const host = getHostname(url);
+  return DIRECTORY_HOST_PATTERNS.some((p) => host.includes(p)) || DIRECTORY_TEXT_PATTERN.test(content);
 }
 
-function inferOrganisationName(
-  candidate: SearchCandidate,
-  inspection: PageInspection,
-): string {
-  const source =
-    inspection.title ||
-    candidate.title ||
-    getHostname(candidate.url);
-
-  const cleaned = decodeHtmlEntities(source)
-    .replace(
-      /\s+[|–—-]\s+.*$/,
-      "",
-    )
-    .replace(
-      /\b(home|contact us|about us|tenders?|rfq|rfp|official website)\b/gi,
-      " ",
-    )
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return (
-    cleaned ||
-    getHostname(candidate.url)
-  );
-}
-
-function inferSector(
-  candidate: SearchCandidate,
-):
-  | "private"
-  | "government"
-  | "nonprofit" {
-  const hostname =
-    getHostname(candidate.url);
-
-  const combined =
-    `${candidate.title} ${candidate.snippet} ${candidate.url}`.toLowerCase();
-
-  if (
-    hostname.endsWith(".gov.za") ||
-    hostname.includes(
-      "etenders.gov.za",
-    ) ||
-    hostname.includes(
-      "treasury.gov.za",
-    )
-  ) {
-    return "government";
-  }
-
-  if (
-    /\b(church|ministry|nonprofit|non-profit|charity|ngo|community centre|foundation)\b/i.test(
-      combined,
-    )
-  ) {
-    return "nonprofit";
-  }
-
-  return "private";
-}
-
-function detectCompetitorServices(
-  request: LeadHunterSearchRequest,
-  content: string,
-): LeadHunterServiceCategory[] {
-  const matches:
-    LeadHunterServiceCategory[] = [];
-
-  for (const service of request.services) {
-    const patterns =
-      competitorPatternsForService(
-        service,
-      );
-
-    if (
-      patterns.some((pattern) =>
-        pattern.test(content),
-      ) &&
-      SERVICE_OFFERING_PATTERN.test(
-        content,
-      )
-    ) {
-      matches.push(service);
-    }
-  }
-
-  return [...new Set(matches)];
-}
-
-function inferBuyerRole(
-  service: LeadHunterServiceCategory,
-  content: string,
-): string | null {
-  const publicRoleMatch =
-    content.match(
-      PUBLIC_BUYER_ROLE_PATTERN,
-    );
-
-  if (publicRoleMatch?.[0]) {
-    return publicRoleMatch[0]
-      .replace(/\b\w/g, (letter) =>
-        letter.toUpperCase(),
-      );
-  }
-
-  const roles: Partial<
-    Record<
-      LeadHunterServiceCategory,
-      string
-    >
-  > = {
-    construction:
-      "Property Owner, Project Manager or Procurement Manager",
-
-    renovation:
-      "Property Manager, Facilities Manager or Property Owner",
-
-    property_maintenance:
-      "Property Manager or Facilities Manager",
-
-    painting:
-      "Facilities Manager or Property Manager",
-
-    tiling:
-      "Property Manager or Project Manager",
-
-    ceilings:
-      "Facilities Manager or Property Manager",
-
-    roofing:
-      "Facilities Manager or Property Manager",
-
-    plumbing:
-      "Facilities Manager or Property Manager",
-
-    facility_management:
-      "Operations Manager or Facilities Director",
-
-    commercial_cleaning:
-      "Facilities Manager, Operations Manager or Property Manager",
-
-    deep_cleaning:
-      "Facilities Manager or Office Manager",
-
-    hygiene:
-      "Facilities Manager or Operations Manager",
-
-    landscaping:
-      "Estate Manager, Property Manager or Facilities Manager",
-
-    waste_management:
-      "Facilities Manager or Operations Manager",
-
-    website_design:
-      "Business Owner, Marketing Manager or IT Manager",
-
-    seo:
-      "Business Owner or Marketing Manager",
-
-    digital_marketing:
-      "Business Owner or Marketing Manager",
-
-    lead_generation:
-      "Sales Director, Business Owner or Marketing Manager",
-
-    crm:
-      "Sales Director, Operations Manager or Business Owner",
-
-    ai_automation:
-      "Operations Manager, IT Manager or Business Owner",
-
-    business_documents:
-      "Business Owner, Operations Manager or Project Manager",
-
-    quotations:
-      "Business Owner, Finance Manager or Sales Manager",
-
-    proposals:
-      "Business Owner, Sales Manager or Bid Manager",
-
-    contracts:
-      "Business Owner, Operations Manager or Legal/Compliance Manager",
-
-    ecommerce:
-      "Business Owner, E-commerce Manager or Marketing Manager",
-
-    general:
-      "Business Owner or Operations Manager",
+function competitorPatternsForService(service: LeadHunterServiceCategory): RegExp[] {
+  const map: Partial<Record<LeadHunterServiceCategory, RegExp[]>> = {
+    construction: [/\bconstruction company\b/i, /\bbuilding contractor\b/i],
+    renovation: [/\brenovation company\b/i, /\brenovation contractor\b/i],
+    property_maintenance: [/\bproperty maintenance company\b/i, /\bmaintenance contractor\b/i],
+    painting: [/\bpainting contractor\b/i, /\bpainting services\b/i],
+    tiling: [/\btiling contractor\b/i, /\btiling services\b/i],
+    ceilings: [/\bceiling installer\b/i, /\bceiling contractor\b/i],
+    roofing: [/\broofing contractor\b/i, /\broofing company\b/i],
+    plumbing: [/\bplumbing company\b/i, /\bplumbing services\b/i],
+    facility_management: [/\bfacilities management company\b/i],
+    commercial_cleaning: [/\bcleaning company\b/i, /\bcommercial cleaning services\b/i],
+    deep_cleaning: [/\bdeep cleaning services\b/i, /\bcleaning company\b/i],
+    hygiene: [/\bhygiene services\b/i, /\bsanitation services\b/i],
+    landscaping: [/\blandscaping company\b/i, /\bgarden services\b/i],
+    waste_management: [/\bwaste management company\b/i],
+    website_design: [/\bweb design company\b/i, /\bwebsite design agency\b/i],
+    seo: [/\bseo agency\b/i, /\bseo company\b/i],
+    digital_marketing: [/\bdigital marketing agency\b/i, /\bmarketing agency\b/i],
+    lead_generation: [/\blead generation agency\b/i],
+    crm: [/\bcrm consultancy\b/i, /\bcrm software company\b/i],
+    ai_automation: [/\bai automation agency\b/i, /\bautomation consultancy\b/i],
+    business_documents: [/\bdocument drafting services\b/i, /\btender writing services\b/i],
+    quotations: [/\bquotation software\b/i, /\binvoicing software\b/i],
+    proposals: [/\bproposal writing services\b/i, /\btender writing company\b/i],
+    contracts: [/\blegal document services\b/i, /\bcontract drafting services\b/i],
+    ecommerce: [/\becommerce agency\b/i, /\bshopify agency\b/i],
   };
+  return map[service] ?? [];
+}
 
+function inferBuyerRole(service: LeadHunterServiceCategory, content: string) {
+  const match = content.match(PUBLIC_BUYER_ROLE_PATTERN);
+  if (match?.[0]) return match[0].replace(/\b\w/g, (l) => l.toUpperCase());
+  const roles: Partial<Record<LeadHunterServiceCategory, string>> = {
+    construction: "Property Owner, Project Manager or Procurement Manager",
+    renovation: "Property Manager, Facilities Manager or Property Owner",
+    property_maintenance: "Property Manager or Facilities Manager",
+    painting: "Facilities Manager or Property Manager",
+    tiling: "Property Manager or Project Manager",
+    ceilings: "Facilities Manager or Property Manager",
+    roofing: "Facilities Manager or Property Manager",
+    plumbing: "Facilities Manager or Property Manager",
+    facility_management: "Operations Manager or Facilities Director",
+    commercial_cleaning: "Facilities Manager, Operations Manager or Property Manager",
+    deep_cleaning: "Facilities Manager or Office Manager",
+    hygiene: "Facilities Manager or Operations Manager",
+    landscaping: "Estate Manager, Property Manager or Facilities Manager",
+    waste_management: "Facilities Manager or Operations Manager",
+    website_design: "Business Owner, Marketing Manager or IT Manager",
+    seo: "Business Owner or Marketing Manager",
+    digital_marketing: "Business Owner or Marketing Manager",
+    lead_generation: "Sales Director, Business Owner or Marketing Manager",
+    crm: "Sales Director, Operations Manager or Business Owner",
+    ai_automation: "Operations Manager, IT Manager or Business Owner",
+    business_documents: "Business Owner, Operations Manager or Project Manager",
+    quotations: "Business Owner, Finance Manager or Sales Manager",
+    proposals: "Business Owner, Sales Manager or Bid Manager",
+    contracts: "Business Owner, Operations Manager or Legal/Compliance Manager",
+    ecommerce: "Business Owner, E-commerce Manager or Marketing Manager",
+    general: "Business Owner or Operations Manager",
+  };
   return roles[service] ?? null;
 }
 
-function sourceTrustScore(
-  candidate: SearchCandidate,
-  inspection: PageInspection,
-): number {
-  const hostname =
-    getHostname(candidate.url);
-
-  const combined =
-    `${candidate.title} ${candidate.snippet} ${inspection.text.slice(0, 5000)}`;
-
-  if (
-    isGovernmentSource(candidate.url)
-  ) {
-    return 95;
-  }
-
-  if (
-    isDirectorySource(
-      candidate.url,
-      combined,
-    )
-  ) {
-    return 20;
-  }
-
-  if (
-    INFORMATIONAL_PAGE_PATTERN.test(
-      combined,
-    )
-  ) {
-    return 30;
-  }
-
-  if (
-    inspection.fetchSucceeded &&
-    hostname &&
-    (
-      inspection.contactPageUrl ||
-      inspection.emails.length > 0 ||
-      inspection.phones.length > 0
-    )
-  ) {
-    return 80;
-  }
-
-  if (
-    inspection.fetchSucceeded
-  ) {
-    return 65;
-  }
-
-  return 45;
-}
-
-function assessCandidate({
-  request,
-  candidate,
-  inspection,
-}: {
-  request: LeadHunterSearchRequest;
-  candidate: SearchCandidate;
-  inspection: PageInspection;
-}): CandidateAssessment {
-  const combined =
-    `${candidate.title} ${candidate.snippet} ${inspection.title ?? ""} ${inspection.text.slice(0, 10_000)}`;
-
+function assessCandidate(request: LeadHunterSearchRequest, candidate: SearchCandidate, inspection: PageInspection): CandidateAssessment {
+  const combined = `${candidate.title} ${candidate.snippet} ${inspection.title ?? ""} ${inspection.text.slice(0, 10000)}`;
   const reasons: string[] = [];
+  const sourceTrust = isGovernmentSource(candidate.url) ? 95 : inspection.fetchSucceeded ? (inspection.contactPageUrl || inspection.emails.length || inspection.phones.length ? 82 : 68) : candidate.provider === "Tavily" ? 58 : candidate.provider === "SerpAPI" ? 54 : 50;
+  const competitors = request.services.filter((s) => competitorPatternsForService(s).some((p) => p.test(combined)) && SERVICE_OFFERING_PATTERN.test(combined));
+  const probableBuyerRole = inferBuyerRole(candidate.searchedService, combined);
 
-  const sourceTrust =
-    sourceTrustScore(
-      candidate,
-      inspection,
-    );
-
-  const competitorForServices =
-    detectCompetitorServices(
-      request,
-      combined,
-    );
-
-  const directory =
-    isDirectorySource(
-      candidate.url,
-      combined,
-    );
-
-  const informational =
-    INFORMATIONAL_PAGE_PATTERN.test(
-      combined,
-    ) &&
-    !PROCUREMENT_PATTERN.test(combined);
-
-  const activeProcurement =
-    PROCUREMENT_PATTERN.test(
-      combined,
-    );
-
-  const supplierRegistration =
-    SUPPLIER_REGISTRATION_PATTERN.test(
-      combined,
-    );
-
-  const explicitBuyerNeed =
-    BUYER_NEED_PATTERN.test(
-      combined,
-    );
-
-  const expansionSignal =
-    EXPANSION_PATTERN.test(
-      combined,
-    );
-
-  const offersSameService =
-    competitorForServices.length > 0;
-
-  const probableBuyerRole =
-    inferBuyerRole(
-      candidate.searchedService,
-      combined,
-    );
-
-  if (directory) {
-    reasons.push(
-      "The page appears to be a directory or aggregator rather than one buyer organisation.",
-    );
-
-    return {
-      disposition: "directory",
-      buyerFit: 5,
-      sourceTrust,
-      reasons,
-      probableBuyerRole: null,
-      competitorForServices,
-    };
-  }
-
-  if (informational) {
-    reasons.push(
-      "The page appears informational, educational or career-related and does not prove procurement demand.",
-    );
-
-    return {
-      disposition: "informational",
-      buyerFit: 5,
-      sourceTrust,
-      reasons,
-      probableBuyerRole: null,
-      competitorForServices,
-    };
-  }
-
-  if (
-    activeProcurement &&
-    (
-      isGovernmentSource(
-        candidate.url,
-      ) ||
-      candidate.purpose ===
-        "active_procurement"
-    )
-  ) {
-    reasons.push(
-      "The source contains formal procurement language.",
-    );
-
-    return {
-      disposition:
-        "active_opportunity",
-      buyerFit: 95,
-      sourceTrust,
-      reasons,
-      probableBuyerRole:
-        "Procurement or Supply Chain Management",
-      competitorForServices,
-    };
-  }
-
-  if (supplierRegistration) {
-    reasons.push(
-      "The source contains a supplier-registration or vendor-database signal.",
-    );
-
-    return {
-      disposition:
-        "supplier_opportunity",
-      buyerFit: 85,
-      sourceTrust,
-      reasons,
-      probableBuyerRole:
-        "Procurement or Supply Chain Management",
-      competitorForServices,
-    };
-  }
-
-  if (
-    offersSameService &&
-    !explicitBuyerNeed
-  ) {
-    reasons.push(
-      "The organisation appears to sell the same service Cossa is trying to offer.",
-    );
-
-    reasons.push(
-      "No separate buying or procurement signal was found.",
-    );
-
-    return {
-      disposition: "competitor",
-      buyerFit: 10,
-      sourceTrust,
-      reasons,
-      probableBuyerRole: null,
-      competitorForServices,
-    };
-  }
-
-  if (
-    explicitBuyerNeed ||
-    expansionSignal
-  ) {
-    reasons.push(
-      explicitBuyerNeed
-        ? "A public buying, appointment, contract or service requirement was detected."
-        : "A public expansion or development signal was detected.",
-    );
-
-    return {
-      disposition:
-        "active_opportunity",
-      buyerFit:
-        explicitBuyerNeed ? 85 : 72,
-      sourceTrust,
-      reasons,
-      probableBuyerRole,
-      competitorForServices,
-    };
-  }
-
-  const targetMatch =
-    lowerText(combined).includes(
-      candidate.targetDescription.toLowerCase(),
-    );
-
-  if (
-    candidate.purpose ===
-      "buyer_discovery" &&
-    targetMatch &&
-    !offersSameService
-  ) {
-    reasons.push(
-      `The organisation matches the selected buyer category: ${candidate.targetDescription}.`,
-    );
-
-    reasons.push(
-      "No active procurement event was proven; treat this as a potential buyer, not a confirmed opportunity.",
-    );
-
-    return {
-      disposition: "buyer",
-      buyerFit: 65,
-      sourceTrust,
-      reasons,
-      probableBuyerRole,
-      competitorForServices,
-    };
-  }
-
-  if (
-    offersSameService &&
-    explicitBuyerNeed
-  ) {
-    reasons.push(
-      "The organisation may be both a supplier and a potential subcontracting or partnership route.",
-    );
-
-    return {
-      disposition: "partner",
-      buyerFit: 45,
-      sourceTrust,
-      reasons,
-      probableBuyerRole:
-        "Operations or Subcontracting Manager",
-      competitorForServices,
-    };
-  }
-
-  reasons.push(
-    "The source did not prove that this organisation is a suitable buyer or active opportunity.",
-  );
-
-  return {
-    disposition: "irrelevant",
-    buyerFit: 15,
-    sourceTrust,
-    reasons,
-    probableBuyerRole,
-    competitorForServices,
-  };
+  if (isDirectorySource(candidate.url, combined)) return { disposition: "directory", buyerFit: 5, sourceTrust: 20, reasons: ["The page appears to be a directory or aggregator rather than one buyer organisation."], probableBuyerRole: null, competitorForServices: competitors };
+  if (INFORMATIONAL_PAGE_PATTERN.test(combined) && !PROCUREMENT_PATTERN.test(combined) && candidate.purpose !== "growth_signal") return { disposition: "informational", buyerFit: 5, sourceTrust: 30, reasons: ["The page appears informational or educational and does not prove procurement demand."], probableBuyerRole: null, competitorForServices: competitors };
+  if (PROCUREMENT_PATTERN.test(combined) && (isGovernmentSource(candidate.url) || candidate.purpose === "active_procurement")) return { disposition: "active_opportunity", buyerFit: 95, sourceTrust, reasons: ["The source contains formal procurement language."], probableBuyerRole: "Procurement or Supply Chain Management", competitorForServices: competitors };
+  if (SUPPLIER_REGISTRATION_PATTERN.test(combined)) return { disposition: "supplier_opportunity", buyerFit: 85, sourceTrust, reasons: ["The source contains a supplier-registration or vendor-database signal."], probableBuyerRole: "Procurement or Supply Chain Management", competitorForServices: competitors };
+  const explicitNeed = BUYER_NEED_PATTERN.test(combined), expansion = EXPANSION_PATTERN.test(combined), offersSame = competitors.length > 0;
+  if (offersSame && !explicitNeed && !expansion) return { disposition: "competitor", buyerFit: 10, sourceTrust, reasons: ["The organisation appears to sell the same service Cossa is trying to offer.", "No separate buying, expansion or procurement signal was found."], probableBuyerRole: null, competitorForServices: competitors };
+  if (explicitNeed || expansion) return { disposition: "active_opportunity", buyerFit: explicitNeed ? 87 : 74, sourceTrust, reasons: [explicitNeed ? "A public buying, appointment, contract or service requirement was detected." : "A public expansion, investment or development signal was detected."], probableBuyerRole, competitorForServices: competitors };
+  const target = candidate.targetDescription.toLowerCase();
+  const targetMatch = lowerText(combined).includes(target) || target.split(/\s+/).filter((v) => v.length >= 5).some((v) => lowerText(combined).includes(v));
+  if (candidate.purpose === "buyer_discovery" && targetMatch && !offersSame) return { disposition: "buyer", buyerFit: 65, sourceTrust, reasons: [`The organisation matches the selected buyer category: ${candidate.targetDescription}.`, "No active procurement event was proven; treat this as a potential buyer, not a confirmed opportunity."], probableBuyerRole, competitorForServices: competitors };
+  return { disposition: "irrelevant", buyerFit: 15, sourceTrust, reasons: ["The source did not prove that this organisation is a suitable buyer or active opportunity."], probableBuyerRole, competitorForServices: competitors };
 }
 
-function inferSignal(
-  candidate: SearchCandidate,
-  inspection: PageInspection,
-  assessment: CandidateAssessment,
-): ProspectSignal {
-  const searchable =
-    `${candidate.title} ${candidate.snippet} ${inspection.text.slice(0, 8000)}`;
-
-  let type: ProspectSignalType =
-    "general_fit";
-
-  let title =
-    "Potential buyer-fit signal";
-
-  let confidence = 40;
-
-  if (
-    assessment.disposition ===
-      "active_opportunity" &&
-    /\b(request for quotation|\bRFQ\b)\b/i.test(
-      searchable,
-    )
-  ) {
-    type = "request_for_quote";
-    title =
-      "Request for quotation";
-    confidence =
-      isGovernmentSource(
-        candidate.url,
-      )
-        ? 94
-        : 82;
-  } else if (
-    assessment.disposition ===
-      "active_opportunity" &&
-    /\b(request for proposal|\bRFP\b)\b/i.test(
-      searchable,
-    )
-  ) {
-    type =
-      "request_for_proposal";
-    title =
-      "Request for proposal";
-    confidence =
-      isGovernmentSource(
-        candidate.url,
-      )
-        ? 94
-        : 82;
-  } else if (
-    assessment.disposition ===
-      "active_opportunity" &&
-    PROCUREMENT_PATTERN.test(
-      searchable,
-    )
-  ) {
-    type = "active_tender";
-    title =
-      "Tender or formal procurement notice";
-    confidence =
-      isGovernmentSource(
-        candidate.url,
-      )
-        ? 95
-        : 78;
-  } else if (
-    assessment.disposition ===
-      "supplier_opportunity"
-  ) {
-    type =
-      "supplier_registration";
-    title =
-      "Supplier-registration opportunity";
-    confidence =
-      isGovernmentSource(
-        candidate.url,
-      )
-        ? 92
-        : 78;
-  } else if (
-    EXPANSION_PATTERN.test(
-      searchable,
-    )
-  ) {
-    type =
-      "business_expansion";
-    title =
-      "Business expansion or development";
-    confidence = 72;
-  } else if (
-    assessment.disposition ===
-      "active_opportunity" &&
-    /\b(maintenance contract|maintenance required|repair works|minor works|refurbishment|renovation project|upgrade project)\b/i.test(
-      searchable,
-    )
-  ) {
-    type =
-      "maintenance_need";
-    title =
-      "Maintenance or upgrade requirement";
-    confidence = 75;
-  } else if (
-    assessment.disposition ===
-      "active_opportunity" &&
-    /\b(cleaning contract|cleaning services required|appointment of.*cleaning|procurement of.*cleaning)\b/i.test(
-      searchable,
-    )
-  ) {
-    type = "cleaning_need";
-    title =
-      "Cleaning-service requirement";
-    confidence = 78;
-  } else if (
-    assessment.disposition ===
-      "active_opportunity" &&
-    /\b(website redesign required|website development tender|digital platform required|online portal development)\b/i.test(
-      searchable,
-    )
-  ) {
-    type =
-      "technology_need";
-    title =
-      "Technology or website requirement";
-    confidence = 76;
-  } else if (
-    assessment.disposition ===
-      "buyer"
-  ) {
-    type = "general_fit";
-    title =
-      "Potential buyer-category fit";
-    confidence = 48;
-  }
-
-  return {
-    type,
-    title,
-    explanation:
-      candidate.snippet.slice(
-        0,
-        700,
-      ),
-    evidence_url:
-      candidate.url,
-    detected_at:
-      new Date().toISOString(),
-    confidence,
-  };
+function inferSignal(candidate: SearchCandidate, inspection: PageInspection, assessment: CandidateAssessment): ProspectSignal {
+  const text = `${candidate.title} ${candidate.snippet} ${inspection.text.slice(0, 8000)}`;
+  let type: ProspectSignalType = "general_fit", title = "Potential buyer-fit signal", confidence = 40;
+  if (assessment.disposition === "active_opportunity" && /\b(request for quotation|\bRFQ\b)\b/i.test(text)) { type = "request_for_quote"; title = "Request for quotation"; confidence = isGovernmentSource(candidate.url) ? 94 : 84; }
+  else if (assessment.disposition === "active_opportunity" && /\b(request for proposal|\bRFP\b)\b/i.test(text)) { type = "request_for_proposal"; title = "Request for proposal"; confidence = isGovernmentSource(candidate.url) ? 94 : 84; }
+  else if (assessment.disposition === "active_opportunity" && PROCUREMENT_PATTERN.test(text)) { type = "active_tender"; title = "Tender or formal procurement notice"; confidence = isGovernmentSource(candidate.url) ? 95 : 80; }
+  else if (assessment.disposition === "supplier_opportunity") { type = "supplier_registration"; title = "Supplier-registration opportunity"; confidence = 90; }
+  else if (/\b(cleaning contract|cleaning services required|appointment of.*cleaning|janitorial)\b/i.test(text)) { type = "cleaning_need"; title = "Cleaning-service requirement"; confidence = 80; }
+  else if (/\b(website redesign required|website development tender|digital platform required|digital transformation)\b/i.test(text)) { type = "technology_need"; title = "Technology or website requirement"; confidence = 78; }
+  else if (/\b(maintenance contract|repair works|minor works|refurbishment|renovation project|upgrade project)\b/i.test(text)) { type = "maintenance_need"; title = "Maintenance or upgrade requirement"; confidence = 77; }
+  else if (EXPANSION_PATTERN.test(text)) { type = "business_expansion"; title = "Business expansion or development"; confidence = candidate.provider === "NewsAPI" ? 76 : 72; }
+  else if (assessment.disposition === "buyer") { confidence = 48; title = "Potential buyer-category fit"; }
+  return { type, title, explanation: candidate.snippet.slice(0, 700), evidence_url: candidate.url, detected_at: new Date().toISOString(), confidence };
 }
 
-function chooseRecommendedService(
-  request: LeadHunterSearchRequest,
-  candidate: SearchCandidate,
-  inspection: PageInspection,
-  assessment: CandidateAssessment,
-): LeadHunterServiceCategory {
-  if (
-    request.services.includes(
-      candidate.searchedService,
-    )
-  ) {
-    return candidate.searchedService;
-  }
-
-  const searchable =
-    `${candidate.title} ${candidate.snippet} ${inspection.text.slice(0, 8000)}`;
-
-  const patterns: Array<{
-    service: LeadHunterServiceCategory;
-    pattern: RegExp;
-  }> = [
-    {
-      service:
-        "commercial_cleaning",
-      pattern:
-        /\b(cleaning contract|cleaning services required|appointment of.*cleaning|janitorial contract)\b/i,
-    },
-    {
-      service:
-        "facility_management",
-      pattern:
-        /\b(facility management|facilities management)\b/i,
-    },
-    {
-      service:
-        "property_maintenance",
-      pattern:
-        /\b(maintenance contract|repair works|property maintenance|minor works)\b/i,
-    },
-    {
-      service: "renovation",
-      pattern:
-        /\b(renovation project|refurbishment|building upgrade)\b/i,
-    },
-    {
-      service: "painting",
-      pattern:
-        /\b(painting works|repainting project)\b/i,
-    },
-    {
-      service: "roofing",
-      pattern:
-        /\b(roof replacement|roof repairs?|roofing works)\b/i,
-    },
-    {
-      service:
-        "website_design",
-      pattern:
-        /\b(website development|website redesign|web portal development)\b/i,
-    },
-    {
-      service:
-        "digital_marketing",
-      pattern:
-        /\b(marketing services required|digital marketing tender|social media management contract)\b/i,
-    },
-    {
-      service: "seo",
-      pattern:
-        /\b(search engine optimisation|search engine optimization|\bSEO\b)\b/i,
-    },
-    {
-      service:
-        "ai_automation",
-      pattern:
-        /\b(automation system|artificial intelligence solution|workflow automation)\b/i,
-    },
-    {
-      service:
-        "business_documents",
-      pattern:
-        /\b(document management|proposal system|quotation system|contract management)\b/i,
-    },
-    {
-      service: "construction",
-      pattern:
-        /\b(construction works|building works|civil works)\b/i,
-    },
+function chooseService(request: LeadHunterSearchRequest, candidate: SearchCandidate, inspection: PageInspection) {
+  const text = `${candidate.title} ${candidate.snippet} ${inspection.text.slice(0, 8000)}`;
+  const patterns: Array<[LeadHunterServiceCategory, RegExp]> = [
+    ["commercial_cleaning", /\b(cleaning contract|cleaning services required|janitorial)\b/i],
+    ["facility_management", /\bfacilit(?:y|ies) management\b/i],
+    ["property_maintenance", /\b(maintenance contract|repair works|property maintenance|minor works)\b/i],
+    ["renovation", /\b(renovation project|refurbishment|building upgrade)\b/i],
+    ["painting", /\b(painting works|repainting project)\b/i],
+    ["roofing", /\b(roof replacement|roof repairs?|roofing works)\b/i],
+    ["website_design", /\b(website development|website redesign|web portal development)\b/i],
+    ["digital_marketing", /\b(digital marketing tender|social media management contract)\b/i],
+    ["seo", /\b(search engine optimisation|search engine optimization|SEO)\b/i],
+    ["ai_automation", /\b(automation system|artificial intelligence solution|workflow automation)\b/i],
+    ["business_documents", /\b(document management|proposal system|quotation system|contract management)\b/i],
+    ["construction", /\b(construction works|building works|civil works|infrastructure project)\b/i],
   ];
-
-  for (const item of patterns) {
-    if (
-      request.services.includes(
-        item.service,
-      ) &&
-      item.pattern.test(searchable)
-    ) {
-      return item.service;
-    }
-  }
-
-  if (
-    assessment.competitorForServices.length >
-    0
-  ) {
-    return (
-      assessment.competitorForServices[0]
-    );
-  }
-
-  return (
-    request.services[0] ?? "general"
-  );
+  for (const [service, pattern] of patterns) if (request.services.includes(service) && pattern.test(text)) return service;
+  return request.services.includes(candidate.searchedService) ? candidate.searchedService : request.services[0] ?? "general";
 }
 
-function recommendedCompanyForService(
-  service: LeadHunterServiceCategory,
-  allowedCompanies: LeadHunterCompany[],
-): LeadHunterCompany {
-  const preferred: Record<
-    string,
-    LeadHunterCompany
-  > = {
-    construction:
-      "cossa_nexus_construction",
-    renovation:
-      "cossa_nexus_construction",
-    property_maintenance:
-      "cossa_nexus_construction",
-    painting:
-      "cossa_nexus_construction",
-    tiling:
-      "cossa_nexus_construction",
-    ceilings:
-      "cossa_nexus_construction",
-    roofing:
-      "cossa_nexus_construction",
-    plumbing:
-      "cossa_nexus_construction",
-
-    facility_management:
-      "cossa_facility_services",
-    commercial_cleaning:
-      "cossa_facility_services",
-    deep_cleaning:
-      "cossa_facility_services",
-    hygiene:
-      "cossa_facility_services",
-    landscaping:
-      "cossa_facility_services",
-    waste_management:
-      "cossa_facility_services",
-
-    website_design:
-      "cossa_tech",
-    seo:
-      "cossa_tech",
-    crm:
-      "cossa_tech",
-    ai_automation:
-      "cossa_tech",
-    ecommerce:
-      "cossa_tech",
-
-    digital_marketing:
-      "cossa_ai_growth",
-    lead_generation:
-      "cossa_ai_growth",
-
-    business_documents:
-      "nexdocs",
-    quotations:
-      "nexdocs",
-    proposals:
-      "nexdocs",
-    contracts:
-      "nexdocs",
-
-    general:
-      "cossa_nexus_holdings",
+function recommendedCompany(service: LeadHunterServiceCategory, allowed: LeadHunterCompany[]) {
+  const map: Partial<Record<LeadHunterServiceCategory, LeadHunterCompany>> = {
+    construction: "cossa_nexus_construction", renovation: "cossa_nexus_construction", property_maintenance: "cossa_nexus_construction", painting: "cossa_nexus_construction", tiling: "cossa_nexus_construction", ceilings: "cossa_nexus_construction", roofing: "cossa_nexus_construction", plumbing: "cossa_nexus_construction",
+    facility_management: "cossa_facility_services", commercial_cleaning: "cossa_facility_services", deep_cleaning: "cossa_facility_services", hygiene: "cossa_facility_services", landscaping: "cossa_facility_services", waste_management: "cossa_facility_services",
+    website_design: "cossa_tech", seo: "cossa_tech", crm: "cossa_tech", ai_automation: "cossa_tech", ecommerce: "cossa_tech",
+    digital_marketing: "cossa_ai_growth", lead_generation: "cossa_ai_growth",
+    business_documents: "nexdocs", quotations: "nexdocs", proposals: "nexdocs", contracts: "nexdocs", general: "cossa_nexus_holdings",
   };
-
-  const company =
-    preferred[service] ??
-    "cossa_nexus_holdings";
-
-  if (
-    allowedCompanies.includes(
-      company,
-    )
-  ) {
-    return company;
-  }
-
-  return (
-    allowedCompanies[0] ??
-    "cossa_nexus_holdings"
-  );
+  const preferred = map[service] ?? "cossa_nexus_holdings";
+  return allowed.includes(preferred) ? preferred : allowed[0] ?? "cossa_nexus_holdings";
 }
 
-function inferLocation(
-  request: LeadHunterSearchRequest,
-  candidate: SearchCandidate,
-  inspection: PageInspection,
-): {
-  city: string | null;
-  province: string | null;
-} {
-  const searchable =
-    `${candidate.title} ${candidate.snippet} ${inspection.text.slice(0, 5000)}`.toLowerCase();
+function calculateScores(candidate: SearchCandidate, inspection: PageInspection, signal: ProspectSignal, assessment: CandidateAssessment): ScoreBreakdown {
+  const hasPhone = inspection.phones.length > 0, hasEmail = inspection.emails.length > 0, hasContact = Boolean(inspection.contactPageUrl);
+  const rejected = ["competitor", "directory", "informational", "irrelevant"].includes(assessment.disposition);
+  const fitScore = rejected ? clampScore(assessment.buyerFit) : clampScore(assessment.buyerFit * 0.72 + candidate.providerScore * 22 + assessment.sourceTrust * 0.06);
+  const intentBase = assessment.disposition === "active_opportunity" ? (["active_tender", "request_for_quote", "request_for_proposal"].includes(signal.type) ? 92 : 76) : assessment.disposition === "supplier_opportunity" ? 72 : assessment.disposition === "buyer" ? 32 : assessment.disposition === "partner" ? 38 : 5;
+  const intentScore = clampScore(intentBase + signal.confidence * 0.08);
+  const evidenceScore = clampScore(assessment.sourceTrust * 0.7 + (inspection.fetchSucceeded ? 15 : 0) + (hasPhone || hasEmail || hasContact ? 10 : 0));
+  const timingScore = ["active_tender", "request_for_quote", "request_for_proposal"].includes(signal.type) ? 92 : signal.type === "supplier_registration" ? 72 : ["business_expansion", "new_branch"].includes(signal.type) ? 70 : assessment.disposition === "active_opportunity" ? 65 : assessment.disposition === "buyer" ? 35 : 25;
+  const contactabilityScore = clampScore((hasPhone ? 40 : 0) + (hasEmail ? 35 : 0) + (hasContact ? 20 : 0) + (assessment.probableBuyerRole ? 5 : 0));
+  let totalScore = clampScore(fitScore * 0.28 + intentScore * 0.26 + evidenceScore * 0.2 + timingScore * 0.14 + contactabilityScore * 0.12);
+  if (assessment.disposition === "buyer") totalScore = Math.min(totalScore, 74);
+  if (assessment.disposition === "partner") totalScore = Math.min(totalScore, 58);
+  if (rejected) totalScore = Math.min(totalScore, 25);
+  return { fitScore, intentScore, evidenceScore, timingScore, contactabilityScore, totalScore };
+}
 
-  const matchedLocation =
-    request.locations.find(
-      (location) =>
-        searchable.includes(
-          location.toLowerCase(),
-        ),
-    ) ?? null;
+function classifyProspect(assessment: CandidateAssessment, signal: ProspectSignal, score: number): ProspectClassification {
+  if (["competitor", "directory", "informational", "irrelevant"].includes(assessment.disposition)) return "rejected";
+  if (assessment.disposition === "partner") return "partnership";
+  if (["active_tender", "request_for_quote", "request_for_proposal"].includes(signal.type)) return "tender";
+  if (signal.type === "supplier_registration") return "supplier_opportunity";
+  if (assessment.disposition === "active_opportunity") return "active_opportunity";
+  return score >= 62 ? "qualified_prospect" : "prospect";
+}
 
-  const provinces = [
-    "Gauteng",
-    "Limpopo",
-    "Mpumalanga",
-    "North West",
-    "Free State",
-    "KwaZulu-Natal",
-    "Eastern Cape",
-    "Western Cape",
-    "Northern Cape",
-  ];
-
-  const province =
-    provinces.find(
-      (item) =>
-        searchable.includes(
-          item.toLowerCase(),
-        ),
-    ) ??
-    (matchedLocation === "Gauteng"
-      ? "Gauteng"
-      : null);
+function createProspect(request: LeadHunterSearchRequest, candidate: SearchCandidate, inspection: PageInspection): LeadHunterProspect {
+  const assessment = assessCandidate(request, candidate, inspection);
+  const signal = inferSignal(candidate, inspection, assessment);
+  const service = chooseService(request, candidate, inspection);
+  const scores = calculateScores(candidate, inspection, signal, assessment);
+  const sector: "private" | "government" | "nonprofit" = isGovernmentSource(candidate.url) ? "government" : /\b(church|ministry|nonprofit|ngo|charity|foundation)\b/i.test(`${candidate.title} ${candidate.snippet}`) ? "nonprofit" : "private";
+  const organisationName = cleanText((inspection.title || candidate.title).replace(/\s+[|–—-]\s+.*$/, "").replace(/\b(home|contact us|about us|tenders?|rfq|rfp|official website)\b/gi, " ")) || getHostname(candidate.url);
+  const rejected = ["competitor", "directory", "informational", "irrelevant"].includes(assessment.disposition);
+  const hasContact = Boolean(inspection.phones.length || inspection.emails.length);
+  const evidence: ProspectEvidence[] = [{ type: isGovernmentSource(candidate.url) ? (["active_tender", "request_for_quote", "request_for_proposal"].includes(signal.type) ? "tender_notice" : "government_portal") : /contact/i.test(candidate.url) ? "contact_page" : "official_website", title: candidate.title, url: candidate.url, publisher: getHostname(candidate.url) || null, published_at: candidate.publishedAt, checked_at: inspection.inspectedAt, excerpt: candidate.snippet.slice(0, 900), supports: ["organisation discovery", assessment.disposition, signal.type, candidate.provider] }];
+  if (inspection.contactPageUrl && inspection.contactPageUrl !== candidate.url) evidence.push({ type: "contact_page", title: `${organisationName} public contact page`, url: inspection.contactPageUrl, publisher: getHostname(inspection.contactPageUrl) || null, published_at: null, checked_at: inspection.inspectedAt, excerpt: "Public contact route discovered on the organisation website.", supports: ["public contact route"] });
+  const classification = classifyProspect(assessment, signal, scores.totalScore);
+  const verification_status = rejected ? "rejected" : evidence.length >= 2 && hasContact && scores.evidenceScore >= 70 ? "verified" : "partially_verified";
+  const opportunity_size: OpportunitySize = /\b(framework agreement|multi-year|national|province-wide|major works|large-scale|multi-site)\b/i.test(`${candidate.title} ${candidate.snippet}`) ? "strategic" : sector === "government" && ["active_tender", "request_for_proposal"].includes(signal.type) ? "large" : /\b(minor works|small works|quotation|rfq|repair|once-off)\b/i.test(`${candidate.title} ${candidate.snippet}`) ? "small" : "unknown";
 
   return {
-    city:
-      matchedLocation &&
-      !provinces.includes(
-        matchedLocation,
-      )
-        ? matchedLocation
-        : null,
-    province,
+    id: crypto.randomUUID(), organisation_name: organisationName, trading_name: null, sector,
+    industry: request.industries[0] ?? null, organisation_type: request.organisation_types[0] ?? candidate.targetDescription ?? null,
+    website: inspection.finalUrl || candidate.url, public_phone: rejected ? null : inspection.phones[0] ?? null, public_email: rejected ? null : inspection.emails[0] ?? null, contact_page_url: rejected ? null : inspection.contactPageUrl,
+    contact_name: null, contact_title: assessment.probableBuyerRole,
+    decision_maker_route: sector === "government" ? "Use the official procurement or Supply Chain Management contact in the bid documentation. Confirm the tender number, closing date, submission method and eligibility before acting." : assessment.probableBuyerRole ? `Request the ${assessment.probableBuyerRole} through the organisation’s verified public contact channel.` : hasContact ? "Use the verified public business contact and request the person responsible for procurement, facilities, operations, property, marketing or technology." : "A public decision-maker route still requires verification.",
+    address: null, suburb: null, city: request.locations.find((v) => v.toLowerCase() !== "gauteng" && lowerText(`${candidate.title} ${candidate.snippet} ${inspection.text.slice(0, 4000)}`).includes(v.toLowerCase())) ?? null, province: lowerText(`${candidate.title} ${candidate.snippet} ${inspection.text.slice(0, 4000)}`).includes("gauteng") || request.locations.includes("Gauteng") ? "Gauteng" : null, country: "South Africa",
+    recommended_company: recommendedCompany(service, request.companies), recommended_service: service,
+    service_fit_reason: assessment.disposition === "active_opportunity" ? `${organisationName} has a public signal that may indicate a current requirement for ${serviceLabel(service)}. Open and verify the source before outreach or bidding.` : assessment.disposition === "buyer" ? `${organisationName} matches a buyer category that commonly purchases ${serviceLabel(service)}. No active buying request has been proven.` : assessment.reasons.join(" "),
+    opportunity_summary: rejected ? assessment.reasons.join(" ") : signal.explanation, opportunity_size, estimated_value: null,
+    classification, verification_status, fit_score: scores.fitScore, intent_score: scores.intentScore, evidence_score: scores.evidenceScore, timing_score: scores.timingScore, contactability_score: scores.contactabilityScore, total_score: scores.totalScore,
+    signals: [signal], evidence, primary_source_url: candidate.url, date_verified: inspection.inspectedAt,
+    next_action: rejected ? `Do not save this result as a customer lead. Reason: ${assessment.reasons.join(" ")}` : sector === "government" ? "Open the official notice. Confirm it is active, then record the tender/RFQ number, closing date, briefing, CIDB grading, CSD requirements, submission method and bid/no-bid decision." : assessment.disposition === "active_opportunity" ? `Open the evidence source and verify the requirement. Then contact the ${assessment.probableBuyerRole ?? "relevant decision-maker"} after human approval.` : `Verify the organisation and contact route. Research one specific pain point before preparing outreach to the ${assessment.probableBuyerRole ?? "relevant decision-maker"}.`,
+    outreach_angle: rejected || sector === "government" ? null : assessment.disposition === "active_opportunity" ? "Reference the specific public requirement or expansion signal and offer a short discovery call or site assessment." : "Introduce Cossa briefly, explain one relevant outcome, and offer a low-friction next step.",
+    duplicate_status: "not_checked", duplicate_lead_id: null, rejection_reasons: rejected ? assessment.reasons : [], raw_provider_name: candidate.provider, raw_provider_result_id: null,
   };
 }
 
-function calculateScores({
-  candidate,
-  inspection,
-  signal,
-  assessment,
-}: {
-  candidate: SearchCandidate;
-  inspection: PageInspection;
-  signal: ProspectSignal;
-  assessment: CandidateAssessment;
-}): ScoreBreakdown {
-  const hasPhone =
-    inspection.phones.length > 0;
-
-  const hasEmail =
-    inspection.emails.length > 0;
-
-  const hasContactPage =
-    Boolean(
-      inspection.contactPageUrl,
-    );
-
-  const rejectedDisposition = [
-    "competitor",
-    "directory",
-    "informational",
-    "irrelevant",
-  ].includes(
-    assessment.disposition,
-  );
-
-  const fitScore =
-    rejectedDisposition
-      ? clampScore(
-          assessment.buyerFit,
-        )
-      : clampScore(
-          assessment.buyerFit * 0.75 +
-            candidate.tavilyScore *
-              20 +
-            assessment.sourceTrust *
-              0.05,
-        );
-
-  let intentBase = 18;
-
-  if (
-    assessment.disposition ===
-      "active_opportunity"
-  ) {
-    intentBase = [
-      "active_tender",
-      "request_for_quote",
-      "request_for_proposal",
-    ].includes(signal.type)
-      ? 92
-      : 76;
-  } else if (
-    assessment.disposition ===
-      "supplier_opportunity"
-  ) {
-    intentBase = 72;
-  } else if (
-    assessment.disposition ===
-      "buyer"
-  ) {
-    intentBase = 32;
-  } else if (
-    assessment.disposition ===
-      "partner"
-  ) {
-    intentBase = 38;
-  } else {
-    intentBase = 5;
-  }
-
-  const intentScore =
-    clampScore(
-      intentBase +
-        signal.confidence * 0.08,
-    );
-
-  const evidenceScore =
-    clampScore(
-      assessment.sourceTrust *
-        0.7 +
-        (inspection.fetchSucceeded
-          ? 15
-          : 0) +
-        (
-          hasPhone ||
-          hasEmail ||
-          hasContactPage
-            ? 10
-            : 0
-        ),
-    );
-
-  let timingScore = 25;
-
-  if (
-    [
-      "active_tender",
-      "request_for_quote",
-      "request_for_proposal",
-    ].includes(signal.type)
-  ) {
-    timingScore = 92;
-  } else if (
-    signal.type ===
-    "supplier_registration"
-  ) {
-    timingScore = 72;
-  } else if (
-    signal.type ===
-      "business_expansion" ||
-    signal.type ===
-      "new_branch"
-  ) {
-    timingScore = 68;
-  } else if (
-    assessment.disposition ===
-      "active_opportunity"
-  ) {
-    timingScore = 65;
-  } else if (
-    assessment.disposition ===
-      "buyer"
-  ) {
-    timingScore = 35;
-  }
-
-  const contactabilityScore =
-    clampScore(
-      (hasPhone ? 40 : 0) +
-        (hasEmail ? 35 : 0) +
-        (hasContactPage ? 20 : 0) +
-        (
-          assessment.probableBuyerRole
-            ? 5
-            : 0
-        ),
-    );
-
-  let totalScore = clampScore(
-    fitScore * 0.28 +
-      intentScore * 0.26 +
-      evidenceScore * 0.2 +
-      timingScore * 0.14 +
-      contactabilityScore * 0.12,
-  );
-
-  if (
-    assessment.disposition ===
-      "buyer"
-  ) {
-    totalScore = Math.min(
-      totalScore,
-      74,
-    );
-  }
-
-  if (
-    assessment.disposition ===
-      "partner"
-  ) {
-    totalScore = Math.min(
-      totalScore,
-      55,
-    );
-  }
-
-  if (rejectedDisposition) {
-    totalScore = Math.min(
-      totalScore,
-      25,
-    );
-  }
-
-  return {
-    fitScore,
-    intentScore,
-    evidenceScore,
-    timingScore,
-    contactabilityScore,
-    totalScore,
-  };
-}
-
-function inferOpportunitySize(
-  signal: ProspectSignal,
-  sector:
-    | "private"
-    | "government"
-    | "nonprofit",
-  candidate: SearchCandidate,
-): OpportunitySize {
-  const searchable =
-    `${candidate.title} ${candidate.snippet}`.toLowerCase();
-
-  if (
-    /\b(framework agreement|framework contract|multi-year|national|province-wide|major works|large-scale|multi-site)\b/i.test(
-      searchable,
-    )
-  ) {
-    return "strategic";
-  }
-
-  if (
-    sector === "government" &&
-    [
-      "active_tender",
-      "request_for_proposal",
-    ].includes(signal.type)
-  ) {
-    return "large";
-  }
-
-  if (
-    /\b(minor works|small works|quotation|rfq|repair|once-off)\b/i.test(
-      searchable,
-    )
-  ) {
-    return "small";
-  }
-
-  if (
-    signal.type ===
-    "supplier_registration"
-  ) {
-    return "unknown";
-  }
-
-  return "unknown";
-}
-
-function classifyProspect(
-  assessment: CandidateAssessment,
-  signal: ProspectSignal,
-  totalScore: number,
-): ProspectClassification {
-  if (
-    [
-      "competitor",
-      "directory",
-      "informational",
-      "irrelevant",
-    ].includes(
-      assessment.disposition,
-    )
-  ) {
-    return "rejected";
-  }
-
-  if (
-    assessment.disposition ===
-      "partner"
-  ) {
-    return "partnership";
-  }
-
-  if (
-    [
-      "active_tender",
-      "request_for_quote",
-      "request_for_proposal",
-    ].includes(signal.type)
-  ) {
-    return "tender";
-  }
-
-  if (
-    signal.type ===
-      "supplier_registration"
-  ) {
-    return "supplier_opportunity";
-  }
-
-  if (
-    assessment.disposition ===
-      "active_opportunity"
-  ) {
-    return "active_opportunity";
-  }
-
-  if (totalScore >= 62) {
-    return "qualified_prospect";
-  }
-
-  return "prospect";
-}
-
-function evidenceTypeForCandidate(
-  candidate: SearchCandidate,
-  signal: ProspectSignal,
-  assessment: CandidateAssessment,
-): EvidenceType {
-  if (
-    isGovernmentSource(
-      candidate.url,
-    )
-  ) {
-    if (
-      [
-        "active_tender",
-        "request_for_quote",
-        "request_for_proposal",
-      ].includes(signal.type)
-    ) {
-      return "tender_notice";
-    }
-
-    return "government_portal";
-  }
-
-  if (
-    assessment.disposition ===
-      "directory"
-  ) {
-    return "company_directory";
-  }
-
-  if (
-    /contact/i.test(
-      candidate.url,
-    )
-  ) {
-    return "contact_page";
-  }
-
-  return "official_website";
-}
-
-function createProspect({
-  request,
-  candidate,
-  inspection,
-}: {
-  request: LeadHunterSearchRequest;
-  candidate: SearchCandidate;
-  inspection: PageInspection;
-}): LeadHunterProspect {
-  const assessment =
-    assessCandidate({
-      request,
-      candidate,
-      inspection,
-    });
-
-  const sector =
-    inferSector(candidate);
-
-  const signal =
-    inferSignal(
-      candidate,
-      inspection,
-      assessment,
-    );
-
-  const service =
-    chooseRecommendedService(
-      request,
-      candidate,
-      inspection,
-      assessment,
-    );
-
-  const company =
-    recommendedCompanyForService(
-      service,
-      request.companies,
-    );
-
-  const scores =
-    calculateScores({
-      candidate,
-      inspection,
-      signal,
-      assessment,
-    });
-
-  const organisationName =
-    inferOrganisationName(
-      candidate,
-      inspection,
-    );
-
-  const location =
-    inferLocation(
-      request,
-      candidate,
-      inspection,
-    );
-
-  const evidence:
-    ProspectEvidence[] = [
-    {
-      type:
-        evidenceTypeForCandidate(
-          candidate,
-          signal,
-          assessment,
-        ),
-      title:
-        candidate.title,
-      url:
-        candidate.url,
-      publisher:
-        getHostname(
-          candidate.url,
-        ) || null,
-      published_at:
-        candidate.publishedAt,
-      checked_at:
-        inspection.inspectedAt,
-      excerpt:
-        candidate.snippet.slice(
-          0,
-          900,
-        ),
-      supports: [
-        "organisation discovery",
-        assessment.disposition,
-        signal.type,
-      ],
-    },
-  ];
-
-  if (
-    inspection.contactPageUrl &&
-    inspection.contactPageUrl !==
-      candidate.url
-  ) {
-    evidence.push({
-      type: "contact_page",
-      title:
-        `${organisationName} public contact page`,
-      url:
-        inspection.contactPageUrl,
-      publisher:
-        getHostname(
-          inspection.contactPageUrl,
-        ) || null,
-      published_at: null,
-      checked_at:
-        inspection.inspectedAt,
-      excerpt:
-        "Public contact route discovered on the organisation website.",
-      supports: [
-        "public contact route",
-      ],
-    });
-  }
-
-  const hasContact =
-    inspection.phones.length > 0 ||
-    inspection.emails.length > 0;
-
-  const rejected =
-    [
-      "competitor",
-      "directory",
-      "informational",
-      "irrelevant",
-    ].includes(
-      assessment.disposition,
-    );
-
-  const verificationStatus =
-    rejected
-      ? "rejected"
-      : (
-          evidence.length >= 2 &&
-          hasContact &&
-          scores.evidenceScore >= 70
-        )
-        ? "verified"
-        : "partially_verified";
-
-  const opportunitySize =
-    inferOpportunitySize(
-      signal,
-      sector,
-      candidate,
-    );
-
-  const classification =
-    classifyProspect(
-      assessment,
-      signal,
-      scores.totalScore,
-    );
-
-  const activeOpportunity =
-    assessment.disposition ===
-      "active_opportunity";
-
-  const buyerOnly =
-    assessment.disposition ===
-      "buyer";
-
-  const decisionMakerRoute =
-    sector === "government"
-      ? "Use the official procurement or Supply Chain Management contact in the bid documentation. Confirm the tender number, closing date, submission method and eligibility before acting."
-      : assessment.probableBuyerRole
-        ? `Request the ${assessment.probableBuyerRole} through the organisation’s verified public contact channel.`
-        : hasContact
-          ? "Use the verified public business contact and request the person responsible for procurement, facilities, operations, property, marketing or technology."
-          : "A public decision-maker route still requires verification.";
-
-  const serviceFitReason =
-    activeOpportunity
-      ? `${organisationName} has a public signal that may indicate a current requirement for ${serviceLabel(service)}. The source must still be opened and checked before outreach or bidding.`
-      : buyerOnly
-        ? `${organisationName} matches a buyer category that commonly purchases ${serviceLabel(service)}. No active buying request has been proven, so this is a prospecting lead rather than a confirmed opportunity.`
-        : assessment.reasons.join(" ");
-
-  const nextAction =
-    rejected
-      ? `Do not save this result as a customer lead. Reason: ${assessment.reasons.join(" ")}`
-      : sector === "government"
-        ? "Open the official notice. Confirm that it is still active, then record the tender or RFQ number, closing date, compulsory briefing, CIDB grading, CSD requirements, submission method and bid/no-bid decision."
-        : activeOpportunity
-          ? `Open the evidence source and verify the requirement. Then contact the ${assessment.probableBuyerRole ?? "relevant decision-maker"} using a personalised, evidence-based approach after human approval.`
-          : `Verify the organisation and contact route. Research one specific pain point before preparing outreach to the ${assessment.probableBuyerRole ?? "relevant decision-maker"}.`;
-
-  const outreachAngle =
-    rejected ||
-    sector === "government"
-      ? null
-      : activeOpportunity
-        ? `Reference the specific public requirement or expansion signal. Offer a short discovery call or site assessment without claiming that the organisation requested contact from Cossa.`
-        : `Introduce Cossa briefly, explain one relevant outcome for organisations of this type, and offer a low-friction next step such as a site assessment, website review or short needs discussion.`;
-
-  return {
-    id:
-      crypto.randomUUID(),
-
-    organisation_name:
-      organisationName,
-
-    trading_name: null,
-
-    sector,
-
-    industry:
-      request.industries[0] ??
-      null,
-
-    organisation_type:
-      request.organisation_types[0] ??
-      candidate.targetDescription ??
-      null,
-
-    website:
-      inspection.finalUrl ||
-      candidate.url,
-
-    public_phone:
-      rejected
-        ? null
-        : inspection.phones[0] ??
-          null,
-
-    public_email:
-      rejected
-        ? null
-        : inspection.emails[0] ??
-          null,
-
-    contact_page_url:
-      rejected
-        ? null
-        : inspection.contactPageUrl,
-
-    contact_name: null,
-
-    contact_title:
-      assessment.probableBuyerRole,
-
-    decision_maker_route:
-      decisionMakerRoute,
-
-    address: null,
-    suburb: null,
-    city:
-      location.city,
-    province:
-      location.province,
-    country:
-      "South Africa",
-
-    recommended_company:
-      company,
-
-    recommended_service:
-      service,
-
-    service_fit_reason:
-      serviceFitReason,
-
-    opportunity_summary:
-      rejected
-        ? assessment.reasons.join(
-            " ",
-          )
-        : signal.explanation,
-
-    opportunity_size:
-      opportunitySize,
-
-    estimated_value: null,
-
-    classification,
-
-    verification_status:
-      verificationStatus,
-
-    fit_score:
-      scores.fitScore,
-
-    intent_score:
-      scores.intentScore,
-
-    evidence_score:
-      scores.evidenceScore,
-
-    timing_score:
-      scores.timingScore,
-
-    contactability_score:
-      scores.contactabilityScore,
-
-    total_score:
-      scores.totalScore,
-
-    signals: [signal],
-
-    evidence,
-
-    primary_source_url:
-      candidate.url,
-
-    date_verified:
-      inspection.inspectedAt,
-
-    next_action:
-      nextAction,
-
-    outreach_angle:
-      outreachAngle,
-
-    duplicate_status:
-      "not_checked",
-
-    duplicate_lead_id:
-      null,
-
-    rejection_reasons:
-      rejected
-        ? assessment.reasons
-        : [],
-
-    raw_provider_name:
-      "Tavily",
-
-    raw_provider_result_id:
-      null,
-  };
-}
-
-function prospectKey(
-  prospect: LeadHunterProspect,
-): string {
-  const domain =
-    prospect.website
-      ? rootDomainKey(
-          prospect.website,
-        )
-      : "";
-
-  return (
-    domain ||
-    prospect.organisation_name
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "")
-  );
-}
-
-function filterProspects(
-  prospects: LeadHunterProspect[],
-  request: LeadHunterSearchRequest,
-): LeadHunterProspect[] {
-  const unique =
-    new Map<
-      string,
-      LeadHunterProspect
-    >();
-
+function filterProspects(prospects: LeadHunterProspect[], request: LeadHunterSearchRequest) {
+  const unique = new Map<string, LeadHunterProspect>();
   for (const prospect of prospects) {
-    if (
-      prospect.verification_status ===
-        "rejected" ||
-      prospect.classification ===
-        "rejected"
-    ) {
-      continue;
-    }
-
-    const key =
-      prospectKey(prospect);
-
-    if (!key) {
-      continue;
-    }
-
-    const hasContact =
-      Boolean(
-        prospect.public_phone ||
-        prospect.public_email,
-      );
-
-    if (
-      request.require_public_phone_or_email &&
-      !hasContact
-    ) {
-      continue;
-    }
-
-    if (
-      request.require_website &&
-      !prospect.website
-    ) {
-      continue;
-    }
-
-    if (
-      request.require_opportunity_signal &&
-      prospect.signals.every(
-        (signal) =>
-          signal.type ===
-          "general_fit",
-      )
-    ) {
-      continue;
-    }
-
-    if (
-      prospect.total_score <
-      request.minimum_score
-    ) {
-      continue;
-    }
-
-    if (
-      prospect.evidence.length <
-      request.minimum_evidence_sources
-    ) {
-      continue;
-    }
-
-    const existing =
-      unique.get(key);
-
-    if (
-      !existing ||
-      prospect.total_score >
-        existing.total_score
-    ) {
-      unique.set(
-        key,
-        prospect,
-      );
-    }
+    if (prospect.verification_status === "rejected" || prospect.classification === "rejected") continue;
+    if (request.require_public_phone_or_email && !prospect.public_phone && !prospect.public_email) continue;
+    if (request.require_website && !prospect.website) continue;
+    if (request.require_opportunity_signal && prospect.signals.every((s) => s.type === "general_fit")) continue;
+    if (prospect.total_score < request.minimum_score) continue;
+    if (prospect.evidence.length < request.minimum_evidence_sources) continue;
+    if (request.verified_sources_only && prospect.evidence_score < 55) continue;
+    const key = prospect.website ? getHostname(prospect.website) : prospect.organisation_name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const existing = unique.get(key);
+    if (!existing || prospect.total_score > existing.total_score) unique.set(key, prospect);
   }
-
-  return [...unique.values()]
-    .sort(
-      (first, second) => {
-        const firstActive =
-          first.classification ===
-            "active_opportunity" ||
-          first.classification ===
-            "tender" ||
-          first.classification ===
-            "supplier_opportunity";
-
-        const secondActive =
-          second.classification ===
-            "active_opportunity" ||
-          second.classification ===
-            "tender" ||
-          second.classification ===
-            "supplier_opportunity";
-
-        if (
-          firstActive !== secondActive
-        ) {
-          return Number(secondActive) -
-            Number(firstActive);
-        }
-
-        return (
-          second.total_score -
-          first.total_score
-        );
-      },
-    )
-    .slice(
-      0,
-      request.result_count,
-    );
+  return [...unique.values()].sort((a, b) => {
+    const activeA = ["active_opportunity", "tender", "supplier_opportunity"].includes(a.classification);
+    const activeB = ["active_opportunity", "tender", "supplier_opportunity"].includes(b.classification);
+    return activeA !== activeB ? Number(activeB) - Number(activeA) : b.total_score - a.total_score;
+  }).slice(0, request.result_count);
 }
 
-export const Route =
-  createFileRoute(
-    "/api/lead-hunter/search",
-  )({
-    server: {
-      handlers: {
-        POST: async ({
-          request,
-        }) => {
-          const environment =
-            getEnvironment();
+export const Route = createFileRoute("/api/lead-hunter/search")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const environment = getEnvironment();
+        if (!environment) return new Response("Lead Hunter is not configured. Add Supabase variables and at least one search provider key: TAVILY_API_KEY, SERPAPI_API_KEY or NEWS_API_KEY.", { status: 503 });
 
-          if (!environment) {
-            return new Response(
-              "Lead Hunter is not configured. Add TAVILY_API_KEY and the Supabase environment variables in Vercel.",
-              {
-                status: 503,
-              },
-            );
-          }
+        const token = getBearerToken(request);
+        if (!token) return new Response("Unauthorized", { status: 401 });
+        const user = await verifySupabaseUser(token, environment);
+        if (!user) return new Response("Your session could not be verified. Sign out and sign in again.", { status: 401 });
+        if (!(await verifyOrganisationMembership(token, user.id, environment))) return new Response("You are not authorised to use the Cossa Lead Hunter.", { status: 403 });
 
-          const token =
-            getBearerToken(request);
+        const limit = enforceRateLimit(user.id);
+        if (!limit.allowed) return new Response(`Lead Hunter rate limit reached. Try again in ${limit.retryAfterSeconds} seconds.`, { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } });
 
-          if (!token) {
-            return new Response(
-              "Unauthorized",
-              {
-                status: 401,
-              },
-            );
-          }
+        let rawPayload: unknown;
+        try { rawPayload = await request.json(); } catch { return new Response("Invalid JSON body.", { status: 400 }); }
+        const validation = validateRequest(rawPayload);
+        if (!validation.valid) return new Response(validation.error, { status: 400 });
 
-          const user =
-            await verifySupabaseUser({
-              token,
-              supabaseUrl:
-                environment.supabaseUrl,
-              supabaseKey:
-                environment.supabaseKey,
-            });
+        const searchRequest = validation.request;
+        const plans = createSearchQueries(searchRequest);
+        if (!plans.length) return new Response("No valid search plans could be generated from this hunt.", { status: 400 });
 
-          if (!user) {
-            return new Response(
-              "Your session could not be verified. Sign out and sign in again.",
-              {
-                status: 401,
-              },
-            );
-          }
+        const searchedAt = new Date().toISOString();
+        const warnings: string[] = [];
+        const candidates: SearchCandidate[] = [];
+        const successfulProviders = new Set<SearchProvider>();
 
-          const member =
-            await verifyOrganisationMembership({
-              token,
-              userId: user.id,
-              organisationId:
-                environment.organisationId,
-              supabaseUrl:
-                environment.supabaseUrl,
-              supabaseKey:
-                environment.supabaseKey,
-            });
-
-          if (!member) {
-            return new Response(
-              "You are not authorised to use the Cossa Lead Hunter.",
-              {
-                status: 403,
-              },
-            );
-          }
-
-          const rateLimit =
-            enforceRateLimit(
-              user.id,
-            );
-
-          if (!rateLimit.allowed) {
-            return new Response(
-              `Lead Hunter rate limit reached. Try again in ${rateLimit.retryAfterSeconds} seconds.`,
-              {
-                status: 429,
-                headers: {
-                  "Retry-After":
-                    String(
-                      rateLimit.retryAfterSeconds,
-                    ),
-                },
-              },
-            );
-          }
-
-          let rawPayload: unknown;
-
-          try {
-            rawPayload =
-              await request.json();
-          } catch {
-            return new Response(
-              "Invalid JSON body.",
-              {
-                status: 400,
-              },
-            );
-          }
-
-          const validation =
-            validateRequest(
-              rawPayload,
-            );
-
-          if (!validation.valid) {
-            return new Response(
-              validation.error,
-              {
-                status: 400,
-              },
-            );
-          }
-
-          const searchRequest =
-            validation.request;
-
-          const searchPlans =
-            createSearchQueries(
-              searchRequest,
-            );
-
-          if (
-            searchPlans.length === 0
-          ) {
-            return new Response(
-              "No valid search plans could be generated from this hunt.",
-              {
-                status: 400,
-              },
-            );
-          }
-
-          const searchedAt =
-            new Date().toISOString();
-
-          const warnings: string[] =
-            [];
-
-          const providerResults =
-            await Promise.allSettled(
-              searchPlans.map(
-                (plan) =>
-                  tavilySearch({
-                    plan,
-                    apiKey:
-                      environment.tavilyApiKey,
-                  }),
-              ),
-            );
-
-          const candidates:
-            SearchCandidate[] = [];
-
-          for (
-            let index = 0;
-            index <
-            providerResults.length;
-            index += 1
-          ) {
-            const result =
-              providerResults[index];
-
-            if (
-              result.status ===
-              "fulfilled"
-            ) {
-              candidates.push(
-                ...result.value,
-              );
-            } else {
-              warnings.push(
-                `Search failed for: ${searchPlans[index]?.query ?? "unknown query"}`,
-              );
-
-              console.error(
-                "Lead Hunter provider error:",
-                result.reason,
-              );
+        const executions = await Promise.all(plans.map((plan) => executePlan(plan, environment)));
+        for (const group of executions) {
+          for (const result of group) {
+            if (result.warning) warnings.push(result.warning);
+            if (result.candidates.length) {
+              successfulProviders.add(result.provider);
+              candidates.push(...result.candidates);
             }
           }
+        }
 
-          const uniqueCandidates =
-            deduplicateCandidates(
-              candidates,
-            ).slice(
-              0,
-              MAX_SOURCE_PAGES_TO_INSPECT,
-            );
+        const uniqueCandidates = deduplicateCandidates(candidates).slice(0, MAX_SOURCE_PAGES_TO_INSPECT);
+        if (!uniqueCandidates.length) {
+          const empty: LeadHunterSearchResponse = {
+            hunt_id: crypto.randomUUID(), status: "completed", searched_at: searchedAt, completed_at: new Date().toISOString(), request: searchRequest,
+            prospects: [], source_count: 0, accepted_count: 0, rejected_count: 0,
+            warnings: [...warnings.slice(0, 12), "No public search results matched this hunt. Broaden the location, buyer type, service or minimum-score filters."],
+            providers_used: [...successfulProviders, "Cossa buyer-intelligence qualification"],
+          };
+          return Response.json(empty, { headers: { "Cache-Control": "no-store" } });
+        }
 
-          if (
-            uniqueCandidates.length ===
-            0
-          ) {
-            const emptyResponse:
-              LeadHunterSearchResponse =
-              {
-                hunt_id:
-                  crypto.randomUUID(),
-                status: "completed",
-                searched_at:
-                  searchedAt,
-                completed_at:
-                  new Date().toISOString(),
-                request:
-                  searchRequest,
-                prospects: [],
-                source_count: 0,
-                accepted_count: 0,
-                rejected_count: 0,
-                warnings: [
-                  ...warnings,
-                  "No public search results matched this hunt. Broaden the location, buyer type or service filters.",
-                ],
-                providers_used: [
-                  "Tavily",
-                ],
-              };
+        const inspections = await Promise.all(uniqueCandidates.map((candidate) => inspectSourcePage(candidate.url)));
+        const rawProspects = uniqueCandidates.map((candidate, index) => createProspect(searchRequest, candidate, inspections[index]));
+        const acceptedProspects = filterProspects(rawProspects, searchRequest);
+        const rejectedCompetitors = rawProspects.filter((p) => p.rejection_reasons.some((r) => r.toLowerCase().includes("same service"))).length;
+        const rejectedDirectories = rawProspects.filter((p) => p.rejection_reasons.some((r) => r.toLowerCase().includes("directory"))).length;
+        const rejectedInformational = rawProspects.filter((p) => p.rejection_reasons.some((r) => r.toLowerCase().includes("informational"))).length;
 
-            return Response.json(
-              emptyResponse,
-              {
-                headers: {
-                  "Cache-Control":
-                    "no-store",
-                },
-              },
-            );
-          }
+        const responsePayload: LeadHunterSearchResponse = {
+          hunt_id: crypto.randomUUID(), status: "completed", searched_at: searchedAt, completed_at: new Date().toISOString(), request: searchRequest,
+          prospects: acceptedProspects, source_count: uniqueCandidates.length, accepted_count: acceptedProspects.length, rejected_count: rawProspects.length - acceptedProspects.length,
+          warnings: [
+            ...warnings.slice(0, 12),
+            `Quality control rejected ${rejectedCompetitors} apparent competitors, ${rejectedDirectories} directories or aggregators, and ${rejectedInformational} informational pages.`,
+            ...(acceptedProspects.length === 0 ? ["Search results were found, but none met the buyer-fit, evidence, intent and score requirements. Reduce minimum score or turn off Require Opportunity Signal for broader prospecting."] : []),
+            "A qualified prospect is not automatically an active buyer. Only records with supported procurement, expansion or service-requirement evidence should be treated as active opportunities.",
+            "Public contact details must be used only for lawful, relevant and respectful business outreach.",
+            "Human verification is required before outreach, quotation preparation, tender submission or commitment.",
+          ],
+          providers_used: [...successfulProviders, "Cossa buyer-intelligence qualification", ...(searchRequest.include_government_sector ? ["Official South African government and eTender sources discovered through search"] : [])],
+        };
 
-          const inspections =
-            await Promise.all(
-              uniqueCandidates.map(
-                (candidate) =>
-                  inspectSourcePage(
-                    candidate.url,
-                  ),
-              ),
-            );
-
-          const rawProspects =
-            uniqueCandidates.map(
-              (
-                candidate,
-                index,
-              ) =>
-                createProspect({
-                  request:
-                    searchRequest,
-                  candidate,
-                  inspection:
-                    inspections[index],
-                }),
-            );
-
-          const acceptedProspects =
-            filterProspects(
-              rawProspects,
-              searchRequest,
-            );
-
-          const rejectedCompetitors =
-            rawProspects.filter(
-              (prospect) =>
-                prospect.rejection_reasons.some(
-                  (reason) =>
-                    reason
-                      .toLowerCase()
-                      .includes(
-                        "same service",
-                      ),
-                ),
-            ).length;
-
-          const rejectedDirectories =
-            rawProspects.filter(
-              (prospect) =>
-                prospect.rejection_reasons.some(
-                  (reason) =>
-                    reason
-                      .toLowerCase()
-                      .includes(
-                        "directory",
-                      ),
-                ),
-            ).length;
-
-          const rejectedInformational =
-            rawProspects.filter(
-              (prospect) =>
-                prospect.rejection_reasons.some(
-                  (reason) =>
-                    reason
-                      .toLowerCase()
-                      .includes(
-                        "informational",
-                      ),
-                ),
-            ).length;
-
-          const responsePayload:
-            LeadHunterSearchResponse =
-            {
-              hunt_id:
-                crypto.randomUUID(),
-
-              status: "completed",
-
-              searched_at:
-                searchedAt,
-
-              completed_at:
-                new Date().toISOString(),
-
-              request:
-                searchRequest,
-
-              prospects:
-                acceptedProspects,
-
-              source_count:
-                uniqueCandidates.length,
-
-              accepted_count:
-                acceptedProspects.length,
-
-              rejected_count:
-                rawProspects.length -
-                acceptedProspects.length,
-
-              warnings: [
-                ...warnings,
-
-                `Quality control rejected ${rejectedCompetitors} apparent competitors, ${rejectedDirectories} directories or aggregators, and ${rejectedInformational} informational pages.`,
-
-                ...(acceptedProspects.length ===
-                0
-                  ? [
-                      "Search results were found, but none met the buyer-fit, evidence, intent and score requirements.",
-                    ]
-                  : []),
-
-                "A qualified prospect is not automatically an active buyer. Only records with supported procurement, expansion or service-requirement evidence should be treated as active opportunities.",
-
-                "Public contact details must be used only for lawful, relevant and respectful business outreach.",
-
-                "Human verification is required before outreach, quotation preparation, tender submission or commitment.",
-              ],
-
-              providers_used: [
-                "Tavily",
-
-                "Cossa buyer-intelligence qualification",
-
-                ...(searchRequest.include_government_sector
-                  ? [
-                      "Official South African government and eTender sources discovered through search",
-                    ]
-                  : []),
-              ],
-            };
-
-          return Response.json(
-            responsePayload,
-            {
-              headers: {
-                "Cache-Control":
-                  "no-store",
-              },
-            },
-          );
-        },
+        return Response.json(responsePayload, { headers: { "Cache-Control": "no-store" } });
       },
     },
-  });
+  },
+});
