@@ -8,7 +8,8 @@
 // - Request verified public prospect research from a secure server endpoint.
 // - Validate returned evidence before displaying or saving prospects.
 // - Reject invented, incomplete or unsupported prospect records.
-// - Score prospects consistently.
+// - Preserve server-side scoring and server-normalised hunt instructions.
+// - Reconcile explicit natural-language mission instructions with UI selections.
 // - Detect likely duplicates in the existing Growth CRM.
 // - Save approved prospects into the existing public.leads table.
 //
@@ -272,10 +273,6 @@ export interface LeadHunterProspect {
   contactability_score: number;
   total_score: number;
 
-  /*
-   * Commercial scores are safe defaults until the server returns
-   * richer revenue intelligence.
-   */
   revenue_potential_score: number;
   ease_to_close_score: number;
   recurring_revenue_score: number;
@@ -336,12 +333,6 @@ export interface LeadHunterSearchRequest {
   exclude_existing_crm_leads: boolean;
   notes: string | null;
 
-  /*
-   * Lead Hunter v2 controls.
-   *
-   * These fields remain optional for temporary compatibility with the
-   * current server route. validateSearchRequest always supplies values.
-   */
   search_instruction?: string | null;
 
   search_scope?: LeadHunterSearchScope;
@@ -661,10 +652,6 @@ export const REVENUE_MODE_OPTIONS: Array<{
   },
 ];
 
-/**
- * Hunting strategies are opportunity hypotheses—not claims that a prospect
- * exists or needs a service. Every returned prospect still requires evidence.
- */
 export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
   {
     id: "first-paying-customers",
@@ -1600,7 +1587,8 @@ export const DEFAULT_LEAD_HUNTER_REQUEST: LeadHunterSearchRequest = {
   easy_wins_only: true,
   revenue_first: true,
 
-  max_search_queries: DEFAULT_MAX_SEARCH_QUERIES,
+  // Economy must actually remain Economy.
+  max_search_queries: 3,
 
   use_cached_results: true,
   cache_max_age_hours: DEFAULT_SEARCH_CACHE_HOURS,
@@ -1610,14 +1598,22 @@ export const DEFAULT_LEAD_HUNTER_REQUEST: LeadHunterSearchRequest = {
   exclude_expired_procurement: true,
 };
 
-function cleanText(value: unknown): string | null {
-  if (typeof value !== "string") {
+function cleanText(
+  value: unknown,
+): string | null {
+  if (
+    typeof value !== "string"
+  ) {
     return null;
   }
 
-  const cleaned = value
-    .replace(/\s+/g, " ")
-    .trim();
+  const cleaned =
+    value
+      .replace(
+        /\s+/g,
+        " ",
+      )
+      .trim();
 
   return cleaned || null;
 }
@@ -1626,82 +1622,137 @@ function cleanLongText(
   value: unknown,
   maximumLength: number,
 ): string | null {
-  const text = cleanText(value);
+  const text =
+    cleanText(
+      value,
+    );
 
   if (!text) {
     return null;
   }
 
-  return text.slice(0, maximumLength);
+  return text.slice(
+    0,
+    maximumLength,
+  );
 }
 
-function lowerText(value: unknown): string {
-  return cleanText(value)?.toLowerCase() ?? "";
+function lowerText(
+  value: unknown,
+): string {
+  return (
+    cleanText(
+      value,
+    )?.toLowerCase() ??
+    ""
+  );
 }
 
 function uniqueTexts(
   values: unknown,
   maximumItems = 50,
 ): string[] {
-  if (!Array.isArray(values)) {
+  if (
+    !Array.isArray(
+      values,
+    )
+  ) {
     return [];
   }
 
   return [
     ...new Set(
       values
-        .map(cleanText)
+        .map(
+          cleanText,
+        )
         .filter(
-          (value): value is string =>
-            Boolean(value),
+          (
+            value,
+          ): value is string =>
+            Boolean(
+              value,
+            ),
         ),
     ),
-  ].slice(0, maximumItems);
+  ].slice(
+    0,
+    maximumItems,
+  );
 }
 
-function normaliseEmail(value: unknown): string | null {
-  const email = lowerText(value);
+function normaliseEmail(
+  value: unknown,
+): string | null {
+  const email =
+    lowerText(
+      value,
+    );
 
   if (!email) {
     return null;
   }
 
   const valid =
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      email,
+    );
 
-  return valid ? email : null;
+  return valid
+    ? email
+    : null;
 }
 
-function normalisePhone(value: unknown): string | null {
-  const text = cleanText(value);
+function normalisePhone(
+  value: unknown,
+): string | null {
+  const text =
+    cleanText(
+      value,
+    );
 
   if (!text) {
     return null;
   }
 
-  const phone = text.replace(/[^\d+]/g, "");
+  const phone =
+    text.replace(
+      /[^\d+]/g,
+      "",
+    );
 
   return phone.length >= 9
     ? phone
     : null;
 }
 
-function normaliseWebsite(value: unknown): string | null {
-  const text = cleanText(value);
+function normaliseWebsite(
+  value: unknown,
+): string | null {
+  const text =
+    cleanText(
+      value,
+    );
 
   if (!text) {
     return null;
   }
 
   try {
-    const url = new URL(
-      text.startsWith("http")
-        ? text
-        : `https://${text}`,
-    );
+    const url =
+      new URL(
+        text.startsWith(
+          "http",
+        )
+          ? text
+          : `https://${text}`,
+      );
 
     if (
-      !["http:", "https:"].includes(
+      ![
+        "http:",
+        "https:",
+      ].includes(
         url.protocol,
       )
     ) {
@@ -1714,10 +1765,19 @@ function normaliseWebsite(value: unknown): string | null {
   }
 }
 
-function clampScore(value: unknown): number {
-  const score = Number(value);
+function clampScore(
+  value: unknown,
+): number {
+  const score =
+    Number(
+      value,
+    );
 
-  if (!Number.isFinite(score)) {
+  if (
+    !Number.isFinite(
+      score,
+    )
+  ) {
     return 0;
   }
 
@@ -1725,12 +1785,16 @@ function clampScore(value: unknown): number {
     0,
     Math.min(
       100,
-      Math.round(score),
+      Math.round(
+        score,
+      ),
     ),
   );
 }
 
-function safeNumber(value: unknown): number | null {
+function safeNumber(
+  value: unknown,
+): number | null {
   if (
     value === null ||
     value === undefined ||
@@ -1739,9 +1803,14 @@ function safeNumber(value: unknown): number | null {
     return null;
   }
 
-  const number = Number(value);
+  const number =
+    Number(
+      value,
+    );
 
-  return Number.isFinite(number)
+  return Number.isFinite(
+    number,
+  )
     ? number
     : null;
 }
@@ -1750,25 +1819,44 @@ function safeBoolean(
   value: unknown,
   fallback: boolean,
 ): boolean {
-  return typeof value === "boolean"
+  return typeof value ===
+    "boolean"
     ? value
     : fallback;
 }
 
-function isValidPublicUrl(value: unknown): boolean {
-  return normaliseWebsite(value) !== null;
+function isValidPublicUrl(
+  value: unknown,
+): boolean {
+  return (
+    normaliseWebsite(
+      value,
+    ) !== null
+  );
 }
 
 function samePhone(
   first: string | null,
   second: string | null,
 ): boolean {
-  if (!first || !second) {
+  if (
+    !first ||
+    !second
+  ) {
     return false;
   }
 
-  const a = first.replace(/\D/g, "");
-  const b = second.replace(/\D/g, "");
+  const a =
+    first.replace(
+      /\D/g,
+      "",
+    );
+
+  const b =
+    second.replace(
+      /\D/g,
+      "",
+    );
 
   if (
     a.length < 9 ||
@@ -1779,7 +1867,8 @@ function samePhone(
 
   return (
     a === b ||
-    a.slice(-9) === b.slice(-9)
+    a.slice(-9) ===
+      b.slice(-9)
   );
 }
 
@@ -1799,33 +1888,51 @@ function similarCompanyName(
   first: string,
   second: string,
 ): boolean {
-  const normalise = (value: string) =>
-    value
-      .toLowerCase()
-      .replace(
-        /\b(pty|ltd|limited|inc|cc|company|holdings)\b/g,
-        "",
-      )
-      .replace(/[^a-z0-9]/g, "");
+  const normalise =
+    (value: string) =>
+      value
+        .toLowerCase()
+        .replace(
+          /\b(pty|ltd|limited|inc|cc|company|holdings)\b/g,
+          "",
+        )
+        .replace(
+          /[^a-z0-9]/g,
+          "",
+        );
 
-  const a = normalise(first);
-  const b = normalise(second);
+  const a =
+    normalise(
+      first,
+    );
+
+  const b =
+    normalise(
+      second,
+    );
 
   return Boolean(
     a &&
       b &&
       (
         a === b ||
-        a.includes(b) ||
-        b.includes(a)
+        a.includes(
+          b,
+        ) ||
+        b.includes(
+          a,
+        )
       ),
   );
 }
 
-function createClientId(): string {
+function createClientId():
+  string {
   if (
-    typeof crypto !== "undefined" &&
-    "randomUUID" in crypto
+    typeof crypto !==
+      "undefined" &&
+    "randomUUID" in
+      crypto
   ) {
     return crypto.randomUUID();
   }
@@ -1836,25 +1943,36 @@ function createClientId(): string {
 }
 
 export function isPhysicalService(
-  service: LeadHunterServiceCategory,
+  service:
+    LeadHunterServiceCategory,
 ): boolean {
-  return PHYSICAL_SERVICE_CATEGORIES.includes(service);
+  return PHYSICAL_SERVICE_CATEGORIES.includes(
+    service,
+  );
 }
 
 export function isRemoteService(
-  service: LeadHunterServiceCategory,
+  service:
+    LeadHunterServiceCategory,
 ): boolean {
-  return REMOTE_SERVICE_CATEGORIES.includes(service);
+  return REMOTE_SERVICE_CATEGORIES.includes(
+    service,
+  );
 }
 
 export function inferDeliveryModel(
-  services: LeadHunterServiceCategory[],
+  services:
+    LeadHunterServiceCategory[],
 ): LeadHunterDeliveryModel {
   const containsPhysical =
-    services.some(isPhysicalService);
+    services.some(
+      isPhysicalService,
+    );
 
   const containsRemote =
-    services.some(isRemoteService);
+    services.some(
+      isRemoteService,
+    );
 
   if (
     containsPhysical &&
@@ -1863,11 +1981,15 @@ export function inferDeliveryModel(
     return "hybrid";
   }
 
-  if (containsPhysical) {
+  if (
+    containsPhysical
+  ) {
     return "physical";
   }
 
-  if (containsRemote) {
+  if (
+    containsRemote
+  ) {
     return "remote";
   }
 
@@ -1875,15 +1997,879 @@ export function inferDeliveryModel(
 }
 
 export function maxQueriesForDepth(
-  depth: LeadHunterSearchDepth,
+  depth:
+    LeadHunterSearchDepth,
 ): number {
   return (
     SEARCH_DEPTH_OPTIONS.find(
-      (option) =>
-        option.value === depth,
+      (
+        option,
+      ) =>
+        option.value ===
+        depth,
     )?.maximumQueries ??
     DEFAULT_MAX_SEARCH_QUERIES
   );
+}
+
+/*
+ * Extract structured mission fields.
+ *
+ * Supports instructions such as:
+ *
+ * Company: Cossa Nexus Construction
+ * Services: Construction Renovation Property Maintenance
+ * Location: Pretoria Centurion Gauteng
+ * Results: 10
+ * Minimum score: 50
+ * Private sector: YES
+ * Government: NO
+ */
+function extractMissionField(
+  instruction: string,
+  field:
+    | "Company"
+    | "Services"
+    | "Location"
+    | "Results"
+    | "Minimum score"
+    | "Private sector"
+    | "Government"
+    | "Require opportunity signal",
+): string | null {
+  const boundary =
+    "(?=\\s+(?:Company|Services?|Location|Results?|Minimum score|Private sector|Government|Require opportunity signal)\\s*:|$)";
+
+  const pattern =
+    new RegExp(
+      `${field}\\s*:\\s*(.+?)${boundary}`,
+      "i",
+    );
+
+  return cleanText(
+    instruction.match(
+      pattern,
+    )?.[1],
+  );
+}
+
+function inferCompaniesFromInstruction(
+  instruction: string,
+): LeadHunterCompany[] {
+  const matches:
+    LeadHunterCompany[] =
+    [];
+
+  const companyField =
+    extractMissionField(
+      instruction,
+      "Company",
+    );
+
+  const searchable =
+    companyField ??
+    instruction;
+
+  const patterns: Array<{
+    company:
+      LeadHunterCompany;
+    pattern: RegExp;
+  }> = [
+    {
+      company:
+        "cossa_nexus_construction",
+      pattern:
+        /\bcossa\s+nexus\s+construction(?:s)?\b/i,
+    },
+    {
+      company:
+        "cossa_facility_services",
+      pattern:
+        /\bcossa\s+facility\s+services\b/i,
+    },
+    {
+      company:
+        "cossa_tech",
+      pattern:
+        /\bcossa\s+tech\b/i,
+    },
+    {
+      company:
+        "cossa_ai_growth",
+      pattern:
+        /\bcossa\s+ai\s+growth\b/i,
+    },
+    {
+      company:
+        "nexdocs",
+      pattern:
+        /\bnexdocs\b/i,
+    },
+    {
+      company:
+        "cossa_store",
+      pattern:
+        /\bcossa\s+store\b/i,
+    },
+    {
+      company:
+        "cossa_nexus_holdings",
+      pattern:
+        /\bcossa\s+nexus\s+holdings\b/i,
+    },
+  ];
+
+  for (
+    const item of
+    patterns
+  ) {
+    if (
+      item.pattern.test(
+        searchable,
+      )
+    ) {
+      matches.push(
+        item.company,
+      );
+    }
+  }
+
+  return [
+    ...new Set(
+      matches,
+    ),
+  ];
+}
+
+function inferServicesFromInstruction(
+  instruction: string,
+): LeadHunterServiceCategory[] {
+  const serviceField =
+    extractMissionField(
+      instruction,
+      "Services",
+    );
+
+  /*
+   * If a structured Services: field exists, it becomes authoritative.
+   * Otherwise we examine the natural-language instruction.
+   */
+  const searchable =
+    serviceField ??
+    instruction;
+
+  const matches:
+    LeadHunterServiceCategory[] =
+    [];
+
+  const patterns: Array<{
+    service:
+      LeadHunterServiceCategory;
+    pattern: RegExp;
+  }> = [
+    {
+      service:
+        "construction",
+      pattern:
+        /\bconstruction\b/i,
+    },
+    {
+      service:
+        "renovation",
+      pattern:
+        /\brenovation(?:s)?\b|\brefurbishment\b/i,
+    },
+    {
+      service:
+        "property_maintenance",
+      pattern:
+        /\bproperty\s+maintenance\b|\bmaintenance\s+services?\b/i,
+    },
+    {
+      service:
+        "painting",
+      pattern:
+        /\bpainting\b|\brepainting\b/i,
+    },
+    {
+      service:
+        "tiling",
+      pattern:
+        /\btiling\b/i,
+    },
+    {
+      service:
+        "ceilings",
+      pattern:
+        /\bceilings?\b/i,
+    },
+    {
+      service:
+        "roofing",
+      pattern:
+        /\broofing\b|\broof repairs?\b/i,
+    },
+    {
+      service:
+        "plumbing",
+      pattern:
+        /\bplumbing\b/i,
+    },
+    {
+      service:
+        "facility_management",
+      pattern:
+        /\bfacilit(?:y|ies)\s+management\b/i,
+    },
+    {
+      service:
+        "commercial_cleaning",
+      pattern:
+        /\bcommercial\s+cleaning\b/i,
+    },
+    {
+      service:
+        "deep_cleaning",
+      pattern:
+        /\bdeep\s+cleaning\b/i,
+    },
+    {
+      service:
+        "hygiene",
+      pattern:
+        /\bhygiene\b|\bsanitation\b/i,
+    },
+    {
+      service:
+        "landscaping",
+      pattern:
+        /\blandscaping\b|\bgarden services?\b/i,
+    },
+    {
+      service:
+        "waste_management",
+      pattern:
+        /\bwaste\s+management\b/i,
+    },
+    {
+      service:
+        "website_design",
+      pattern:
+        /\bwebsite\s+(?:design|redesign|development|upgrade)\b|\bweb\s+design\b/i,
+    },
+    {
+      service:
+        "logo_design",
+      pattern:
+        /\blogo\s+(?:design|redesign|upgrade)\b/i,
+    },
+    {
+      service:
+        "branding",
+      pattern:
+        /\bbranding\b|\bbrand\s+identity\b/i,
+    },
+    {
+      service:
+        "seo",
+      pattern:
+        /\bseo\b|\bsearch engine optimi[sz]ation\b/i,
+    },
+    {
+      service:
+        "digital_marketing",
+      pattern:
+        /\bdigital\s+marketing\b/i,
+    },
+    {
+      service:
+        "social_media_management",
+      pattern:
+        /\bsocial\s+media\s+management\b/i,
+    },
+    {
+      service:
+        "google_business_profile",
+      pattern:
+        /\bgoogle\s+business\s+profile\b|\bgbp\b/i,
+    },
+    {
+      service:
+        "lead_generation",
+      pattern:
+        /\blead\s+generation\b/i,
+    },
+    {
+      service:
+        "crm",
+      pattern:
+        /\bcrm\b|\bcustomer relationship management\b/i,
+    },
+    {
+      service:
+        "ai_automation",
+      pattern:
+        /\bai\s+automation\b|\bworkflow\s+automation\b/i,
+    },
+    {
+      service:
+        "business_documents",
+      pattern:
+        /\bbusiness\s+documents?\b/i,
+    },
+    {
+      service:
+        "quotations",
+      pattern:
+        /\bquotations?\b|\bquote systems?\b/i,
+    },
+    {
+      service:
+        "proposals",
+      pattern:
+        /\bproposals?\b/i,
+    },
+    {
+      service:
+        "contracts",
+      pattern:
+        /\bcontracts?\b|\bcontract documents?\b/i,
+    },
+    {
+      service:
+        "ecommerce",
+      pattern:
+        /\be-?commerce\b|\bonline store\b/i,
+    },
+  ];
+
+  for (
+    const item of
+    patterns
+  ) {
+    if (
+      item.pattern.test(
+        searchable,
+      )
+    ) {
+      matches.push(
+        item.service,
+      );
+    }
+  }
+
+  return [
+    ...new Set(
+      matches,
+    ),
+  ];
+}
+
+function inferLocationsFromInstruction(
+  instruction: string,
+): string[] {
+  const locationField =
+    extractMissionField(
+      instruction,
+      "Location",
+    );
+
+  if (
+    locationField
+  ) {
+    return [
+      ...new Set(
+        locationField
+          .split(
+            /[,;|]+|\s+(?:and|&)\s+/i,
+          )
+          .map(
+            (
+              item,
+            ) =>
+              cleanText(
+                item,
+              ),
+          )
+          .filter(
+            (
+              item,
+            ): item is string =>
+              Boolean(
+                item,
+              ),
+          ),
+      ),
+    ].slice(
+      0,
+      25,
+    );
+  }
+
+  const knownLocations =
+    [
+      ...PRIORITY_GAUTENG_LOCATIONS,
+      ...SOUTH_AFRICAN_PROVINCES,
+      "South Africa",
+    ];
+
+  return knownLocations.filter(
+    (
+      location,
+    ) =>
+      new RegExp(
+        `\\b${location.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&",
+        )}\\b`,
+        "i",
+      ).test(
+        instruction,
+      ),
+  );
+}
+
+/*
+ * Natural-language mission reconciliation.
+ *
+ * This does NOT attempt unrestricted AI guessing.
+ * It only applies explicit, high-confidence instructions.
+ *
+ * Therefore:
+ * "Company: Cossa Nexus Construction"
+ * really searches Construction.
+ *
+ * "Government: NO"
+ * really disables government.
+ *
+ * "Services: Construction Renovation Property Maintenance"
+ * really removes unrelated cleaning/marketing/technology services.
+ */
+function applyInstructionIntent(
+  request:
+    Partial<LeadHunterSearchRequest>,
+): Partial<LeadHunterSearchRequest> {
+  const instruction =
+    cleanLongText(
+      request.search_instruction,
+      MAX_CUSTOM_SEARCH_INSTRUCTION_LENGTH,
+    );
+
+  if (
+    !instruction
+  ) {
+    return request;
+  }
+
+  const next:
+    Partial<LeadHunterSearchRequest> =
+    {
+      ...request,
+
+      search_instruction:
+        instruction,
+    };
+
+  const inferredCompanies =
+    inferCompaniesFromInstruction(
+      instruction,
+    );
+
+  if (
+    inferredCompanies.length >
+    0
+  ) {
+    next.companies =
+      inferredCompanies;
+  }
+
+  const inferredServices =
+    inferServicesFromInstruction(
+      instruction,
+    );
+
+  if (
+    inferredServices.length >
+    0
+  ) {
+    next.services =
+      inferredServices;
+  }
+
+  const inferredLocations =
+    inferLocationsFromInstruction(
+      instruction,
+    );
+
+  if (
+    inferredLocations.length >
+    0
+  ) {
+    next.locations =
+      inferredLocations;
+  }
+
+  const privateField =
+    extractMissionField(
+      instruction,
+      "Private sector",
+    );
+
+  const governmentField =
+    extractMissionField(
+      instruction,
+      "Government",
+    );
+
+  const privateFieldValue =
+    privateField?.toLowerCase();
+
+  const governmentFieldValue =
+    governmentField?.toLowerCase();
+
+  const explicitPrivateOnly =
+    /\bprivate[\s-]*sector\s+only\b/i.test(
+      instruction,
+    ) ||
+    /\bdo not search government\b/i.test(
+      instruction,
+    ) ||
+    /\bno government\b/i.test(
+      instruction,
+    ) ||
+    [
+      "no",
+      "false",
+      "off",
+    ].includes(
+      governmentFieldValue ??
+      "",
+    );
+
+  const explicitGovernmentOnly =
+    /\bgovernment[\s-]*sector\s+only\b/i.test(
+      instruction,
+    ) ||
+    /\bgovernment opportunities only\b/i.test(
+      instruction,
+    ) ||
+    [
+      "no",
+      "false",
+      "off",
+    ].includes(
+      privateFieldValue ??
+      "",
+    );
+
+  if (
+    explicitPrivateOnly &&
+    !explicitGovernmentOnly
+  ) {
+    next.sector =
+      "private";
+
+    next.include_private_sector =
+      true;
+
+    next.include_government_sector =
+      false;
+
+    next.include_nonprofits =
+      false;
+  } else if (
+    explicitGovernmentOnly &&
+    !explicitPrivateOnly
+  ) {
+    next.sector =
+      "government";
+
+    next.include_private_sector =
+      false;
+
+    next.include_government_sector =
+      true;
+
+    next.include_nonprofits =
+      false;
+  }
+
+  /*
+   * Handle explicit exclusion clauses.
+   *
+   * Example:
+   * "Do not search government, cleaning, technology, marketing,
+   * branding or NexDocs opportunities."
+   */
+  const negativeClauses =
+    instruction.match(
+      /\b(?:do not|don't|exclude|without|no)\b[^.!;\n]*/gi,
+    ) ??
+    [];
+
+  const negativeText =
+    negativeClauses
+      .join(" ")
+      .toLowerCase();
+
+  const excludedServices =
+    new Set<
+      LeadHunterServiceCategory
+    >();
+
+  if (
+    /\bcleaning\b/.test(
+      negativeText,
+    )
+  ) {
+    excludedServices.add(
+      "commercial_cleaning",
+    );
+
+    excludedServices.add(
+      "deep_cleaning",
+    );
+
+    excludedServices.add(
+      "hygiene",
+    );
+  }
+
+  if (
+    /\btechnology\b|\btech\b/.test(
+      negativeText,
+    )
+  ) {
+    const technologyServices:
+      LeadHunterServiceCategory[] =
+      [
+        "website_design",
+        "crm",
+        "ai_automation",
+        "ecommerce",
+        "google_business_profile",
+      ];
+
+    for (
+      const service of
+      technologyServices
+    ) {
+      excludedServices.add(
+        service,
+      );
+    }
+  }
+
+  if (
+    /\bmarketing\b/.test(
+      negativeText,
+    )
+  ) {
+    const marketingServices:
+      LeadHunterServiceCategory[] =
+      [
+        "seo",
+        "digital_marketing",
+        "social_media_management",
+        "lead_generation",
+        "google_business_profile",
+      ];
+
+    for (
+      const service of
+      marketingServices
+    ) {
+      excludedServices.add(
+        service,
+      );
+    }
+  }
+
+  if (
+    /\bbranding\b|\blogo\b/.test(
+      negativeText,
+    )
+  ) {
+    excludedServices.add(
+      "logo_design",
+    );
+
+    excludedServices.add(
+      "branding",
+    );
+  }
+
+  if (
+    /\bnexdocs\b|\bbusiness documents?\b/.test(
+      negativeText,
+    )
+  ) {
+    const documentServices:
+      LeadHunterServiceCategory[] =
+      [
+        "business_documents",
+        "quotations",
+        "proposals",
+        "contracts",
+      ];
+
+    for (
+      const service of
+      documentServices
+    ) {
+      excludedServices.add(
+        service,
+      );
+    }
+
+    if (
+      next.companies
+    ) {
+      next.companies =
+        next.companies.filter(
+          (
+            company,
+          ) =>
+            company !==
+            "nexdocs",
+        );
+    }
+  }
+
+  if (
+    next.services &&
+    excludedServices.size >
+      0
+  ) {
+    const filtered =
+      next.services.filter(
+        (
+          service,
+        ) =>
+          !excludedServices.has(
+            service,
+          ),
+      );
+
+    /*
+     * Never turn the hunt into an empty service list accidentally.
+     * Only apply exclusions if at least one valid requested service remains.
+     */
+    if (
+      filtered.length >
+      0
+    ) {
+      next.services =
+        filtered;
+    }
+  }
+
+  const resultsField =
+    extractMissionField(
+      instruction,
+      "Results",
+    );
+
+  const resultCount =
+    safeNumber(
+      resultsField?.match(
+        /\d+/,
+      )?.[0],
+    );
+
+  if (
+    resultCount !==
+    null
+  ) {
+    next.result_count =
+      Math.max(
+        1,
+        Math.min(
+          MAX_HUNT_RESULTS,
+          Math.round(
+            resultCount,
+          ),
+        ),
+      );
+  }
+
+  const minimumScoreField =
+    extractMissionField(
+      instruction,
+      "Minimum score",
+    );
+
+  const minimumScore =
+    safeNumber(
+      minimumScoreField?.match(
+        /\d+/,
+      )?.[0],
+    );
+
+  if (
+    minimumScore !==
+    null
+  ) {
+    next.minimum_score =
+      clampScore(
+        minimumScore,
+      );
+  }
+
+  const requireSignalField =
+    extractMissionField(
+      instruction,
+      "Require opportunity signal",
+    );
+
+  if (
+    requireSignalField
+  ) {
+    const normalised =
+      requireSignalField
+        .toLowerCase();
+
+    if (
+      [
+        "no",
+        "false",
+        "off",
+      ].includes(
+        normalised,
+      )
+    ) {
+      next.require_opportunity_signal =
+        false;
+    } else if (
+      [
+        "yes",
+        "true",
+        "on",
+      ].includes(
+        normalised,
+      )
+    ) {
+      next.require_opportunity_signal =
+        true;
+    }
+  }
+
+  if (
+    /\bquick revenue\b|\beasy wins?\b|\bfaster[-\s]to[-\s]close\b|\bsmall(?:er)? jobs?\b/i.test(
+      instruction,
+    )
+  ) {
+    next.revenue_mode =
+      "quick_revenue";
+
+    next.easy_wins_only =
+      true;
+
+    next.revenue_first =
+      true;
+  }
+
+  return next;
 }
 
 export function calculateProspectScore(
@@ -1897,13 +2883,30 @@ export function calculateProspectScore(
   >,
 ): number {
   const weightedScore =
-    clampScore(prospect.fit_score) * 0.3 +
-    clampScore(prospect.intent_score) * 0.25 +
-    clampScore(prospect.evidence_score) * 0.2 +
-    clampScore(prospect.timing_score) * 0.15 +
-    clampScore(prospect.contactability_score) * 0.1;
+    clampScore(
+      prospect.fit_score,
+    ) *
+      0.3 +
+    clampScore(
+      prospect.intent_score,
+    ) *
+      0.25 +
+    clampScore(
+      prospect.evidence_score,
+    ) *
+      0.2 +
+    clampScore(
+      prospect.timing_score,
+    ) *
+      0.15 +
+    clampScore(
+      prospect.contactability_score,
+    ) *
+      0.1;
 
-  return clampScore(weightedScore);
+  return clampScore(
+    weightedScore,
+  );
 }
 
 export function calculateSalesPriority({
@@ -1919,7 +2922,8 @@ export function calculateSalesPriority({
 }): ProspectSalesPriority {
   if (
     totalScore >= 80 &&
-    contactabilityScore >= 60 &&
+    contactabilityScore >=
+      60 &&
     (
       intentScore >= 70 ||
       timingScore >= 75
@@ -1930,12 +2934,15 @@ export function calculateSalesPriority({
 
   if (
     totalScore >= 65 &&
-    contactabilityScore >= 40
+    contactabilityScore >=
+      40
   ) {
     return "warm";
   }
 
-  if (totalScore >= 50) {
+  if (
+    totalScore >= 50
+  ) {
     return "cold";
   }
 
@@ -1943,19 +2950,27 @@ export function calculateSalesPriority({
 }
 
 function buildWhyContact(
-  candidate: Partial<LeadHunterProspect>,
-  signals: ProspectSignal[],
+  candidate:
+    Partial<LeadHunterProspect>,
+  signals:
+    ProspectSignal[],
 ): string[] {
-  const reasons = uniqueTexts(
-    candidate.why_contact,
-    10,
-  );
+  const reasons =
+    uniqueTexts(
+      candidate.why_contact,
+      10,
+    );
 
-  if (reasons.length > 0) {
+  if (
+    reasons.length >
+    0
+  ) {
     return reasons;
   }
 
-  const generated: string[] = [];
+  const generated:
+    string[] =
+    [];
 
   if (
     candidate.public_phone ||
@@ -1968,8 +2983,11 @@ function buildWhyContact(
 
   if (
     signals.some(
-      (signal) =>
-        signal.type === "website_problem" ||
+      (
+        signal,
+      ) =>
+        signal.type ===
+          "website_problem" ||
         signal.type ===
           "mobile_website_problem" ||
         signal.type ===
@@ -1985,9 +3003,13 @@ function buildWhyContact(
 
   if (
     signals.some(
-      (signal) =>
-        signal.type === "branding_problem" ||
-        signal.type === "missing_logo",
+      (
+        signal,
+      ) =>
+        signal.type ===
+          "branding_problem" ||
+        signal.type ===
+          "missing_logo",
     )
   ) {
     generated.push(
@@ -1997,7 +3019,9 @@ function buildWhyContact(
 
   if (
     signals.some(
-      (signal) =>
+      (
+        signal,
+      ) =>
         signal.type ===
           "maintenance_need" ||
         signal.type ===
@@ -2013,8 +3037,11 @@ function buildWhyContact(
 
   if (
     signals.some(
-      (signal) =>
-        signal.type === "active_tender" ||
+      (
+        signal,
+      ) =>
+        signal.type ===
+          "active_tender" ||
         signal.type ===
           "request_for_quote" ||
         signal.type ===
@@ -2030,14 +3057,21 @@ function buildWhyContact(
 }
 
 export function validateProspect(
-  candidate: Partial<LeadHunterProspect>,
+  candidate:
+    Partial<LeadHunterProspect>,
 ): LeadHunterProspect {
-  const rejectionReasons: string[] = [];
+  const rejectionReasons:
+    string[] =
+    [];
 
   const organisationName =
-    cleanText(candidate.organisation_name);
+    cleanText(
+      candidate.organisation_name,
+    );
 
-  if (!organisationName) {
+  if (
+    !organisationName
+  ) {
     rejectionReasons.push(
       "Organisation name is missing.",
     );
@@ -2048,14 +3082,18 @@ export function validateProspect(
       candidate.primary_source_url,
     );
 
-  if (!primarySourceUrl) {
+  if (
+    !primarySourceUrl
+  ) {
     rejectionReasons.push(
       "No valid primary public source URL was supplied.",
     );
   }
 
   const evidence =
-    Array.isArray(candidate.evidence)
+    Array.isArray(
+      candidate.evidence,
+    )
       ? candidate.evidence
           .filter(
             (
@@ -2063,50 +3101,81 @@ export function validateProspect(
             ): item is ProspectEvidence =>
               Boolean(
                 item &&
-                  cleanText(item.title) &&
-                  isValidPublicUrl(item.url),
+                  cleanText(
+                    item.title,
+                  ) &&
+                  isValidPublicUrl(
+                    item.url,
+                  ),
               ),
           )
-          .map((item) => ({
-            ...item,
-            title:
-              cleanText(item.title) ??
-              "Public source",
-            url:
-              normaliseWebsite(
-                item.url,
-              ) as string,
-            publisher:
-              cleanText(item.publisher),
-            published_at:
-              item.published_at || null,
-            checked_at:
-              item.checked_at ||
-              new Date().toISOString(),
-            excerpt:
-              cleanText(item.excerpt),
-            supports:
-              uniqueTexts(
-                item.supports,
-                20,
-              ),
-          }))
+          .map(
+            (
+              item,
+            ) => ({
+              ...item,
+
+              title:
+                cleanText(
+                  item.title,
+                ) ??
+                "Public source",
+
+              url:
+                normaliseWebsite(
+                  item.url,
+                ) as string,
+
+              publisher:
+                cleanText(
+                  item.publisher,
+                ),
+
+              published_at:
+                item.published_at ||
+                null,
+
+              checked_at:
+                item.checked_at ||
+                new Date().toISOString(),
+
+              excerpt:
+                cleanText(
+                  item.excerpt,
+                ),
+
+              supports:
+                uniqueTexts(
+                  item.supports,
+                  20,
+                ),
+            }),
+          )
       : [];
 
-  if (evidence.length === 0) {
+  if (
+    evidence.length ===
+    0
+  ) {
     rejectionReasons.push(
       "No valid public evidence source was supplied.",
     );
   }
 
   const website =
-    normaliseWebsite(candidate.website);
+    normaliseWebsite(
+      candidate.website,
+    );
 
   const phone =
-    normalisePhone(candidate.public_phone);
+    normalisePhone(
+      candidate.public_phone,
+    );
 
   const email =
-    normaliseEmail(candidate.public_email);
+    normaliseEmail(
+      candidate.public_email,
+    );
 
   if (
     !website &&
@@ -2119,7 +3188,9 @@ export function validateProspect(
   }
 
   const signals =
-    Array.isArray(candidate.signals)
+    Array.isArray(
+      candidate.signals,
+    )
       ? candidate.signals
           .filter(
             (
@@ -2127,7 +3198,9 @@ export function validateProspect(
             ): signal is ProspectSignal =>
               Boolean(
                 signal &&
-                  cleanText(signal.title) &&
+                  cleanText(
+                    signal.title,
+                  ) &&
                   cleanText(
                     signal.explanation,
                   ) &&
@@ -2136,56 +3209,101 @@ export function validateProspect(
                   ),
               ),
           )
-          .map((signal) => ({
-            ...signal,
-            title:
-              cleanText(signal.title) ??
-              "Opportunity signal",
-            explanation:
-              cleanText(
-                signal.explanation,
-              ) ??
-              "No signal explanation supplied.",
-            evidence_url:
-              normaliseWebsite(
-                signal.evidence_url,
-              ) as string,
-            detected_at:
-              signal.detected_at ||
-              new Date().toISOString(),
-            confidence:
-              clampScore(
-                signal.confidence,
-              ),
-          }))
+          .map(
+            (
+              signal,
+            ) => ({
+              ...signal,
+
+              title:
+                cleanText(
+                  signal.title,
+                ) ??
+                "Opportunity signal",
+
+              explanation:
+                cleanText(
+                  signal.explanation,
+                ) ??
+                "No signal explanation supplied.",
+
+              evidence_url:
+                normaliseWebsite(
+                  signal.evidence_url,
+                ) as string,
+
+              detected_at:
+                signal.detected_at ||
+                new Date().toISOString(),
+
+              confidence:
+                clampScore(
+                  signal.confidence,
+                ),
+            }),
+          )
       : [];
 
   const fitScore =
-    clampScore(candidate.fit_score);
+    clampScore(
+      candidate.fit_score,
+    );
 
   const intentScore =
-    clampScore(candidate.intent_score);
+    clampScore(
+      candidate.intent_score,
+    );
 
   const evidenceScore =
-    clampScore(candidate.evidence_score);
+    clampScore(
+      candidate.evidence_score,
+    );
 
   const timingScore =
-    clampScore(candidate.timing_score);
+    clampScore(
+      candidate.timing_score,
+    );
 
   const contactabilityScore =
     clampScore(
       candidate.contactability_score,
     );
 
+  /*
+   * Preserve the secure server's total_score.
+   *
+   * The previous implementation recalculated the score in the browser,
+   * which could change a 96 server score into something different.
+   *
+   * We now calculate only when the server did not provide a score.
+   */
+  const suppliedTotalScore =
+    safeNumber(
+      candidate.total_score,
+    );
+
   const totalScore =
-    calculateProspectScore({
-      fit_score: fitScore,
-      intent_score: intentScore,
-      evidence_score: evidenceScore,
-      timing_score: timingScore,
-      contactability_score:
-        contactabilityScore,
-    });
+    suppliedTotalScore !==
+    null
+      ? clampScore(
+          suppliedTotalScore,
+        )
+      : calculateProspectScore({
+          fit_score:
+            fitScore,
+
+          intent_score:
+            intentScore,
+
+          evidence_score:
+            evidenceScore,
+
+          timing_score:
+            timingScore,
+
+          contactability_score:
+            contactabilityScore,
+        });
 
   const revenuePotentialScore =
     candidate.revenue_potential_score !==
@@ -2194,9 +3312,12 @@ export function validateProspect(
           candidate.revenue_potential_score,
         )
       : clampScore(
-          totalScore * 0.55 +
-          intentScore * 0.25 +
-          timingScore * 0.2,
+          totalScore *
+            0.55 +
+          intentScore *
+            0.25 +
+          timingScore *
+            0.2,
         );
 
   const easeToCloseScore =
@@ -2206,9 +3327,12 @@ export function validateProspect(
           candidate.ease_to_close_score,
         )
       : clampScore(
-          contactabilityScore * 0.45 +
-          intentScore * 0.3 +
-          fitScore * 0.25,
+          contactabilityScore *
+            0.45 +
+          intentScore *
+            0.3 +
+          fitScore *
+            0.25,
         );
 
   const recurringRevenueScore =
@@ -2254,22 +3378,29 @@ export function validateProspect(
       requestedStatus;
 
   if (
-    rejectionReasons.length > 0
+    rejectionReasons.length >
+    0
   ) {
-    verificationStatus = "rejected";
+    verificationStatus =
+      "rejected";
   } else if (
     evidence.length >= 2 &&
-    (phone || email) &&
+    (
+      phone ||
+      email
+    ) &&
     signals.length >= 1
   ) {
-    verificationStatus = "verified";
+    verificationStatus =
+      "verified";
   } else {
     verificationStatus =
       "partially_verified";
   }
 
   const classification =
-    verificationStatus === "rejected"
+    verificationStatus ===
+    "rejected"
       ? "rejected"
       : candidate.classification ??
         "prospect";
@@ -2285,7 +3416,9 @@ export function validateProspect(
 
   return {
     id:
-      cleanText(candidate.id) ??
+      cleanText(
+        candidate.id,
+      ) ??
       createClientId(),
 
     organisation_name:
@@ -2302,7 +3435,9 @@ export function validateProspect(
       "private",
 
     industry:
-      cleanText(candidate.industry),
+      cleanText(
+        candidate.industry,
+      ),
 
     organisation_type:
       cleanText(
@@ -2311,8 +3446,11 @@ export function validateProspect(
 
     website,
 
-    public_phone: phone,
-    public_email: email,
+    public_phone:
+      phone,
+
+    public_email:
+      email,
 
     contact_page_url:
       normaliseWebsite(
@@ -2335,19 +3473,29 @@ export function validateProspect(
       ),
 
     address:
-      cleanText(candidate.address),
+      cleanText(
+        candidate.address,
+      ),
 
     suburb:
-      cleanText(candidate.suburb),
+      cleanText(
+        candidate.suburb,
+      ),
 
     city:
-      cleanText(candidate.city),
+      cleanText(
+        candidate.city,
+      ),
 
     province:
-      cleanText(candidate.province),
+      cleanText(
+        candidate.province,
+      ),
 
     country:
-      cleanText(candidate.country) ??
+      cleanText(
+        candidate.country,
+      ) ??
       "South Africa",
 
     recommended_company:
@@ -2380,17 +3528,27 @@ export function validateProspect(
       ),
 
     classification,
+
     verification_status:
       verificationStatus,
 
-    fit_score: fitScore,
-    intent_score: intentScore,
-    evidence_score: evidenceScore,
-    timing_score: timingScore,
+    fit_score:
+      fitScore,
+
+    intent_score:
+      intentScore,
+
+    evidence_score:
+      evidenceScore,
+
+    timing_score:
+      timingScore,
+
     contactability_score:
       contactabilityScore,
 
-    total_score: totalScore,
+    total_score:
+      totalScore,
 
     revenue_potential_score:
       revenuePotentialScore,
@@ -2414,17 +3572,21 @@ export function validateProspect(
       ),
 
     signals,
+
     evidence,
 
     primary_source_url:
-      primarySourceUrl ?? "",
+      primarySourceUrl ??
+      "",
 
     date_verified:
       candidate.date_verified ||
       new Date().toISOString(),
 
     next_action:
-      cleanText(candidate.next_action) ??
+      cleanText(
+        candidate.next_action,
+      ) ??
       "Verify the organisation and identify the correct public procurement or decision-maker route.",
 
     outreach_angle:
@@ -2447,6 +3609,7 @@ export function validateProspect(
           candidate.rejection_reasons ??
           []
         ),
+
         ...rejectionReasons,
       ]),
     ],
@@ -2464,20 +3627,38 @@ export function validateProspect(
 }
 
 export function validateSearchRequest(
-  request: Partial<LeadHunterSearchRequest>,
+  requestInput:
+    Partial<LeadHunterSearchRequest>,
 ): LeadHunterSearchRequest {
-  const resultCount = Math.min(
-    MAX_HUNT_RESULTS,
-    Math.max(
-      1,
-      Math.round(
-        Number(
-          request.result_count ??
-          DEFAULT_HUNT_RESULTS,
+  /*
+   * First reconcile explicit mission instructions.
+   *
+   * This prevents a hunt saying:
+   *
+   * Company: Cossa Nexus Construction
+   * Government: NO
+   *
+   * while the underlying request still contains Cossa Tech, NexDocs,
+   * government procurement and cleaning.
+   */
+  const request =
+    applyInstructionIntent(
+      requestInput,
+    );
+
+  const resultCount =
+    Math.min(
+      MAX_HUNT_RESULTS,
+      Math.max(
+        1,
+        Math.round(
+          Number(
+            request.result_count ??
+            DEFAULT_HUNT_RESULTS,
+          ),
         ),
       ),
-    ),
-  );
+    );
 
   const services =
     request.services?.length
@@ -2494,8 +3675,11 @@ export function validateSearchRequest(
     "auto";
 
   const deliveryModel =
-    requestedDeliveryModel === "auto"
-      ? inferDeliveryModel(services)
+    requestedDeliveryModel ===
+    "auto"
+      ? inferDeliveryModel(
+          services,
+        )
       : requestedDeliveryModel;
 
   const searchDepth =
@@ -2503,7 +3687,12 @@ export function validateSearchRequest(
     DEFAULT_LEAD_HUNTER_REQUEST.search_depth ??
     "economy";
 
-  const maximumQueries =
+  const depthQueryLimit =
+    maxQueriesForDepth(
+      searchDepth,
+    );
+
+  const requestedQueryLimit =
     Math.max(
       1,
       Math.min(
@@ -2511,24 +3700,43 @@ export function validateSearchRequest(
         Math.round(
           Number(
             request.max_search_queries ??
-            maxQueriesForDepth(
-              searchDepth,
-            ),
+            depthQueryLimit,
           ),
         ),
       ),
     );
 
+  /*
+   * Search depth is now a hard ceiling.
+   *
+   * Economy = maximum 3
+   * Standard = maximum 5
+   * Deep = maximum 8
+   *
+   * An old value of 5 can no longer cause Economy to silently use
+   * Standard-level credit consumption.
+   */
+  const maximumQueries =
+    Math.min(
+      depthQueryLimit,
+      requestedQueryLimit,
+    );
+
   const objectives =
-    Array.isArray(request.objectives) &&
-    request.objectives.length > 0
+    Array.isArray(
+      request.objectives,
+    ) &&
+    request.objectives.length >
+      0
       ? [
           ...new Set(
             request.objectives,
           ),
         ]
       : DEFAULT_LEAD_HUNTER_REQUEST.objectives ??
-        ["find_customers"];
+        [
+          "find_customers",
+        ];
 
   const searchEverything =
     safeBoolean(
@@ -2578,6 +3786,7 @@ export function validateSearchRequest(
 
   return {
     ...DEFAULT_LEAD_HUNTER_REQUEST,
+
     ...request,
 
     companies:
@@ -2592,9 +3801,11 @@ export function validateSearchRequest(
     services,
 
     locations:
-      locations.length > 0
+      locations.length >
+      0
         ? locations
-        : fallbackLocations.length > 0
+        : fallbackLocations.length >
+            0
           ? fallbackLocations
           : DEFAULT_LEAD_HUNTER_REQUEST.locations,
 
@@ -2637,7 +3848,8 @@ export function validateSearchRequest(
       uniqueTexts(
         request.tender_keywords,
         25,
-      ).length > 0
+      ).length >
+      0
         ? uniqueTexts(
             request.tender_keywords,
             25,
@@ -2648,7 +3860,8 @@ export function validateSearchRequest(
       uniqueTexts(
         request.prospect_keywords,
         35,
-      ).length > 0
+      ).length >
+      0
         ? uniqueTexts(
             request.prospect_keywords,
             35,
@@ -2688,19 +3901,24 @@ export function validateSearchRequest(
     objectives,
 
     countries:
-      countries.length > 0
+      countries.length >
+      0
         ? countries
         : DEFAULT_LEAD_HUNTER_REQUEST.countries ??
-          ["South Africa"],
+          [
+            "South Africa",
+          ],
 
     provinces:
-      provinces.length > 0
+      provinces.length >
+      0
         ? provinces
         : DEFAULT_LEAD_HUNTER_REQUEST.provinces ??
           [],
 
     cities:
-      cities.length > 0
+      cities.length >
+      0
         ? cities
         : DEFAULT_LEAD_HUNTER_REQUEST.cities ??
           [],
@@ -2708,8 +3926,10 @@ export function validateSearchRequest(
     suburbs,
 
     radius_km:
-      request.radius_km === null ||
-      request.radius_km === undefined
+      request.radius_km ===
+        null ||
+      request.radius_km ===
+        undefined
         ? null
         : Math.max(
             1,
@@ -2784,12 +4004,17 @@ export function validateSearchRequest(
 }
 
 export function requestFromStrategy(
-  strategy: LeadHunterStrategy,
-  overrides: Partial<LeadHunterSearchRequest> = {},
+  strategy:
+    LeadHunterStrategy,
+  overrides:
+    Partial<LeadHunterSearchRequest> =
+    {},
 ): LeadHunterSearchRequest {
   const defaultProvinces =
     strategy.recommended_locations.filter(
-      (location) =>
+      (
+        location,
+      ) =>
         SOUTH_AFRICAN_PROVINCES.includes(
           location as
             (typeof SOUTH_AFRICAN_PROVINCES)[number],
@@ -2798,12 +4023,15 @@ export function requestFromStrategy(
 
   const defaultCities =
     strategy.recommended_locations.filter(
-      (location) =>
+      (
+        location,
+      ) =>
         !SOUTH_AFRICAN_PROVINCES.includes(
           location as
             (typeof SOUTH_AFRICAN_PROVINCES)[number],
         ) &&
-        location !== "South Africa",
+        location !==
+          "South Africa",
     );
 
   return validateSearchRequest({
@@ -2835,7 +4063,7 @@ export function requestFromStrategy(
 
     tender_keywords:
       strategy.target_sector ===
-        "government"
+      "government"
         ? strategy.keywords
         : DEFAULT_LEAD_HUNTER_REQUEST.tender_keywords,
 
@@ -2878,7 +4106,9 @@ export function requestFromStrategy(
 
     objectives:
       strategy.objectives ??
-      ["find_customers"],
+      [
+        "find_customers",
+      ],
 
     countries: [
       "South Africa",
@@ -2889,6 +4119,18 @@ export function requestFromStrategy(
 
     cities:
       defaultCities,
+
+    /*
+     * Strategies start economically unless the user deliberately changes
+     * Search Depth in the UI.
+     */
+    search_depth:
+      "economy",
+
+    max_search_queries:
+      maxQueriesForDepth(
+        "economy",
+      ),
 
     ...overrides,
   });
@@ -2903,7 +4145,9 @@ export function createCustomHuntRequest({
   locations = [],
   provinces = [],
   cities = [],
-  countries = ["South Africa"],
+  countries = [
+    "South Africa",
+  ],
   revenueMode = "quick_revenue",
   searchDepth = "economy",
 }: {
@@ -2926,6 +4170,7 @@ export function createCustomHuntRequest({
       instruction,
 
     services,
+
     companies,
 
     search_scope:
@@ -2935,8 +4180,11 @@ export function createCustomHuntRequest({
       deliveryModel,
 
     locations,
+
     provinces,
+
     cities,
+
     countries,
 
     revenue_mode:
@@ -2961,45 +4209,81 @@ export function buildHuntSummary(
       requestInput,
     );
 
-  const summary = [
-    `Mission: ${
-      request.search_instruction ??
-      "Find verified prospects"
-    }`,
+  const summary =
+    [
+      `Mission: ${
+        request.search_instruction ??
+        "Find verified prospects"
+      }`,
 
-    `Scope: ${
-      request.search_scope ??
-      "south_africa"
-    }`,
+      `Sector: ${
+        request.sector
+      }`,
 
-    `Delivery model: ${
-      request.delivery_model ??
-      "auto"
-    }`,
+      `Companies: ${
+        request.companies.join(
+          ", ",
+        )
+      }`,
 
-    `Revenue mode: ${
-      request.revenue_mode ??
-      "balanced"
-    }`,
+      `Scope: ${
+        request.search_scope ??
+        "south_africa"
+      }`,
 
-    `Search depth: ${
-      request.search_depth ??
-      "economy"
-    }`,
+      `Delivery model: ${
+        request.delivery_model ??
+        "auto"
+      }`,
 
-    `Maximum search queries: ${
-      request.max_search_queries ??
-      DEFAULT_MAX_SEARCH_QUERIES
-    }`,
+      `Revenue mode: ${
+        request.revenue_mode ??
+        "balanced"
+      }`,
 
-    `Services: ${
-      request.services.join(", ")
-    }`,
+      `Search depth: ${
+        request.search_depth ??
+        "economy"
+      }`,
 
-    `Locations: ${
-      request.locations.join(", ")
-    }`,
-  ];
+      `Maximum search queries: ${
+        request.max_search_queries ??
+        maxQueriesForDepth(
+          request.search_depth ??
+          "economy",
+        )
+      }`,
+
+      `Private sector: ${
+        request.include_private_sector
+          ? "YES"
+          : "NO"
+      }`,
+
+      `Government: ${
+        request.include_government_sector
+          ? "YES"
+          : "NO"
+      }`,
+
+      `Nonprofit: ${
+        request.include_nonprofits
+          ? "YES"
+          : "NO"
+      }`,
+
+      `Services: ${
+        request.services.join(
+          ", ",
+        )
+      }`,
+
+      `Locations: ${
+        request.locations.join(
+          ", ",
+        )
+      }`,
+    ];
 
   if (
     request.provinces?.length
@@ -3030,21 +4314,30 @@ export async function huntProspects(
   signal?: AbortSignal,
 ): Promise<LeadHunterSearchResponse> {
   const validatedRequest =
-    validateSearchRequest(request);
+    validateSearchRequest(
+      request,
+    );
 
   const {
-    data: { session },
-    error: sessionError,
+    data: {
+      session,
+    },
+    error:
+      sessionError,
   } =
     await supabase.auth.getSession();
 
-  if (sessionError) {
+  if (
+    sessionError
+  ) {
     throw new Error(
       `Lead Hunter authentication failed: ${sessionError.message}`,
     );
   }
 
-  if (!session) {
+  if (
+    !session
+  ) {
     throw new Error(
       "Your session has expired. Sign in again before running the Lead Hunter.",
     );
@@ -3054,7 +4347,9 @@ export async function huntProspects(
     await fetch(
       LEAD_HUNTER_SEARCH_ENDPOINT,
       {
-        method: "POST",
+        method:
+          "POST",
+
         headers: {
           "Content-Type":
             "application/json",
@@ -3072,11 +4367,16 @@ export async function huntProspects(
       },
     );
 
-  if (!response.ok) {
+  if (
+    !response.ok
+  ) {
     const message =
       await response
         .text()
-        .catch(() => "");
+        .catch(
+          () =>
+            "",
+        );
 
     throw new Error(
       message ||
@@ -3089,8 +4389,24 @@ export async function huntProspects(
       await response.json()
     ) as Partial<LeadHunterSearchResponse>;
 
+  /*
+   * Preserve the server-normalised request.
+   *
+   * If the server corrected, restricted or interpreted the mission,
+   * the UI must show what was actually executed rather than stale browser
+   * state.
+   */
+  const effectiveRequest =
+    payload.request
+      ? validateSearchRequest(
+          payload.request,
+        )
+      : validatedRequest;
+
   const prospects =
-    Array.isArray(payload.prospects)
+    Array.isArray(
+      payload.prospects,
+    )
       ? payload.prospects.map(
           validateProspect,
         )
@@ -3099,21 +4415,80 @@ export async function huntProspects(
   const acceptedProspects =
     prospects
       .filter(
-        (prospect) =>
-          prospect.verification_status !==
-            "rejected" &&
-          prospect.total_score >=
-            validatedRequest.minimum_score &&
-          prospect.evidence.length >=
-            validatedRequest.minimum_evidence_sources,
+        (
+          prospect,
+        ) => {
+          if (
+            prospect.verification_status ===
+            "rejected"
+          ) {
+            return false;
+          }
+
+          if (
+            prospect.total_score <
+            effectiveRequest.minimum_score
+          ) {
+            return false;
+          }
+
+          if (
+            prospect.evidence.length <
+            effectiveRequest.minimum_evidence_sources
+          ) {
+            return false;
+          }
+
+          /*
+           * Client enforcement mirrors server requirements.
+           * A result cannot sneak through because of a server/client mismatch.
+           */
+          if (
+            effectiveRequest.require_public_phone_or_email &&
+            !prospect.public_phone &&
+            !prospect.public_email
+          ) {
+            return false;
+          }
+
+          if (
+            effectiveRequest.require_website &&
+            !prospect.website
+          ) {
+            return false;
+          }
+
+          if (
+            effectiveRequest.require_opportunity_signal &&
+            (
+              prospect.signals.length ===
+                0 ||
+              prospect.signals.every(
+                (
+                  signal,
+                ) =>
+                  signal.type ===
+                  "general_fit",
+              )
+            )
+          ) {
+            return false;
+          }
+
+          return true;
+        },
       )
       .sort(
-        (first, second) => {
+        (
+          first,
+          second,
+        ) => {
           if (
-            validatedRequest.revenue_first
+            effectiveRequest.revenue_first
           ) {
             const firstCommercial =
-              first.total_score * 0.35 +
+              first.total_score *
+                0.35 +
               first.revenue_potential_score *
                 0.25 +
               first.ease_to_close_score *
@@ -3122,7 +4497,8 @@ export async function huntProspects(
                 0.15;
 
             const secondCommercial =
-              second.total_score * 0.35 +
+              second.total_score *
+                0.35 +
               second.revenue_potential_score *
                 0.25 +
               second.ease_to_close_score *
@@ -3144,12 +4520,22 @@ export async function huntProspects(
       )
       .slice(
         0,
-        validatedRequest.result_count,
+        effectiveRequest.result_count,
       );
 
   const rejectedCount =
     prospects.length -
     acceptedProspects.length;
+
+  const payloadSourceCount =
+    safeNumber(
+      payload.source_count,
+    );
+
+  const payloadRejectedCount =
+    safeNumber(
+      payload.rejected_count,
+    );
 
   return {
     hunt_id:
@@ -3158,7 +4544,8 @@ export async function huntProspects(
       ) ??
       createClientId(),
 
-    status: "completed",
+    status:
+      "completed",
 
     searched_at:
       payload.searched_at ??
@@ -3169,15 +4556,19 @@ export async function huntProspects(
       new Date().toISOString(),
 
     request:
-      validatedRequest,
+      effectiveRequest,
 
     prospects:
       acceptedProspects,
 
+    /*
+     * Null-aware fallback.
+     *
+     * A legitimate server count of 0 must stay 0.
+     * The old `Number(value) || fallback` logic could incorrectly replace it.
+     */
     source_count:
-      Number(
-        payload.source_count,
-      ) ||
+      payloadSourceCount ??
       acceptedProspects.reduce(
         (
           total,
@@ -3192,9 +4583,7 @@ export async function huntProspects(
       acceptedProspects.length,
 
     rejected_count:
-      Number(
-        payload.rejected_count,
-      ) ||
+      payloadRejectedCount ??
       rejectedCount,
 
     warnings:
@@ -3220,23 +4609,36 @@ export async function huntProspects(
 }
 
 export async function findCrmDuplicates(
-  prospect: LeadHunterProspect,
-): Promise<CrmDuplicateMatch[]> {
-  const { data, error } =
+  prospect:
+    LeadHunterProspect,
+): Promise<
+  CrmDuplicateMatch[]
+> {
+  const {
+    data,
+    error,
+  } =
     await db
-      .from("leads")
+      .from(
+        "leads",
+      )
       .select(
         "id,name,full_name,company,phone,email,source,status,score,created_at",
       )
       .order(
         "created_at",
         {
-          ascending: false,
+          ascending:
+            false,
         },
       )
-      .limit(1000);
+      .limit(
+        1000,
+      );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to check CRM duplicates: ${error.message}`,
     );
@@ -3252,7 +4654,10 @@ export async function findCrmDuplicates(
       prospect.public_email,
     );
 
-  return (data ?? [])
+  return (
+    data ??
+    []
+  )
     .map(
       (
         row: Record<
@@ -3261,15 +4666,20 @@ export async function findCrmDuplicates(
         >,
       ) => {
         const rowName =
-          cleanText(row.company) ??
+          cleanText(
+            row.company,
+          ) ??
           cleanText(
             row.full_name,
           ) ??
-          cleanText(row.name) ??
+          cleanText(
+            row.name,
+          ) ??
           "Unnamed lead";
 
         const matchReasons:
-          string[] = [];
+          string[] =
+          [];
 
         if (
           sameEmail(
@@ -3310,7 +4720,9 @@ export async function findCrmDuplicates(
 
         return {
           id:
-            String(row.id),
+            String(
+              row.id,
+            ),
 
           name:
             cleanText(
@@ -3368,8 +4780,10 @@ export async function findCrmDuplicates(
         match:
           CrmDuplicateMatch,
       ) =>
-        match.match_reasons
-          .length > 0,
+        match
+          .match_reasons
+          .length >
+        0,
     );
 }
 
@@ -3385,6 +4799,7 @@ function formatProspectEvidence(
       ) =>
         [
           `${index + 1}. ${evidence.title}`,
+
           `URL: ${evidence.url}`,
 
           evidence.publisher
@@ -3401,15 +4816,21 @@ function formatProspectEvidence(
             ? `Evidence: ${evidence.excerpt}`
             : null,
         ]
-          .filter(Boolean)
-          .join("\n"),
+          .filter(
+            Boolean,
+          )
+          .join(
+            "\n",
+          ),
     );
 
   return [
     "Lead Hunter verified public prospect.",
+
     "",
 
     `Organisation: ${prospect.organisation_name}`,
+
     `Sector: ${prospect.sector}`,
 
     `Industry: ${
@@ -3444,18 +4865,25 @@ function formatProspectEvidence(
       prospect.province,
       prospect.country,
     ]
-      .filter(Boolean)
-      .join(", ")}`,
+      .filter(
+        Boolean,
+      )
+      .join(
+        ", ",
+      )}`,
 
     "",
 
     `Recommended Cossa company: ${prospect.recommended_company}`,
+
     `Recommended service: ${prospect.recommended_service}`,
+
     `Service fit: ${prospect.service_fit_reason}`,
 
     "",
 
     `Opportunity: ${prospect.opportunity_summary}`,
+
     `Opportunity size: ${prospect.opportunity_size}`,
 
     `Estimated value: ${
@@ -3470,12 +4898,19 @@ function formatProspectEvidence(
     "",
 
     `Classification: ${prospect.classification}`,
+
     `Verification: ${prospect.verification_status}`,
+
     `Sales priority: ${prospect.sales_priority}`,
+
     `Total score: ${prospect.total_score}/100`,
+
     `Revenue potential: ${prospect.revenue_potential_score}/100`,
+
     `Ease to close: ${prospect.ease_to_close_score}/100`,
+
     `Recurring revenue potential: ${prospect.recurring_revenue_score}/100`,
+
     `Date verified: ${prospect.date_verified}`,
 
     "",
@@ -3483,10 +4918,12 @@ function formatProspectEvidence(
     "WHY CONTACT",
 
     ...(
-      prospect.why_contact
-        .length > 0
+      prospect.why_contact.length >
+      0
         ? prospect.why_contact.map(
-            (reason) =>
+            (
+              reason,
+            ) =>
               `- ${reason}`,
           )
         : [
@@ -3513,8 +4950,12 @@ function formatProspectEvidence(
 
     ...evidenceLines,
   ]
-    .filter(Boolean)
-    .join("\n");
+    .filter(
+      Boolean,
+    )
+    .join(
+      "\n",
+    );
 }
 
 export async function saveProspectToCrm(
@@ -3556,9 +4997,13 @@ export async function saveProspectToCrm(
 
   const strongestDuplicate =
     duplicateMatches.find(
-      (match) =>
+      (
+        match,
+      ) =>
         match.match_reasons.some(
-          (reason) =>
+          (
+            reason,
+          ) =>
             reason ===
               "Same email address" ||
             reason ===
@@ -3576,8 +5021,11 @@ export async function saveProspectToCrm(
       lead_id:
         strongestDuplicate.id,
 
-      created: false,
-      duplicate: true,
+      created:
+        false,
+
+      duplicate:
+        true,
 
       duplicate_match:
         strongestDuplicate,
@@ -3603,9 +5051,14 @@ export async function saveProspectToCrm(
     prospect.estimated_value ??
     0;
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await db
-      .from("leads")
+      .from(
+        "leads",
+      )
       .insert({
         full_name:
           contactName,
@@ -3631,8 +5084,12 @@ export async function saveProspectToCrm(
           prospect.province,
           prospect.country,
         ]
-          .filter(Boolean)
-          .join(", "),
+          .filter(
+            Boolean,
+          )
+          .join(
+            ", ",
+          ),
 
         source:
           "cossa_verified_lead_hunter",
@@ -3660,21 +5117,30 @@ export async function saveProspectToCrm(
         next_follow_up:
           new Date()
             .toISOString()
-            .slice(0, 10),
+            .slice(
+              0,
+              10,
+            ),
 
         updated_at:
           new Date().toISOString(),
       })
-      .select("id")
+      .select(
+        "id",
+      )
       .single();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to save the verified prospect to CRM: ${error.message}`,
     );
   }
 
-  if (!data?.id) {
+  if (
+    !data?.id
+  ) {
     throw new Error(
       "The prospect was not saved because Supabase returned no lead ID.",
     );
@@ -3682,10 +5148,15 @@ export async function saveProspectToCrm(
 
   return {
     lead_id:
-      String(data.id),
+      String(
+        data.id,
+      ),
 
-    created: true,
-    duplicate: false,
+    created:
+      true,
+
+    duplicate:
+      false,
 
     duplicate_match:
       null,
@@ -3706,24 +5177,29 @@ export async function saveProspectsToCrm(
     prospect:
       LeadHunterProspect;
 
-    error: string;
+    error:
+      string;
   }>;
 }> {
   const created:
-    SaveProspectResult[] = [];
+    SaveProspectResult[] =
+    [];
 
   const duplicates:
-    SaveProspectResult[] = [];
+    SaveProspectResult[] =
+    [];
 
   const failed: Array<{
     prospect:
       LeadHunterProspect;
 
-    error: string;
+    error:
+      string;
   }> = [];
 
   for (
-    const prospect of prospects
+    const prospect of
+    prospects
   ) {
     try {
       const result =
@@ -3731,7 +5207,9 @@ export async function saveProspectsToCrm(
           prospect,
         );
 
-      if (result.duplicate) {
+      if (
+        result.duplicate
+      ) {
         duplicates.push(
           result,
         );
@@ -3740,12 +5218,15 @@ export async function saveProspectsToCrm(
           result,
         );
       }
-    } catch (error) {
+    } catch (
+      error
+    ) {
       failed.push({
         prospect,
 
         error:
-          error instanceof Error
+          error instanceof
+          Error
             ? error.message
             : "Unknown CRM save error.",
       });
@@ -3763,46 +5244,54 @@ export function exportProspectsToCsv(
   prospects:
     LeadHunterProspect[],
 ): string {
-  const headers = [
-    "Organisation",
-    "Sector",
-    "Industry",
-    "Website",
-    "Public Phone",
-    "Public Email",
-    "City",
-    "Province",
-    "Country",
-    "Recommended Company",
-    "Recommended Service",
-    "Opportunity",
-    "Classification",
-    "Verification",
-    "Sales Priority",
-    "Score",
-    "Revenue Potential",
-    "Ease to Close",
-    "Recurring Revenue Potential",
-    "Primary Source",
-    "Date Verified",
-    "Next Action",
-  ];
+  const headers =
+    [
+      "Organisation",
+      "Sector",
+      "Industry",
+      "Website",
+      "Public Phone",
+      "Public Email",
+      "City",
+      "Province",
+      "Country",
+      "Recommended Company",
+      "Recommended Service",
+      "Opportunity",
+      "Classification",
+      "Verification",
+      "Sales Priority",
+      "Score",
+      "Revenue Potential",
+      "Ease to Close",
+      "Recurring Revenue Potential",
+      "Primary Source",
+      "Date Verified",
+      "Next Action",
+    ];
 
-  const escapeCsv = (
-    value: unknown,
-  ) => {
-    const string =
-      String(value ?? "");
+  const escapeCsv =
+    (
+      value:
+        unknown,
+    ) => {
+      const string =
+        String(
+          value ??
+          "",
+        );
 
-    return `"${string.replace(
-      /"/g,
-      '""',
-    )}"`;
-  };
+      return `"${string.replace(
+        /"/g,
+        '""',
+      )}"`;
+    };
 
   const rows =
     prospects.map(
-      (prospect) => [
+      (
+        prospect,
+      ) => [
         prospect.organisation_name,
         prospect.sector,
         prospect.industry,
@@ -3830,14 +5319,26 @@ export function exportProspectsToCsv(
 
   return [
     headers
-      .map(escapeCsv)
-      .join(","),
+      .map(
+        escapeCsv,
+      )
+      .join(
+        ",",
+      ),
 
     ...rows.map(
-      (row) =>
+      (
+        row,
+      ) =>
         row
-          .map(escapeCsv)
-          .join(","),
+          .map(
+            escapeCsv,
+          )
+          .join(
+            ",",
+          ),
     ),
-  ].join("\n");
+  ].join(
+    "\n",
+  );
 }
