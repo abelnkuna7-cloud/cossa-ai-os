@@ -1607,32 +1607,43 @@ function createSearchQueries(
     ...request.locations,
   ];
 
-  const location =
-    [
-      ...new Set(
-        combinedLocations,
-      ),
-    ]
-      .filter(Boolean)
-      .slice(0, 4)
-      .join(" ") ||
-    "South Africa";
+  const locationTerms = [
+    ...new Set(
+      combinedLocations,
+    ),
+  ]
+    .filter(Boolean)
+    .slice(0, 4);
+
+  /*
+   * A prospect will normally mention one service area, not every city in a
+   * service radius. Search those areas as alternatives rather than one exact
+   * multi-city phrase.
+   */
+  const locationQuery =
+    locationTerms.length > 0
+      ? `(${locationTerms
+          .map(
+            (location) =>
+              `"${location}"`,
+          )
+          .join(" OR ")})`
+      : '"South Africa"';
 
   const requestedTargets = [
     ...request.organisation_types,
     ...request.industries,
   ].filter(Boolean);
 
-  const extraTerms = [
+  const procurementTerms = [
     ...request.tender_keywords,
-    ...request.prospect_keywords,
   ]
     .filter(Boolean)
     .slice(0, 4);
 
-  const extra =
-    extraTerms.length > 0
-      ? ` (${extraTerms
+  const procurementExtra =
+    procurementTerms.length > 0
+      ? ` (${procurementTerms
           .map(
             (value) =>
               `"${value}"`,
@@ -1694,7 +1705,7 @@ function createSearchQueries(
     if (shouldPrivate) {
       plans.push({
         query:
-          `"${target1}" "${location}" "${label}" official website contact${extra}`,
+          `"${target1}" ${locationQuery} "${label}" official website contact`,
 
         purpose:
           "buyer_discovery",
@@ -1707,7 +1718,7 @@ function createSearchQueries(
 
       plans.push({
         query:
-          `"${target2}" "${location}" "${label}" official organisation contact${extra}`,
+          `"${target2}" ${locationQuery} "${label}" official organisation contact`,
 
         purpose:
           "buyer_discovery",
@@ -1720,7 +1731,7 @@ function createSearchQueries(
 
       plans.push({
         query:
-          `"${location}" "${target1}" ("new branch" OR expansion OR development OR refurbishment OR upgrade OR investment OR "new premises") "${label}"`,
+          `${locationQuery} "${target1}" ("new branch" OR expansion OR development OR refurbishment OR upgrade OR investment OR "new premises") "${label}"`,
 
         purpose:
           "growth_signal",
@@ -1750,7 +1761,7 @@ function createSearchQueries(
       ) {
         plans.push({
           query:
-            `"${target1}" "${location}" official website contact business`,
+            `"${target1}" ${locationQuery} official website contact business`,
 
           purpose:
             "website_gap",
@@ -1766,7 +1777,7 @@ function createSearchQueries(
     if (shouldNonprofit) {
       plans.push({
         query:
-          `(church OR nonprofit OR NGO OR "community centre") "${location}" official website contact "${label}"`,
+          `(church OR nonprofit OR NGO OR "community centre") ${locationQuery} official website contact "${label}"`,
 
         purpose:
           "buyer_discovery",
@@ -1781,7 +1792,7 @@ function createSearchQueries(
     if (shouldGovernment) {
       plans.push({
         query:
-          `site:etenders.gov.za "${label}" ("closing date" OR "tender number" OR "bid number" OR RFQ)${extra}`,
+          `site:etenders.gov.za "${label}" ("closing date" OR "tender number" OR "bid number" OR RFQ)${procurementExtra}`,
 
         purpose:
           "active_procurement",
@@ -1794,7 +1805,7 @@ function createSearchQueries(
 
       plans.push({
         query:
-          `(site:gov.za OR site:gauteng.gov.za OR site:tshwane.gov.za) "${label}" (RFQ OR RFP OR tender OR bid)${extra}`,
+          `(site:gov.za OR site:gauteng.gov.za OR site:tshwane.gov.za) "${label}" (RFQ OR RFP OR tender OR bid)${procurementExtra}`,
 
         purpose:
           "active_procurement",
@@ -1807,7 +1818,7 @@ function createSearchQueries(
 
       plans.push({
         query:
-          `"${location}" (government OR municipality OR department) "${label}" ("supplier registration" OR "supplier database" OR "vendor registration")`,
+          `${locationQuery} (government OR municipality OR department) "${label}" ("supplier registration" OR "supplier database" OR "vendor registration")${procurementExtra}`,
 
         purpose:
           "supplier_registration",
