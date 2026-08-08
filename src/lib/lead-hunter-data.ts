@@ -243,6 +243,8 @@ export interface LeadHunterProspect {
   website: string | null;
   public_phone: string | null;
   public_email: string | null;
+  /** Internal public-identity keys used only to prevent duplicate results. */
+  identity_keys?: string[];
   contact_page_url: string | null;
 
   contact_name: string | null;
@@ -3378,18 +3380,21 @@ export function validateProspect(
       requestedStatus;
 
   if (
-    rejectionReasons.length >
-    0
+    requestedStatus === "rejected" ||
+    candidate.classification === "rejected" ||
+    rejectionReasons.length > 0
   ) {
     verificationStatus =
       "rejected";
   } else if (
+    requestedStatus === "verified" &&
     evidence.length >= 2 &&
     (
       phone ||
       email
     ) &&
-    signals.length >= 1
+    signals.length >= 1 &&
+    evidenceScore >= 70
   ) {
     verificationStatus =
       "verified";
@@ -3451,6 +3456,17 @@ export function validateProspect(
 
     public_email:
       email,
+
+    identity_keys:
+      uniqueTexts(
+        candidate.identity_keys,
+        20,
+      ).filter(
+        (value) =>
+          /^(phone|email):.+$/i.test(
+            value,
+          ),
+      ),
 
     contact_page_url:
       normaliseWebsite(
@@ -4308,6 +4324,32 @@ export function buildHuntSummary(
   return summary;
 }
 
+function sectorAllowedForRequest(
+  request: LeadHunterSearchRequest,
+  sector: LeadHunterSector,
+): boolean {
+  if (
+    request.sector !== "mixed" &&
+    request.sector !== sector
+  ) {
+    return false;
+  }
+
+  if (sector === "private") {
+    return request.include_private_sector;
+  }
+
+  if (sector === "government") {
+    return request.include_government_sector;
+  }
+
+  if (sector === "nonprofit") {
+    return request.include_nonprofits;
+  }
+
+  return false;
+}
+
 export async function huntProspects(
   request:
     Partial<LeadHunterSearchRequest>,
@@ -4421,6 +4463,26 @@ export async function huntProspects(
           if (
             prospect.verification_status ===
             "rejected"
+          ) {
+            return false;
+          }
+
+          if (
+            !sectorAllowedForRequest(
+              effectiveRequest,
+              prospect.sector,
+            )
+          ) {
+            return false;
+          }
+
+          if (
+            !effectiveRequest.services.includes(
+              prospect.recommended_service,
+            ) ||
+            !effectiveRequest.companies.includes(
+              prospect.recommended_company,
+            )
           ) {
             return false;
           }

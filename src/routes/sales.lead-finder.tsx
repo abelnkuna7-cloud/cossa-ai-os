@@ -1341,6 +1341,7 @@ function LeadHunterPage() {
                 <span>
                   Write the exact customer, service,
                   problem and area you want searched.
+                  This instruction is the mission; CRM notes never alter search targeting.
                 </span>
 
                 <span>

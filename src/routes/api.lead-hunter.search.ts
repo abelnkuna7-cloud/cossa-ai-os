@@ -32,6 +32,30 @@ const MAX_RESULTS_PER_QUERY = 10;
 const MAX_SOURCE_PAGES_TO_INSPECT = 40;
 const MAX_SOURCE_CONTENT_LENGTH = 30_000;
 
+/* The API enforces the same credit ceilings as the UI. */
+const SEARCH_DEPTH_QUERY_BUDGETS = {
+  economy: 3,
+  standard: 5,
+  deep: 8,
+} as const;
+
+const VALID_SECTORS = new Set([
+  "private",
+  "government",
+  "nonprofit",
+  "mixed",
+] as const);
+
+const VALID_COMPANIES = new Set<LeadHunterCompany>([
+  "cossa_nexus_construction",
+  "cossa_facility_services",
+  "cossa_tech",
+  "cossa_ai_growth",
+  "nexdocs",
+  "cossa_store",
+  "cossa_nexus_holdings",
+]);
+
 const SEARCH_TIMEOUT_MS = 25_000;
 const PAGE_TIMEOUT_MS = 12_000;
 
@@ -119,6 +143,18 @@ const BRANDING_WEAKNESS_PATTERN =
 const MARKETING_WEAKNESS_PATTERN =
   /\b(inactive marketing|inactive social media|no recent posts|weak online presence|poor online presence|poor review response|inactive facebook|inactive instagram|weak google business profile|unclaimed google business profile)\b/i;
 
+const GOVERNMENT_BUYER_PATTERN =
+  /\b(government|municipality|municipal|department of|provincial|national department|public entity|state[- ]owned|state owned|supply chain management|SCM|treasury|metropolitan municipality|local municipality|district municipality|SANRAL|merSETA|State Theatre|Eskom|Transnet|PRASA)\b/i;
+
+const PROCUREMENT_AGGREGATOR_PATTERN =
+  /\b(tender(?:s|ing)? (?:notice|notices|bulletin|listing|list|portal|opportunities)|procurement (?:notice|notices|listing|list|opportunities)|latest (?:tenders?|rfqs?|bids?)|all (?:tenders?|rfqs?|bids?)|weekly tender)\b/i;
+
+const PROCUREMENT_REFERENCE_PATTERN =
+  /\b(?:tender|bid|rfq|rfp|rft|quotation)\s*(?:number|no\.?|reference|#)?\s*[:#-]?\s*[A-Z0-9]{1,12}(?:[/-][A-Z0-9]{1,16})+\b/i;
+
+const PROCUREMENT_DEADLINE_PATTERN =
+  /\b(?:closing date|closing(?:\s+time)?|submission deadline|deadline|due date|bids? close|quotations? close)\b[^\n.]{0,100}?\b(?:\d{1,2}[\s/-](?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\s,/-]+\d{2,4}|(?:\d{4}[/-]\d{1,2}[/-]\d{1,2})|(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}))\b/i;
+
 type SearchProvider =
   | "Tavily"
   | "SerpAPI"
@@ -186,7 +222,24 @@ type CandidateDisposition =
   | "directory"
   | "informational"
   | "irrelevant"
-  | "sector_mismatch";
+  | "sector_mismatch"
+  | "service_mismatch"
+  | "expired_procurement"
+  | "ambiguous_procurement";
+
+type CandidateSector =
+  | "private"
+  | "government"
+  | "nonprofit";
+
+type ProcurementValidation = {
+  hasSelectedService: boolean;
+  matchedServices: LeadHunterServiceCategory[];
+  hasReference: boolean;
+  closingDate: Date | null;
+  isExpired: boolean;
+  isAmbiguous: boolean;
+};
 
 type CandidateAssessment = {
   disposition: CandidateDisposition;
@@ -771,7 +824,18 @@ function validateRequest(
     )
       ? [
           ...new Set(
-            candidate.services,
+            candidate.services.filter(
+              (
+                service,
+              ): service is LeadHunterServiceCategory =>
+                typeof service ===
+                  "string" &&
+                service !== "general" &&
+                Object.hasOwn(
+                  SERVICE_LABELS,
+                  service,
+                ),
+            ),
           ),
         ].slice(
           0,
@@ -785,7 +849,16 @@ function validateRequest(
     )
       ? [
           ...new Set(
-            candidate.companies,
+            candidate.companies.filter(
+              (
+                company,
+              ): company is LeadHunterCompany =>
+                typeof company ===
+                  "string" &&
+                VALID_COMPANIES.has(
+                  company as LeadHunterCompany,
+                ),
+            ),
           ),
         ].slice(
           0,
@@ -925,8 +998,13 @@ function validateRequest(
    * Do not infer government permission from the mission.
    */
   const sector =
-    candidate.sector ??
-    "mixed";
+    typeof candidate.sector ===
+      "string" &&
+    VALID_SECTORS.has(
+      candidate.sector as LeadHunterSearchRequest["sector"],
+    )
+      ? candidate.sector
+      : "mixed";
 
   const includePrivateSector =
     candidate.include_private_sector ===
@@ -949,8 +1027,17 @@ function validateRequest(
     "auto";
 
   const searchDepth =
-    candidate.search_depth ??
-    "economy";
+    candidate.search_depth ===
+      "standard" ||
+    candidate.search_depth ===
+      "deep"
+      ? candidate.search_depth
+      : "economy";
+
+  const depthQueryBudget =
+    SEARCH_DEPTH_QUERY_BUDGETS[
+      searchDepth
+    ];
 
   const revenueMode =
     candidate.revenue_mode ??
@@ -1126,7 +1213,10 @@ function validateRequest(
         false,
 
       max_search_queries:
-        maxSearchQueries,
+        Math.min(
+          maxSearchQueries,
+          depthQueryBudget,
+        ),
 
       use_cached_results:
         candidate.use_cached_results !==
@@ -1516,30 +1606,25 @@ function createSearchQueries(
    * Sector permissions come from explicit controls only.
    */
   const shouldPrivate =
-    request.include_private_sector ===
-      true;
+    request.include_private_sector === true &&
+    (request.sector === "mixed" || request.sector === "private");
 
   const shouldGovernment =
-    request.include_government_sector ===
-      true;
+    request.include_government_sector === true &&
+    (request.sector === "mixed" || request.sector === "government");
 
   const shouldNonprofit =
-    request.include_nonprofits ===
-      true;
+    request.include_nonprofits === true &&
+    (request.sector === "mixed" || request.sector === "nonprofit");
 
   if (mission) {
     const missionPurpose:
       SearchPurpose =
-      shouldGovernment &&
-      (
-        request.sector ===
-          "government" ||
-        PROCUREMENT_PATTERN.test(
-          mission,
-        ) ||
-        /\b(tender|rfq|rfp|bid|procurement)\b/i.test(
-          mission,
-        )
+      PROCUREMENT_PATTERN.test(
+        mission,
+      ) ||
+      /\b(tender|rfq|rfp|bid|procurement)\b/i.test(
+        mission,
       )
         ? "active_procurement"
         : DIGITAL_AUDIT_MISSION_PATTERN.test(
@@ -1580,10 +1665,9 @@ function createSearchQueries(
     const targets =
       requestedTargets.length > 0
         ? [
-            ...new Set([
-              ...requestedTargets,
-              ...defaults,
-            ]),
+            ...new Set(
+              requestedTargets,
+            ),
           ].slice(0, 6)
         : defaults.slice(
             0,
@@ -1606,7 +1690,7 @@ function createSearchQueries(
     if (shouldPrivate) {
       plans.push({
         query:
-          `"${target1}" "${location}" official website contact${extra}`,
+          `"${target1}" "${location}" "${label}" official website contact${extra}`,
 
         purpose:
           "buyer_discovery",
@@ -1619,7 +1703,7 @@ function createSearchQueries(
 
       plans.push({
         query:
-          `"${target2}" "${location}" official organisation contact${extra}`,
+          `"${target2}" "${location}" "${label}" official organisation contact${extra}`,
 
         purpose:
           "buyer_discovery",
@@ -2445,13 +2529,11 @@ async function executePlan(
   plan: SearchPlan,
   environment: Environment,
 ) {
-  const jobs: Array<
-    Promise<{
-      provider: SearchProvider;
-      candidates: SearchCandidate[];
-      warning?: string;
-    }>
-  > = [];
+  const results: Array<{
+    provider: SearchProvider;
+    candidates: SearchCandidate[];
+    warning?: string;
+  }> = [];
 
   const wrap = (
     provider: SearchProvider,
@@ -2486,25 +2568,50 @@ async function executePlan(
         }),
       );
 
+  /*
+   * One plan represents one query budget unit. Do not spend the same unit at
+   * every provider by default. Fresh-news growth searches use the free-tier
+   * friendly NewsAPI first; Tavily basic is the primary discovery source; and
+   * SerpAPI remains an explicit fallback when the earlier source is thin.
+   */
   if (
-    environment.tavilyApiKey
+    plan.purpose === "growth_signal" &&
+    environment.newsApiKey
   ) {
-    jobs.push(
-      wrap(
-        "Tavily",
-        tavilySearch(
-          plan,
-          environment.tavilyApiKey,
-        ),
+    const news = await wrap(
+      "NewsAPI",
+      newsApiSearch(
+        plan,
+        environment.newsApiKey,
       ),
     );
+
+    results.push(news);
+
+    if (news.candidates.length >= 3) {
+      return results;
+    }
   }
 
-  if (
-    environment.serpApiKey
-  ) {
-    jobs.push(
-      wrap(
+  if (environment.tavilyApiKey) {
+    const tavily = await wrap(
+      "Tavily",
+      tavilySearch(
+        plan,
+        environment.tavilyApiKey,
+      ),
+    );
+
+    results.push(tavily);
+
+    if (tavily.candidates.length >= 3) {
+      return results;
+    }
+  }
+
+  if (environment.serpApiKey) {
+    results.push(
+      await wrap(
         "SerpAPI",
         serpApiSearch(
           plan,
@@ -2514,23 +2621,7 @@ async function executePlan(
     );
   }
 
-  if (
-    environment.newsApiKey
-  ) {
-    jobs.push(
-      wrap(
-        "NewsAPI",
-        newsApiSearch(
-          plan,
-          environment.newsApiKey,
-        ),
-      ),
-    );
-  }
-
-  return Promise.all(
-    jobs,
-  );
+  return results;
 }
 
 function getHostname(
@@ -2902,6 +2993,76 @@ async function inspectSourcePage(
       response.url ||
       sourceUrl;
 
+    const contactPageUrl =
+      findContactPageUrl(
+        html,
+        finalUrl,
+      );
+
+    let emails =
+      extractEmails(
+        text,
+      );
+
+    let phones =
+      extractPhones(
+        text,
+      );
+
+    /*
+     * Related domains often expose their shared phone or email only on the
+     * contact page. Fetch a same-domain contact page so entity deduplication
+     * uses that public identity, without following third-party links.
+     */
+    if (
+      contactPageUrl &&
+      getHostname(contactPageUrl) ===
+        getHostname(finalUrl)
+    ) {
+      try {
+        const contactResponse =
+          await fetchWithTimeout(
+            contactPageUrl,
+            {
+              headers: {
+                Accept:
+                  "text/html,application/xhtml+xml",
+                "User-Agent":
+                  "CossaLeadHunter/4.0 (+https://growth.cossanexusholdings.co.za)",
+              },
+              redirect: "follow",
+            },
+            PAGE_TIMEOUT_MS,
+          );
+
+        if (
+          contactResponse.ok &&
+          (contactResponse.headers.get("content-type") ?? "").toLowerCase().includes("text/html")
+        ) {
+          const contactText =
+            htmlToText(
+              await contactResponse.text(),
+            );
+
+          emails = [
+            ...new Set([
+              ...emails,
+              ...extractEmails(contactText),
+            ]),
+          ].slice(0, 8);
+
+          phones = [
+            ...new Set([
+              ...phones,
+              ...extractPhones(contactText),
+            ]),
+          ].slice(0, 8);
+        }
+      } catch {
+        // The primary page remains valid evidence when its contact page fails.
+      }
+    }
+
     return {
       url:
         sourceUrl,
@@ -2923,20 +3084,13 @@ async function inspectSourcePage(
       text,
 
       emails:
-        extractEmails(
-          text,
-        ),
+        emails,
 
       phones:
-        extractPhones(
-          text,
-        ),
+        phones,
 
       contactPageUrl:
-        findContactPageUrl(
-          html,
-          finalUrl,
-        ),
+        contactPageUrl,
 
       inspectedAt,
 
@@ -3341,13 +3495,21 @@ function inferBuyerRole(
 
 function inferSectorFromSource(
   candidate: SearchCandidate,
-): "private" | "government" | "nonprofit" {
+  inspection: PageInspection,
+): CandidateSector {
   const searchable =
-    `${candidate.title} ${candidate.snippet} ${candidate.url}`;
+    `${candidate.title} ${candidate.snippet} ${candidate.url} ${inspection.title ?? ""} ${inspection.text.slice(0, 8_000)}`;
 
   if (
     isGovernmentSource(
       candidate.url,
+    ) ||
+    inspection.emails.some((email) =>
+      email.endsWith(".gov.za"),
+    ) ||
+    (
+      PROCUREMENT_PATTERN.test(searchable) &&
+      GOVERNMENT_BUYER_PATTERN.test(searchable)
     )
   ) {
     return "government";
@@ -3366,11 +3528,29 @@ function inferSectorFromSource(
 
 function sectorAllowed(
   request: LeadHunterSearchRequest,
-  sector:
-    | "private"
-    | "government"
-    | "nonprofit",
+  sector: CandidateSector,
 ): boolean {
+  if (
+    request.sector === "private" &&
+    sector !== "private"
+  ) {
+    return false;
+  }
+
+  if (
+    request.sector === "government" &&
+    sector !== "government"
+  ) {
+    return false;
+  }
+
+  if (
+    request.sector === "nonprofit" &&
+    sector !== "nonprofit"
+  ) {
+    return false;
+  }
+
   if (
     sector ===
     "private"
@@ -3433,6 +3613,185 @@ function detectCompetitorServices(
       matches,
     ),
   ];
+}
+
+function serviceRequirementPatterns(
+  service: LeadHunterServiceCategory,
+): RegExp[] {
+  const patterns: Partial<
+    Record<
+      LeadHunterServiceCategory,
+      RegExp[]
+    >
+  > = {
+    construction: [/\b(construction works?|building works?|civil works?|infrastructure works?|main contractor|contractor panel)\b/i],
+    renovation: [/\b(renovation|refurbishment|building upgrade|alterations?)\b/i],
+    property_maintenance: [/\b(property maintenance|maintenance contract|planned maintenance|minor works?|repair works?)\b/i],
+    painting: [/\b(painting works?|repainting|painting contract)\b/i],
+    tiling: [/\b(tiling works?|floor tiling|wall tiling)\b/i],
+    ceilings: [/\b(ceiling (?:installation|repair|repairs|works)|suspended ceilings?)\b/i],
+    roofing: [/\b(roof(?:ing)? (?:works?|repair|repairs|replacement)|roof replacement)\b/i],
+    plumbing: [/\b(plumbing (?:works?|repair|repairs|contract)|water reticulation)\b/i],
+    facility_management: [/\b(facilit(?:y|ies) management|facility services?)\b/i],
+    commercial_cleaning: [/\b(commercial cleaning|cleaning contract|cleaning services required|janitorial)\b/i],
+    deep_cleaning: [/\b(deep cleaning|post[- ]construction cleaning|industrial cleaning)\b/i],
+    hygiene: [/\b(hygiene|sanitation|washroom services?|sanitary services?)\b/i],
+    landscaping: [/\b(landscaping|landscape maintenance|garden services?)\b/i],
+    waste_management: [/\b(waste management|waste collection|refuse removal|waste disposal)\b/i],
+    website_design: [/\b(website (?:design|development|redesign|upgrade)|web(?:site)? development|web design|web portal)\b/i],
+    logo_design: [/\b(logo (?:design|redesign|development|upgrade)|new logo)\b/i],
+    branding: [/\b(branding|brand identity|brand strategy|brand redesign)\b/i],
+    seo: [/\b(SEO|search engine optimi[sz]ation)\b/i],
+    digital_marketing: [/\b(digital marketing|marketing services? required|marketing campaign)\b/i],
+    social_media_management: [/\b(social media (?:management|services?|campaign))\b/i],
+    google_business_profile: [/\b(google business profile|google business listing|google profile)\b/i],
+    lead_generation: [/\b(lead generation|appointment setting|sales leads?)\b/i],
+    crm: [/\b(CRM|customer relationship management|salesforce automation)\b/i],
+    ai_automation: [/\b(AI automation|artificial intelligence (?:solution|solutions)|workflow automation|business process automation)\b/i],
+    business_documents: [/\b(document management|business documents?|document system)\b/i],
+    quotations: [/\b(quotation system|quote system|quotations? (?:software|process|system))\b/i],
+    proposals: [/\b(proposal (?:writing|development|system)|bid proposal)\b/i],
+    contracts: [/\b(contract (?:management|drafting|document|system)|service level agreement)\b/i],
+    ecommerce: [/\b(e-?commerce|online store|web shop|shopping cart)\b/i],
+  };
+
+  return patterns[service] ?? [];
+}
+
+function matchingRequestedServices(
+  request: LeadHunterSearchRequest,
+  content: string,
+): LeadHunterServiceCategory[] {
+  return request.services.filter(
+    (service) =>
+      serviceRequirementPatterns(
+        service,
+      ).some(
+        (pattern) =>
+          pattern.test(
+            content,
+          ),
+      ),
+  );
+}
+
+function parseProcurementDate(
+  value: string,
+): Date | null {
+  const written = value.match(
+    /\b(\d{1,2})[\s-](jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\s,/-]+(\d{2,4})\b/i,
+  );
+
+  const numeric = value.match(
+    /\b(\d{4})[/-](\d{1,2})[/-](\d{1,2})\b|\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/,
+  );
+
+  let day: number;
+  let month: number;
+  let year: number;
+
+  if (written) {
+    day = Number(written[1]);
+    month = [
+      "jan", "feb", "mar", "apr", "may", "jun",
+      "jul", "aug", "sep", "oct", "nov", "dec",
+    ].findIndex((item) =>
+      written[2].toLowerCase().startsWith(item),
+    ) + 1;
+    year = Number(written[3]);
+  } else if (numeric?.[1]) {
+    year = Number(numeric[1]);
+    month = Number(numeric[2]);
+    day = Number(numeric[3]);
+  } else if (numeric) {
+    day = Number(numeric[4]);
+    month = Number(numeric[5]);
+    year = Number(numeric[6]);
+  } else {
+    return null;
+  }
+
+  if (year < 100) {
+    year += 2000;
+  }
+
+  const parsed = new Date(
+    Date.UTC(year, month - 1, day, 23, 59, 59),
+  );
+
+  return parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+    ? parsed
+    : null;
+}
+
+function validateProcurement(
+  request: LeadHunterSearchRequest,
+  candidate: SearchCandidate,
+  inspection: PageInspection,
+  content: string,
+): ProcurementValidation {
+  const matchedServices = matchingRequestedServices(
+    request,
+    content,
+  );
+  const deadlineMatch = content.match(
+    PROCUREMENT_DEADLINE_PATTERN,
+  );
+  const closingDate = deadlineMatch
+    ? parseProcurementDate(deadlineMatch[0])
+    : null;
+  const referenceMatches = [
+    ...content.matchAll(
+      new RegExp(
+        PROCUREMENT_REFERENCE_PATTERN.source,
+        "gi",
+      ),
+    ),
+  ];
+  const procurementMentions = content.match(
+    /\b(?:RFQ|RFP|RFT|tender|bid|quotation)\b/gi,
+  )?.length ?? 0;
+  const publicBuyers = [
+    "sanral", "merseta", "state theatre", "eskom", "transnet", "prasa",
+  ].filter((name) =>
+    lowerText(content).includes(name),
+  );
+  const title = `${candidate.title} ${inspection.title ?? ""}`;
+
+  return {
+    hasSelectedService:
+      matchedServices.length > 0,
+    matchedServices,
+    hasReference:
+      PROCUREMENT_REFERENCE_PATTERN.test(
+        `${content} ${candidate.url}`,
+      ),
+    closingDate,
+    isExpired:
+      Boolean(closingDate && closingDate.getTime() < Date.now()),
+    isAmbiguous:
+      (PROCUREMENT_AGGREGATOR_PATTERN.test(title) &&
+        procurementMentions > 2) ||
+      referenceMatches.length > 1 ||
+      (publicBuyers.length > 1 && procurementMentions > 3),
+  };
+}
+
+function isRejectedDisposition(
+  disposition: CandidateDisposition,
+): boolean {
+  return [
+    "competitor",
+    "directory",
+    "informational",
+    "irrelevant",
+    "sector_mismatch",
+    "service_mismatch",
+    "expired_procurement",
+    "ambiguous_procurement",
+  ].includes(disposition);
 }
 
 function sourceTrustScore(
@@ -3541,6 +3900,7 @@ function assessCandidate(
   const sector =
     inferSectorFromSource(
       candidate,
+      inspection,
     );
 
   if (
@@ -3605,6 +3965,14 @@ function assessCandidate(
       combined,
     );
 
+  const procurement =
+    validateProcurement(
+      request,
+      candidate,
+      inspection,
+      combined,
+    );
+
   const supplierRegistration =
     SUPPLIER_REGISTRATION_PATTERN.test(
       combined,
@@ -3642,20 +4010,86 @@ function assessCandidate(
     !supplierRegistration &&
     !partnershipSignal;
 
-  /**
-   * Formal procurement wins because a supplier can also buy
-   * subcontracting/services. But it must be actual procurement evidence.
+  /*
+   * A result is never a tender merely because it contains "RFQ" or appeared
+   * in a procurement search. It must be a single, current notice for one of
+   * the selected services. This blocks unrelated advertising RFQs and tender
+   * aggregation pages from being treated as construction opportunities.
    */
-  if (
-    formalProcurement &&
-    (
-      isGovernmentSource(
+  if (formalProcurement) {
+    if (procurement.isAmbiguous) {
+      return {
+        disposition: "ambiguous_procurement",
+        buyerFit: 0,
+        sourceTrust,
+        reasons: [
+          "The page appears to aggregate multiple procurement notices or buyers rather than identifying one actionable opportunity.",
+        ],
+        probableBuyerRole: null,
+        competitorForServices: competitors,
+      };
+    }
+
+    if (!procurement.hasSelectedService) {
+      return {
+        disposition: "service_mismatch",
+        buyerFit: 0,
+        sourceTrust,
+        reasons: [
+          "The procurement notice does not evidence a requirement for any selected Cossa service.",
+        ],
+        probableBuyerRole: null,
+        competitorForServices: competitors,
+      };
+    }
+
+    if (
+      !procurement.hasReference &&
+      !isGovernmentSource(
         candidate.url,
-      ) ||
-      candidate.purpose ===
-        "active_procurement"
-    )
-  ) {
+      )
+    ) {
+      return {
+        disposition: "irrelevant",
+        buyerFit: 10,
+        sourceTrust,
+        reasons: [
+          "The procurement page has no tender, bid or RFQ reference that can tie the service requirement to one verifiable notice.",
+        ],
+        probableBuyerRole: null,
+        competitorForServices: competitors,
+      };
+    }
+
+    if (
+      request.exclude_expired_procurement !== false &&
+      procurement.isExpired
+    ) {
+      return {
+        disposition: "expired_procurement",
+        buyerFit: 0,
+        sourceTrust,
+        reasons: [
+          "The procurement notice has an expired closing date and is not a current opportunity.",
+        ],
+        probableBuyerRole: null,
+        competitorForServices: competitors,
+      };
+    }
+
+    if (!procurement.closingDate) {
+      return {
+        disposition: "irrelevant",
+        buyerFit: 10,
+        sourceTrust,
+        reasons: [
+          "The procurement notice has no verifiable closing date, so its current validity cannot be established.",
+        ],
+        probableBuyerRole: null,
+        competitorForServices: competitors,
+      };
+    }
+
     return {
       disposition:
         "active_opportunity",
@@ -3666,7 +4100,7 @@ function assessCandidate(
       sourceTrust,
 
       reasons: [
-        "The source contains formal procurement language tied to this organisation or procurement source.",
+        `A current procurement notice matches the selected service${procurement.matchedServices.length > 1 ? "s" : ""}: ${procurement.matchedServices.map(serviceLabel).join(", ")}.`,
       ],
 
       probableBuyerRole:
@@ -3680,6 +4114,21 @@ function assessCandidate(
   if (
     supplierRegistration
   ) {
+    if (
+      procurement.matchedServices.length === 0
+    ) {
+      return {
+        disposition: "service_mismatch",
+        buyerFit: 0,
+        sourceTrust,
+        reasons: [
+          "The supplier-registration page does not identify a category matching any selected Cossa service.",
+        ],
+        probableBuyerRole: null,
+        competitorForServices: competitors,
+      };
+    }
+
     return {
       disposition:
         "supplier_opportunity",
@@ -3708,6 +4157,21 @@ function assessCandidate(
   if (
     partnershipSignal
   ) {
+    if (
+      procurement.matchedServices.length === 0
+    ) {
+      return {
+        disposition: "service_mismatch",
+        buyerFit: 0,
+        sourceTrust,
+        reasons: [
+          "The partnership or subcontracting page does not evidence a requirement for any selected Cossa service.",
+        ],
+        probableBuyerRole: null,
+        competitorForServices: competitors,
+      };
+    }
+
     return {
       disposition:
         "partner",
@@ -3796,6 +4260,7 @@ function assessCandidate(
    */
   if (
     strongBuyerNeed &&
+    procurement.matchedServices.length > 0 &&
     !sellerLanguage
   ) {
     return {
@@ -3824,6 +4289,7 @@ function assessCandidate(
    */
   if (
     expansion &&
+    procurement.matchedServices.length > 0 &&
     !offersSameService &&
     !sellerLanguage
   ) {
@@ -3887,6 +4353,7 @@ function assessCandidate(
   if (
     candidate.purpose ===
       "website_gap" &&
+    procurement.matchedServices.length > 0 &&
     !offersSameService
   ) {
     const hasDigitalGap =
@@ -4253,6 +4720,18 @@ function chooseService(
       0,
       8000,
     )}`;
+
+  const matchingServices =
+    matchingRequestedServices(
+      request,
+      text,
+    );
+
+  if (
+    matchingServices.length > 0
+  ) {
+    return matchingServices[0];
+  }
 
   const patterns: Array<
     [
@@ -4733,13 +5212,7 @@ function calculateScores(
     );
 
   const rejected =
-    [
-      "competitor",
-      "directory",
-      "informational",
-      "irrelevant",
-      "sector_mismatch",
-    ].includes(
+    isRejectedDisposition(
       assessment.disposition,
     );
 
@@ -4953,13 +5426,7 @@ function classifyProspect(
   score: number,
 ): ProspectClassification {
   if (
-    [
-      "competitor",
-      "directory",
-      "informational",
-      "irrelevant",
-      "sector_mismatch",
-    ].includes(
+    isRejectedDisposition(
       assessment.disposition,
     )
   ) {
@@ -5159,6 +5626,7 @@ function createProspect(
   const sector =
     inferSectorFromSource(
       candidate,
+      inspection,
     );
 
   const organisationName =
@@ -5175,13 +5643,7 @@ function createProspect(
     );
 
   const rejected =
-    [
-      "competitor",
-      "directory",
-      "informational",
-      "irrelevant",
-      "sector_mismatch",
-    ].includes(
+    isRejectedDisposition(
       assessment.disposition,
     );
 
@@ -5394,6 +5856,34 @@ function createProspect(
         : inspection.emails[0] ??
           null,
 
+    identity_keys:
+      rejected
+        ? []
+        : [
+            ...new Set([
+              ...inspection.phones
+                .map(normalisePhoneKey)
+                .filter(
+                  (value): value is string =>
+                    Boolean(value),
+                )
+                .map(
+                  (value) =>
+                    `phone:${value}`,
+                ),
+              ...inspection.emails
+                .map(normaliseEmailKey)
+                .filter(
+                  (value): value is string =>
+                    Boolean(value),
+                )
+                .map(
+                  (value) =>
+                    `email:${value}`,
+                ),
+            ]),
+          ],
+
     contact_page_url:
       rejected
         ? null
@@ -5551,6 +6041,21 @@ function prospectIdentityKeys(
     keys.push(
       `email:${email}`,
     );
+  }
+
+  for (
+    const identityKey of
+    prospect.identity_keys ?? []
+  ) {
+    if (
+      /^(phone|email):.+$/i.test(
+        identityKey,
+      )
+    ) {
+      keys.push(
+        identityKey.toLowerCase(),
+      );
+    }
   }
 
   if (hostname) {
