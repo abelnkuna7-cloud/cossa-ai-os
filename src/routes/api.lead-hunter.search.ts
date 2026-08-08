@@ -70,6 +70,14 @@ const PRIVATE_SOURCE_DOMAINS_TO_EXCLUDE = [
   "youtube.com",
 ];
 
+/* Lead Hunter must never qualify Cossa's own brands as customer prospects. */
+const COSSA_FIRST_PARTY_DOMAINS = [
+  "cossanexusholdings.co.za",
+];
+
+const COSSA_FIRST_PARTY_NAME_PATTERN =
+  /\b(?:cossa nexus(?: holdings| construction)?|cossa facility services|cossa tech|cossa ai growth|cossa store|nexdocs)\b/i;
+
 const HIGH_TRUST_GOVERNMENT_DOMAINS = [
   "etenders.gov.za",
   "gov.za",
@@ -160,9 +168,6 @@ const CUSTOMER_ACQUISITION_PROVIDER_PATTERN =
 
 const PUBLIC_BUYER_ROLE_PATTERN =
   /\b(procurement manager|supply chain manager|facilities manager|facility manager|property manager|estate manager|operations manager|school principal|administrator|marketing manager|it manager|project manager|business owner|managing director|bid manager|contracts manager|procurement officer|scm manager)\b/i;
-
-const DIGITAL_AUDIT_MISSION_PATTERN =
-  /\b(website|web design|redesign|logo|branding|seo|google business|google profile|online presence|social media|digital marketing|crm|automation|ecommerce|e-commerce)\b/i;
 
 const WEBSITE_WEAKNESS_PATTERN =
   /\b(outdated website|website redesign|broken website|not mobile friendly|non-mobile|poor mobile experience|missing contact form|no contact form|missing whatsapp|no whatsapp|poor seo|weak seo|slow website|website error|under construction website|inactive website)\b/i;
@@ -1586,11 +1591,12 @@ function createSearchQueries(
   const plans:
     SearchPlan[] = [];
 
-  const mission =
-    cleanText(
-      request.search_instruction,
-    ) ?? "";
-
+  /*
+   * `search_instruction` is reconciled into the request before this point.
+   * Do not paste the full internal mission into a public search query: it
+   * contains policy wording and Cossa brand names, neither of which identifies
+   * a buyer and both of which can surface first-party pages.
+   */
   const combinedLocations = [
     ...(request.cities ?? []),
     ...(request.suburbs ?? []),
@@ -1645,40 +1651,6 @@ function createSearchQueries(
   const shouldNonprofit =
     request.include_nonprofits === true &&
     (request.sector === "mixed" || request.sector === "nonprofit");
-
-  if (mission) {
-    const missionPurpose:
-      SearchPurpose =
-      PROCUREMENT_PATTERN.test(
-        mission,
-      ) ||
-      /\b(tender|rfq|rfp|bid|procurement)\b/i.test(
-        mission,
-      )
-        ? "active_procurement"
-        : DIGITAL_AUDIT_MISSION_PATTERN.test(
-              mission,
-            )
-          ? "website_gap"
-          : "buyer_discovery";
-
-    plans.push({
-      query:
-        `${mission} ${location}`,
-
-      purpose:
-        missionPurpose,
-
-      targetDescription:
-        request.organisation_types[0] ??
-        request.industries[0] ??
-        "custom mission target",
-
-      service:
-        request.services[0] ??
-        "general",
-    });
-  }
 
   for (
     const service of request.services.slice(
@@ -1893,12 +1865,64 @@ function createSearchQueries(
       ),
     );
 
-  return [
+  const availablePlans = [
     ...unique.values(),
-  ].slice(
-    0,
-    requestedLimit,
-  );
+  ];
+  const selectedPlans: SearchPlan[] = [];
+  const selectedServices = new Set<
+    LeadHunterServiceCategory
+  >();
+  const selectedTargets = new Set<string>();
+
+  /*
+   * Economy searches have only a few calls available. Spend them across
+   * different selected services and buyer categories instead of using every
+   * call on the first service in the form.
+   */
+  for (const plan of availablePlans) {
+    const targetKey =
+      `${plan.purpose}:${plan.targetDescription.toLowerCase()}`;
+
+    if (
+      selectedPlans.length < requestedLimit &&
+      !selectedServices.has(plan.service) &&
+      !selectedTargets.has(targetKey)
+    ) {
+      selectedPlans.push(plan);
+      selectedServices.add(plan.service);
+      selectedTargets.add(targetKey);
+    }
+  }
+
+  /*
+   * A narrow hunt can legitimately have one target category. In that case,
+   * preserve service coverage before falling back to repeated searches.
+   */
+  for (const plan of availablePlans) {
+    if (
+      selectedPlans.length >= requestedLimit ||
+      selectedPlans.includes(plan) ||
+      selectedServices.has(plan.service)
+    ) {
+      continue;
+    }
+
+    selectedPlans.push(plan);
+    selectedServices.add(plan.service);
+  }
+
+  for (const plan of availablePlans) {
+    if (
+      selectedPlans.length >= requestedLimit ||
+      selectedPlans.includes(plan)
+    ) {
+      continue;
+    }
+
+    selectedPlans.push(plan);
+  }
+
+  return selectedPlans;
 }
 
 async function fetchWithTimeout(
@@ -3181,6 +3205,50 @@ function isGovernmentSource(
   );
 }
 
+function isCossaFirstPartyCandidate(
+  candidate: SearchCandidate,
+  inspection: PageInspection,
+): boolean {
+  const urls = [
+    candidate.url,
+    inspection.url,
+    inspection.finalUrl,
+  ];
+
+  if (
+    urls.some((url) => {
+      const host =
+        getHostname(
+          url,
+        );
+
+      return COSSA_FIRST_PARTY_DOMAINS.some(
+        (domain) =>
+          host === domain ||
+          host.endsWith(
+            `.${domain}`,
+          ),
+      );
+    })
+  ) {
+    return true;
+  }
+
+  if (
+    inspection.emails.some((email) =>
+      email.endsWith(
+        "@cossanexusholdings.co.za",
+      ),
+    )
+  ) {
+    return true;
+  }
+
+  return COSSA_FIRST_PARTY_NAME_PATTERN.test(
+    `${candidate.title} ${inspection.title ?? ""}`,
+  );
+}
+
 function isDirectorySource(
   url: string,
   content: string,
@@ -4050,6 +4118,24 @@ function assessCandidate(
       request,
       combined,
     );
+
+  if (
+    isCossaFirstPartyCandidate(
+      candidate,
+      inspection,
+    )
+  ) {
+    return {
+      disposition: "irrelevant",
+      buyerFit: 0,
+      sourceTrust: 0,
+      reasons: [
+        "The result belongs to Cossa Nexus Holdings or one of its own brands and cannot be a customer prospect.",
+      ],
+      probableBuyerRole: null,
+      competitorForServices: competitors,
+    };
+  }
 
   const sector =
     inferSectorFromSource(
