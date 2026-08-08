@@ -110,6 +110,12 @@ const COMPANY_OPTIONS: Array<{
 }> = [
   {
     value:
+      "cossa_nexus_holdings",
+    label:
+      "Cossa Nexus Holdings",
+  },
+  {
+    value:
       "cossa_nexus_construction",
     label:
       "Cossa Nexus Construction",
@@ -1997,7 +2003,7 @@ function LeadHunterPage() {
 
               <ToggleOption
                 label="Require opportunity evidence"
-                description="Reject results that only match the industry but show no supported service signal."
+                description="When off, Lead Hunter may return low-priority research prospects only when buyer fit, selected-service routing, an official site and a public contact route are verified."
                 checked={
                   request.require_opportunity_signal
                 }
@@ -2040,26 +2046,11 @@ function LeadHunterPage() {
               />
 
               <ToggleOption
-                label="Exclude competitors"
-                description="Reject companies that mainly sell the same selected service."
-                checked={
-                  request.exclude_competitors ??
-                  true
-                }
-                onChange={(
-                  checked,
-                ) =>
-                  setRequest(
-                    (
-                      current,
-                    ) => ({
-                      ...current,
-
-                      exclude_competitors:
-                        checked,
-                    }),
-                  )
-                }
+                label="Buyer-only results"
+                description="Always reject companies that sell the selected service or customer-acquisition services themselves."
+                checked={true}
+                disabled
+                onChange={() => undefined}
               />
 
               <ToggleOption
@@ -2818,15 +2809,17 @@ function ToggleOption({
   description,
   checked,
   onChange,
+  disabled = false,
 }: {
   label: string;
   description?: string;
   checked: boolean;
   onChange:
     (checked: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-border/60 px-3 py-3">
+    <label className={`flex items-start justify-between gap-4 rounded-lg border border-border/60 px-3 py-3 ${disabled ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}>
       <span>
         <span className="block text-xs font-medium text-foreground">
           {label}
@@ -2841,6 +2834,7 @@ function ToggleOption({
 
       <input
         type="checkbox"
+        disabled={disabled}
         checked={
           checked
         }

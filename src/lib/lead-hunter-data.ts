@@ -667,6 +667,8 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "cossa_tech",
       "cossa_ai_growth",
       "nexdocs",
+      "cossa_store",
+      "cossa_nexus_holdings",
     ],
     services: [
       "property_maintenance",
@@ -1480,6 +1482,8 @@ export const DEFAULT_LEAD_HUNTER_REQUEST: LeadHunterSearchRequest = {
     "cossa_tech",
     "cossa_ai_growth",
     "nexdocs",
+    "cossa_store",
+    "cossa_nexus_holdings",
   ],
 
   services: [
@@ -3411,13 +3415,18 @@ export function validateProspect(
         "prospect";
 
   const salesPriority =
-    candidate.sales_priority ??
-    calculateSalesPriority({
-      totalScore,
-      intentScore,
-      contactabilityScore,
-      timingScore,
-    });
+    classification === "prospect" &&
+    signals.every(
+      (signal) => signal.type === "general_fit",
+    )
+      ? "research"
+      : candidate.sales_priority ??
+        calculateSalesPriority({
+          totalScore,
+          intentScore,
+          contactabilityScore,
+          timingScore,
+        });
 
   return {
     id:

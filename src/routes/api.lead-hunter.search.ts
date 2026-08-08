@@ -128,6 +128,15 @@ const STRONG_BUYER_NEED_PATTERN =
 const SERVICE_OFFERING_PATTERN =
   /\b(we offer|we provide|our services|call us today|get a free quote|request a free quote|professional services|specialists in|experts in|affordable services|same day service|book our service|our expertise|we specialise|we specialize|we undertake|we deliver|contact us for|our team provides|trusted contractors?|professional contractors?|leading builders?|building services|construction services|renovation services|maintenance services)\b/i;
 
+/**
+ * These businesses sell customer-acquisition services themselves. They are
+ * not customer prospects for a Lead Hunter mission, even when the selected
+ * service is different. Formal supplier or partnership evidence is
+ * handled before this rule.
+ */
+const CUSTOMER_ACQUISITION_PROVIDER_PATTERN =
+  /\b(?:lead[- ]generation|appointment[- ]setting|digital marketing|marketing|advertising|seo|web design|branding|crm|automation|business growth)\s+(?:agency|company|consultancy|consultant|services?)\b|\b(?:we help businesses (?:get|win|find) customers|customer acquisition agency|sales outsourcing)\b/i;
+
 const PUBLIC_BUYER_ROLE_PATTERN =
   /\b(procurement manager|supply chain manager|facilities manager|facility manager|property manager|estate manager|operations manager|school principal|administrator|marketing manager|it manager|project manager|business owner|managing director|bid manager|contracts manager|procurement officer|scm manager)\b/i;
 
@@ -1237,8 +1246,7 @@ function validateRequest(
         ),
 
       exclude_competitors:
-        candidate.exclude_competitors !==
-        false,
+        true,
 
       exclude_directories:
         candidate.exclude_directories !==
@@ -3675,6 +3683,74 @@ function matchingRequestedServices(
   );
 }
 
+function hasVerifiedResearchBuyerProfile(
+  request: LeadHunterSearchRequest,
+  candidate: SearchCandidate,
+  inspection: PageInspection,
+  content: string,
+): boolean {
+  if (
+    candidate.purpose !== "buyer_discovery" ||
+    request.require_opportunity_signal ||
+    candidate.searchedService === "general" ||
+    !request.services.includes(candidate.searchedService) ||
+    !inspection.fetchSucceeded ||
+    (!inspection.contactPageUrl &&
+      inspection.phones.length === 0 &&
+      inspection.emails.length === 0)
+  ) {
+    return false;
+  }
+
+  const searchable = lowerText(content);
+  const buyerCategoryPattern =
+    /\b(?:property (?:manager|management|owner|developer)|body corporate|homeowners? association|estate (?:manager|management)|facilit(?:y|ies) management|shopping cent(?:re|er)|retail (?:store|centre|center)|office park|warehouse|factory|manufactur(?:er|ing)|logistics|distribution cent(?:re|er)|school|college|university|clinic|hospital|hotel|restaurant|franchise|church|nonprofit|non-profit|ngo)\b/i;
+
+  if (buyerCategoryPattern.test(searchable)) {
+    return true;
+  }
+
+  const genericTargetWords = new Set([
+    "business",
+    "company",
+    "companies",
+    "organisation",
+    "organization",
+    "services",
+    "service",
+    "custom",
+    "target",
+    "industry",
+  ]);
+  const targets = [
+    candidate.targetDescription,
+    ...request.organisation_types,
+    ...request.industries,
+  ];
+
+  return targets.some((target) => {
+    const normalised = lowerText(target).trim();
+    const words = normalised
+      .split(/[^a-z0-9]+/)
+      .filter(
+        (word) => word.length >= 4 && !genericTargetWords.has(word),
+      );
+
+    if (words.length === 0) {
+      return false;
+    }
+
+    if (words.length === 1) {
+      return searchable.includes(words[0]);
+    }
+
+    return (
+      searchable.includes(normalised) ||
+      words.filter((word) => searchable.includes(word)).length >= 2
+    );
+  });
+}
+
 function parseProcurementDate(
   value: string,
 ): Date | null {
@@ -3794,6 +3870,20 @@ function isRejectedDisposition(
   ].includes(disposition);
 }
 
+function isInformationalPage(
+  candidate: SearchCandidate,
+  inspection: PageInspection,
+): boolean {
+  /*
+   * Do not scan an entire organisation site for words such as "careers".
+   * Normal site navigation and footers otherwise turn genuine buyer homepages
+   * into false informational-page rejections.
+   */
+  const pageIdentity = `${candidate.title} ${candidate.snippet} ${inspection.title ?? ""} ${candidate.url}`;
+
+  return INFORMATIONAL_PAGE_PATTERN.test(pageIdentity);
+}
+
 function sourceTrustScore(
   candidate: SearchCandidate,
   inspection: PageInspection,
@@ -3822,12 +3912,8 @@ function sourceTrustScore(
   }
 
   if (
-    INFORMATIONAL_PAGE_PATTERN.test(
-      combined,
-    ) &&
-    !PROCUREMENT_PATTERN.test(
-      combined,
-    )
+    isInformationalPage(candidate, inspection) &&
+    !PROCUREMENT_PATTERN.test(combined)
   ) {
     return 32;
   }
@@ -3998,13 +4084,19 @@ function assessCandidate(
       combined,
     );
 
+  const customerAcquisitionProvider =
+    CUSTOMER_ACQUISITION_PROVIDER_PATTERN.test(
+      combined,
+    );
+
   const offersSameService =
     competitors.length >
     0;
 
   const informational =
-    INFORMATIONAL_PAGE_PATTERN.test(
-      combined,
+    isInformationalPage(
+      candidate,
+      inspection,
     ) &&
     !formalProcurement &&
     !supplierRegistration &&
@@ -4036,7 +4128,7 @@ function assessCandidate(
         buyerFit: 0,
         sourceTrust,
         reasons: [
-          "The procurement notice does not evidence a requirement for any selected Cossa service.",
+          "The procurement notice does not evidence a requirement for any selected service.",
         ],
         probableBuyerRole: null,
         competitorForServices: competitors,
@@ -4122,7 +4214,7 @@ function assessCandidate(
         buyerFit: 0,
         sourceTrust,
         reasons: [
-          "The supplier-registration page does not identify a category matching any selected Cossa service.",
+          "The supplier-registration page does not identify a category matching any selected service.",
         ],
         probableBuyerRole: null,
         competitorForServices: competitors,
@@ -4165,7 +4257,7 @@ function assessCandidate(
         buyerFit: 0,
         sourceTrust,
         reasons: [
-          "The partnership or subcontracting page does not evidence a requirement for any selected Cossa service.",
+          "The partnership or subcontracting page does not evidence a requirement for any selected service.",
         ],
         probableBuyerRole: null,
         competitorForServices: competitors,
@@ -4196,7 +4288,7 @@ function assessCandidate(
   /**
    * HARD SELLER RULE.
    *
-   * If the site sells the same service Cossa wants to sell,
+   * If the site sells the same service the selected business wants to sell,
    * reject it unless explicit procurement/partnership evidence exists.
    */
   if (
@@ -4215,7 +4307,7 @@ function assessCandidate(
       sourceTrust,
 
       reasons: [
-        "The organisation publicly sells the same selected service Cossa is trying to offer.",
+        "The organisation publicly sells the same selected service the selected business is trying to offer.",
         "No separate procurement, subcontracting, supplier-panel or partnership requirement was proven.",
       ],
 
@@ -4224,6 +4316,23 @@ function assessCandidate(
 
       competitorForServices:
         competitors,
+    };
+  }
+
+  if (
+    request.exclude_competitors !== false &&
+    customerAcquisitionProvider
+  ) {
+    return {
+      disposition: "competitor",
+      buyerFit: 5,
+      sourceTrust,
+      reasons: [
+        "The organisation appears to sell lead-generation, marketing or customer-acquisition services rather than buy them.",
+        "No separate procurement, subcontracting, supplier-panel or partnership requirement was proven.",
+      ],
+      probableBuyerRole: null,
+      competitorForServices: competitors,
     };
   }
 
@@ -4244,7 +4353,7 @@ function assessCandidate(
         ),
 
       reasons: [
-        "The page is primarily informational or market-content material and does not prove that the organisation is buying a Cossa service.",
+        "The page is primarily informational or market-content material and does not prove that the organisation is buying a selected service.",
       ],
 
       probableBuyerRole:
@@ -4313,40 +4422,6 @@ function assessCandidate(
     };
   }
 
-  const target =
-    candidate.targetDescription.toLowerCase();
-
-  const targetWords =
-    target
-      .split(
-        /\s+/,
-      )
-      .filter(
-        (
-          value,
-        ) =>
-          value.length >=
-          5,
-      );
-
-  const combinedLower =
-    lowerText(
-      combined,
-    );
-
-  const targetMatch =
-    combinedLower.includes(
-      target,
-    ) ||
-    targetWords.some(
-      (
-        value,
-      ) =>
-        combinedLower.includes(
-          value,
-        ),
-    );
-
   /**
    * Digital audit missions can use objective observable weaknesses.
    */
@@ -4392,13 +4467,19 @@ function assessCandidate(
   }
 
   /**
-   * A normal buyer-category match remains a prospect, not an
-   * invented active opportunity.
+   * With opportunity evidence disabled, return only a verified research
+   * prospect: an official, contactable buyer-category site for a selected
+   * service. This is deliberately never presented as an active opportunity.
    */
   if (
     candidate.purpose ===
       "buyer_discovery" &&
-    targetMatch &&
+    hasVerifiedResearchBuyerProfile(
+      request,
+      candidate,
+      inspection,
+      combined,
+    ) &&
     !offersSameService &&
     !sellerLanguage
   ) {
@@ -4407,13 +4488,13 @@ function assessCandidate(
         "buyer",
 
       buyerFit:
-        65,
+        60,
 
       sourceTrust,
 
       reasons: [
-        `The organisation matches the selected buyer category: ${candidate.targetDescription}.`,
-        "No active buying request was proven. Treat this as a prospecting lead rather than a confirmed opportunity.",
+        `The official organisation site matches a buyer category for the selected ${serviceLabel(candidate.searchedService)} service.`,
+        "This is a verified research prospect with a public contact route; no active buying request has been proven.",
       ],
 
       probableBuyerRole,
@@ -4442,7 +4523,7 @@ function assessCandidate(
       sourceTrust,
 
       reasons: [
-        "The organisation appears to operate in the same service market as Cossa.",
+        "The organisation appears to operate in the same service market as the selected business.",
         "No independent buying, procurement or subcontracting requirement was verified.",
       ],
 
@@ -4933,7 +5014,7 @@ function recommendedCompany(
       "cossa_tech",
 
     ecommerce:
-      "cossa_tech",
+      "cossa_store",
 
     google_business_profile:
       "cossa_tech",
@@ -5441,6 +5522,13 @@ function classifyProspect(
   }
 
   if (
+    assessment.disposition ===
+      "buyer"
+  ) {
+    return "prospect";
+  }
+
+  if (
     [
       "active_tender",
       "request_for_quote",
@@ -5780,9 +5868,9 @@ function createProspect(
         )}. Open and verify the evidence before outreach or bidding.`
       : assessment.disposition ===
           "buyer"
-        ? `${organisationName} matches a buyer category that commonly purchases ${serviceLabel(
+        ? `${organisationName} is a verified research prospect in a buyer category that commonly purchases ${serviceLabel(
             service,
-          )}. No active buying request has been proven, so treat this as a prospect rather than a confirmed opportunity.`
+          )}. No active buying request has been proven, so keep it low priority until a specific need is researched.`
         : assessment.disposition ===
             "partner"
           ? `${organisationName} has explicit public subcontracting, supplier-panel or partnership evidence relevant to ${serviceLabel(
@@ -5814,10 +5902,10 @@ function createProspect(
       ? null
       : assessment.disposition ===
           "partner"
-        ? "Reference the verified subcontracting, supplier-panel or partnership route and explain the specific Cossa capability relevant to it."
+        ? "Reference the verified subcontracting, supplier-panel or partnership route and explain the specific selected-business capability relevant to it."
         : activeOpportunity
           ? "Reference only the specific public requirement, development or verified weakness. Offer a short discovery call, site assessment or relevant review without claiming that the organisation requested contact from Cossa."
-          : "Introduce Cossa briefly, explain one relevant business outcome for organisations of this type, and offer a low-friction next step such as a site assessment, website review or short needs discussion.";
+          : "Introduce the selected business briefly, explain one relevant business outcome for organisations of this type, and offer a low-friction next step such as a site assessment, website review or short needs discussion.";
 
   return {
     id:
@@ -6711,7 +6799,7 @@ export const Route =
 
                 "A qualified prospect is not automatically an active buyer. Active opportunities require specific supported procurement, service-need, verified digital-gap or expansion evidence.",
 
-                "Companies that sell the same selected Cossa service are rejected unless a separate procurement, subcontracting, supplier-panel or partnership route is explicitly evidenced.",
+                "Companies that sell the same selected service are rejected unless a separate procurement, subcontracting, supplier-panel or partnership route is explicitly evidenced.",
 
                 "Public contact details must be used only for lawful, relevant and respectful business outreach.",
 
