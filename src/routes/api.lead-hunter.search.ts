@@ -292,6 +292,12 @@ type CachedSearchExecution = {
   results: SearchExecution[];
 };
 
+type PersistedSearchCacheRow = {
+  cached_at?: unknown;
+  expires_at?: unknown;
+  search_results?: unknown;
+};
+
 const MAX_CACHED_SEARCH_PLANS = 60;
 const MAX_CACHED_SEARCH_AGE_MS = 168 * 60 * 60 * 1_000;
 
@@ -2772,15 +2778,292 @@ async function executePlan(
 
 function searchPlanCacheKey(
   plan: SearchPlan,
+  environment: Environment,
 ): string {
   return [
+    "v2",
     plan.service,
     plan.purpose,
     plan.targetDescription.toLowerCase(),
     plan.query.toLowerCase(),
+    environment.tavilyApiKey
+      ? "tavily"
+      : "",
+    environment.serpApiKey
+      ? "serpapi"
+      : "",
+    environment.newsApiKey
+      ? "newsapi"
+      : "",
   ].join(
     "|",
   );
+}
+
+function cacheMaxAgeMs(
+  request: LeadHunterSearchRequest,
+): number {
+  return (
+    Math.min(
+      168,
+      Math.max(
+        1,
+        request.cache_max_age_hours ?? 24,
+      ),
+    ) *
+    60 *
+    60 *
+    1_000
+  );
+}
+
+function parsePersistedSearchResults(
+  value: unknown,
+  plan: SearchPlan,
+): SearchExecution[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const results = value.flatMap(
+    (rawResult): SearchExecution[] => {
+      if (
+        typeof rawResult !== "object" ||
+        rawResult === null
+      ) {
+        return [];
+      }
+
+      const result = rawResult as {
+        provider?: unknown;
+        candidates?: unknown;
+      };
+      const provider = result.provider;
+
+      if (
+        (provider !== "Tavily" &&
+          provider !== "SerpAPI" &&
+          provider !== "NewsAPI") ||
+        !Array.isArray(result.candidates)
+      ) {
+        return [];
+      }
+
+      const candidates = result.candidates.flatMap(
+        (rawCandidate): SearchCandidate[] => {
+          if (
+            typeof rawCandidate !== "object" ||
+            rawCandidate === null
+          ) {
+            return [];
+          }
+
+          const candidate = rawCandidate as {
+            title?: unknown;
+            url?: unknown;
+            snippet?: unknown;
+            publishedAt?: unknown;
+            providerScore?: unknown;
+          };
+          const title = cleanText(candidate.title);
+          const url = cleanText(candidate.url);
+
+          if (
+            !title ||
+            !url ||
+            !getHostname(url) ||
+            title.length > 500 ||
+            url.length > 2_048
+          ) {
+            return [];
+          }
+
+          const snippet =
+            cleanText(candidate.snippet)?.slice(
+              0,
+              4_000,
+            ) || "";
+          const publishedAt = cleanText(
+            candidate.publishedAt,
+          );
+          const providerScore =
+            typeof candidate.providerScore === "number" &&
+            Number.isFinite(candidate.providerScore)
+              ? Math.max(
+                  0,
+                  Math.min(
+                    1,
+                    candidate.providerScore,
+                  ),
+                )
+              : 0.5;
+
+          return [
+            {
+              provider,
+              query: plan.query,
+              purpose: plan.purpose,
+              targetDescription:
+                plan.targetDescription,
+              searchedService: plan.service,
+              title,
+              url,
+              snippet,
+              publishedAt,
+              providerScore,
+            },
+          ];
+        },
+      );
+
+      return candidates.length > 0
+        ? [
+            {
+              provider,
+              candidates,
+            },
+          ]
+        : [];
+    },
+  );
+
+  return results.length > 0
+    ? results
+    : null;
+}
+
+async function readPersistentSearchCache(
+  plan: SearchPlan,
+  environment: Environment,
+  token: string,
+  maxAgeMs: number,
+  now: number,
+): Promise<CachedSearchExecution | null> {
+  const query = new URLSearchParams({
+    select: "cached_at,expires_at,search_results",
+    organisation_id: `eq.${environment.organisationId}`,
+    cache_key: `eq.${searchPlanCacheKey(plan, environment)}`,
+    expires_at: `gt.${new Date(now).toISOString()}`,
+    limit: "1",
+  });
+
+  try {
+    const response = await fetch(
+      `${environment.supabaseUrl}/rest/v1/lead_hunter_search_cache?${query}`,
+      {
+        headers: {
+          apikey: environment.supabaseKey,
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      },
+    );
+
+    if (!response.ok) {
+      console.warn(
+        "Lead Hunter persistent cache read skipped:",
+        response.status,
+      );
+      return null;
+    }
+
+    const rows =
+      (await response.json()) as unknown;
+
+    if (
+      !Array.isArray(rows) ||
+      rows.length !== 1 ||
+      typeof rows[0] !== "object" ||
+      rows[0] === null
+    ) {
+      return null;
+    }
+
+    const row = rows[0] as PersistedSearchCacheRow;
+    const cachedAt = Date.parse(
+      cleanText(row.cached_at) || "",
+    );
+    const expiresAt = Date.parse(
+      cleanText(row.expires_at) || "",
+    );
+
+    if (
+      !Number.isFinite(cachedAt) ||
+      !Number.isFinite(expiresAt) ||
+      cachedAt > now ||
+      expiresAt <= now ||
+      now - cachedAt > maxAgeMs
+    ) {
+      return null;
+    }
+
+    const results = parsePersistedSearchResults(
+      row.search_results,
+      plan,
+    );
+
+    return results
+      ? {
+          cachedAt,
+          results,
+        }
+      : null;
+  } catch (error) {
+    console.warn(
+      "Lead Hunter persistent cache read failed:",
+      error instanceof Error
+        ? error.message
+        : "unknown error",
+    );
+    return null;
+  }
+}
+
+async function writePersistentSearchCache(
+  plan: SearchPlan,
+  environment: Environment,
+  token: string,
+  cachedAt: number,
+  maxAgeMs: number,
+  results: SearchExecution[],
+): Promise<void> {
+  try {
+    const response = await fetch(
+      `${environment.supabaseUrl}/rest/v1/lead_hunter_search_cache?on_conflict=organisation_id,cache_key`,
+      {
+        method: "POST",
+        headers: {
+          apikey: environment.supabaseKey,
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify({
+          organisation_id: environment.organisationId,
+          cache_key: searchPlanCacheKey(plan, environment),
+          cached_at: new Date(cachedAt).toISOString(),
+          expires_at: new Date(
+            cachedAt + maxAgeMs,
+          ).toISOString(),
+          search_results: results,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      console.warn(
+        "Lead Hunter persistent cache write skipped:",
+        response.status,
+      );
+    }
+  } catch (error) {
+    console.warn(
+      "Lead Hunter persistent cache write failed:",
+      error instanceof Error
+        ? error.message
+        : "unknown error",
+    );
+  }
 }
 
 function pruneProviderSearchCache(
@@ -2838,6 +3121,7 @@ async function executePlanWithCache(
   plan: SearchPlan,
   environment: Environment,
   request: LeadHunterSearchRequest,
+  token: string,
 ): Promise<{
   results: SearchExecution[];
   reusedCache: boolean;
@@ -2846,15 +3130,11 @@ async function executePlanWithCache(
   const cacheKey =
     searchPlanCacheKey(
       plan,
+      environment,
     );
-  const maxAgeMs =
-    Math.max(
-      1,
-      request.cache_max_age_hours ?? 24,
-    ) *
-    60 *
-    60 *
-    1_000;
+  const maxAgeMs = cacheMaxAgeMs(
+    request,
+  );
   const cached =
     request.use_cached_results
       ? providerSearchCache.get(
@@ -2871,6 +3151,29 @@ async function executePlanWithCache(
       results: cached.results,
       reusedCache: true,
     };
+  }
+
+  if (request.use_cached_results) {
+    const persisted = await readPersistentSearchCache(
+      plan,
+      environment,
+      token,
+      maxAgeMs,
+      now,
+    );
+
+    if (persisted) {
+      providerSearchCache.set(
+        cacheKey,
+        persisted,
+      );
+      pruneProviderSearchCache(now);
+
+      return {
+        results: persisted.results,
+        reusedCache: true,
+      };
+    }
   }
 
   const results = await executePlan(
@@ -2901,6 +3204,15 @@ async function executePlanWithCache(
 
       pruneProviderSearchCache(
         now,
+      );
+
+      await writePersistentSearchCache(
+        plan,
+        environment,
+        token,
+        now,
+        maxAgeMs,
+        successfulResults,
       );
     }
   }
@@ -7099,6 +7411,7 @@ export const Route =
                     plan,
                     environment,
                     searchRequest,
+                    token,
                   ),
               ),
             );
