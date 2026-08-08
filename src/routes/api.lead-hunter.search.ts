@@ -247,6 +247,30 @@ type SearchCandidate = {
   providerScore: number;
 };
 
+type SearchExecution = {
+  provider: SearchProvider;
+  candidates: SearchCandidate[];
+  warning?: string;
+};
+
+type CachedSearchExecution = {
+  cachedAt: number;
+  results: SearchExecution[];
+};
+
+const MAX_CACHED_SEARCH_PLANS = 60;
+const MAX_CACHED_SEARCH_AGE_MS = 168 * 60 * 60 * 1_000;
+
+/*
+ * This caches only public-provider search responses, never qualification or
+ * CRM decisions. Every hunt still re-inspects sources and reruns the current
+ * buyer, sector, evidence and duplicate protections before returning a lead.
+ */
+const providerSearchCache = new Map<
+  string,
+  CachedSearchExecution
+>();
+
 type PageInspection = {
   url: string;
   finalUrl: string;
@@ -2620,12 +2644,8 @@ async function newsApiSearch(
 async function executePlan(
   plan: SearchPlan,
   environment: Environment,
-) {
-  const results: Array<{
-    provider: SearchProvider;
-    candidates: SearchCandidate[];
-    warning?: string;
-  }> = [];
+): Promise<SearchExecution[]> {
+  const results: SearchExecution[] = [];
 
   const wrap = (
     provider: SearchProvider,
@@ -2714,6 +2734,147 @@ async function executePlan(
   }
 
   return results;
+}
+
+function searchPlanCacheKey(
+  plan: SearchPlan,
+): string {
+  return [
+    plan.service,
+    plan.purpose,
+    plan.targetDescription.toLowerCase(),
+    plan.query.toLowerCase(),
+  ].join(
+    "|",
+  );
+}
+
+function pruneProviderSearchCache(
+  now: number,
+): void {
+  for (const [
+    key,
+    entry,
+  ] of providerSearchCache) {
+    if (
+      now - entry.cachedAt >
+      MAX_CACHED_SEARCH_AGE_MS
+    ) {
+      providerSearchCache.delete(
+        key,
+      );
+    }
+  }
+
+  if (
+    providerSearchCache.size <=
+    MAX_CACHED_SEARCH_PLANS
+  ) {
+    return;
+  }
+
+  const oldestKeys = [
+    ...providerSearchCache.entries(),
+  ]
+    .sort(
+      (
+        first,
+        second,
+      ) =>
+        first[1].cachedAt -
+        second[1].cachedAt,
+    )
+    .slice(
+      0,
+      providerSearchCache.size -
+        MAX_CACHED_SEARCH_PLANS,
+    )
+    .map(
+      ([key]) => key,
+    );
+
+  for (const key of oldestKeys) {
+    providerSearchCache.delete(
+      key,
+    );
+  }
+}
+
+async function executePlanWithCache(
+  plan: SearchPlan,
+  environment: Environment,
+  request: LeadHunterSearchRequest,
+): Promise<{
+  results: SearchExecution[];
+  reusedCache: boolean;
+}> {
+  const now = Date.now();
+  const cacheKey =
+    searchPlanCacheKey(
+      plan,
+    );
+  const maxAgeMs =
+    Math.max(
+      1,
+      request.cache_max_age_hours ?? 24,
+    ) *
+    60 *
+    60 *
+    1_000;
+  const cached =
+    request.use_cached_results
+      ? providerSearchCache.get(
+          cacheKey,
+        )
+      : undefined;
+
+  if (
+    cached &&
+    now - cached.cachedAt <=
+      maxAgeMs
+  ) {
+    return {
+      results: cached.results,
+      reusedCache: true,
+    };
+  }
+
+  const results = await executePlan(
+    plan,
+    environment,
+  );
+
+  if (
+    request.use_cached_results
+  ) {
+    const successfulResults = results.filter(
+      (result) =>
+        result.candidates.length >
+        0,
+    );
+
+    if (
+      successfulResults.length >
+      0
+    ) {
+      providerSearchCache.set(
+        cacheKey,
+        {
+          cachedAt: now,
+          results: successfulResults,
+        },
+      );
+
+      pruneProviderSearchCache(
+        now,
+      );
+    }
+  }
+
+  return {
+    results,
+    reusedCache: false,
+  };
 }
 
 function getHostname(
@@ -6858,19 +7019,33 @@ export const Route =
                 (
                   plan,
                 ) =>
-                  executePlan(
+                  executePlanWithCache(
                     plan,
                     environment,
+                    searchRequest,
                   ),
               ),
             );
 
-          for (
-            const group of executions
+          const reusedPlanCount =
+            executions.filter(
+              (
+                execution,
+              ) =>
+                execution.reusedCache,
+            ).length;
+
+          if (
+            reusedPlanCount >
+            0
           ) {
-            for (
-              const result of group
-            ) {
+            warnings.push(
+              `Reused ${reusedPlanCount}/${plans.length} recent public-source searches; those queries did not use provider credits. Source validation and buyer checks were run again.`,
+            );
+          }
+
+          for (const execution of executions) {
+            for (const result of execution.results) {
               if (
                 result.warning
               ) {

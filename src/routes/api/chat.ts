@@ -7,8 +7,11 @@ const GROQ_MODEL = "llama-3.3-70b-versatile";
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 12_000;
 const MAX_TOTAL_MESSAGE_LENGTH = 60_000;
-const MAX_KNOWLEDGE_CONTEXT_LENGTH = 18_000;
-const MAX_OPERATIONAL_CONTEXT_LENGTH = 16_000;
+const MAX_GROQ_HISTORY_MESSAGES = 12;
+const MAX_GROQ_HISTORY_LENGTH = 16_000;
+const MAX_KNOWLEDGE_CONTEXT_LENGTH = 8_000;
+const MAX_OPERATIONAL_CONTEXT_LENGTH = 8_000;
+const MAX_GROQ_COMPLETION_TOKENS = 700;
 
 type ChatRole = "system" | "user" | "assistant";
 
@@ -264,6 +267,50 @@ function validateMessages(
     valid: true,
     messages,
   };
+}
+
+/*
+ * The browser can retain a long conversation, but sending its full transcript
+ * and every data extract to Groq on each turn burns credits without improving
+ * the answer to the latest request. Keep a useful recent window instead.
+ */
+function selectGroqHistory(
+  messages: ChatMessage[],
+): ChatMessage[] {
+  const recent: ChatMessage[] = [];
+  let length = 0;
+
+  for (const message of [...messages].reverse()) {
+    if (
+      recent.length >=
+      MAX_GROQ_HISTORY_MESSAGES
+    ) {
+      break;
+    }
+
+    const remaining =
+      MAX_GROQ_HISTORY_LENGTH -
+      length;
+
+    if (remaining <= 0) {
+      break;
+    }
+
+    const content =
+      message.content.length > remaining
+        ? message.content.slice(
+            -remaining,
+          )
+        : message.content;
+
+    recent.unshift({
+      ...message,
+      content,
+    });
+    length += content.length;
+  }
+
+  return recent;
 }
 
 function extractSearchTerms(message: string): Set<string> {
@@ -843,7 +890,9 @@ export const Route = createFileRoute("/api/chat")({
         const groqMessages: ChatMessage[] = [
           systemPreamble,
           ...(safetyGuard ? [safetyGuard] : []),
-          ...messages,
+          ...selectGroqHistory(
+            messages,
+          ),
         ];
 
         const upstream = await fetch(
@@ -859,6 +908,8 @@ export const Route = createFileRoute("/api/chat")({
               model: GROQ_MODEL,
               stream: true,
               temperature: 0.2,
+              max_tokens:
+                MAX_GROQ_COMPLETION_TOKENS,
               messages: groqMessages,
             }),
             signal: request.signal,
