@@ -126,6 +126,9 @@ const DIRECTORY_TEXT_PATTERN =
 const INFORMATIONAL_PAGE_PATTERN =
   /\b(career guide|careers?|qualification|registered qualifications?|learnership|course|training programme|employment opportunities|recommended subjects|blog|useful information|industry overview|what is|how to become|guide to|tips for choosing|industry trends?|market overview)\b/i;
 
+const RECRUITMENT_OR_JOB_SOURCE_PATTERN =
+  /\b(?:recruitment (?:agency|company|firm|services?)|specialist recruitment|staffing (?:agency|company|services?|solutions)|employment agency|job (?:board|portal|vacancies|listings?)|submit your cv|find talent|find a job|career placement)\b/i;
+
 /*
  * Regulations, advice and community discussions sometimes mention works,
  * contractors or quotations. They describe a topic; they are not a buyer
@@ -4004,6 +4007,7 @@ function isInformationalPage(
 
   return (
     INFORMATIONAL_PAGE_PATTERN.test(pageIdentity) ||
+    RECRUITMENT_OR_JOB_SOURCE_PATTERN.test(pageIdentity) ||
     REGULATORY_OR_FORUM_PAGE_PATTERN.test(pageIdentity)
   );
 }
@@ -4017,6 +4021,15 @@ function isRegulatoryOrForumPage(
 
   return REGULATORY_OR_FORUM_PAGE_PATTERN.test(
     pageIdentity,
+  );
+}
+
+function isRecruitmentOrJobSource(
+  candidate: SearchCandidate,
+  inspection: PageInspection,
+): boolean {
+  return RECRUITMENT_OR_JOB_SOURCE_PATTERN.test(
+    `${candidate.title} ${candidate.snippet} ${inspection.title ?? ""} ${inspection.text.slice(0, 6_000)}`,
   );
 }
 
@@ -4281,13 +4294,34 @@ function assessCandidate(
     };
   }
 
+  if (
+    isRecruitmentOrJobSource(
+      candidate,
+      inspection,
+    )
+  ) {
+    return {
+      disposition: "informational",
+      buyerFit: 0,
+      sourceTrust: Math.min(
+        sourceTrust,
+        35,
+      ),
+      reasons: [
+        "The source is a recruitment, staffing or job-listing business rather than a customer organisation for this hunt.",
+      ],
+      probableBuyerRole: null,
+      competitorForServices: competitors,
+    };
+  }
+
   /*
-   * Government-only hunts are procurement hunts. A public entity's normal
+   * Public-sector organisations procure through formal processes. Their normal
    * website, news, policy and supplier-registration pages are useful context,
-   * but are not a current tender a Cossa company can pursue.
+   * but are not customer opportunities, including during mixed-sector hunts.
    */
   if (
-    request.sector === "government" &&
+    sector === "government" &&
     !formalProcurement
   ) {
     return {
@@ -4312,7 +4346,7 @@ function assessCandidate(
    */
   if (formalProcurement) {
     if (
-      request.sector === "government" &&
+      sector === "government" &&
       !isOfficialPublicSectorSource(
         candidate.url,
       )
