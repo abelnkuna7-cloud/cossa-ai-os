@@ -121,7 +121,7 @@ const DIRECTORY_HOST_PATTERNS = [
 ];
 
 const DIRECTORY_TEXT_PATTERN =
-  /\b(directory|business listings?|find the best|top \d+|compare quotes?|submit a request|get \d+ quotes?|service providers? near me|browse companies|popular listings?)\b/i;
+  /\b(directory|business listings?|find the best|top \d+|compare quotes?|submit a request|get \d+ quotes?|service providers? near me|browse companies|popular listings?|(?:list|database) of (?:[\w&-]+\s+){0,6}(?:companies|businesses|providers|suppliers)|(?:companies|businesses|providers|suppliers) by (?:city|industry|location|province)|top (?:[\w&-]+\s+){0,4}(?:companies|businesses|providers|suppliers))\b/i;
 
 const INFORMATIONAL_PAGE_PATTERN =
   /\b(career guide|careers?|qualification|registered qualifications?|learnership|course|training programme|employment opportunities|recommended subjects|blog|useful information|industry overview|what is|how to become|guide to|tips for choosing|industry trends?|market overview)\b/i;
