@@ -112,6 +112,40 @@ const OFFICIAL_PUBLIC_ENTITY_DOMAINS = [
 const PUBLIC_SCHOOL_PATTERN =
   /\b(?:public school|section\s+21\s+public\s+school|(?:gauteng|provincial)\s+department\s+of\s+education|department\s+of\s+basic\s+education|school\s+governing\s+body|\bsgb\b)\b/i;
 
+/*
+ * South African public universities usually publish from their own academic
+ * domains, rather than .gov.za. Treat their official sites as public-sector
+ * sources so ordinary university pages cannot be marketed as private buyers.
+ */
+const PUBLIC_HIGHER_EDUCATION_DOMAINS = [
+  "cput.ac.za",
+  "cut.ac.za",
+  "dut.ac.za",
+  "mandela.ac.za",
+  "mut.ac.za",
+  "nwu.ac.za",
+  "ru.ac.za",
+  "smu.ac.za",
+  "spu.ac.za",
+  "sun.ac.za",
+  "tut.ac.za",
+  "uct.ac.za",
+  "ufh.ac.za",
+  "ufs.ac.za",
+  "uj.ac.za",
+  "ukzn.ac.za",
+  "ul.ac.za",
+  "ump.ac.za",
+  "unisa.ac.za",
+  "univen.ac.za",
+  "unizulu.ac.za",
+  "up.ac.za",
+  "uwc.ac.za",
+  "vut.ac.za",
+  "wits.ac.za",
+  "wsu.ac.za",
+];
+
 const DIRECTORY_HOST_PATTERNS = [
   "yellowpages",
   "brabys",
@@ -4005,6 +4039,25 @@ function isOfficialPublicEntitySource(
   );
 }
 
+function isOfficialPublicHigherEducationSource(
+  url: string,
+): boolean {
+  const host =
+    getHostname(
+      url,
+    );
+
+  return PUBLIC_HIGHER_EDUCATION_DOMAINS.some(
+    (
+      domain,
+    ) =>
+      host === domain ||
+      host.endsWith(
+        `.${domain}`,
+      ),
+  );
+}
+
 function isOfficialPublicSectorSource(
   url: string,
 ): boolean {
@@ -4013,6 +4066,9 @@ function isOfficialPublicSectorSource(
       url,
     ) ||
     isOfficialPublicEntitySource(
+      url,
+    ) ||
+    isOfficialPublicHigherEducationSource(
       url,
     )
   );
