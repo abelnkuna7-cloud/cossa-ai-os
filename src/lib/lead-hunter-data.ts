@@ -2837,9 +2837,23 @@ function applyInstructionIntent(
       "Require opportunity signal",
     );
 
-  if (
-    requireSignalField
-  ) {
+  /*
+   * A customer-only mission may deliberately permit verified Research
+   * prospects when there is no current tender or buying signal. Respect that
+   * explicit instruction instead of leaving the UI's stricter default on.
+   */
+  const allowsResearchProspects =
+    /\bif no active opportunit(?:y|ies) (?:is|are) proven,?\s*(?:return|keep)\b[\s\S]{0,180}?\b(?:research prospects?|low[-\s]priority research)\b/i.test(
+      instruction,
+    ) ||
+    /\b(?:return|keep)\b[\s\S]{0,100}?\b(?:research prospects?|low[-\s]priority research)\b[\s\S]{0,100}?\b(?:no active opportunit(?:y|ies)|not a confirmed active buyer)\b/i.test(
+      instruction,
+    );
+
+  if (allowsResearchProspects) {
+    next.require_opportunity_signal =
+      false;
+  } else if (requireSignalField) {
     const normalised =
       requireSignalField
         .toLowerCase();
@@ -4302,6 +4316,12 @@ export function buildHuntSummary(
 
       `Nonprofit: ${
         request.include_nonprofits
+          ? "YES"
+          : "NO"
+      }`,
+
+      `Require opportunity evidence: ${
+        request.require_opportunity_signal
           ? "YES"
           : "NO"
       }`,
