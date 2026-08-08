@@ -83,6 +83,19 @@ const HIGH_TRUST_GOVERNMENT_DOMAINS = [
   "sita.co.za",
 ];
 
+/*
+ * These are public entities rather than government-domain websites. They are
+ * valid public-sector buyers, but their ordinary informational pages must not
+ * inherit the trust given to an official tender portal.
+ */
+const OFFICIAL_PUBLIC_ENTITY_DOMAINS = [
+  "sabs.co.za",
+  "sanral.co.za",
+  "eskom.co.za",
+  "transnet.net",
+  "prasa.com",
+];
+
 const DIRECTORY_HOST_PATTERNS = [
   "yellowpages",
   "brabys",
@@ -104,6 +117,14 @@ const DIRECTORY_TEXT_PATTERN =
 
 const INFORMATIONAL_PAGE_PATTERN =
   /\b(career guide|careers?|qualification|registered qualifications?|learnership|course|training programme|employment opportunities|recommended subjects|blog|useful information|industry overview|what is|how to become|guide to|tips for choosing|industry trends?|market overview)\b/i;
+
+/*
+ * Regulations, advice and community discussions sometimes mention works,
+ * contractors or quotations. They describe a topic; they are not a buyer
+ * asking to purchase a selected service.
+ */
+const REGULATORY_OR_FORUM_PAGE_PATTERN =
+  /\b(?:SANS\s*10400|national building regulations?|building regulations?|planning permission|regulatory (?:guidance|requirement|advice)|compliance (?:guide|advice)|frequently asked questions?|\bFAQ\b|questions? (?:and|&) answers?|\bQ\s*&\s*A\b|discussion forum|community forum|ask (?:an?|the) (?:architect|expert|builder))\b/i;
 
 const PROCUREMENT_PATTERN =
   /\b(request for quotation|request for proposal|invitation to bid|invitation to tender|request for bid|request for tender|\bRFQ\b|\bRFP\b|\bRFB\b|\bRFT\b|tender number|bid number|closing date|compulsory briefing|non-compulsory briefing|submission deadline|procurement notice|bid invitation|quotation invitation)\b/i;
@@ -3509,7 +3530,7 @@ function inferSectorFromSource(
     `${candidate.title} ${candidate.snippet} ${candidate.url} ${inspection.title ?? ""} ${inspection.text.slice(0, 8_000)}`;
 
   if (
-    isGovernmentSource(
+    isOfficialPublicSectorSource(
       candidate.url,
     ) ||
     inspection.emails.some((email) =>
@@ -3680,6 +3701,38 @@ function matchingRequestedServices(
             content,
           ),
       ),
+  );
+}
+
+function isOfficialPublicEntitySource(
+  url: string,
+): boolean {
+  const host =
+    getHostname(
+      url,
+    );
+
+  return OFFICIAL_PUBLIC_ENTITY_DOMAINS.some(
+    (
+      domain,
+    ) =>
+      host === domain ||
+      host.endsWith(
+        `.${domain}`,
+      ),
+  );
+}
+
+function isOfficialPublicSectorSource(
+  url: string,
+): boolean {
+  return (
+    isGovernmentSource(
+      url,
+    ) ||
+    isOfficialPublicEntitySource(
+      url,
+    )
   );
 }
 
@@ -3881,7 +3934,22 @@ function isInformationalPage(
    */
   const pageIdentity = `${candidate.title} ${candidate.snippet} ${inspection.title ?? ""} ${candidate.url}`;
 
-  return INFORMATIONAL_PAGE_PATTERN.test(pageIdentity);
+  return (
+    INFORMATIONAL_PAGE_PATTERN.test(pageIdentity) ||
+    REGULATORY_OR_FORUM_PAGE_PATTERN.test(pageIdentity)
+  );
+}
+
+function isRegulatoryOrForumPage(
+  candidate: SearchCandidate,
+  inspection: PageInspection,
+): boolean {
+  const pageIdentity =
+    `${candidate.title} ${candidate.snippet} ${inspection.title ?? ""} ${candidate.url}`;
+
+  return REGULATORY_OR_FORUM_PAGE_PATTERN.test(
+    pageIdentity,
+  );
 }
 
 function sourceTrustScore(
@@ -4103,12 +4171,78 @@ function assessCandidate(
     !partnershipSignal;
 
   /*
+   * A regulatory article or forum answer is never a customer opportunity,
+   * even if its wording happens to include procurement-related terms.
+   */
+  if (
+    isRegulatoryOrForumPage(
+      candidate,
+      inspection,
+    )
+  ) {
+    return {
+      disposition: "informational",
+      buyerFit: 0,
+      sourceTrust: Math.min(
+        sourceTrust,
+        35,
+      ),
+      reasons: [
+        "The page is regulatory guidance, a FAQ or a forum discussion rather than a buyer notice.",
+      ],
+      probableBuyerRole: null,
+      competitorForServices: competitors,
+    };
+  }
+
+  /*
+   * Government-only hunts are procurement hunts. A public entity's normal
+   * website, news, policy and supplier-registration pages are useful context,
+   * but are not a current tender a Cossa company can pursue.
+   */
+  if (
+    request.sector === "government" &&
+    !formalProcurement
+  ) {
+    return {
+      disposition: informational
+        ? "informational"
+        : "irrelevant",
+      buyerFit: 0,
+      sourceTrust,
+      reasons: [
+        "Government procurement hunts accept only official current tender, bid, RFQ or RFP notices with a reference, selected-service evidence and a closing date.",
+      ],
+      probableBuyerRole: null,
+      competitorForServices: competitors,
+    };
+  }
+
+  /*
    * A result is never a tender merely because it contains "RFQ" or appeared
    * in a procurement search. It must be a single, current notice for one of
    * the selected services. This blocks unrelated advertising RFQs and tender
    * aggregation pages from being treated as construction opportunities.
    */
   if (formalProcurement) {
+    if (
+      request.sector === "government" &&
+      !isOfficialPublicSectorSource(
+        candidate.url,
+      )
+    ) {
+      return {
+        disposition: "irrelevant",
+        buyerFit: 0,
+        sourceTrust,
+        reasons: [
+          "A government procurement lead must be published on an official government or public-entity source.",
+        ],
+        probableBuyerRole: null,
+        competitorForServices: competitors,
+      };
+    }
+
     if (procurement.isAmbiguous) {
       return {
         disposition: "ambiguous_procurement",
@@ -4135,12 +4269,7 @@ function assessCandidate(
       };
     }
 
-    if (
-      !procurement.hasReference &&
-      !isGovernmentSource(
-        candidate.url,
-      )
-    ) {
+    if (!procurement.hasReference) {
       return {
         disposition: "irrelevant",
         buyerFit: 10,
