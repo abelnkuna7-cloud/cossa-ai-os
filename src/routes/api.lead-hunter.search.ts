@@ -4074,11 +4074,75 @@ function isOfficialPublicSectorSource(
   );
 }
 
+function organisationIdentitySupportsBuyerTarget(
+  candidate: SearchCandidate,
+  inspection: PageInspection,
+): boolean {
+  /*
+   * News posts, sponsor names and footers can mention a buyer category without
+   * describing the organisation itself. Research prospects need that evidence
+   * in the official page identity, not somewhere in its article archive.
+   */
+  const identity = lowerText(
+    `${inspection.title ?? candidate.title} ${getHostname(candidate.url)}`,
+  );
+  const target = lowerText(
+    candidate.targetDescription,
+  );
+
+  const targetRules: Array<{
+    target: RegExp;
+    identity: RegExp;
+  }> = [
+    {
+      target: /\b(?:property|facilit)/i,
+      identity:
+        /\b(?:property|properties|estate|body corporate|homeowners? association|facilit(?:y|ies)|shopping cent(?:re|er)|office park)\b/i,
+    },
+    {
+      target: /\b(?:school|education|training)/i,
+      identity:
+        /\b(?:school|college|university|academy|training cent(?:re|er))\b/i,
+    },
+    {
+      target: /\b(?:warehouse|logistics|distribution)/i,
+      identity:
+        /\b(?:warehouse|logistics|distribution cent(?:re|er)|freight|manufactur(?:er|ing)|factory)\b/i,
+    },
+    {
+      target: /\b(?:church|nonprofit|non-profit|ngo)/i,
+      identity:
+        /\b(?:church|ministr(?:y|ies)|nonprofit|non-profit|ngo|charity|foundation)\b/i,
+    },
+    {
+      target: /\b(?:retail|shopping)/i,
+      identity:
+        /\b(?:retail|shopping cent(?:re|er)|mall|store|supermarket)\b/i,
+    },
+  ];
+
+  const rule = targetRules.find(
+    (candidateRule) =>
+      candidateRule.target.test(
+        target,
+      ),
+  );
+
+  if (rule) {
+    return rule.identity.test(
+      identity,
+    );
+  }
+
+  return /\b(?:property|properties|estate|body corporate|homeowners? association|facilit(?:y|ies)|shopping cent(?:re|er)|retail|office park|warehouse|factory|manufactur(?:er|ing)|logistics|distribution cent(?:re|er)|school|college|university|clinic|hospital|hotel|restaurant|franchise|church|nonprofit|non-profit|ngo)\b/i.test(
+    identity,
+  );
+}
+
 function hasVerifiedResearchBuyerProfile(
   request: LeadHunterSearchRequest,
   candidate: SearchCandidate,
   inspection: PageInspection,
-  content: string,
 ): boolean {
   if (
     candidate.purpose !== "buyer_discovery" ||
@@ -4093,53 +4157,10 @@ function hasVerifiedResearchBuyerProfile(
     return false;
   }
 
-  const searchable = lowerText(content);
-  const buyerCategoryPattern =
-    /\b(?:property (?:manager|management|owner|developer)|body corporate|homeowners? association|estate (?:manager|management)|facilit(?:y|ies) management|shopping cent(?:re|er)|retail (?:store|centre|center)|office park|warehouse|factory|manufactur(?:er|ing)|logistics|distribution cent(?:re|er)|school|college|university|clinic|hospital|hotel|restaurant|franchise|church|nonprofit|non-profit|ngo)\b/i;
-
-  if (buyerCategoryPattern.test(searchable)) {
-    return true;
-  }
-
-  const genericTargetWords = new Set([
-    "business",
-    "company",
-    "companies",
-    "organisation",
-    "organization",
-    "services",
-    "service",
-    "custom",
-    "target",
-    "industry",
-  ]);
-  const targets = [
-    candidate.targetDescription,
-    ...request.organisation_types,
-    ...request.industries,
-  ];
-
-  return targets.some((target) => {
-    const normalised = lowerText(target).trim();
-    const words = normalised
-      .split(/[^a-z0-9]+/)
-      .filter(
-        (word) => word.length >= 4 && !genericTargetWords.has(word),
-      );
-
-    if (words.length === 0) {
-      return false;
-    }
-
-    if (words.length === 1) {
-      return searchable.includes(words[0]);
-    }
-
-    return (
-      searchable.includes(normalised) ||
-      words.filter((word) => searchable.includes(word)).length >= 2
-    );
-  });
+  return organisationIdentitySupportsBuyerTarget(
+    candidate,
+    inspection,
+  );
 }
 
 function parseProcurementDate(
@@ -4994,7 +5015,6 @@ function assessCandidate(
       request,
       candidate,
       inspection,
-      combined,
     ) &&
     !offersSameService &&
     !sellerLanguage
