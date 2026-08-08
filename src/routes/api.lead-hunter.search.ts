@@ -104,6 +104,14 @@ const OFFICIAL_PUBLIC_ENTITY_DOMAINS = [
   "prasa.com",
 ];
 
+/*
+ * Many public schools use their own .co.za websites.  A school governing
+ * body (SGB), a provincial education department or an explicit Section 21
+ * reference is reliable public-school evidence; a generic school page is not.
+ */
+const PUBLIC_SCHOOL_PATTERN =
+  /\b(?:public school|section\s+21\s+public\s+school|(?:gauteng|provincial)\s+department\s+of\s+education|department\s+of\s+basic\s+education|school\s+governing\s+body|\bsgb\b)\b/i;
+
 const DIRECTORY_HOST_PATTERNS = [
   "yellowpages",
   "brabys",
@@ -3628,6 +3636,9 @@ function inferSectorFromSource(
   const searchable =
     `${candidate.title} ${candidate.snippet} ${candidate.url} ${inspection.title ?? ""} ${inspection.text.slice(0, 8_000)}`;
 
+  const organisationIdentity =
+    `${candidate.title} ${inspection.title ?? ""} ${candidate.url}`;
+
   if (
     isOfficialPublicSectorSource(
       candidate.url,
@@ -3644,7 +3655,18 @@ function inferSectorFromSource(
   }
 
   if (
+    PUBLIC_SCHOOL_PATTERN.test(
+      searchable,
+    )
+  ) {
+    return "government";
+  }
+
+  if (
     /\b(church|ministry|nonprofit|non-profit|ngo|charity|foundation|community centre|community center)\b/i.test(
+      organisationIdentity,
+    ) ||
+    /\b(?:registered (?:as )?(?:a )?(?:nonprofit|non-profit|npo|ngo)|charitable organisation|public benefit organisation|\bpbo\b)\b/i.test(
       searchable,
     )
   ) {
