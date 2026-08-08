@@ -2157,12 +2157,21 @@ function inferServicesFromInstruction(
     );
 
   /*
-   * If a structured Services: field exists, it becomes authoritative.
-   * Otherwise we examine the natural-language instruction.
+   * Service selection belongs to the form controls. Natural-language missions
+   * often name a Cossa subsidiary or describe competitors to exclude (for
+   * example "Cossa Nexus Construction" or "reject cleaning companies").
+   * Those mentions must never silently reduce a multi-service hunt to the
+   * one service word they contain.
+   *
+   * Only an explicit `Services:` field can deliberately replace the selected
+   * service list.
    */
+  if (!serviceField) {
+    return [];
+  }
+
   const searchable =
-    serviceField ??
-    instruction;
+    serviceField;
 
   const matches:
     LeadHunterServiceCategory[] =
