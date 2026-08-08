@@ -1667,10 +1667,15 @@ function createSearchQueries(
     (request.sector === "mixed" || request.sector === "nonprofit");
 
   for (
-    const service of request.services.slice(
-      0,
-      6,
-    )
+    const [
+      serviceIndex,
+      service,
+    ] of request.services
+      .slice(
+        0,
+        6,
+      )
+      .entries()
   ) {
     const defaults =
       buyerTargetsForService(
@@ -1690,11 +1695,23 @@ function createSearchQueries(
           );
 
     const target1 =
-      targets[0] ??
+      targets[
+        serviceIndex %
+          Math.max(
+            targets.length,
+            1,
+          )
+      ] ??
       "business";
 
     const target2 =
-      targets[1] ??
+      targets[
+        (serviceIndex + 1) %
+          Math.max(
+            targets.length,
+            1,
+          )
+      ] ??
       target1;
 
     const label =
@@ -1705,7 +1722,7 @@ function createSearchQueries(
     if (shouldPrivate) {
       plans.push({
         query:
-          `"${target1}" ${locationQuery} "${label}" official website contact`,
+          `"${target1}" ${locationQuery} official website contact`,
 
         purpose:
           "buyer_discovery",
@@ -1718,7 +1735,7 @@ function createSearchQueries(
 
       plans.push({
         query:
-          `"${target2}" ${locationQuery} "${label}" official organisation contact`,
+          `"${target2}" ${locationQuery} official organisation contact`,
 
         purpose:
           "buyer_discovery",
