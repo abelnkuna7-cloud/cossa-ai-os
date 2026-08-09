@@ -25,6 +25,13 @@ import {
 } from "@/lib/business-data";
 import { supabase } from "@/integrations/supabase/client";
 
+// The generated Supabase types lag behind the existing production tables.
+// Keep this narrowly-scoped adapter until the types are regenerated from the
+// linked project; runtime data remains validated by the query and UI model.
+const db = supabase as unknown as {
+  from: (table: string) => any;
+};
+
 export const Route = createFileRoute("/sales/crm")({
   component: CrmHub,
   head: () => ({
@@ -41,8 +48,7 @@ export const Route = createFileRoute("/sales/crm")({
       },
       {
         property: "og:description",
-        content:
-          "Cossa AI CRM for enquiries, leads and customer relationships.",
+        content: "Cossa AI CRM for enquiries, leads and customer relationships.",
       },
     ],
   }),
@@ -72,7 +78,7 @@ interface CrmTile {
 }
 
 async function listQuoteRequests(): Promise<QuoteRequest[]> {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("quote_requests")
     .select(
       [
@@ -95,20 +101,14 @@ async function listQuoteRequests(): Promise<QuoteRequest[]> {
     });
 
   if (error) {
-    throw new Error(
-      `Unable to load website quote requests: ${error.message}`,
-    );
+    throw new Error(`Unable to load website quote requests: ${error.message}`);
   }
 
   return (data ?? []) as QuoteRequest[];
 }
 
 function getRequesterName(request: QuoteRequest): string {
-  return (
-    request.full_name?.trim() ||
-    request.name?.trim() ||
-    "Unnamed enquiry"
-  );
+  return request.full_name?.trim() || request.name?.trim() || "Unnamed enquiry";
 }
 
 function getRequestDescription(request: QuoteRequest): string {
@@ -165,10 +165,7 @@ function CrmHub() {
   });
 
   const openOpportunityCount = (opportunities.data ?? []).filter(
-    (opportunity) =>
-      !["won", "lost"].includes(
-        String(opportunity.stage ?? opportunity.status ?? "").toLowerCase(),
-      ),
+    (opportunity) => !["won", "lost"].includes(String(opportunity.stage ?? "").toLowerCase()),
   ).length;
 
   const tiles: CrmTile[] = [
@@ -229,7 +226,7 @@ function CrmHub() {
               <Users className="h-5 w-5" />
             </div>
 
-            <StatusBadge status="Live" />
+            <StatusBadge status="Testing" />
           </div>
 
           <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
@@ -237,9 +234,8 @@ function CrmHub() {
           </h1>
 
           <p className="mt-1 max-w-3xl text-muted-foreground">
-            Manage website enquiries, qualified leads, customers, companies,
-            quotations, opportunities and follow-up activity from one connected
-            workspace.
+            Manage website enquiries, qualified leads, customers, companies, quotations,
+            opportunities and follow-up activity from one connected workspace.
           </p>
         </div>
       </section>
@@ -250,9 +246,7 @@ function CrmHub() {
             <div className="flex items-center gap-2">
               <Inbox className="h-5 w-5 text-primary" />
 
-              <h2 className="font-display text-xl font-semibold">
-                Website enquiries
-              </h2>
+              <h2 className="font-display text-xl font-semibold">Website enquiries</h2>
             </div>
 
             <p className="mt-1 text-sm text-muted-foreground">
@@ -304,9 +298,7 @@ function CrmHub() {
           <div className="p-10 text-center">
             <Inbox className="mx-auto h-10 w-10 text-muted-foreground/60" />
 
-            <h3 className="mt-3 font-display text-lg font-semibold">
-              No website enquiries yet
-            </h3>
+            <h3 className="mt-3 font-display text-lg font-semibold">No website enquiries yet</h3>
 
             <p className="mt-1 text-sm text-muted-foreground">
               New quote requests from the Growth landing page will appear here.
@@ -315,10 +307,7 @@ function CrmHub() {
         ) : (
           <div className="divide-y divide-border/60">
             {latestQuoteRequests.map((request) => (
-              <article
-                key={request.id}
-                className="p-5 transition-colors hover:bg-muted/20"
-              >
+              <article key={request.id} className="p-5 transition-colors hover:bg-muted/20">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -414,9 +403,7 @@ function CrmHub() {
 
                 {tile.count !== null && (
                   <div className="text-right">
-                    <div className="font-display text-2xl font-semibold">
-                      {tile.count}
-                    </div>
+                    <div className="font-display text-2xl font-semibold">{tile.count}</div>
 
                     <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                       records
@@ -426,13 +413,9 @@ function CrmHub() {
               </div>
 
               <div>
-                <h3 className="font-display text-lg font-semibold">
-                  {tile.title}
-                </h3>
+                <h3 className="font-display text-lg font-semibold">{tile.title}</h3>
 
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {tile.description}
-                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{tile.description}</p>
               </div>
 
               <div className="mt-auto inline-flex items-center gap-1 text-xs text-primary group-hover:underline">

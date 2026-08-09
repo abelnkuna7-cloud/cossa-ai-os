@@ -68,6 +68,7 @@ import { Route as MarketingCampaignsRouteImport } from './routes/marketing.campa
 import { Route as MarketingBrandRouteImport } from './routes/marketing.brand'
 import { Route as MarketingAiDirectorRouteImport } from './routes/marketing.ai-director'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as AiWorkforceRouteImport } from './routes/ai.workforce'
 import { Route as AiWorkflowRouteImport } from './routes/ai.workflow'
 import { Route as AiVoiceRouteImport } from './routes/ai.voice'
 import { Route as AiSupportRouteImport } from './routes/ai.support'
@@ -384,6 +385,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AiWorkforceRoute = AiWorkforceRouteImport.update({
+  id: '/ai/workforce',
+  path: '/ai/workforce',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AiWorkflowRoute = AiWorkflowRouteImport.update({
   id: '/ai/workflow',
   path: '/ai/workflow',
@@ -518,6 +524,7 @@ export interface FileRoutesByFullPath {
   '/ai/support': typeof AiSupportRoute
   '/ai/voice': typeof AiVoiceRoute
   '/ai/workflow': typeof AiWorkflowRoute
+  '/ai/workforce': typeof AiWorkforceRoute
   '/api/chat': typeof ApiChatRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
@@ -598,6 +605,7 @@ export interface FileRoutesByTo {
   '/ai/support': typeof AiSupportRoute
   '/ai/voice': typeof AiVoiceRoute
   '/ai/workflow': typeof AiWorkflowRoute
+  '/ai/workforce': typeof AiWorkforceRoute
   '/api/chat': typeof ApiChatRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
@@ -679,6 +687,7 @@ export interface FileRoutesById {
   '/ai/support': typeof AiSupportRoute
   '/ai/voice': typeof AiVoiceRoute
   '/ai/workflow': typeof AiWorkflowRoute
+  '/ai/workforce': typeof AiWorkforceRoute
   '/api/chat': typeof ApiChatRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
@@ -761,6 +770,7 @@ export interface FileRouteTypes {
     | '/ai/support'
     | '/ai/voice'
     | '/ai/workflow'
+    | '/ai/workforce'
     | '/api/chat'
     | '/marketing/ai-director'
     | '/marketing/brand'
@@ -841,6 +851,7 @@ export interface FileRouteTypes {
     | '/ai/support'
     | '/ai/voice'
     | '/ai/workflow'
+    | '/ai/workforce'
     | '/api/chat'
     | '/marketing/ai-director'
     | '/marketing/brand'
@@ -921,6 +932,7 @@ export interface FileRouteTypes {
     | '/ai/support'
     | '/ai/voice'
     | '/ai/workflow'
+    | '/ai/workforce'
     | '/api/chat'
     | '/marketing/ai-director'
     | '/marketing/brand'
@@ -1002,6 +1014,7 @@ export interface RootRouteChildren {
   AiSupportRoute: typeof AiSupportRoute
   AiVoiceRoute: typeof AiVoiceRoute
   AiWorkflowRoute: typeof AiWorkflowRoute
+  AiWorkforceRoute: typeof AiWorkforceRoute
   ApiChatRoute: typeof ApiChatRoute
   MarketingAiDirectorRoute: typeof MarketingAiDirectorRoute
   MarketingBrandRoute: typeof MarketingBrandRoute
@@ -1460,6 +1473,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ai/workforce': {
+      id: '/ai/workforce'
+      path: '/ai/workforce'
+      fullPath: '/ai/workforce'
+      preLoaderRoute: typeof AiWorkforceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ai/workflow': {
       id: '/ai/workflow'
       path: '/ai/workflow'
@@ -1634,6 +1654,7 @@ const rootRouteChildren: RootRouteChildren = {
   AiSupportRoute: AiSupportRoute,
   AiVoiceRoute: AiVoiceRoute,
   AiWorkflowRoute: AiWorkflowRoute,
+  AiWorkforceRoute: AiWorkforceRoute,
   ApiChatRoute: ApiChatRoute,
   MarketingAiDirectorRoute: MarketingAiDirectorRoute,
   MarketingBrandRoute: MarketingBrandRoute,

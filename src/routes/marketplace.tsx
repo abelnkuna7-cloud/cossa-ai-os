@@ -1,56 +1,219 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import {
-  Store, Megaphone, Users, Building2, Sparkles, Workflow, FileStack,
-  Briefcase, Download, Star, ArrowRight, Search,
+  ArrowRight,
+  BarChart3,
+  BookOpenCheck,
+  Briefcase,
+  Building2,
+  FileStack,
+  Gauge,
+  Megaphone,
+  Radar,
+  Search,
+  Sparkles,
+  Store,
+  Users,
+  Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
+import type { ModuleStatus } from "@/lib/modules";
 
 export const Route = createFileRoute("/marketplace")({
   component: Marketplace,
   head: () => ({
     meta: [
-      { title: "Marketplace — Cossa AI" },
-      { name: "description", content: "Templates, industry packs, prompts and automations to extend Cossa AI." },
+      { title: "Cossa Marketplace — Cossa AI" },
+      {
+        name: "description",
+        content:
+          "The verified Cossa workspace catalogue: live tools, AI guidance and clearly marked future capabilities.",
+      },
     ],
   }),
 });
 
-type Category = "All" | "Marketing" | "CRM" | "Industry" | "Prompts" | "Automations" | "Business" | "NexDocs" | "Agency";
+type Category =
+  | "All"
+  | "Sales"
+  | "Marketing"
+  | "Knowledge"
+  | "Industry"
+  | "Automation"
+  | "NexDocs"
+  | "Agency";
+
+type MarketplaceRoute =
+  | "/sales/lead-finder"
+  | "/sales/customers"
+  | "/opportunity-radar"
+  | "/sales/forecast"
+  | "/ai/prompts"
+  | "/ai/knowledge"
+  | "/marketing/ai-director"
+  | "/construction-growth"
+  | "/operations/nexdocs"
+  | "/integrations";
 
 interface Item {
   title: string;
   category: Exclude<Category, "All">;
   description: string;
-  installs: string;
-  rating: number;
+  status: ModuleStatus;
+  availability: string;
+  to: MarketplaceRoute;
   icon: typeof Megaphone;
   featured?: boolean;
 }
 
+/**
+ * This is an internal Cossa catalogue, not a public app store. Every item is
+ * tied to an existing workspace route; ratings and install figures are omitted
+ * until a real publishing and installation system exists.
+ */
 const items: Item[] = [
-  { title: "SME Marketing Playbook", category: "Marketing", description: "12 campaigns, 40 templates and 3 automations for South African SMEs.", installs: "1.2k", rating: 4.9, icon: Megaphone, featured: true },
-  { title: "Modern CRM Starter", category: "CRM", description: "Pipeline, stages, activities and dashboards pre-configured.", installs: "980", rating: 4.8, icon: Users },
-  { title: "Construction Industry Pack", category: "Industry", description: "Quotes, projects, safety docs and site reports for construction SMEs.", installs: "410", rating: 4.7, icon: Building2 },
-  { title: "AI Prompt Vault", category: "Prompts", description: "200+ curated prompts across sales, marketing and ops.", installs: "3.4k", rating: 4.9, icon: Sparkles, featured: true },
-  { title: "Overdue Invoice Autopilot", category: "Automations", description: "3-step reminder cadence with WhatsApp and email.", installs: "760", rating: 4.8, icon: Workflow },
-  { title: "NexDocs Proposal Templates", category: "NexDocs", description: "12 winning proposal templates with e-sign.", installs: "540", rating: 4.7, icon: FileStack },
-  { title: "Agency Client Reporting", category: "Agency", description: "White-label monthly reports for agency retainers.", installs: "320", rating: 4.6, icon: Briefcase },
-  { title: "Business Health Baseline", category: "Business", description: "Pre-built scoring, dashboards and improvement plans.", installs: "660", rating: 4.8, icon: Star },
-  { title: "Retail Industry Pack", category: "Industry", description: "POS integrations, inventory dashboards and loyalty flows.", installs: "290", rating: 4.5, icon: Building2 },
-  { title: "Winter Campaign Kit", category: "Marketing", description: "Ads, emails, WhatsApp and landing page — ready to launch.", installs: "150", rating: 4.7, icon: Megaphone },
-  { title: "Sales Coach Prompt Pack", category: "Prompts", description: "Role-play, objection handling and call reviews.", installs: "820", rating: 4.8, icon: Sparkles },
-  { title: "Legal & HR Doc Pack", category: "NexDocs", description: "Contracts, offers and policies compliant with SA law.", installs: "270", rating: 4.6, icon: FileStack },
+  {
+    title: "Lead Hunter",
+    category: "Sales",
+    description:
+      "Research buyer-fit organisations with service, sector, evidence and duplicate protection.",
+    status: "Testing",
+    availability: "Live research workspace",
+    to: "/sales/lead-finder",
+    icon: Radar,
+    featured: true,
+  },
+  {
+    title: "Revenue Recovery Queue",
+    category: "Sales",
+    description:
+      "Review only CRM-backed overdue follow-ups, quotations, opportunities and high-scoring new leads.",
+    status: "Testing",
+    availability: "Verified CRM signals",
+    to: "/opportunity-radar",
+    icon: Gauge,
+    featured: true,
+  },
+  {
+    title: "Sales Forecast",
+    category: "Sales",
+    description:
+      "Review open pipeline and probability-weighted value from current opportunity records.",
+    status: "Live",
+    availability: "Live CRM workspace",
+    to: "/sales/forecast",
+    icon: BarChart3,
+  },
+  {
+    title: "Cossa Prompt Library",
+    category: "Knowledge",
+    description:
+      "Create, approve and reuse operational prompts grounded in the Cossa business context.",
+    status: "Live",
+    availability: "Live knowledge workspace",
+    to: "/ai/prompts",
+    icon: Sparkles,
+    featured: true,
+  },
+  {
+    title: "Verified Knowledge Base",
+    category: "Knowledge",
+    description:
+      "Store Cossa-approved facts and sources for use by Cossa AI. Human review remains required.",
+    status: "Live",
+    availability: "Live knowledge workspace",
+    to: "/ai/knowledge",
+    icon: BookOpenCheck,
+  },
+  {
+    title: "AI Marketing Director",
+    category: "Marketing",
+    description:
+      "Use Groq-powered strategy guidance. It does not publish, spend advertising budget or message customers without a connected account and approval.",
+    status: "Testing",
+    availability: "AI guidance workspace",
+    to: "/marketing/ai-director",
+    icon: Megaphone,
+  },
+  {
+    title: "Construction Growth Workspace",
+    category: "Industry",
+    description:
+      "Open the Cossa Nexus Construction growth solution and route prospective work into the CRM.",
+    status: "Live",
+    availability: "Cossa solution workspace",
+    to: "/construction-growth",
+    icon: Building2,
+  },
+  {
+    title: "NexDocs AI Guidance",
+    category: "NexDocs",
+    description:
+      "Use the document specialist for drafting guidance. E-signature, payment and document-template automation remain separate activation work.",
+    status: "Testing",
+    availability: "AI guidance workspace",
+    to: "/operations/nexdocs",
+    icon: FileStack,
+  },
+  {
+    title: "White-label Workspace Foundation",
+    category: "Agency",
+    description:
+      "Organisation isolation, customer memberships and authorised provider connections for future client workspaces.",
+    status: "Development",
+    availability: "Foundation upgrade in progress",
+    to: "/integrations",
+    icon: Briefcase,
+  },
+  {
+    title: "Workflow Guidance",
+    category: "Automation",
+    description:
+      "Plan safe, approval-based automation steps before an external message, spend or data-changing action is permitted.",
+    status: "Testing",
+    availability: "AI guidance workspace",
+    to: "/integrations",
+    icon: Workflow,
+  },
+  {
+    title: "Customer Relationship Workspace",
+    category: "Sales",
+    description:
+      "Review and manage customer records, then use real follow-up and quotation workflows.",
+    status: "Live",
+    availability: "Live CRM workspace",
+    to: "/sales/customers",
+    icon: Users,
+  },
 ];
 
-const CATS: Category[] = ["All", "Marketing", "CRM", "Industry", "Prompts", "Automations", "Business", "NexDocs", "Agency"];
+const CATEGORIES: Category[] = [
+  "All",
+  "Sales",
+  "Marketing",
+  "Knowledge",
+  "Industry",
+  "Automation",
+  "NexDocs",
+  "Agency",
+];
 
 function Marketplace() {
-  const [cat, setCat] = useState<Category>("All");
-  const list = cat === "All" ? items : items.filter((i) => i.category === cat);
-  const featured = items.filter((i) => i.featured);
+  const [category, setCategory] = useState<Category>("All");
+  const [search, setSearch] = useState("");
+  const list = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return items.filter((item) => {
+      const categoryMatches = category === "All" || item.category === category;
+      const searchMatches =
+        !query ||
+        `${item.title} ${item.description} ${item.category}`.toLowerCase().includes(query);
+      return categoryMatches && searchMatches;
+    });
+  }, [category, search]);
+  const featured = list.filter((item) => item.featured);
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
@@ -62,98 +225,111 @@ function Marketplace() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <Store className="h-4 w-4" />
               </div>
-              <StatusBadge status="Design" />
+              <StatusBadge status="Testing" />
             </div>
             <h1 className="mt-3 font-display text-3xl md:text-4xl font-semibold">
               Cossa <span className="text-gradient-gold">Marketplace</span>
             </h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              Templates, industry packs, prompt packs and automations — curated to extend Cossa AI for your business.
+              The real Cossa workspace catalogue. Every item opens its matching tool; availability
+              describes what it can do today.
             </p>
           </div>
-          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/40 px-3 py-2 text-sm text-muted-foreground w-full max-w-xs">
+          <label className="flex w-full max-w-xs items-center gap-2 rounded-lg border border-border/60 bg-card/40 px-3 py-2 text-sm text-muted-foreground">
             <Search className="h-4 w-4" />
-            <span className="flex-1 truncate">Search the marketplace…</span>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="min-w-0 flex-1 bg-transparent outline-none"
+              placeholder="Search available tools"
+            />
+          </label>
+        </div>
+      </section>
+
+      {featured.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <h2 className="font-display text-lg font-semibold">Featured workspaces</h2>
           </div>
-        </div>
-      </section>
+          <div className="grid gap-4 md:grid-cols-3">
+            {featured.map((item) => (
+              <MarketplaceCard key={item.title} item={item} featured />
+            ))}
+          </div>
+        </section>
+      )}
 
-      {/* Featured */}
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <h2 className="font-display text-lg font-semibold">Featured</h2>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {featured.map((f) => (
-            <article key={f.title} className="glass-card relative overflow-hidden p-6">
-              <div className="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-primary/15 blur-3xl" />
-              <div className="relative flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow">
-                  <f.icon className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[10px] uppercase tracking-widest text-primary/90">{f.category}</div>
-                  <h3 className="font-display text-lg font-semibold">{f.title}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{f.description}</p>
-                  <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1 text-primary"><Star className="h-3 w-3 fill-primary" /> {f.rating}</span>
-                    <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" /> {f.installs}</span>
-                  </div>
-                </div>
-                <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
-                  Install <ArrowRight className="ml-1 h-3 w-3" />
-                </Button>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      {/* Category filters */}
       <div className="flex flex-wrap gap-2">
-        {CATS.map((c) => (
+        {CATEGORIES.map((item) => (
           <button
-            key={c}
-            onClick={() => setCat(c)}
+            key={item}
+            onClick={() => setCategory(item)}
             className={cn(
               "rounded-full border px-3 py-1 text-xs transition-colors",
-              cat === c
+              category === item
                 ? "border-primary/60 bg-primary/15 text-primary"
                 : "border-border/60 bg-card/40 text-muted-foreground hover:border-primary/40 hover:text-primary",
             )}
           >
-            {c}
+            {item}
           </button>
         ))}
       </div>
 
-      {/* Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {list.map((i) => (
-          <article key={i.title} className="glass-card flex flex-col gap-3 p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                <i.icon className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{i.category}</div>
-                <h3 className="font-semibold">{i.title}</h3>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">{i.description}</p>
-            <div className="mt-auto flex items-center justify-between text-xs">
-              <div className="flex items-center gap-3 text-muted-foreground">
-                <span className="inline-flex items-center gap-1 text-primary"><Star className="h-3 w-3 fill-primary" /> {i.rating}</span>
-                <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" /> {i.installs}</span>
-              </div>
-              <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10">
-                View
-              </Button>
-            </div>
-          </article>
-        ))}
-      </div>
+      {list.length === 0 ? (
+        <section className="glass-card p-6 text-sm text-muted-foreground">
+          No verified Cossa workspace matches that search.
+        </section>
+      ) : (
+        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {list.map((item) => (
+            <MarketplaceCard key={item.title} item={item} />
+          ))}
+        </section>
+      )}
     </div>
+  );
+}
+
+function MarketplaceCard({ item, featured = false }: { item: Item; featured?: boolean }) {
+  const Icon = item.icon;
+  return (
+    <article
+      className={cn("glass-card flex flex-col gap-3 p-5", featured && "relative overflow-hidden")}
+    >
+      {featured && (
+        <div className="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-primary/15 blur-3xl" />
+      )}
+      <div className="relative flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              {item.category}
+            </div>
+            <StatusBadge status={item.status} className="text-[10px]" />
+          </div>
+          <h3 className="mt-1 font-semibold">{item.title}</h3>
+        </div>
+      </div>
+      <p className="relative text-sm text-muted-foreground">{item.description}</p>
+      <div className="relative mt-auto flex items-center justify-between gap-3">
+        <span className="text-xs text-primary">{item.availability}</span>
+        <Button
+          asChild
+          size="sm"
+          variant="outline"
+          className="shrink-0 border-primary/40 text-primary hover:bg-primary/10"
+        >
+          <Link to={item.to}>
+            Open <ArrowRight className="ml-1 h-3 w-3" />
+          </Link>
+        </Button>
+      </div>
+    </article>
   );
 }

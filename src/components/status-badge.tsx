@@ -7,6 +7,7 @@ const styles: Record<ModuleStatus, string> = {
   Development: "bg-warning/15 text-warning border-warning/40",
   Testing: "bg-chart-5/15 text-chart-5 border-chart-5/40",
   Live: "bg-success/15 text-success border-success/40",
+  Production: "bg-success/15 text-success border-success/40",
 };
 
 export function StatusBadge({ status, className }: { status: ModuleStatus; className?: string }) {

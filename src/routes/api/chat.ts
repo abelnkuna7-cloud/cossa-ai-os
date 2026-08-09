@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const DEFAULT_COSSA_ORGANISATION_ID =
-  "00000000-0000-4000-8000-000000000001";
+const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 const MAX_MESSAGES = 40;
@@ -11,6 +10,7 @@ const MAX_GROQ_HISTORY_MESSAGES = 12;
 const MAX_GROQ_HISTORY_LENGTH = 16_000;
 const MAX_KNOWLEDGE_CONTEXT_LENGTH = 8_000;
 const MAX_OPERATIONAL_CONTEXT_LENGTH = 8_000;
+const MAX_WORKFORCE_CONTEXT_LENGTH = 4_500;
 const MAX_GROQ_COMPLETION_TOKENS = 700;
 
 type ChatRole = "system" | "user" | "assistant";
@@ -53,9 +53,7 @@ function trimTrailingSlash(value: string): string {
 function getEnvironment() {
   const groqApiKey = process.env.GROQ_API_KEY;
 
-  const supabaseUrl =
-    process.env.VITE_SUPABASE_URL ||
-    process.env.SUPABASE_URL;
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 
   const supabaseKey =
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
@@ -122,25 +120,18 @@ async function restSelect<T>({
   supabaseUrl,
   supabaseKey,
 }: RestRequestOptions): Promise<T[]> {
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/${table}?${query}`,
-    {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
+  const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${query}`, {
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
     },
-  );
+  });
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
 
-    console.error(
-      `Supabase query failed for ${table}:`,
-      response.status,
-      errorText,
-    );
+    console.error(`Supabase query failed for ${table}:`, response.status, errorText);
 
     return [];
   }
@@ -184,9 +175,7 @@ async function verifyOrganisationMembership({
 
 function validateMessages(
   value: unknown,
-):
-  | { valid: true; messages: ChatMessage[] }
-  | { valid: false; error: string } {
+): { valid: true; messages: ChatMessage[] } | { valid: false; error: string } {
   if (!Array.isArray(value) || value.length === 0) {
     return {
       valid: false,
@@ -205,12 +194,7 @@ function validateMessages(
   let totalLength = 0;
 
   for (const item of value) {
-    if (
-      typeof item !== "object" ||
-      item === null ||
-      !("role" in item) ||
-      !("content" in item)
-    ) {
+    if (typeof item !== "object" || item === null || !("role" in item) || !("content" in item)) {
       return {
         valid: false,
         error: "Invalid chat message format.",
@@ -218,16 +202,9 @@ function validateMessages(
     }
 
     const role = item.role;
-    const content =
-      typeof item.content === "string"
-        ? item.content.trim()
-        : "";
+    const content = typeof item.content === "string" ? item.content.trim() : "";
 
-    if (
-      role !== "system" &&
-      role !== "user" &&
-      role !== "assistant"
-    ) {
+    if (role !== "system" && role !== "user" && role !== "assistant") {
       return {
         valid: false,
         error: "Unsupported chat message role.",
@@ -274,34 +251,23 @@ function validateMessages(
  * and every data extract to Groq on each turn burns credits without improving
  * the answer to the latest request. Keep a useful recent window instead.
  */
-function selectGroqHistory(
-  messages: ChatMessage[],
-): ChatMessage[] {
+function selectGroqHistory(messages: ChatMessage[]): ChatMessage[] {
   const recent: ChatMessage[] = [];
   let length = 0;
 
   for (const message of [...messages].reverse()) {
-    if (
-      recent.length >=
-      MAX_GROQ_HISTORY_MESSAGES
-    ) {
+    if (recent.length >= MAX_GROQ_HISTORY_MESSAGES) {
       break;
     }
 
-    const remaining =
-      MAX_GROQ_HISTORY_LENGTH -
-      length;
+    const remaining = MAX_GROQ_HISTORY_LENGTH - length;
 
     if (remaining <= 0) {
       break;
     }
 
     const content =
-      message.content.length > remaining
-        ? message.content.slice(
-            -remaining,
-          )
-        : message.content;
+      message.content.length > remaining ? message.content.slice(-remaining) : message.content;
 
     recent.unshift({
       ...message,
@@ -314,9 +280,7 @@ function selectGroqHistory(
 }
 
 function extractSearchTerms(message: string): Set<string> {
-  return new Set(
-    message.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [],
-  );
+  return new Set(message.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
 }
 
 function selectRelevantKnowledge(
@@ -337,15 +301,12 @@ function selectRelevantKnowledge(
 
   return knowledge
     .map((document) => {
-      const searchable =
-        `${document.title} ${document.body}`.toLowerCase();
+      const searchable = `${document.title} ${document.body}`.toLowerCase();
 
       const relevance = [...queryTerms].reduce(
         (score, term) =>
           score +
-          (searchable.includes(term) ||
-          (term.length >= 6 &&
-            searchable.includes(term.slice(0, 5)))
+          (searchable.includes(term) || (term.length >= 6 && searchable.includes(term.slice(0, 5)))
             ? 1
             : 0),
         0,
@@ -361,17 +322,11 @@ function selectRelevantKnowledge(
         isCore,
       };
     })
-    .sort(
-      (a, b) =>
-        Number(b.isCore) - Number(a.isCore) ||
-        b.relevance - a.relevance,
-    )
+    .sort((a, b) => Number(b.isCore) - Number(a.isCore) || b.relevance - a.relevance)
     .map(({ document }) => document);
 }
 
-function formatKnowledgeContext(
-  knowledge: KnowledgeDocument[],
-): string {
+function formatKnowledgeContext(knowledge: KnowledgeDocument[]): string {
   if (knowledge.length === 0) {
     return "No verified company knowledge was retrieved.";
   }
@@ -380,12 +335,8 @@ function formatKnowledgeContext(
     .map((document) =>
       [
         `DOCUMENT: ${document.title}`,
-        document.source
-          ? `SOURCE: ${document.source}`
-          : null,
-        document.source_url
-          ? `SOURCE URL: ${document.source_url}`
-          : null,
+        document.source ? `SOURCE: ${document.source}` : null,
+        document.source_url ? `SOURCE URL: ${document.source_url}` : null,
         document.body,
       ]
         .filter(Boolean)
@@ -413,14 +364,22 @@ function needsLeadContactData(message: string): boolean {
   );
 }
 
+function needsWorkforceData(message: string): boolean {
+  return /\b(ai[- ]?ceo|workforce|worker|workers|handoff|handoffs|mission|missions|approval|approvals|owner briefing|briefing)\b/i.test(
+    message,
+  );
+}
+
 async function loadOperationalContext({
   latestUserMessage,
   token,
+  organisationId,
   supabaseUrl,
   supabaseKey,
 }: {
   latestUserMessage: string;
   token: string;
+  organisationId: string;
   supabaseUrl: string;
   supabaseKey: string;
 }): Promise<string> {
@@ -428,8 +387,7 @@ async function loadOperationalContext({
     return "Operational CRM records were not required for this request.";
   }
 
-  const includeContactFields =
-    needsLeadContactData(latestUserMessage);
+  const includeContactFields = needsLeadContactData(latestUserMessage);
 
   const leadSelect = includeContactFields
     ? "id,name,full_name,phone,email,service,location,source,status,stage,score,notes,estimated_value,created_at,updated_at"
@@ -449,6 +407,7 @@ async function loadOperationalContext({
       table: "leads",
       query: new URLSearchParams({
         select: leadSelect,
+        organisation_id: `eq.${organisationId}`,
         order: "created_at.desc",
         limit: "25",
       }).toString(),
@@ -489,6 +448,7 @@ async function loadOperationalContext({
       query: new URLSearchParams({
         select:
           "id,organization_name,opportunity_type,location,estimated_value,status,probability,expected_close,notes,created_at,updated_at",
+        organisation_id: `eq.${organisationId}`,
         order: "created_at.desc",
         limit: "25",
       }).toString(),
@@ -502,6 +462,7 @@ async function loadOperationalContext({
       query: new URLSearchParams({
         select:
           "id,quote_number,title,amount,status,valid_until,service,description,created_at,updated_at",
+        organisation_id: `eq.${organisationId}`,
         order: "created_at.desc",
         limit: "25",
       }).toString(),
@@ -516,6 +477,7 @@ async function loadOperationalContext({
         select: includeContactFields
           ? "id,name,email,phone,company,customer_type,status,created_at,updated_at"
           : "id,name,company,customer_type,status,created_at,updated_at",
+        organisation_id: `eq.${organisationId}`,
         order: "created_at.desc",
         limit: "25",
       }).toString(),
@@ -529,6 +491,7 @@ async function loadOperationalContext({
       query: new URLSearchParams({
         select:
           "id,name,project_name,service,location,budget,status,priority,progress,start_date,end_date,created_at,updated_at",
+        organisation_id: `eq.${organisationId}`,
         order: "created_at.desc",
         limit: "25",
       }).toString(),
@@ -542,6 +505,7 @@ async function loadOperationalContext({
       query: new URLSearchParams({
         select:
           "id,title,service,location,status,scheduled_at,appointment_date,ends_at,created_at,updated_at",
+        organisation_id: `eq.${organisationId}`,
         order: "created_at.desc",
         limit: "25",
       }).toString(),
@@ -582,13 +546,124 @@ async function loadOperationalContext({
     .slice(0, MAX_OPERATIONAL_CONTEXT_LENGTH);
 }
 
+/**
+ * Loads only the workforce records required for an explicit workforce or AI
+ * CEO question. This adds database context, not another Groq call, so it does
+ * not consume additional model credits.
+ */
+async function loadWorkforceContext({
+  latestUserMessage,
+  token,
+  organisationId,
+  supabaseUrl,
+  supabaseKey,
+}: {
+  latestUserMessage: string;
+  token: string;
+  organisationId: string;
+  supabaseUrl: string;
+  supabaseKey: string;
+}): Promise<string> {
+  if (!needsWorkforceData(latestUserMessage)) {
+    return "Workforce records were not required for this request.";
+  }
+
+  const [employees, missions, runs, handoffs, approvals] = await Promise.all([
+    restSelect<Record<string, unknown>>({
+      table: "ai_employees",
+      query: new URLSearchParams({
+        select: "employee_key,name,title,department,mission,status,updated_at",
+        organisation_id: `eq.${organisationId}`,
+        order: "updated_at.desc",
+        limit: "20",
+      }).toString(),
+      token,
+      supabaseUrl,
+      supabaseKey,
+    }),
+    restSelect<Record<string, unknown>>({
+      table: "missions",
+      query: new URLSearchParams({
+        select: "id,title,objective,status,priority,risk_level,created_at,updated_at",
+        organisation_id: `eq.${organisationId}`,
+        order: "created_at.desc",
+        limit: "20",
+      }).toString(),
+      token,
+      supabaseUrl,
+      supabaseKey,
+    }),
+    restSelect<Record<string, unknown>>({
+      table: "mission_runs",
+      query: new URLSearchParams({
+        select:
+          "mission_id,status,model_provider,model_name,created_at,started_at,completed_at,error_code",
+        organisation_id: `eq.${organisationId}`,
+        order: "created_at.desc",
+        limit: "30",
+      }).toString(),
+      token,
+      supabaseUrl,
+      supabaseKey,
+    }),
+    restSelect<Record<string, unknown>>({
+      table: "employee_handoffs",
+      query: new URLSearchParams({
+        select:
+          "mission_id,from_employee_id,to_employee_id,reason,status,created_at,accepted_at,completed_at",
+        organisation_id: `eq.${organisationId}`,
+        order: "created_at.desc",
+        limit: "50",
+      }).toString(),
+      token,
+      supabaseUrl,
+      supabaseKey,
+    }),
+    restSelect<Record<string, unknown>>({
+      table: "approvals",
+      query: new URLSearchParams({
+        select: "mission_id,action_type,risk_level,justification,status,requested_at,decided_at",
+        organisation_id: `eq.${organisationId}`,
+        order: "requested_at.desc",
+        limit: "20",
+      }).toString(),
+      token,
+      supabaseUrl,
+      supabaseKey,
+    }),
+  ]);
+
+  return [
+    `LIVE AI WORKFORCE DATA CHECKED AT: ${new Date().toISOString()}`,
+    "",
+    `EMPLOYEES (${employees.length})`,
+    JSON.stringify(employees, null, 2),
+    "",
+    `MISSIONS (${missions.length})`,
+    JSON.stringify(missions, null, 2),
+    "",
+    `MISSION RUNS (${runs.length})`,
+    JSON.stringify(runs, null, 2),
+    "",
+    `HANDOFFS (${handoffs.length})`,
+    JSON.stringify(handoffs, null, 2),
+    "",
+    `APPROVALS (${approvals.length})`,
+    JSON.stringify(approvals, null, 2),
+  ]
+    .join("\n")
+    .slice(0, MAX_WORKFORCE_CONTEXT_LENGTH);
+}
+
 function buildSystemPrompt({
   verifiedContext,
   operationalContext,
+  workforceContext,
   customSystem,
 }: {
   verifiedContext: string;
   operationalContext: string;
+  workforceContext: string;
   customSystem?: string;
 }): string {
   return `
@@ -617,6 +692,9 @@ OPERATING RULES
 14. Protect private contact information. Only show phone numbers and email addresses when the authenticated user explicitly requests contact or outreach details.
 15. When live operational context contains a clear count, answer directly with the exact count. Do not claim that CRM access is unavailable.
 16. Do not ask the user to manually check the CRM when the requested records are already present in the live operational context.
+17. For workforce questions, use the live workforce context. A pending handoff is not accepted, completed work or an external action.
+18. Do not claim an AI worker performed work unless a mission run or completed handoff proves it. Do not claim social accounts, advertising accounts or website tools are connected unless the Integration Center records an authorised connection.
+19. An AI CEO briefing must state verified facts, missing information, approval decisions required and which external actions remain disabled. The Cossa owner makes the final decision.
 
 VERIFIED COMPANY KNOWLEDGE
 
@@ -625,11 +703,11 @@ ${verifiedContext}
 LIVE OPERATIONAL CONTEXT
 
 ${operationalContext}
-${
-  customSystem?.trim()
-    ? `\nADDITIONAL APPROVED INSTRUCTIONS\n\n${customSystem.trim()}`
-    : ""
-}
+
+LIVE AI WORKFORCE CONTEXT
+
+${workforceContext}
+${customSystem?.trim() ? `\nADDITIONAL APPROVED INSTRUCTIONS\n\n${customSystem.trim()}` : ""}
 `.trim();
 }
 
@@ -685,16 +763,13 @@ function createPlainTextStream(
             }>;
           };
 
-          const token =
-            parsed.choices?.[0]?.delta?.content;
+          const token = parsed.choices?.[0]?.delta?.content;
 
           if (token && !streamClosed) {
             controller.enqueue(encoder.encode(token));
           }
         } catch {
-          console.warn(
-            "Ignored malformed Groq streaming chunk.",
-          );
+          console.warn("Ignored malformed Groq streaming chunk.");
         }
       }
 
@@ -721,9 +796,7 @@ function createPlainTextStream(
             let lineBreakIndex = buffer.indexOf("\n");
 
             while (lineBreakIndex !== -1) {
-              const line = buffer
-                .slice(0, lineBreakIndex)
-                .trim();
+              const line = buffer.slice(0, lineBreakIndex).trim();
 
               buffer = buffer.slice(lineBreakIndex + 1);
 
@@ -761,10 +834,7 @@ export const Route = createFileRoute("/api/chat")({
         const environment = getEnvironment();
 
         if (!environment) {
-          return new Response(
-            "Cossa AI is not fully configured.",
-            { status: 503 },
-          );
+          return new Response("Cossa AI is not fully configured.", { status: 503 });
         }
 
         const token = getBearerToken(request);
@@ -788,36 +858,31 @@ export const Route = createFileRoute("/api/chat")({
           );
         }
 
-        const isOrganisationMember =
-          await verifyOrganisationMembership({
-            token,
-            userId: user.id,
-            organisationId: environment.organisationId,
-            supabaseUrl: environment.supabaseUrl,
-            supabaseKey: environment.supabaseKey,
-          });
+        const isOrganisationMember = await verifyOrganisationMembership({
+          token,
+          userId: user.id,
+          organisationId: environment.organisationId,
+          supabaseUrl: environment.supabaseUrl,
+          supabaseKey: environment.supabaseKey,
+        });
 
         if (!isOrganisationMember) {
-          return new Response(
-            "You are not authorised to use this Cossa AI workspace.",
-            { status: 403 },
-          );
+          return new Response("You are not authorised to use this Cossa AI workspace.", {
+            status: 403,
+          });
         }
 
         let payload: ChatPayload;
 
         try {
-          payload =
-            (await request.json()) as ChatPayload;
+          payload = (await request.json()) as ChatPayload;
         } catch {
           return new Response("Invalid JSON body.", {
             status: 400,
           });
         }
 
-        const validation = validateMessages(
-          payload.messages,
-        );
+        const validation = validateMessages(payload.messages);
 
         if (!validation.valid) {
           return new Response(validation.error, {
@@ -828,127 +893,102 @@ export const Route = createFileRoute("/api/chat")({
         const messages = validation.messages;
 
         const latestUserMessage =
-          [...messages]
-            .reverse()
-            .find(
-              (message) =>
-                message.role === "user",
-            )?.content ?? "";
+          [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
 
-        const knowledge =
-          await restSelect<KnowledgeDocument>({
-            table: "ai_knowledge_documents",
-            query: new URLSearchParams({
-              select:
-                "title,body,source,source_url,updated_at",
-              organisation_id:
-                `eq.${environment.organisationId}`,
-              verification_status: "eq.verified",
-              order: "updated_at.desc",
-              limit: "100",
-            }).toString(),
-            token,
-            supabaseUrl: environment.supabaseUrl,
-            supabaseKey: environment.supabaseKey,
-          });
+        const knowledge = await restSelect<KnowledgeDocument>({
+          table: "ai_knowledge_documents",
+          query: new URLSearchParams({
+            select: "title,body,source,source_url,updated_at",
+            organisation_id: `eq.${environment.organisationId}`,
+            verification_status: "eq.verified",
+            order: "updated_at.desc",
+            limit: "100",
+          }).toString(),
+          token,
+          supabaseUrl: environment.supabaseUrl,
+          supabaseKey: environment.supabaseKey,
+        });
 
-        const selectedKnowledge =
-          selectRelevantKnowledge(
-            knowledge,
-            latestUserMessage,
-          );
+        const selectedKnowledge = selectRelevantKnowledge(knowledge, latestUserMessage);
 
-        const verifiedContext =
-          formatKnowledgeContext(selectedKnowledge);
+        const verifiedContext = formatKnowledgeContext(selectedKnowledge);
 
-        const operationalContext =
-          await loadOperationalContext({
+        const [operationalContext, workforceContext] = await Promise.all([
+          loadOperationalContext({
             latestUserMessage,
             token,
+            organisationId: environment.organisationId,
             supabaseUrl: environment.supabaseUrl,
             supabaseKey: environment.supabaseKey,
-          });
+          }),
+          loadWorkforceContext({
+            latestUserMessage,
+            token,
+            organisationId: environment.organisationId,
+            supabaseUrl: environment.supabaseUrl,
+            supabaseKey: environment.supabaseKey,
+          }),
+        ]);
 
         const systemPreamble: ChatMessage = {
           role: "system",
           content: buildSystemPrompt({
             verifiedContext,
             operationalContext,
+            workforceContext,
             customSystem: payload.system,
           }),
         };
 
-        const safetyGuard: ChatMessage | null =
-          needsRecordSafeSupport(latestUserMessage)
-            ? {
-                role: "system",
-                content:
-                  "No verified order, payment, courier, delivery or tracking record is available. Do not promise an investigation, follow-up, response, delivery date or future action. Ask for the order reference and payment proof before preparing a human review request.",
-              }
-            : null;
+        const safetyGuard: ChatMessage | null = needsRecordSafeSupport(latestUserMessage)
+          ? {
+              role: "system",
+              content:
+                "No verified order, payment, courier, delivery or tracking record is available. Do not promise an investigation, follow-up, response, delivery date or future action. Ask for the order reference and payment proof before preparing a human review request.",
+            }
+          : null;
 
         const groqMessages: ChatMessage[] = [
           systemPreamble,
           ...(safetyGuard ? [safetyGuard] : []),
-          ...selectGroqHistory(
-            messages,
-          ),
+          ...selectGroqHistory(messages),
         ];
 
-        const upstream = await fetch(
-          "https://api.groq.com/openai/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization:
-                `Bearer ${environment.groqApiKey}`,
-            },
-            body: JSON.stringify({
-              model: GROQ_MODEL,
-              stream: true,
-              temperature: 0.2,
-              max_tokens:
-                MAX_GROQ_COMPLETION_TOKENS,
-              messages: groqMessages,
-            }),
-            signal: request.signal,
+        const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${environment.groqApiKey}`,
           },
-        );
+          body: JSON.stringify({
+            model: GROQ_MODEL,
+            stream: true,
+            temperature: 0.2,
+            max_tokens: MAX_GROQ_COMPLETION_TOKENS,
+            messages: groqMessages,
+          }),
+          signal: request.signal,
+        });
 
         if (!upstream.ok || !upstream.body) {
-          const errorText =
-            await upstream.text().catch(() => "");
+          const errorText = await upstream.text().catch(() => "");
 
-          console.error(
-            "Groq request failed:",
-            upstream.status,
-            errorText,
-          );
+          console.error("Groq request failed:", upstream.status, errorText);
 
           const responseStatus =
-            upstream.status === 402 ||
-            upstream.status === 429
-              ? upstream.status
-              : 502;
+            upstream.status === 402 || upstream.status === 429 ? upstream.status : 502;
 
-          return new Response(
-            errorText || "Cossa AI gateway error.",
-            {
-              status: responseStatus,
-            },
-          );
+          return new Response(errorText || "Cossa AI gateway error.", {
+            status: responseStatus,
+          });
         }
 
-        const responseStream =
-          createPlainTextStream(upstream.body);
+        const responseStream = createPlainTextStream(upstream.body);
 
         return new Response(responseStream, {
           headers: {
-            "Content-Type":
-              "text/plain; charset=utf-8",
-            "Cache-Control":
-              "no-cache, no-transform",
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
             "X-Accel-Buffering": "no",
             "X-Content-Type-Options": "nosniff",
           },

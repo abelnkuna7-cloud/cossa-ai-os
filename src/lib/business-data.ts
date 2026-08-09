@@ -160,19 +160,11 @@ const UI_OPPORTUNITY_STAGES = [
   "lost",
 ] as const;
 
-type UiOpportunityStage =
-  (typeof UI_OPPORTUNITY_STAGES)[number];
+type UiOpportunityStage = (typeof UI_OPPORTUNITY_STAGES)[number];
 
-const DATABASE_OPPORTUNITY_STATUSES = [
-  "prospect",
-  "qualified",
-  "engaged",
-  "won",
-  "lost",
-] as const;
+const DATABASE_OPPORTUNITY_STATUSES = ["prospect", "qualified", "engaged", "won", "lost"] as const;
 
-type DatabaseOpportunityStatus =
-  (typeof DATABASE_OPPORTUNITY_STATUSES)[number];
+type DatabaseOpportunityStatus = (typeof DATABASE_OPPORTUNITY_STATUSES)[number];
 
 const DATABASE_OPPORTUNITY_TYPES = [
   "property_manager",
@@ -183,8 +175,7 @@ const DATABASE_OPPORTUNITY_TYPES = [
   "estate_agent",
 ] as const;
 
-type DatabaseOpportunityType =
-  (typeof DATABASE_OPPORTUNITY_TYPES)[number];
+type DatabaseOpportunityType = (typeof DATABASE_OPPORTUNITY_TYPES)[number];
 
 const UI_STAGE_MARKER_PATTERN =
   /\[cossa_ui_stage:(prospect|qualified|proposal|negotiation|won|lost)\]/i;
@@ -207,18 +198,11 @@ const OPPORTUNITY_SELECT = [
   "updated_at",
 ].join(",");
 
-function lower(
-  value: unknown,
-  fallback: string,
-): string {
-  return typeof value === "string" && value.trim()
-    ? value.trim().toLowerCase()
-    : fallback;
+function lower(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim().toLowerCase() : fallback;
 }
 
-function optionalText(
-  value: unknown,
-): string | null {
+function optionalText(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
@@ -228,10 +212,7 @@ function optionalText(
   return cleaned || null;
 }
 
-function requiredText(
-  value: unknown,
-  fieldName: string,
-): string {
+function requiredText(value: unknown, fieldName: string): string {
   const cleaned = optionalText(value);
 
   if (!cleaned) {
@@ -241,75 +222,42 @@ function requiredText(
   return cleaned;
 }
 
-function safeNumber(
-  value: unknown,
-  fallback = 0,
-): number {
+function safeNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
 
-  return Number.isFinite(parsed)
-    ? parsed
-    : fallback;
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function clampProbability(
-  value: unknown,
-): number {
-  return Math.min(
-    100,
-    Math.max(
-      0,
-      Math.round(safeNumber(value, 20)),
-    ),
-  );
+function clampProbability(value: unknown): number {
+  return Math.min(100, Math.max(0, Math.round(safeNumber(value, 20))));
 }
 
-function databaseError(
-  operation: string,
-  error: unknown,
-): Error {
+function databaseError(operation: string, error: unknown): Error {
   if (error instanceof Error) {
-    return new Error(
-      `${operation}: ${error.message}`,
-    );
+    return new Error(`${operation}: ${error.message}`);
   }
 
-  const typedError =
-    error as DatabaseErrorLike | null;
+  const typedError = error as DatabaseErrorLike | null;
 
   if (typedError?.message) {
     const details = [
       typedError.details,
       typedError.hint,
-      typedError.code
-        ? `Code: ${typedError.code}`
-        : null,
+      typedError.code ? `Code: ${typedError.code}` : null,
     ]
       .filter(Boolean)
       .join(" ");
 
-    return new Error(
-      `${operation}: ${typedError.message}${
-        details ? ` ${details}` : ""
-      }`,
-    );
+    return new Error(`${operation}: ${typedError.message}${details ? ` ${details}` : ""}`);
   }
 
-  return new Error(
-    `${operation}: Unknown Supabase error.`,
-  );
+  return new Error(`${operation}: Unknown Supabase error.`);
 }
 
-function normaliseUiOpportunityStage(
-  value: unknown,
-): UiOpportunityStage {
+function normaliseUiOpportunityStage(value: unknown): UiOpportunityStage {
   const stage = lower(value, "prospect");
 
-  if (
-    UI_OPPORTUNITY_STAGES.includes(
-      stage as UiOpportunityStage,
-    )
-  ) {
+  if (UI_OPPORTUNITY_STAGES.includes(stage as UiOpportunityStage)) {
     return stage as UiOpportunityStage;
   }
 
@@ -320,9 +268,7 @@ function normaliseUiOpportunityStage(
   return "prospect";
 }
 
-function toDatabaseOpportunityStatus(
-  stage: UiOpportunityStage,
-): DatabaseOpportunityStatus {
+function toDatabaseOpportunityStatus(stage: UiOpportunityStage): DatabaseOpportunityStatus {
   switch (stage) {
     case "proposal":
     case "negotiation":
@@ -336,30 +282,19 @@ function toDatabaseOpportunityStatus(
   }
 }
 
-function readUiStageFromNotes(
-  notes: unknown,
-  databaseStatus: unknown,
-): UiOpportunityStage {
-  const text =
-    typeof notes === "string" ? notes : "";
+function readUiStageFromNotes(notes: unknown, databaseStatus: unknown): UiOpportunityStage {
+  const text = typeof notes === "string" ? notes : "";
 
-  const match =
-    text.match(UI_STAGE_MARKER_PATTERN);
+  const match = text.match(UI_STAGE_MARKER_PATTERN);
 
   if (match?.[1]) {
-    return normaliseUiOpportunityStage(
-      match[1],
-    );
+    return normaliseUiOpportunityStage(match[1]);
   }
 
-  return normaliseUiOpportunityStage(
-    databaseStatus,
-  );
+  return normaliseUiOpportunityStage(databaseStatus);
 }
 
-function removeUiStageMarker(
-  notes: unknown,
-): string | null {
+function removeUiStageMarker(notes: unknown): string | null {
   if (typeof notes !== "string") {
     return null;
   }
@@ -372,29 +307,14 @@ function removeUiStageMarker(
   return cleaned || null;
 }
 
-function addUiStageMarker(
-  notes: unknown,
-  stage: UiOpportunityStage,
-): string {
-  const cleanNotes =
-    removeUiStageMarker(notes);
+function addUiStageMarker(notes: unknown, stage: UiOpportunityStage): string {
+  const cleanNotes = removeUiStageMarker(notes);
 
-  return [
-    `[cossa_ui_stage:${stage}]`,
-    cleanNotes,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  return [`[cossa_ui_stage:${stage}]`, cleanNotes].filter(Boolean).join("\n\n");
 }
 
-function inferOpportunityType(
-  title: unknown,
-  notes: unknown,
-): DatabaseOpportunityType {
-  const searchable =
-    `${String(title ?? "")} ${String(
-      notes ?? "",
-    )}`.toLowerCase();
+function inferOpportunityType(title: unknown, notes: unknown): DatabaseOpportunityType {
+  const searchable = `${String(title ?? "")} ${String(notes ?? "")}`.toLowerCase();
 
   if (
     searchable.includes("school") ||
@@ -441,81 +361,46 @@ function inferOpportunityType(
   return "property_manager";
 }
 
-function mapOpportunityRow(
-  row: any,
-): SalesOpportunity {
+function mapOpportunityRow(row: any): SalesOpportunity {
   return {
     id: row.id,
-    title:
-      row.organization_name ??
-      "Untitled opportunity",
+    title: row.organization_name ?? "Untitled opportunity",
     customer_id: null,
-    value: safeNumber(
-      row.estimated_value,
-      0,
-    ),
-    stage: readUiStageFromNotes(
-      row.notes,
-      row.status,
-    ),
-    probability: clampProbability(
-      row.probability,
-    ),
-    expected_close:
-      row.expected_close ?? null,
-    notes: removeUiStageMarker(
-      row.notes,
-    ),
+    value: safeNumber(row.estimated_value, 0),
+    stage: readUiStageFromNotes(row.notes, row.status),
+    probability: clampProbability(row.probability),
+    expected_close: row.expected_close ?? null,
+    notes: removeUiStageMarker(row.notes),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
 }
 
-function adaptedCrud<T>(
-  adapter: Adapter<T>,
-) {
+function adaptedCrud<T>(adapter: Adapter<T>) {
   return {
     list: async (): Promise<T[]> => {
-      let query = db
-        .from(adapter.table)
-        .select(adapter.select ?? "*");
+      let query = db.from(adapter.table).select(adapter.select ?? "*");
 
       if (adapter.organisationScoped) {
-        query = query.eq(
-          "organisation_id",
-          COSSA_ORGANISATION_ID,
-        );
+        query = query.eq("organisation_id", COSSA_ORGANISATION_ID);
       }
 
-      const { data, error } =
-        await query.order(
-          adapter.orderBy ?? "created_at",
-          {
-            ascending:
-              adapter.ascending ?? false,
-          },
-        );
+      const { data, error } = await query.order(adapter.orderBy ?? "created_at", {
+        ascending: adapter.ascending ?? false,
+      });
 
       if (error) {
-        throw databaseError(
-          `Unable to load ${adapter.table}`,
-          error,
-        );
+        throw databaseError(`Unable to load ${adapter.table}`, error);
       }
 
-      return (data ?? []).map(
-        adapter.fromRow,
-      );
+      return (data ?? []).map(adapter.fromRow);
     },
 
-    create: async (
-      payload: Partial<T>,
-    ): Promise<T> => {
+    create: async (payload: Partial<T>): Promise<T> => {
       const row = adapter.toRow(payload);
 
       if (adapter.organisationScoped) {
-        row.organisation_id =
-          COSSA_ORGANISATION_ID;
+        row.organisation_id = COSSA_ORGANISATION_ID;
       }
 
       const { data, error } = await db
@@ -525,10 +410,7 @@ function adaptedCrud<T>(
         .single();
 
       if (error) {
-        throw databaseError(
-          `Unable to create ${adapter.table} record`,
-          error,
-        );
+        throw databaseError(`Unable to create ${adapter.table} record`, error);
       }
 
       if (!data) {
@@ -540,29 +422,21 @@ function adaptedCrud<T>(
       return adapter.fromRow(data);
     },
 
-    update: async (
-      id: string,
-      patch: Partial<T>,
-    ): Promise<void> => {
-      const cleanId = requiredText(
-        id,
-        "Record ID",
-      );
+    update: async (id: string, patch: Partial<T>): Promise<void> => {
+      const cleanId = requiredText(id, "Record ID");
 
       const row = adapter.toRow(patch);
 
-      const { data, error } = await db
-        .from(adapter.table)
-        .update(row)
-        .eq("id", cleanId)
-        .select("id")
-        .maybeSingle();
+      let query = db.from(adapter.table).update(row).eq("id", cleanId);
+
+      if (adapter.organisationScoped) {
+        query = query.eq("organisation_id", COSSA_ORGANISATION_ID);
+      }
+
+      const { data, error } = await query.select("id").maybeSingle();
 
       if (error) {
-        throw databaseError(
-          `Unable to update ${adapter.table} record`,
-          error,
-        );
+        throw databaseError(`Unable to update ${adapter.table} record`, error);
       }
 
       if (!data) {
@@ -572,26 +446,19 @@ function adaptedCrud<T>(
       }
     },
 
-    remove: async (
-      id: string,
-    ): Promise<void> => {
-      const cleanId = requiredText(
-        id,
-        "Record ID",
-      );
+    remove: async (id: string): Promise<void> => {
+      const cleanId = requiredText(id, "Record ID");
 
-      const { data, error } = await db
-        .from(adapter.table)
-        .delete()
-        .eq("id", cleanId)
-        .select("id")
-        .maybeSingle();
+      let query = db.from(adapter.table).delete().eq("id", cleanId);
+
+      if (adapter.organisationScoped) {
+        query = query.eq("organisation_id", COSSA_ORGANISATION_ID);
+      }
+
+      const { data, error } = await query.select("id").maybeSingle();
 
       if (error) {
-        throw databaseError(
-          `Unable to delete ${adapter.table} record`,
-          error,
-        );
+        throw databaseError(`Unable to delete ${adapter.table} record`, error);
       }
 
       if (!data) {
@@ -619,149 +486,98 @@ function plainCrud<T>(
 
     toRow: (value) => ({
       ...value,
-      updated_at:
-        new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }),
   });
 }
 
-export const salesCompanies =
-  plainCrud<SalesCompany>(
-    "sales_companies",
-    "created_at",
-    false,
-    true,
-  );
+export const salesCompanies = plainCrud<SalesCompany>("sales_companies", "created_at", false, true);
 
-export const salesCustomers =
-  adaptedCrud<SalesCustomer>({
-    table: "customers",
+export const salesCustomers = adaptedCrud<SalesCustomer>({
+  table: "customers",
+  organisationScoped: true,
 
-    fromRow: (row) => ({
-      ...row,
-      name:
-        row.name ??
-        row.full_name ??
-        "Unnamed customer",
-      status: lower(
-        row.status,
-        "active",
-      ),
-      company_id: null,
+  fromRow: (row) => ({
+    ...row,
+    name: row.name ?? row.full_name ?? "Unnamed customer",
+    status: lower(row.status, "active"),
+    company_id: null,
+  }),
+
+  toRow: (value) => ({
+    ...(value.name !== undefined && {
+      name: requiredText(value.name, "Customer name"),
     }),
 
-    toRow: (value) => ({
-      ...(value.name !== undefined && {
-        name: requiredText(
-          value.name,
-          "Customer name",
-        ),
-      }),
-
-      ...(value.email !== undefined && {
-        email: optionalText(value.email),
-      }),
-
-      ...(value.phone !== undefined && {
-        phone: optionalText(value.phone),
-      }),
-
-      ...(value.status !== undefined && {
-        status: lower(
-          value.status,
-          "active",
-        ),
-      }),
-
-      ...(value.notes !== undefined && {
-        notes: optionalText(value.notes),
-      }),
-
-      updated_at:
-        new Date().toISOString(),
-    }),
-  });
-
-export const salesLeads =
-  adaptedCrud<SalesLead>({
-    table: "leads",
-
-    fromRow: (row) => ({
-      ...row,
-      name:
-        row.name ??
-        row.full_name ??
-        "Unnamed lead",
-      status: lower(
-        row.stage ?? row.status,
-        "new",
-      ),
-      score: safeNumber(
-        row.score,
-        0,
-      ),
+    ...(value.email !== undefined && {
+      email: optionalText(value.email),
     }),
 
-    toRow: (value) => ({
-      ...(value.name !== undefined && {
-        name: requiredText(
-          value.name,
-          "Lead name",
-        ),
-        full_name: requiredText(
-          value.name,
-          "Lead name",
-        ),
-      }),
-
-      ...(value.email !== undefined && {
-        email: optionalText(value.email),
-      }),
-
-      ...(value.phone !== undefined && {
-        phone: optionalText(value.phone),
-      }),
-
-      ...(value.company !== undefined && {
-        company: optionalText(
-          value.company,
-        ),
-      }),
-
-      ...(value.source !== undefined && {
-        source: optionalText(
-          value.source,
-        ),
-      }),
-
-      ...(value.status !== undefined && {
-        status: lower(
-          value.status,
-          "new",
-        ),
-        stage: lower(
-          value.status,
-          "new",
-        ),
-      }),
-
-      ...(value.score !== undefined && {
-        score: safeNumber(
-          value.score,
-          0,
-        ),
-      }),
-
-      ...(value.notes !== undefined && {
-        notes: optionalText(
-          value.notes,
-        ),
-      }),
-
-      updated_at:
-        new Date().toISOString(),
+    ...(value.phone !== undefined && {
+      phone: optionalText(value.phone),
     }),
-  });
+
+    ...(value.status !== undefined && {
+      status: lower(value.status, "active"),
+    }),
+
+    ...(value.notes !== undefined && {
+      notes: optionalText(value.notes),
+    }),
+
+    updated_at: new Date().toISOString(),
+  }),
+});
+
+export const salesLeads = adaptedCrud<SalesLead>({
+  table: "leads",
+  organisationScoped: true,
+
+  fromRow: (row) => ({
+    ...row,
+    name: row.name ?? row.full_name ?? "Unnamed lead",
+    status: lower(row.stage ?? row.status, "new"),
+    score: safeNumber(row.score, 0),
+  }),
+
+  toRow: (value) => ({
+    ...(value.name !== undefined && {
+      name: requiredText(value.name, "Lead name"),
+      full_name: requiredText(value.name, "Lead name"),
+    }),
+
+    ...(value.email !== undefined && {
+      email: optionalText(value.email),
+    }),
+
+    ...(value.phone !== undefined && {
+      phone: optionalText(value.phone),
+    }),
+
+    ...(value.company !== undefined && {
+      company: optionalText(value.company),
+    }),
+
+    ...(value.source !== undefined && {
+      source: optionalText(value.source),
+    }),
+
+    ...(value.status !== undefined && {
+      status: lower(value.status, "new"),
+      stage: lower(value.status, "new"),
+    }),
+
+    ...(value.score !== undefined && {
+      score: safeNumber(value.score, 0),
+    }),
+
+    ...(value.notes !== undefined && {
+      notes: optionalText(value.notes),
+    }),
+
+    updated_at: new Date().toISOString(),
+  }),
+});
 
 /**
  * The existing opportunities table only supports:
@@ -776,86 +592,52 @@ export const salesLeads =
  * Their detailed UI stage is preserved in a controlled marker inside notes.
  */
 export const salesOpportunities = {
-  list: async (): Promise<
-    SalesOpportunity[]
-  > => {
+  list: async (): Promise<SalesOpportunity[]> => {
     const { data, error } = await db
       .from("opportunities")
       .select(OPPORTUNITY_SELECT)
+      .eq("organisation_id", COSSA_ORGANISATION_ID)
       .order("created_at", {
         ascending: false,
       });
 
     if (error) {
-      throw databaseError(
-        "Unable to load opportunities",
-        error,
-      );
+      throw databaseError("Unable to load opportunities", error);
     }
 
-    return (data ?? []).map(
-      mapOpportunityRow,
-    );
+    return (data ?? []).map(mapOpportunityRow);
   },
 
-  create: async (
-    payload: Partial<SalesOpportunity>,
-  ): Promise<SalesOpportunity> => {
-    const title = requiredText(
-      payload.title,
-      "Opportunity title",
-    );
+  create: async (payload: Partial<SalesOpportunity>): Promise<SalesOpportunity> => {
+    const title = requiredText(payload.title, "Opportunity title");
 
-    const value = safeNumber(
-      payload.value,
-      0,
-    );
+    const value = safeNumber(payload.value, 0);
 
     if (value < 0) {
-      throw new Error(
-        "Opportunity value cannot be negative.",
-      );
+      throw new Error("Opportunity value cannot be negative.");
     }
 
-    const stage =
-      normaliseUiOpportunityStage(
-        payload.stage,
-      );
+    const stage = normaliseUiOpportunityStage(payload.stage);
 
-    const cleanNotes =
-      optionalText(payload.notes);
+    const cleanNotes = optionalText(payload.notes);
 
     const row = {
+      organisation_id: COSSA_ORGANISATION_ID,
       organization_name: title,
 
-      opportunity_type:
-        inferOpportunityType(
-          title,
-          cleanNotes,
-        ),
+      opportunity_type: inferOpportunityType(title, cleanNotes),
 
       estimated_value: value,
 
-      status:
-        toDatabaseOpportunityStatus(
-          stage,
-        ),
+      status: toDatabaseOpportunityStatus(stage),
 
-      probability:
-        clampProbability(
-          payload.probability,
-        ),
+      probability: clampProbability(payload.probability),
 
-      expected_close:
-        payload.expected_close || null,
+      expected_close: payload.expected_close || null,
 
-      notes: addUiStageMarker(
-        cleanNotes,
-        stage,
-      ),
+      notes: addUiStageMarker(cleanNotes, stage),
 
-      updated_at:
-        new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
     const { data, error } = await db
@@ -865,526 +647,326 @@ export const salesOpportunities = {
       .single();
 
     if (error) {
-      throw databaseError(
-        "Unable to create opportunity",
-        error,
-      );
+      throw databaseError("Unable to create opportunity", error);
     }
 
     if (!data) {
-      throw new Error(
-        "Unable to create opportunity: Supabase returned no saved record.",
-      );
+      throw new Error("Unable to create opportunity: Supabase returned no saved record.");
     }
 
     return mapOpportunityRow(data);
   },
 
-  update: async (
-    id: string,
-    patch: Partial<SalesOpportunity>,
-  ): Promise<void> => {
-    const cleanId = requiredText(
-      id,
-      "Opportunity ID",
-    );
+  update: async (id: string, patch: Partial<SalesOpportunity>): Promise<void> => {
+    const cleanId = requiredText(id, "Opportunity ID");
 
-    const {
-      data: existing,
-      error: existingError,
-    } = await db
+    const { data: existing, error: existingError } = await db
       .from("opportunities")
       .select(OPPORTUNITY_SELECT)
       .eq("id", cleanId)
+      .eq("organisation_id", COSSA_ORGANISATION_ID)
       .maybeSingle();
 
     if (existingError) {
-      throw databaseError(
-        "Unable to load the opportunity before updating",
-        existingError,
-      );
+      throw databaseError("Unable to load the opportunity before updating", existingError);
     }
 
     if (!existing) {
-      throw new Error(
-        "The opportunity was not found or access was denied.",
-      );
+      throw new Error("The opportunity was not found or access was denied.");
     }
 
-    const current =
-      mapOpportunityRow(existing);
+    const current = mapOpportunityRow(existing);
 
     const nextTitle =
-      patch.title !== undefined
-        ? requiredText(
-            patch.title,
-            "Opportunity title",
-          )
-        : current.title;
+      patch.title !== undefined ? requiredText(patch.title, "Opportunity title") : current.title;
 
     const nextStage =
       patch.stage !== undefined
-        ? normaliseUiOpportunityStage(
-            patch.stage,
-          )
-        : normaliseUiOpportunityStage(
-            current.stage,
-          );
+        ? normaliseUiOpportunityStage(patch.stage)
+        : normaliseUiOpportunityStage(current.stage);
 
-    const nextNotes =
-      patch.notes !== undefined
-        ? optionalText(patch.notes)
-        : current.notes;
+    const nextNotes = patch.notes !== undefined ? optionalText(patch.notes) : current.notes;
 
-    const updateRow: Record<
-      string,
-      unknown
-    > = {
-      updated_at:
-        new Date().toISOString(),
+    const updateRow: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
     };
 
     if (patch.title !== undefined) {
-      updateRow.organization_name =
-        nextTitle;
+      updateRow.organization_name = nextTitle;
 
-      updateRow.opportunity_type =
-        inferOpportunityType(
-          nextTitle,
-          nextNotes,
-        );
+      updateRow.opportunity_type = inferOpportunityType(nextTitle, nextNotes);
     }
 
     if (patch.value !== undefined) {
-      const amount = safeNumber(
-        patch.value,
-        0,
-      );
+      const amount = safeNumber(patch.value, 0);
 
       if (amount < 0) {
-        throw new Error(
-          "Opportunity value cannot be negative.",
-        );
+        throw new Error("Opportunity value cannot be negative.");
       }
 
-      updateRow.estimated_value =
-        amount;
+      updateRow.estimated_value = amount;
     }
 
     if (patch.stage !== undefined) {
-      updateRow.status =
-        toDatabaseOpportunityStatus(
-          nextStage,
-        );
+      updateRow.status = toDatabaseOpportunityStatus(nextStage);
     }
 
-    if (
-      patch.probability !== undefined
-    ) {
-      updateRow.probability =
-        clampProbability(
-          patch.probability,
-        );
+    if (patch.probability !== undefined) {
+      updateRow.probability = clampProbability(patch.probability);
     }
 
-    if (
-      patch.expected_close !==
-      undefined
-    ) {
-      updateRow.expected_close =
-        patch.expected_close || null;
+    if (patch.expected_close !== undefined) {
+      updateRow.expected_close = patch.expected_close || null;
     }
 
-    if (
-      patch.notes !== undefined ||
-      patch.stage !== undefined
-    ) {
-      updateRow.notes =
-        addUiStageMarker(
-          nextNotes,
-          nextStage,
-        );
+    if (patch.notes !== undefined || patch.stage !== undefined) {
+      updateRow.notes = addUiStageMarker(nextNotes, nextStage);
     }
 
     const { data, error } = await db
       .from("opportunities")
       .update(updateRow)
       .eq("id", cleanId)
+      .eq("organisation_id", COSSA_ORGANISATION_ID)
       .select("id")
       .maybeSingle();
 
     if (error) {
-      throw databaseError(
-        "Unable to update opportunity",
-        error,
-      );
+      throw databaseError("Unable to update opportunity", error);
     }
 
     if (!data) {
-      throw new Error(
-        "Unable to update opportunity: the row was not found or access was denied.",
-      );
+      throw new Error("Unable to update opportunity: the row was not found or access was denied.");
     }
   },
 
-  remove: async (
-    id: string,
-  ): Promise<void> => {
-    const cleanId = requiredText(
-      id,
-      "Opportunity ID",
-    );
+  remove: async (id: string): Promise<void> => {
+    const cleanId = requiredText(id, "Opportunity ID");
 
     const { data, error } = await db
       .from("opportunities")
       .delete()
       .eq("id", cleanId)
+      .eq("organisation_id", COSSA_ORGANISATION_ID)
       .select("id")
       .maybeSingle();
 
     if (error) {
-      throw databaseError(
-        "Unable to delete opportunity",
-        error,
-      );
+      throw databaseError("Unable to delete opportunity", error);
     }
 
     if (!data) {
-      throw new Error(
-        "Unable to delete opportunity: the row was not found or access was denied.",
-      );
+      throw new Error("Unable to delete opportunity: the row was not found or access was denied.");
     }
   },
 };
 
-export const salesQuotations =
-  adaptedCrud<SalesQuotation>({
-    table: "quotations",
+export const salesQuotations = adaptedCrud<SalesQuotation>({
+  table: "quotations",
+  organisationScoped: true,
 
-    fromRow: (row) => ({
-      ...row,
-      number:
-        row.quote_number ??
-        "Unnumbered",
-      status: lower(
-        row.status,
-        "draft",
-      ),
-      opportunity_id: null,
+  fromRow: (row) => ({
+    ...row,
+    number: row.quote_number ?? "Unnumbered",
+    status: lower(row.status, "draft"),
+    opportunity_id: null,
+  }),
+
+  toRow: (value) => ({
+    ...(value.number !== undefined && {
+      quote_number: requiredText(value.number, "Quotation number"),
     }),
 
-    toRow: (value) => ({
-      ...(value.number !== undefined && {
-        quote_number:
-          requiredText(
-            value.number,
-            "Quotation number",
-          ),
-      }),
-
-      ...(value.customer_id !==
-        undefined && {
-        customer_id:
-          value.customer_id,
-      }),
-
-      ...(value.amount !== undefined && {
-        amount: safeNumber(
-          value.amount,
-          0,
-        ),
-      }),
-
-      ...(value.status !== undefined && {
-        status: lower(
-          value.status,
-          "draft",
-        ),
-      }),
-
-      ...(value.valid_until !==
-        undefined && {
-        valid_until:
-          value.valid_until || null,
-      }),
-
-      ...(value.notes !== undefined && {
-        notes: optionalText(
-          value.notes,
-        ),
-      }),
-
-      updated_at:
-        new Date().toISOString(),
-    }),
-  });
-
-export const salesAppointments =
-  adaptedCrud<SalesAppointment>({
-    table: "appointments",
-    orderBy: "scheduled_at",
-    ascending: true,
-
-    fromRow: (row) => ({
-      ...row,
-      title:
-        row.title ??
-        row.service ??
-        "Appointment",
-      starts_at:
-        row.scheduled_at ??
-        row.appointment_date,
-      ends_at:
-        row.ends_at ?? null,
+    ...(value.customer_id !== undefined && {
+      customer_id: value.customer_id,
     }),
 
-    toRow: (value) => ({
-      ...(value.title !== undefined && {
-        title: requiredText(
-          value.title,
-          "Appointment title",
-        ),
-      }),
-
-      ...(value.customer_id !==
-        undefined && {
-        customer_id:
-          value.customer_id,
-      }),
-
-      ...(value.starts_at !==
-        undefined && {
-        scheduled_at:
-          value.starts_at,
-        appointment_date:
-          value.starts_at,
-      }),
-
-      ...(value.ends_at !== undefined && {
-        ends_at:
-          value.ends_at,
-      }),
-
-      ...(value.location !== undefined && {
-        location: optionalText(
-          value.location,
-        ),
-      }),
-
-      ...(value.notes !== undefined && {
-        notes: optionalText(
-          value.notes,
-        ),
-      }),
-
-      updated_at:
-        new Date().toISOString(),
-    }),
-  });
-
-export const salesFollowUps =
-  plainCrud<SalesFollowUp>(
-    "sales_follow_ups",
-    "due_at",
-    true,
-    true,
-  );
-
-export const opsProjects =
-  adaptedCrud<OpsProject>({
-    table: "projects",
-
-    select: [
-      "id",
-      "customer_id",
-      "project_name",
-      "name",
-      "service",
-      "location",
-      "budget",
-      "status",
-      "priority",
-      "progress",
-      "start_date",
-      "end_date",
-      "notes",
-      "created_at",
-      "updated_at",
-    ].join(","),
-
-    fromRow: (row) => ({
-      id: row.id,
-
-      name:
-        row.project_name ??
-        row.name ??
-        "Unnamed project",
-
-      customer_id:
-        row.customer_id ?? null,
-
-      status: lower(
-        row.status,
-        "planning",
-      ),
-
-      priority: lower(
-        row.priority,
-        "medium",
-      ),
-
-      progress: safeNumber(
-        row.progress,
-        0,
-      ),
-
-      start_date:
-        row.start_date ?? null,
-
-      due_date:
-        row.end_date ?? null,
-
-      notes:
-        row.notes ?? null,
-
-      created_at:
-        row.created_at,
-
-      updated_at:
-        row.updated_at,
+    ...(value.amount !== undefined && {
+      amount: safeNumber(value.amount, 0),
     }),
 
-    toRow: (value) => {
-      const row: Record<
-        string,
-        unknown
-      > = {
-        updated_at:
-          new Date().toISOString(),
-      };
-
-      if (value.name !== undefined) {
-        const projectName =
-          requiredText(
-            value.name,
-            "Project name",
-          );
-
-        row.name = projectName;
-        row.project_name =
-          projectName;
-      }
-
-      if (
-        value.customer_id !== undefined
-      ) {
-        row.customer_id =
-          value.customer_id;
-      }
-
-      if (value.status !== undefined) {
-        row.status = lower(
-          value.status,
-          "planning",
-        );
-      }
-
-      if (value.priority !== undefined) {
-        row.priority = lower(
-          value.priority,
-          "medium",
-        );
-      }
-
-      if (value.progress !== undefined) {
-        row.progress = Math.min(
-          100,
-          Math.max(
-            0,
-            Math.round(
-              safeNumber(
-                value.progress,
-                0,
-              ),
-            ),
-          ),
-        );
-      }
-
-      if (
-        value.start_date !== undefined
-      ) {
-        row.start_date =
-          value.start_date || null;
-      }
-
-      if (
-        value.due_date !== undefined
-      ) {
-        row.end_date =
-          value.due_date || null;
-      }
-
-      if (value.notes !== undefined) {
-        row.notes = optionalText(
-          value.notes,
-        );
-      }
-
-      return row;
-    },
-  });
-
-export const opsTasks =
-  plainCrud<OpsTask>(
-    "ops_tasks",
-    "due_at",
-    true,
-    true,
-  );
-
-export const opsDocuments =
-  adaptedCrud<OpsDocument>({
-    table: "ops_documents",
-    organisationScoped: true,
-
-    fromRow: (row) => ({
-      ...row,
-      url:
-        row.source_url ?? null,
+    ...(value.status !== undefined && {
+      status: lower(value.status, "draft"),
     }),
 
-    toRow: (value) => ({
-      ...(value.title !== undefined && {
-        title: requiredText(
-          value.title,
-          "Document title",
-        ),
-      }),
-
-      ...(value.category !==
-        undefined && {
-        category: optionalText(
-          value.category,
-        ),
-      }),
-
-      ...(value.url !== undefined && {
-        source_url: optionalText(
-          value.url,
-        ),
-      }),
-
-      ...(value.notes !== undefined && {
-        notes: optionalText(
-          value.notes,
-        ),
-      }),
-
-      updated_at:
-        new Date().toISOString(),
+    ...(value.valid_until !== undefined && {
+      valid_until: value.valid_until || null,
     }),
-  });
+
+    ...(value.notes !== undefined && {
+      notes: optionalText(value.notes),
+    }),
+
+    updated_at: new Date().toISOString(),
+  }),
+});
+
+export const salesAppointments = adaptedCrud<SalesAppointment>({
+  table: "appointments",
+  organisationScoped: true,
+  orderBy: "scheduled_at",
+  ascending: true,
+
+  fromRow: (row) => ({
+    ...row,
+    title: row.title ?? row.service ?? "Appointment",
+    starts_at: row.scheduled_at ?? row.appointment_date,
+    ends_at: row.ends_at ?? null,
+  }),
+
+  toRow: (value) => ({
+    ...(value.title !== undefined && {
+      title: requiredText(value.title, "Appointment title"),
+    }),
+
+    ...(value.customer_id !== undefined && {
+      customer_id: value.customer_id,
+    }),
+
+    ...(value.starts_at !== undefined && {
+      scheduled_at: value.starts_at,
+      appointment_date: value.starts_at,
+    }),
+
+    ...(value.ends_at !== undefined && {
+      ends_at: value.ends_at,
+    }),
+
+    ...(value.location !== undefined && {
+      location: optionalText(value.location),
+    }),
+
+    ...(value.notes !== undefined && {
+      notes: optionalText(value.notes),
+    }),
+
+    updated_at: new Date().toISOString(),
+  }),
+});
+
+export const salesFollowUps = plainCrud<SalesFollowUp>("sales_follow_ups", "due_at", true, true);
+
+export const opsProjects = adaptedCrud<OpsProject>({
+  table: "projects",
+  organisationScoped: true,
+
+  select: [
+    "id",
+    "customer_id",
+    "project_name",
+    "name",
+    "service",
+    "location",
+    "budget",
+    "status",
+    "priority",
+    "progress",
+    "start_date",
+    "end_date",
+    "notes",
+    "created_at",
+    "updated_at",
+  ].join(","),
+
+  fromRow: (row) => ({
+    id: row.id,
+
+    name: row.project_name ?? row.name ?? "Unnamed project",
+
+    customer_id: row.customer_id ?? null,
+
+    status: lower(row.status, "planning"),
+
+    priority: lower(row.priority, "medium"),
+
+    progress: safeNumber(row.progress, 0),
+
+    start_date: row.start_date ?? null,
+
+    due_date: row.end_date ?? null,
+
+    notes: row.notes ?? null,
+
+    created_at: row.created_at,
+
+    updated_at: row.updated_at,
+  }),
+
+  toRow: (value) => {
+    const row: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (value.name !== undefined) {
+      const projectName = requiredText(value.name, "Project name");
+
+      row.name = projectName;
+      row.project_name = projectName;
+    }
+
+    if (value.customer_id !== undefined) {
+      row.customer_id = value.customer_id;
+    }
+
+    if (value.status !== undefined) {
+      row.status = lower(value.status, "planning");
+    }
+
+    if (value.priority !== undefined) {
+      row.priority = lower(value.priority, "medium");
+    }
+
+    if (value.progress !== undefined) {
+      row.progress = Math.min(100, Math.max(0, Math.round(safeNumber(value.progress, 0))));
+    }
+
+    if (value.start_date !== undefined) {
+      row.start_date = value.start_date || null;
+    }
+
+    if (value.due_date !== undefined) {
+      row.end_date = value.due_date || null;
+    }
+
+    if (value.notes !== undefined) {
+      row.notes = optionalText(value.notes);
+    }
+
+    return row;
+  },
+});
+
+export const opsTasks = plainCrud<OpsTask>("ops_tasks", "due_at", true, true);
+
+export const opsDocuments = adaptedCrud<OpsDocument>({
+  table: "ops_documents",
+  organisationScoped: true,
+
+  fromRow: (row) => ({
+    ...row,
+    url: row.source_url ?? null,
+  }),
+
+  toRow: (value) => ({
+    ...(value.title !== undefined && {
+      title: requiredText(value.title, "Document title"),
+    }),
+
+    ...(value.category !== undefined && {
+      category: optionalText(value.category),
+    }),
+
+    ...(value.url !== undefined && {
+      source_url: optionalText(value.url),
+    }),
+
+    ...(value.notes !== undefined && {
+      notes: optionalText(value.notes),
+    }),
+
+    updated_at: new Date().toISOString(),
+  }),
+});
 
 /**
  * Creates a project from a won opportunity.
@@ -1395,70 +977,36 @@ export const opsDocuments =
 export async function createProjectFromOpportunity(
   opportunity: SalesOpportunity,
 ): Promise<OpsProject> {
-  if (
-    normaliseUiOpportunityStage(
-      opportunity.stage,
-    ) !== "won"
-  ) {
-    throw new Error(
-      "Only a won opportunity can be converted into a project.",
-    );
+  if (normaliseUiOpportunityStage(opportunity.stage) !== "won") {
+    throw new Error("Only a won opportunity can be converted into a project.");
   }
 
-  const opportunityId =
-    requiredText(
-      opportunity.id,
-      "Opportunity ID",
-    );
+  const opportunityId = requiredText(opportunity.id, "Opportunity ID");
 
-  const projectName =
-    requiredText(
-      opportunity.title,
-      "Opportunity title",
-    );
+  const projectName = requiredText(opportunity.title, "Opportunity title");
 
-  const sourceMarker =
-    `[source_opportunity_id:${opportunityId}]`;
+  const sourceMarker = `[source_opportunity_id:${opportunityId}]`;
 
-  const {
-    data: existingProjects,
-    error: existingProjectError,
-  } = await db
+  const { data: existingProjects, error: existingProjectError } = await db
     .from("projects")
     .select(
       "id,customer_id,project_name,name,status,priority,progress,start_date,end_date,notes,created_at,updated_at",
     )
-    .ilike(
-      "notes",
-      `%${sourceMarker}%`,
-    )
+    .eq("organisation_id", COSSA_ORGANISATION_ID)
+    .ilike("notes", `%${sourceMarker}%`)
     .limit(1);
 
   if (existingProjectError) {
-    throw databaseError(
-      "Unable to check for an existing project",
-      existingProjectError,
-    );
+    throw databaseError("Unable to check for an existing project", existingProjectError);
   }
 
-  if (
-    Array.isArray(existingProjects) &&
-    existingProjects.length > 0
-  ) {
-    const projects =
-      await opsProjects.list();
+  if (Array.isArray(existingProjects) && existingProjects.length > 0) {
+    const projects = await opsProjects.list();
 
-    const existing =
-      projects.find(
-        (project) =>
-          project.id ===
-          existingProjects[0].id,
-      );
+    const existing = projects.find((project) => project.id === existingProjects[0].id);
 
     if (!existing) {
-      throw new Error(
-        "The project already exists but could not be reloaded.",
-      );
+      throw new Error("The project already exists but could not be reloaded.");
     }
 
     return existing;
@@ -1467,16 +1015,9 @@ export async function createProjectFromOpportunity(
   const projectNotes = [
     sourceMarker,
     "Created from a won sales opportunity.",
-    `Opportunity value: R${safeNumber(
-      opportunity.value,
-      0,
-    ).toFixed(2)}`,
-    opportunity.expected_close
-      ? `Original expected close: ${opportunity.expected_close}`
-      : null,
-    opportunity.notes
-      ? `Opportunity notes:\n${opportunity.notes}`
-      : null,
+    `Opportunity value: R${safeNumber(opportunity.value, 0).toFixed(2)}`,
+    opportunity.expected_close ? `Original expected close: ${opportunity.expected_close}` : null,
+    opportunity.notes ? `Opportunity notes:\n${opportunity.notes}` : null,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -1484,20 +1025,17 @@ export async function createProjectFromOpportunity(
   const { data, error } = await db
     .from("projects")
     .insert({
+      organisation_id: COSSA_ORGANISATION_ID,
       name: projectName,
       project_name: projectName,
-      budget: safeNumber(
-        opportunity.value,
-        0,
-      ),
+      budget: safeNumber(opportunity.value, 0),
       status: "planning",
       priority: "high",
       progress: 0,
       start_date: null,
       end_date: null,
       notes: projectNotes,
-      updated_at:
-        new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     })
     .select(
       "id,customer_id,project_name,name,status,priority,progress,start_date,end_date,notes,created_at,updated_at",
@@ -1505,45 +1043,26 @@ export async function createProjectFromOpportunity(
     .single();
 
   if (error) {
-    throw databaseError(
-      "Unable to create a project from the won opportunity",
-      error,
-    );
+    throw databaseError("Unable to create a project from the won opportunity", error);
   }
 
   if (!data) {
-    throw new Error(
-      "The project could not be created because Supabase returned no saved record.",
-    );
+    throw new Error("The project could not be created because Supabase returned no saved record.");
   }
 
-  const projects =
-    await opsProjects.list();
+  const projects = await opsProjects.list();
 
-  const created =
-    projects.find(
-      (project) =>
-        project.id === data.id,
-    );
+  const created = projects.find((project) => project.id === data.id);
 
   if (!created) {
-    throw new Error(
-      "The project was created but could not be reloaded.",
-    );
+    throw new Error("The project was created but could not be reloaded.");
   }
 
   return created;
 }
 
 export async function dashboardStats() {
-  const [
-    leads,
-    opportunities,
-    quotations,
-    projects,
-    tasks,
-    customers,
-  ] = await Promise.all([
+  const [leads, opportunities, quotations, projects, tasks, customers] = await Promise.all([
     salesLeads.list(),
     salesOpportunities.list(),
     salesQuotations.list(),
@@ -1552,117 +1071,47 @@ export async function dashboardStats() {
     salesCustomers.list(),
   ]);
 
-  const pipelineValue =
-    opportunities
-      .filter(
-        (opportunity) =>
-          !["won", "lost"].includes(
-            normaliseUiOpportunityStage(
-              opportunity.stage,
-            ),
-          ),
-      )
-      .reduce(
-        (total, opportunity) =>
-          total +
-          safeNumber(
-            opportunity.value,
-            0,
-          ),
-        0,
-      );
+  const pipelineValue = opportunities
+    .filter(
+      (opportunity) => !["won", "lost"].includes(normaliseUiOpportunityStage(opportunity.stage)),
+    )
+    .reduce((total, opportunity) => total + safeNumber(opportunity.value, 0), 0);
 
-  const wonValue =
-    opportunities
-      .filter(
-        (opportunity) =>
-          normaliseUiOpportunityStage(
-            opportunity.stage,
-          ) === "won",
-      )
-      .reduce(
-        (total, opportunity) =>
-          total +
-          safeNumber(
-            opportunity.value,
-            0,
-          ),
-        0,
-      );
+  const wonValue = opportunities
+    .filter((opportunity) => normaliseUiOpportunityStage(opportunity.stage) === "won")
+    .reduce((total, opportunity) => total + safeNumber(opportunity.value, 0), 0);
 
-  const acceptedRevenue =
-    quotations
-      .filter(
-        (quotation) =>
-          lower(
-            quotation.status,
-            "draft",
-          ) === "accepted",
-      )
-      .reduce(
-        (total, quotation) =>
-          total +
-          safeNumber(
-            quotation.amount,
-            0,
-          ),
-        0,
-      );
+  const acceptedRevenue = quotations
+    .filter((quotation) => lower(quotation.status, "draft") === "accepted")
+    .reduce((total, quotation) => total + safeNumber(quotation.amount, 0), 0);
 
-  const stages = [
-    "prospect",
-    "qualified",
-    "proposal",
-    "negotiation",
-    "won",
-  ] as const;
+  const stages = ["prospect", "qualified", "proposal", "negotiation", "won"] as const;
 
-  const pipelineByStage =
-    stages.map((stage) => {
-      const stageRows =
-        opportunities.filter(
-          (opportunity) =>
-            normaliseUiOpportunityStage(
-              opportunity.stage,
-            ) === stage,
-        );
+  const pipelineByStage = stages.map((stage) => {
+    const stageRows = opportunities.filter(
+      (opportunity) => normaliseUiOpportunityStage(opportunity.stage) === stage,
+    );
 
-      return {
-        stage,
-        count: stageRows.length,
-        value: stageRows.reduce(
-          (total, opportunity) =>
-            total +
-            safeNumber(
-              opportunity.value,
-              0,
-            ),
-          0,
-        ),
-      };
-    });
+    return {
+      stage,
+      count: stageRows.length,
+      value: stageRows.reduce((total, opportunity) => total + safeNumber(opportunity.value, 0), 0),
+    };
+  });
 
   const now = Date.now();
 
   return {
-    revenueMTD:
-      wonValue +
-      acceptedRevenue,
+    // The existing source records do not retain a reliable win/acceptance
+    // timestamp. This is therefore recorded revenue, not a month-to-date
+    // figure. Keep the label honest until lifecycle dates are available.
+    recordedRevenue: wonValue + acceptedRevenue,
 
-    newLeads: leads.filter(
-      (lead) => {
-        const createdAt =
-          new Date(
-            lead.created_at,
-          ).getTime();
+    newLeads: leads.filter((lead) => {
+      const createdAt = new Date(lead.created_at).getTime();
 
-        return (
-          Number.isFinite(createdAt) &&
-          now - createdAt <
-            7 * 86_400_000
-        );
-      },
-    ).length,
+      return Number.isFinite(createdAt) && now - createdAt < 7 * 86_400_000;
+    }).length,
 
     totalLeads: leads.length,
 
@@ -1670,64 +1119,28 @@ export async function dashboardStats() {
 
     pipelineByStage,
 
-    customers:
-      customers.length,
+    customers: customers.length,
 
-    activeProjects:
-      projects.filter(
-        (project) =>
-          !["done", "archived"].includes(
-            lower(
-              project.status,
-              "planning",
-            ),
-          ),
-      ).length,
+    activeProjects: projects.filter(
+      (project) => !["done", "archived"].includes(lower(project.status, "planning")),
+    ).length,
 
-    projectCount:
-      projects.length,
+    projectCount: projects.length,
 
-    openTasks:
-      tasks.filter(
-        (task) =>
-          lower(
-            task.status,
-            "open",
-          ) !== "done",
-      ).length,
+    openTasks: tasks.filter((task) => lower(task.status, "open") !== "done").length,
 
-    overdueTasks:
-      tasks.filter((task) => {
-        if (
-          lower(
-            task.status,
-            "open",
-          ) === "done" ||
-          !task.due_at
-        ) {
-          return false;
-        }
+    overdueTasks: tasks.filter((task) => {
+      if (lower(task.status, "open") === "done" || !task.due_at) {
+        return false;
+      }
 
-        const dueAt =
-          new Date(
-            task.due_at,
-          ).getTime();
+      const dueAt = new Date(task.due_at).getTime();
 
-        return (
-          Number.isFinite(dueAt) &&
-          dueAt < now
-        );
-      }).length,
+      return Number.isFinite(dueAt) && dueAt < now;
+    }).length,
 
-    quotesOpen:
-      quotations.filter(
-        (quotation) =>
-          ["draft", "sent"].includes(
-            lower(
-              quotation.status,
-              "draft",
-            ),
-          ),
-      ).length,
+    quotesOpen: quotations.filter((quotation) =>
+      ["draft", "sent"].includes(lower(quotation.status, "draft")),
+    ).length,
   };
 }

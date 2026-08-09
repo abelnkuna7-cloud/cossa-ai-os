@@ -3,7 +3,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  Send, Sparkles, Plus, Search, Pin, MessageSquare, Bot, Trash2, Loader2, User,
+  Send,
+  Sparkles,
+  Plus,
+  Search,
+  Pin,
+  MessageSquare,
+  Bot,
+  Trash2,
+  Loader2,
+  User,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,14 +20,22 @@ import { StatusBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  listConversations, createConversation, updateConversation, deleteConversation,
-  listMessages, insertMessage, type AiConversation, type AiMessage,
+  listConversations,
+  createConversation,
+  updateConversation,
+  deleteConversation,
+  listMessages,
+  insertMessage,
+  type AiConversation,
+  type AiMessage,
 } from "@/lib/ai-data";
 import { streamChat } from "@/lib/ai-stream";
 import { getModule } from "@/lib/modules";
 import { specialistFor } from "@/lib/specialists";
 
-interface Props { to: string }
+interface Props {
+  to: string;
+}
 
 export function SpecialistChat({ to }: Props) {
   const mod = getModule(to);
@@ -64,7 +81,9 @@ export function SpecialistChat({ to }: Props) {
       const c = await createConversation("New conversation", category);
       await qc.invalidateQueries({ queryKey: ["ai-conversations", category] });
       setActiveId(c.id);
-    } catch (e) { toast.error("Could not start a new chat", { description: (e as Error).message }); }
+    } catch (e) {
+      toast.error("Could not start a new chat", { description: (e as Error).message });
+    }
   }
 
   async function handleDelete(id: string) {
@@ -73,14 +92,18 @@ export function SpecialistChat({ to }: Props) {
       await deleteConversation(id);
       await qc.invalidateQueries({ queryKey: ["ai-conversations", category] });
       if (id === activeId) setActiveId(null);
-    } catch (e) { toast.error("Delete failed", { description: (e as Error).message }); }
+    } catch (e) {
+      toast.error("Delete failed", { description: (e as Error).message });
+    }
   }
 
   async function handleTogglePin(c: AiConversation) {
     try {
       await updateConversation(c.id, { pinned: !c.pinned });
       await qc.invalidateQueries({ queryKey: ["ai-conversations", category] });
-    } catch (e) { toast.error("Could not update", { description: (e as Error).message }); }
+    } catch (e) {
+      toast.error("Could not update", { description: (e as Error).message });
+    }
   }
 
   async function handleSend(text?: string) {
@@ -99,9 +122,15 @@ export function SpecialistChat({ to }: Props) {
       await insertMessage(convoId, "user", content);
       await qc.invalidateQueries({ queryKey: ["ai-messages", convoId] });
 
-      const prior = (await listMessages(convoId)).map((m) => ({ role: m.role, content: m.content }));
+      const prior = (await listMessages(convoId)).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
       const currentConvo = (convos.data ?? []).find((c) => c.id === convoId);
-      if (currentConvo && (currentConvo.title === "New conversation" || !currentConvo.title.trim())) {
+      if (
+        currentConvo &&
+        (currentConvo.title === "New conversation" || !currentConvo.title.trim())
+      ) {
         await updateConversation(convoId, { title: content.slice(0, 60) });
         await qc.invalidateQueries({ queryKey: ["ai-conversations", category] });
       }
@@ -122,8 +151,12 @@ export function SpecialistChat({ to }: Props) {
     } catch (e) {
       setStreaming(null);
       const msg = (e as Error).message;
-      if (msg.includes("402")) toast.error("AI service unavailable", { description: "The inference service needs attention. Please try again later." });
-      else if (msg.includes("429")) toast.error("Rate limited", { description: "Please try again in a moment." });
+      if (msg.includes("402"))
+        toast.error("AI service unavailable", {
+          description: "The inference service needs attention. Please try again later.",
+        });
+      else if (msg.includes("429"))
+        toast.error("Rate limited", { description: "Please try again in a moment." });
       else toast.error("AI request failed", { description: msg });
     } finally {
       setSending(false);
@@ -149,12 +182,15 @@ export function SpecialistChat({ to }: Props) {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="font-display text-xl md:text-2xl font-semibold">{title}</h1>
-                <StatusBadge status="Live" />
+                <StatusBadge status="Testing" />
               </div>
               <p className="text-xs text-muted-foreground">{tagline}</p>
             </div>
           </div>
-          <Button onClick={handleNew} className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
+          <Button
+            onClick={handleNew}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+          >
             <Plus className="mr-1.5 h-4 w-4" /> New chat
           </Button>
         </div>
@@ -186,24 +222,54 @@ export function SpecialistChat({ to }: Props) {
                       onClick={() => setActiveId(c.id)}
                       className={cn(
                         "group flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors",
-                        c.id === activeId ? "border-primary/40 bg-primary/10" : "border-transparent hover:border-border/60 hover:bg-card/40",
+                        c.id === activeId
+                          ? "border-primary/40 bg-primary/10"
+                          : "border-transparent hover:border-border/60 hover:bg-card/40",
                       )}
                     >
-                      <MessageSquare className={cn("h-3.5 w-3.5 shrink-0", c.pinned ? "text-primary" : "text-muted-foreground")} />
+                      <MessageSquare
+                        className={cn(
+                          "h-3.5 w-3.5 shrink-0",
+                          c.pinned ? "text-primary" : "text-muted-foreground",
+                        )}
+                      />
                       <span className="min-w-0 flex-1 truncate">{c.title}</span>
                       <span
-                        role="button" tabIndex={0}
-                        onClick={(e) => { e.stopPropagation(); handleTogglePin(c); }}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleTogglePin(c); } }}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTogglePin(c);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.stopPropagation();
+                            handleTogglePin(c);
+                          }
+                        }}
                         className="opacity-0 group-hover:opacity-100 hover:text-primary"
                         aria-label={c.pinned ? "Unpin" : "Pin"}
                       >
-                        <Pin className={cn("h-3 w-3", c.pinned && "fill-primary text-primary opacity-100")} />
+                        <Pin
+                          className={cn(
+                            "h-3 w-3",
+                            c.pinned && "fill-primary text-primary opacity-100",
+                          )}
+                        />
                       </span>
                       <span
-                        role="button" tabIndex={0}
-                        onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleDelete(c.id); } }}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(c.id);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.stopPropagation();
+                            handleDelete(c.id);
+                          }
+                        }}
                         className="opacity-0 group-hover:opacity-100 hover:text-destructive"
                         aria-label="Delete"
                       >
@@ -220,9 +286,12 @@ export function SpecialistChat({ to }: Props) {
         <section className="glass-card flex min-h-0 flex-col">
           <div className="flex items-center justify-between border-b border-border/40 px-5 py-3">
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">{activeConvo?.title ?? "New chat"}</div>
+              <div className="truncate text-sm font-semibold">
+                {activeConvo?.title ?? "New chat"}
+              </div>
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Cossa Nexus AI • Groq inference
+                Cossa Nexus AI guidance • Groq inference • external actions require a connected
+                account
               </div>
             </div>
           </div>
@@ -257,32 +326,47 @@ export function SpecialistChat({ to }: Props) {
                 {(messages.data ?? []).map((m) => (
                   <ChatBubble key={m.id} role={m.role} content={m.content} Icon={Icon} />
                 ))}
-                {streaming !== null && <ChatBubble role="assistant" content={streaming || "…"} streaming Icon={Icon} />}
+                {streaming !== null && (
+                  <ChatBubble role="assistant" content={streaming || "…"} streaming Icon={Icon} />
+                )}
               </div>
             )}
           </div>
 
           <div className="border-t border-border/40 p-3 md:p-4">
             <form
-              onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSend();
+              }}
               className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-border/60 bg-background/50 p-2 focus-within:border-primary/50"
             >
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
                 rows={1}
                 placeholder={`Message ${title}… (Enter to send, Shift+Enter for newline)`}
                 className="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
                 disabled={sending}
               />
               <Button
-                type="submit" size="sm"
+                type="submit"
+                size="sm"
                 disabled={sending || !input.trim()}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
                 aria-label="Send"
               >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {sending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </form>
             <p className="mx-auto mt-2 max-w-3xl text-center text-[10px] text-muted-foreground">
@@ -295,7 +379,17 @@ export function SpecialistChat({ to }: Props) {
   );
 }
 
-function ChatBubble({ role, content, streaming, Icon }: { role: string; content: string; streaming?: boolean; Icon: LucideIcon }) {
+function ChatBubble({
+  role,
+  content,
+  streaming,
+  Icon,
+}: {
+  role: string;
+  content: string;
+  streaming?: boolean;
+  Icon: LucideIcon;
+}) {
   const isUser = role === "user";
   return (
     <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
@@ -307,7 +401,9 @@ function ChatBubble({ role, content, streaming, Icon }: { role: string; content:
       <div
         className={cn(
           "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm",
-          isUser ? "bg-primary/15 border border-primary/30 text-foreground" : "border border-border/60 bg-card/40",
+          isUser
+            ? "bg-primary/15 border border-primary/30 text-foreground"
+            : "border border-border/60 bg-card/40",
         )}
       >
         {isUser ? (
@@ -315,7 +411,9 @@ function ChatBubble({ role, content, streaming, Icon }: { role: string; content:
         ) : (
           <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-pre:my-2 prose-headings:font-display">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-            {streaming && <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-primary align-middle" />}
+            {streaming && (
+              <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-primary align-middle" />
+            )}
           </div>
         )}
       </div>

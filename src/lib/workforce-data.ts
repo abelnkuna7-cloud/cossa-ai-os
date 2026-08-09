@@ -1,11 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const DEFAULT_COSSA_ORGANISATION_ID =
-  "00000000-0000-4000-8000-000000000001";
+const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 
 function resolveOrganisationId(): string {
-  const configuredOrganisationId =
-    import.meta.env.VITE_COSSA_ORGANISATION_ID?.trim();
+  const configuredOrganisationId = import.meta.env.VITE_COSSA_ORGANISATION_ID?.trim();
 
   return configuredOrganisationId || DEFAULT_COSSA_ORGANISATION_ID;
 }
@@ -129,6 +127,237 @@ export interface Approval {
   executed_at: string | null;
 }
 
+export interface EmployeeHandoff {
+  id: string;
+  organisation_id: string;
+  mission_id: string;
+  run_id: string | null;
+  from_employee_id: string | null;
+  to_employee_id: string;
+  reason: string;
+  context: Record<string, unknown>;
+  retained_record_ids: Record<string, unknown>;
+  status: "pending" | "accepted" | "rejected" | "completed";
+  created_at: string;
+  accepted_at: string | null;
+  completed_at: string | null;
+}
+
+type GrowthWorkforceProfile = Pick<
+  AiEmployee,
+  | "employee_key"
+  | "name"
+  | "title"
+  | "department"
+  | "mission"
+  | "responsibilities"
+  | "kpis"
+  | "capabilities"
+  | "allowed_actions"
+  | "prohibited_actions"
+  | "system_instructions"
+  | "requires_approval_by_default"
+  | "status"
+>;
+
+/**
+ * The workforce starts as a controlled planning and briefing team. These
+ * profiles are deliberately barred from publishing, spending, sending or
+ * connecting third-party accounts until a separate approved integration exists.
+ */
+export const COSSA_GROWTH_WORKFORCE: readonly GrowthWorkforceProfile[] = [
+  {
+    employee_key: "social-strategy-planner",
+    name: "Social Strategy Planner",
+    title: "AI Social Strategy Planner",
+    department: "Growth",
+    mission:
+      "Turn approved Cossa business objectives into a practical, channel-aware social growth plan.",
+    responsibilities: [
+      "Define audience, offer, content pillars and cadence from approved Cossa information.",
+      "Prepare a written plan for the content and scheduling workers.",
+      "Escalate missing facts, strategy decisions and risk to the AI CEO and owner.",
+    ],
+    kpis: [
+      "Clear, evidence-based planning briefs.",
+      "No invented audience, performance or competitor claims.",
+      "Every external action remains approval-gated.",
+    ],
+    capabilities: ["research synthesis", "channel planning", "brief writing"],
+    allowed_actions: [
+      "analyse approved context",
+      "create internal plans",
+      "draft internal handoffs",
+    ],
+    prohibited_actions: [
+      "publish posts",
+      "send messages",
+      "spend advertising budget",
+      "connect external accounts",
+    ],
+    system_instructions:
+      "Use only approved Cossa knowledge, connected data and user-provided facts. State when information is missing. Produce a concise plan with assumptions, evidence and approval gates.",
+    requires_approval_by_default: true,
+    status: "active",
+  },
+  {
+    employee_key: "content-writer",
+    name: "Content Writer",
+    title: "AI Content Writer",
+    department: "Growth",
+    mission:
+      "Draft accurate, on-brand social, website and campaign content from an approved brief.",
+    responsibilities: [
+      "Create draft captions, articles, scripts and campaign copy.",
+      "Preserve the approved Cossa brand voice and label unverified assumptions.",
+      "Pass drafts to the scheduler only after human content approval.",
+    ],
+    kpis: [
+      "Useful drafts grounded in approved business information.",
+      "No unverified claims, testimonials or results.",
+      "No direct publication.",
+    ],
+    capabilities: ["copywriting", "content repurposing", "editorial drafting"],
+    allowed_actions: ["draft content", "prepare internal content packs", "request missing facts"],
+    prohibited_actions: [
+      "publish posts",
+      "claim customer results",
+      "use copyrighted material without approval",
+    ],
+    system_instructions:
+      "Draft only from approved information. Separate facts from proposed wording. Do not invent performance, customer stories, offers, pricing or legal claims.",
+    requires_approval_by_default: true,
+    status: "active",
+  },
+  {
+    employee_key: "social-schedule-coordinator",
+    name: "Social Schedule Coordinator",
+    title: "AI Social Schedule Coordinator",
+    department: "Growth",
+    mission:
+      "Organise approved content into a reviewable publishing schedule without posting it externally.",
+    responsibilities: [
+      "Turn approved content into a proposed schedule with owners and approval points.",
+      "Flag missing assets, channel access and consent requirements.",
+      "Prepare handoff notes for account growth and paid media review.",
+    ],
+    kpis: [
+      "Reviewable schedules with clear dependencies.",
+      "No silent publishing or auto-sending.",
+      "Every channel requirement is visible to the owner.",
+    ],
+    capabilities: ["content calendars", "dependency tracking", "approval checklists"],
+    allowed_actions: [
+      "create internal schedules",
+      "create internal tasks",
+      "flag missing approvals",
+    ],
+    prohibited_actions: ["publish posts", "send direct messages", "modify social accounts"],
+    system_instructions:
+      "Create internal scheduling recommendations only. Treat every social network as disconnected until the Integration Center shows an authorised live connection.",
+    requires_approval_by_default: true,
+    status: "active",
+  },
+  {
+    employee_key: "account-growth-analyst",
+    name: "Account Growth Analyst",
+    title: "AI Account Growth Analyst",
+    department: "Growth",
+    mission:
+      "Assess approved, connected account data and recommend responsible audience and account-growth actions.",
+    responsibilities: [
+      "Review only authorised account and campaign information.",
+      "Recommend content, community and conversion improvements with evidence.",
+      "Escalate missing data instead of estimating performance.",
+    ],
+    kpis: [
+      "Source-labelled recommendations.",
+      "No fabricated followers, reach, traffic or conversion data.",
+      "No outreach without consent and approval.",
+    ],
+    capabilities: ["growth analysis", "funnel review", "account recommendations"],
+    allowed_actions: [
+      "analyse authorised data",
+      "draft recommendations",
+      "prepare CEO briefing inputs",
+    ],
+    prohibited_actions: [
+      "follow users",
+      "message people",
+      "buy engagement",
+      "claim performance results",
+    ],
+    system_instructions:
+      "Only analyse connected and authorised data. If data is not present, say so and request the connection or source rather than estimating metrics.",
+    requires_approval_by_default: true,
+    status: "active",
+  },
+  {
+    employee_key: "paid-media-specialist",
+    name: "Paid Media Specialist",
+    title: "AI Paid Media Specialist",
+    department: "Growth",
+    mission:
+      "Prepare compliant, controlled Google and Meta advertising recommendations for owner approval.",
+    responsibilities: [
+      "Draft campaign structure, targeting hypotheses, creative briefs and measurement plans.",
+      "Flag budget, policy, tracking and approval requirements before any campaign is launched.",
+      "Supply a decision-ready paid-media summary to the AI CEO.",
+    ],
+    kpis: [
+      "Clear assumptions and spend controls.",
+      "No campaign launch or budget change without owner approval.",
+      "No fabricated advertising metrics.",
+    ],
+    capabilities: ["ad planning", "creative briefing", "measurement planning"],
+    allowed_actions: ["draft media plans", "draft ad copy", "prepare approval requests"],
+    prohibited_actions: [
+      "spend budget",
+      "launch campaigns",
+      "change bids",
+      "connect advertising accounts",
+    ],
+    system_instructions:
+      "Prepare recommendations only. No spend, campaign launch, bid adjustment or account change is allowed without an authorised connected account and a recorded human approval.",
+    requires_approval_by_default: true,
+    status: "active",
+  },
+  {
+    employee_key: "ai-ceo",
+    name: "Cossa AI CEO",
+    title: "AI CEO",
+    department: "Executive",
+    mission:
+      "Synthesize verified worker outputs into an owner-ready decision briefing for Cossa Nexus Holdings.",
+    responsibilities: [
+      "Check that handoff outputs are evidence-labelled and internally consistent.",
+      "Summarise decisions, trade-offs, blockers and approval requests for the owner.",
+      "Never approve or execute external actions on the owner's behalf.",
+    ],
+    kpis: [
+      "Decision-ready briefings grounded in recorded information.",
+      "Clear disclosure of missing evidence and connection gaps.",
+      "Owner approval preserved for all external or high-risk action.",
+    ],
+    capabilities: ["executive synthesis", "risk review", "decision briefing"],
+    allowed_actions: [
+      "review internal handoffs",
+      "prepare executive briefings",
+      "recommend next actions",
+    ],
+    prohibited_actions: [
+      "approve itself",
+      "publish content",
+      "spend money",
+      "make legal or financial commitments",
+    ],
+    system_instructions:
+      "Prepare a concise CEO briefing from verified Cossa records and workforce handoffs. Clearly label facts, recommendations, missing information and owner decisions required.",
+    requires_approval_by_default: true,
+    status: "active",
+  },
+] as const;
+
 export interface CreateMissionInput {
   title: string;
   instruction: string;
@@ -147,10 +376,7 @@ export interface CreateMissionInput {
   risk_level?: Mission["risk_level"];
 }
 
-function createDatabaseError(
-  operation: string,
-  error: unknown,
-): Error {
+function createDatabaseError(operation: string, error: unknown): Error {
   if (error instanceof Error) {
     return new Error(`${operation}: ${error.message}`);
   }
@@ -183,10 +409,7 @@ async function rows<T>(
   return data ?? [];
 }
 
-function requireNonEmptyValue(
-  value: string,
-  fieldName: string,
-): string {
+function requireNonEmptyValue(value: string, fieldName: string): string {
   const cleanedValue = value.trim();
 
   if (!cleanedValue) {
@@ -196,9 +419,7 @@ function requireNonEmptyValue(
   return cleanedValue;
 }
 
-export function listEmployees(
-  organisationId = COSSA_ORGANISATION_ID,
-): Promise<AiEmployee[]> {
+export function listEmployees(organisationId = COSSA_ORGANISATION_ID): Promise<AiEmployee[]> {
   return rows<AiEmployee>(
     "Unable to load AI employees",
     db
@@ -210,9 +431,7 @@ export function listEmployees(
   );
 }
 
-export function listActiveEmployees(
-  organisationId = COSSA_ORGANISATION_ID,
-): Promise<AiEmployee[]> {
+export function listActiveEmployees(organisationId = COSSA_ORGANISATION_ID): Promise<AiEmployee[]> {
   return rows<AiEmployee>(
     "Unable to load active AI employees",
     db
@@ -225,9 +444,7 @@ export function listActiveEmployees(
   );
 }
 
-export function listMissions(
-  organisationId = COSSA_ORGANISATION_ID,
-): Promise<Mission[]> {
+export function listMissions(organisationId = COSSA_ORGANISATION_ID): Promise<Mission[]> {
   return rows<Mission>(
     "Unable to load missions",
     db
@@ -242,10 +459,7 @@ export function listMissionRuns(
   missionId: string,
   organisationId = COSSA_ORGANISATION_ID,
 ): Promise<MissionRun[]> {
-  const validMissionId = requireNonEmptyValue(
-    missionId,
-    "Mission ID",
-  );
+  const validMissionId = requireNonEmptyValue(missionId, "Mission ID");
 
   return rows<MissionRun>(
     "Unable to load mission runs",
@@ -258,9 +472,7 @@ export function listMissionRuns(
   );
 }
 
-export function listPendingApprovals(
-  organisationId = COSSA_ORGANISATION_ID,
-): Promise<Approval[]> {
+export function listPendingApprovals(organisationId = COSSA_ORGANISATION_ID): Promise<Approval[]> {
   return rows<Approval>(
     "Unable to load pending approvals",
     db
@@ -272,28 +484,17 @@ export function listPendingApprovals(
   );
 }
 
-export async function createMission(
-  input: CreateMissionInput,
-): Promise<Mission> {
+export async function createMission(input: CreateMissionInput): Promise<Mission> {
   const title = requireNonEmptyValue(input.title, "Mission title");
-  const instruction = requireNonEmptyValue(
-    input.instruction,
-    "Mission instruction",
-  );
-  const objective = requireNonEmptyValue(
-    input.objective,
-    "Mission objective",
-  );
+  const instruction = requireNonEmptyValue(input.instruction, "Mission instruction");
+  const objective = requireNonEmptyValue(input.objective, "Mission objective");
 
   if (
     input.required_result_count !== undefined &&
     input.required_result_count !== null &&
-    (!Number.isInteger(input.required_result_count) ||
-      input.required_result_count <= 0)
+    (!Number.isInteger(input.required_result_count) || input.required_result_count <= 0)
   ) {
-    throw new Error(
-      "Required result count must be a positive whole number",
-    );
+    throw new Error("Required result count must be a positive whole number");
   }
 
   const missionPayload = {
@@ -316,20 +517,14 @@ export async function createMission(
     status: "draft" as const,
   };
 
-  const { data, error } = await db
-    .from("missions")
-    .insert(missionPayload)
-    .select("*")
-    .single();
+  const { data, error } = await db.from("missions").insert(missionPayload).select("*").single();
 
   if (error) {
     throw createDatabaseError("Unable to create mission", error);
   }
 
   if (!data) {
-    throw new Error(
-      "Unable to create mission: Supabase returned no mission record",
-    );
+    throw new Error("Unable to create mission: Supabase returned no mission record");
   }
 
   return data as Mission;
@@ -339,10 +534,7 @@ export async function queueMission(
   missionId: string,
   organisationId = COSSA_ORGANISATION_ID,
 ): Promise<Mission> {
-  const validMissionId = requireNonEmptyValue(
-    missionId,
-    "Mission ID",
-  );
+  const validMissionId = requireNonEmptyValue(missionId, "Mission ID");
 
   const { data, error } = await db
     .from("missions")
@@ -361,9 +553,7 @@ export async function queueMission(
   }
 
   if (!data) {
-    throw new Error(
-      "Unable to queue mission: The mission was not found or is not in draft status",
-    );
+    throw new Error("Unable to queue mission: The mission was not found or is not in draft status");
   }
 
   return data as Mission;
@@ -375,23 +565,13 @@ export async function decideApproval(
   reason: string,
   organisationId = COSSA_ORGANISATION_ID,
 ): Promise<Approval> {
-  const validApprovalId = requireNonEmptyValue(
-    approvalId,
-    "Approval ID",
-  );
-  const validReason = requireNonEmptyValue(
-    reason,
-    "Decision reason",
-  );
+  const validApprovalId = requireNonEmptyValue(approvalId, "Approval ID");
+  const validReason = requireNonEmptyValue(reason, "Decision reason");
 
-  const { data: userData, error: userError } =
-    await supabase.auth.getUser();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
 
   if (userError) {
-    throw createDatabaseError(
-      "Unable to verify the authenticated user",
-      userError,
-    );
+    throw createDatabaseError("Unable to verify the authenticated user", userError);
   }
 
   if (!userData.user) {
@@ -414,10 +594,7 @@ export async function decideApproval(
     .single();
 
   if (error) {
-    throw createDatabaseError(
-      "Unable to update approval",
-      error,
-    );
+    throw createDatabaseError("Unable to update approval", error);
   }
 
   if (!data) {
@@ -427,4 +604,161 @@ export async function decideApproval(
   }
 
   return data as Approval;
+}
+
+export function listEmployeeHandoffs(
+  organisationId = COSSA_ORGANISATION_ID,
+): Promise<EmployeeHandoff[]> {
+  return rows<EmployeeHandoff>(
+    "Unable to load employee handoffs",
+    db
+      .from("employee_handoffs")
+      .select("*")
+      .eq("organisation_id", organisationId)
+      .order("created_at", { ascending: false }),
+  );
+}
+
+/**
+ * Inserts only missing default profiles. Existing Cossa workforce profiles are
+ * never overwritten by this activation action.
+ */
+export async function installCossaGrowthWorkforce(): Promise<AiEmployee[]> {
+  const existing = await listEmployees();
+  const existingKeys = new Set(existing.map((employee) => employee.employee_key));
+  const missingProfiles = COSSA_GROWTH_WORKFORCE.filter(
+    (profile) => !existingKeys.has(profile.employee_key),
+  );
+
+  if (missingProfiles.length === 0) {
+    return existing;
+  }
+
+  const { error } = await db.from("ai_employees").insert(
+    missingProfiles.map((profile) => ({
+      organisation_id: COSSA_ORGANISATION_ID,
+      business_unit_id: null,
+      ...profile,
+    })),
+  );
+
+  if (error) {
+    throw createDatabaseError("Unable to install the Cossa growth workforce", error);
+  }
+
+  return listEmployees();
+}
+
+export interface CreateGrowthCoordinationMissionInput {
+  objective: string;
+  target_market?: string | null;
+  target_location?: string | null;
+}
+
+export interface GrowthCoordinationMissionResult {
+  mission: Mission;
+  handoffs: EmployeeHandoff[];
+}
+
+/**
+ * Records a controlled internal work sequence. It does not call a model,
+ * publish content, contact a person, spend budget or change an external
+ * account. Those later actions need a connected provider and human approval.
+ */
+export async function createGrowthCoordinationMission(
+  input: CreateGrowthCoordinationMissionInput,
+): Promise<GrowthCoordinationMissionResult> {
+  const objective = requireNonEmptyValue(input.objective, "Growth objective");
+  const employees = await listEmployees();
+  const employeeByKey = new Map(employees.map((employee) => [employee.employee_key, employee]));
+
+  const handoffKeys = [
+    "social-strategy-planner",
+    "content-writer",
+    "social-schedule-coordinator",
+    "account-growth-analyst",
+    "paid-media-specialist",
+    "ai-ceo",
+  ];
+
+  const handoffEmployees = handoffKeys.map((key) => employeeByKey.get(key));
+
+  if (handoffEmployees.some((employee) => !employee)) {
+    throw new Error("Install the Cossa growth workforce before creating a coordination mission.");
+  }
+
+  const assignedEmployee = handoffEmployees[0]!;
+
+  const mission = await createMission({
+    title: `Growth coordination: ${objective.slice(0, 100)}`,
+    instruction:
+      "Coordinate an internal social, content and paid-media planning brief. Use approved Cossa information only. Preserve the handoff order, label missing evidence and do not perform an external action.",
+    objective,
+    assigned_employee_id: assignedEmployee.id,
+    target_market: input.target_market?.trim() || null,
+    target_location: input.target_location?.trim() || null,
+    constraints: [
+      "Planning and draft work only until a provider connection and owner approval exist.",
+      "No social publishing, direct messaging, advertising spend, account changes or external data collection.",
+      "Each worker must label verified facts, recommendations and missing information.",
+      "The AI CEO prepares an owner briefing; the Cossa owner makes the final decision.",
+    ],
+    prohibited_actions: [
+      "publish_social_content",
+      "send_external_messages",
+      "spend_ad_budget",
+      "connect_or_modify_external_accounts",
+      "make_legal_or_financial_commitments",
+    ],
+    output_schema: {
+      required_sections: [
+        "strategy brief",
+        "content drafts",
+        "proposed schedule",
+        "account-growth recommendations",
+        "paid-media recommendation",
+        "AI CEO owner briefing",
+      ],
+      final_decision_owner: "Cossa Nexus Holdings owner",
+    },
+    priority: "normal",
+    risk_level: "medium",
+  });
+
+  const handoffReasons = [
+    "Start with an evidence-based social growth strategy brief.",
+    "Turn the approved strategy brief into draft content.",
+    "Prepare a reviewable schedule; do not publish externally.",
+    "Assess authorised account data or record the missing data connection.",
+    "Prepare a controlled paid-media recommendation; do not spend or launch.",
+    "Synthesize the workforce outputs into a Cossa owner decision briefing.",
+  ];
+
+  const handoffRows = handoffEmployees.map((employee, index) => ({
+    organisation_id: COSSA_ORGANISATION_ID,
+    mission_id: mission.id,
+    run_id: null,
+    from_employee_id: index === 0 ? null : handoffEmployees[index - 1]!.id,
+    to_employee_id: employee!.id,
+    reason: handoffReasons[index],
+    context: {
+      objective,
+      stage: index + 1,
+      total_stages: handoffEmployees.length,
+      external_actions_enabled: false,
+    },
+    retained_record_ids: {},
+    status: "pending" as const,
+  }));
+
+  const { data, error } = await db.from("employee_handoffs").insert(handoffRows).select("*");
+
+  if (error) {
+    throw createDatabaseError("Unable to create the workforce handoff plan", error);
+  }
+
+  return {
+    mission,
+    handoffs: (data ?? []) as EmployeeHandoff[],
+  };
 }

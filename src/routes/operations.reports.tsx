@@ -26,11 +26,15 @@ function ReportsPage() {
         <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative">
           <div className="flex items-center gap-2">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow"><FileBarChart className="h-5 w-5" /></div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow">
+              <FileBarChart className="h-5 w-5" />
+            </div>
             <StatusBadge status="Live" />
           </div>
           <h1 className="mt-3 font-display text-3xl md:text-4xl font-semibold">Reports</h1>
-          <p className="mt-1 text-muted-foreground">Cross-module reporting, live from the database.</p>
+          <p className="mt-1 text-muted-foreground">
+            Cross-module reporting, live from the database.
+          </p>
         </div>
       </section>
 
@@ -40,7 +44,7 @@ function ReportsPage() {
         <>
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: "Revenue", value: fmtCurrency(data.revenueMTD) },
+              { label: "Recorded revenue", value: fmtCurrency(data.recordedRevenue) },
               { label: "Pipeline value", value: fmtCurrency(data.pipelineValue) },
               { label: "New leads (7d)", value: data.newLeads },
               { label: "Customers", value: data.customers },
@@ -50,7 +54,9 @@ function ReportsPage() {
               { label: "Open quotes", value: data.quotesOpen },
             ].map((s) => (
               <div key={s.label} className="glass-card p-4">
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{s.label}</div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  {s.label}
+                </div>
                 <div className="mt-1 font-display text-2xl font-semibold">{s.value}</div>
               </div>
             ))}
@@ -61,7 +67,9 @@ function ReportsPage() {
             <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
               {data.pipelineByStage.map((p) => (
                 <div key={p.stage} className="rounded-xl border border-border/60 bg-card/40 p-3">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{p.stage}</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    {p.stage}
+                  </div>
                   <div className="mt-1 font-display text-xl font-semibold">{p.count}</div>
                   <div className="text-xs text-primary">{fmtCurrency(p.value)}</div>
                 </div>

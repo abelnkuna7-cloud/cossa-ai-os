@@ -1,7 +1,4 @@
-import {
-  createFileRoute,
-  Link,
-} from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -18,38 +15,33 @@ import {
   Loader2,
   Rocket,
   Sparkles,
+  ShieldCheck,
   TrendingUp,
   Users,
+  UsersRound,
   Zap,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { StatusBadge } from "@/components/status-badge";
-import {
-  dashboardStats,
-  opsTasks,
-  salesAppointments,
-} from "@/lib/business-data";
-import {
-  fmtCurrency,
-  fmtDateTime,
-} from "@/components/crud-workspace";
-import {
-  GrowthEagleArtwork,
-  ParentBrandEndorsement,
-} from "@/components/brand/growth-brand";
+import { dashboardStats, opsTasks, salesAppointments } from "@/lib/business-data";
+import { fmtCurrency, fmtDateTime } from "@/components/crud-workspace";
+import { GrowthEagleArtwork, ParentBrandEndorsement } from "@/components/brand/growth-brand";
 import { GROWTH_BRAND } from "@/lib/brand";
+import {
+  listEmployeeHandoffs,
+  listEmployees,
+  listMissions,
+  listPendingApprovals,
+} from "@/lib/workforce-data";
 
-export const Route = createFileRoute(
-  "/command-center",
-)({
+export const Route = createFileRoute("/command-center")({
   component: Dashboard,
   head: () => ({
     meta: [
       {
-        title:
-          "GROWTH Command Center — Business Growth Intelligence",
+        title: "GROWTH Command Center — Business Growth Intelligence",
       },
       {
         name: "description",
@@ -118,9 +110,7 @@ function scoreTone(value: number) {
   return "text-destructive";
 }
 
-function normaliseStatus(
-  value: unknown,
-): string {
+function normaliseStatus(value: unknown): string {
   return String(value ?? "")
     .trim()
     .toLowerCase();
@@ -148,93 +138,106 @@ function Dashboard() {
     staleTime: 30_000,
   });
 
+  const workforceEmployeesQuery = useQuery({
+    queryKey: ["dashboard-ai-workforce-employees"],
+    queryFn: () => listEmployees(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const workforceMissionsQuery = useQuery({
+    queryKey: ["dashboard-ai-workforce-missions"],
+    queryFn: () => listMissions(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const workforceHandoffsQuery = useQuery({
+    queryKey: ["dashboard-ai-workforce-handoffs"],
+    queryFn: () => listEmployeeHandoffs(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const workforceApprovalsQuery = useQuery({
+    queryKey: ["dashboard-ai-workforce-approvals"],
+    queryFn: () => listPendingApprovals(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
   const stats = statsQuery.data;
 
   const kpis = [
     {
-      label: "Revenue",
-      value: fmtCurrency(
-        stats?.revenueMTD ?? 0,
-      ),
+      label: "Recorded revenue",
+      value: fmtCurrency(stats?.recordedRevenue ?? 0),
       icon: DollarSign,
       tone: "text-success",
       to: "/sales/quotations" as const,
-      description:
-        "Won opportunities and accepted quotations",
+      description: "All recorded won opportunities and accepted quotations",
     },
     {
       label: "New Leads (7d)",
-      value: String(
-        stats?.newLeads ?? 0,
-      ),
+      value: String(stats?.newLeads ?? 0),
       icon: Users,
       tone: "text-info",
       to: "/sales/leads" as const,
-      description:
-        "Leads created during the last seven days",
+      description: "Leads created during the last seven days",
     },
     {
       label: "Pipeline Value",
-      value: fmtCurrency(
-        stats?.pipelineValue ?? 0,
-      ),
+      value: fmtCurrency(stats?.pipelineValue ?? 0),
       icon: TrendingUp,
       tone: "text-primary",
       to: "/sales/pipeline" as const,
-      description:
-        "Estimated value of open opportunities",
+      description: "Estimated value of open opportunities",
     },
     {
       label: "Active Projects",
-      value: String(
-        stats?.activeProjects ?? 0,
-      ),
+      value: String(stats?.activeProjects ?? 0),
       icon: Gauge,
       tone: "text-chart-5",
       to: "/operations/projects" as const,
-      description:
-        "Projects not marked done or archived",
+      description: "Projects not marked done or archived",
     },
   ];
 
-  const openTasks = (
-    tasksQuery.data ?? []
-  )
-    .filter(
-      (task) =>
-        normaliseStatus(task.status) !==
-        "done",
-    )
+  const openTasks = (tasksQuery.data ?? [])
+    .filter((task) => normaliseStatus(task.status) !== "done")
     .slice(0, 5);
 
-  const upcomingAppointments = (
-    appointmentsQuery.data ?? []
-  )
+  const upcomingAppointments = (appointmentsQuery.data ?? [])
     .filter((appointment) => {
-      const startsAt = new Date(
-        appointment.starts_at,
-      ).getTime();
+      const startsAt = new Date(appointment.starts_at).getTime();
 
-      return (
-        Number.isFinite(startsAt) &&
-        startsAt >= Date.now()
-      );
+      return Number.isFinite(startsAt) && startsAt >= Date.now();
     })
-    .sort(
-      (a, b) =>
-        new Date(
-          a.starts_at,
-        ).getTime() -
-        new Date(
-          b.starts_at,
-        ).getTime(),
-    )
+    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
     .slice(0, 5);
+
+  const growthCoordinationMissions = (workforceMissionsQuery.data ?? []).filter((mission) =>
+    mission.title.startsWith("Growth coordination:"),
+  );
+  const growthMissionIds = new Set(growthCoordinationMissions.map((mission) => mission.id));
+  const pendingGrowthHandoffs = (workforceHandoffsQuery.data ?? []).filter(
+    (handoff) => handoff.status === "pending" && growthMissionIds.has(handoff.mission_id),
+  );
+  const latestGrowthMission = growthCoordinationMissions[0] ?? null;
+  const workforceLoading =
+    workforceEmployeesQuery.isLoading ||
+    workforceMissionsQuery.isLoading ||
+    workforceHandoffsQuery.isLoading ||
+    workforceApprovalsQuery.isLoading;
 
   const dashboardHasError =
     statsQuery.isError ||
     tasksQuery.isError ||
-    appointmentsQuery.isError;
+    appointmentsQuery.isError ||
+    workforceEmployeesQuery.isError ||
+    workforceMissionsQuery.isError ||
+    workforceHandoffsQuery.isError ||
+    workforceApprovalsQuery.isError;
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
@@ -248,22 +251,17 @@ function Dashboard() {
             <div className="flex items-center gap-2">
               <StatusBadge status="Production" />
 
-              <span className="text-xs text-muted-foreground">
-                GROWTH Command Center
-              </span>
+              <span className="text-xs text-muted-foreground">GROWTH Command Center</span>
             </div>
 
             <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
-              Welcome back to {" "}
-              <span className="text-gradient-gold">
-                {GROWTH_BRAND.productName}.
-              </span>
+              Welcome back to{" "}
+              <span className="text-gradient-gold">{GROWTH_BRAND.productName}.</span>
             </h1>
 
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              {GROWTH_BRAND.productDescriptor} connects CRM, leads,
-              opportunities, quotations, projects, tasks and appointments
-              in one production workspace.
+              {GROWTH_BRAND.productDescriptor} connects CRM, leads, opportunities, quotations,
+              projects, tasks and appointments in one production workspace.
             </p>
 
             <ParentBrandEndorsement className="mt-4" />
@@ -299,16 +297,12 @@ function Dashboard() {
 
           <div className="min-w-0">
             <h2 className="text-sm font-semibold">
-              Some dashboard information
-              could not be loaded
+              Some dashboard information could not be loaded
             </h2>
 
             <p className="mt-1 text-xs text-muted-foreground">
-              Existing records have not been
-              changed. Refresh the dashboard
-              or check the relevant Supabase
-              permissions if the problem
-              continues.
+              Existing records have not been changed. Refresh the dashboard or check the relevant
+              Supabase permissions if the problem continues.
             </p>
 
             <button
@@ -317,6 +311,10 @@ function Dashboard() {
                 void statsQuery.refetch();
                 void tasksQuery.refetch();
                 void appointmentsQuery.refetch();
+                void workforceEmployeesQuery.refetch();
+                void workforceMissionsQuery.refetch();
+                void workforceHandoffsQuery.refetch();
+                void workforceApprovalsQuery.refetch();
               }}
               className="mt-3 text-xs font-semibold text-primary hover:underline"
             >
@@ -341,9 +339,7 @@ function Dashboard() {
                   {kpi.label}
                 </div>
 
-                <Icon
-                  className={`h-4 w-4 ${kpi.tone}`}
-                />
+                <Icon className={`h-4 w-4 ${kpi.tone}`} />
               </div>
 
               <div className="mt-2 font-display text-2xl font-semibold">
@@ -354,14 +350,10 @@ function Dashboard() {
                 )}
               </div>
 
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {kpi.description}
-              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">{kpi.description}</p>
 
               <div className="mt-3 inline-flex items-center gap-1 text-xs text-primary">
-                {statsQuery.isSuccess
-                  ? "Open live records"
-                  : "Open records"}
+                {statsQuery.isSuccess ? "Open live records" : "Open records"}
 
                 <ArrowUpRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </div>
@@ -374,14 +366,10 @@ function Dashboard() {
         <section className="glass-card p-6 lg:col-span-2">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="font-display text-lg font-semibold">
-                Business Health
-              </h2>
+              <h2 className="font-display text-lg font-semibold">Business Health</h2>
 
               <p className="text-xs text-muted-foreground">
-                A future verified score across
-                finance, sales, marketing,
-                operations, customers and
+                A future verified score across finance, sales, marketing, operations, customers and
                 delivery.
               </p>
             </div>
@@ -397,38 +385,24 @@ function Dashboard() {
 
           {healthCategories.length === 0 ? (
             <p className="mt-5 rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-              No health score has been
-              calculated. Cossa AI must only
-              calculate it from verified CRM,
-              financial, operational and
-              marketing evidence.
+              No health score has been calculated. Cossa AI must only calculate it from verified
+              CRM, financial, operational and marketing evidence.
             </p>
           ) : (
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              {healthCategories.map(
-                (category) => (
-                  <div key={category.name}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {category.name}
-                      </span>
+              {healthCategories.map((category) => (
+                <div key={category.name}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{category.name}</span>
 
-                      <span
-                        className={`font-semibold ${scoreTone(
-                          category.score,
-                        )}`}
-                      >
-                        {category.score}
-                      </span>
-                    </div>
-
-                    <Progress
-                      value={category.score}
-                      className="mt-1.5 h-1.5"
-                    />
+                    <span className={`font-semibold ${scoreTone(category.score)}`}>
+                      {category.score}
+                    </span>
                   </div>
-                ),
-              )}
+
+                  <Progress value={category.score} className="mt-1.5 h-1.5" />
+                </div>
+              ))}
             </div>
           )}
         </section>
@@ -437,9 +411,7 @@ function Dashboard() {
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
 
-            <h2 className="font-display text-lg font-semibold">
-              Quick Actions
-            </h2>
+            <h2 className="font-display text-lg font-semibold">Quick Actions</h2>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -454,9 +426,7 @@ function Dashboard() {
                 >
                   <Icon className="h-4 w-4 text-primary" />
 
-                  <span className="text-xs font-medium">
-                    {action.label}
-                  </span>
+                  <span className="text-xs font-medium">{action.label}</span>
                 </Link>
               );
             })}
@@ -468,20 +438,14 @@ function Dashboard() {
         <section className="glass-card p-6 lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="font-display text-lg font-semibold">
-                Sales Pipeline
-              </h2>
+              <h2 className="font-display text-lg font-semibold">Sales Pipeline</h2>
 
               <p className="mt-1 text-xs text-muted-foreground">
-                Open opportunities grouped by
-                their current sales stage.
+                Open opportunities grouped by their current sales stage.
               </p>
             </div>
 
-            <Link
-              to="/sales/pipeline"
-              className="text-xs text-primary hover:underline"
-            >
+            <Link to="/sales/pipeline" className="text-xs text-primary hover:underline">
               Open pipeline
             </Link>
           </div>
@@ -493,9 +457,7 @@ function Dashboard() {
             </div>
           ) : (
             <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
-              {(
-                stats?.pipelineByStage ?? []
-              ).map((stage) => (
+              {(stats?.pipelineByStage ?? []).map((stage) => (
                 <Link
                   key={stage.stage}
                   to="/sales/pipeline"
@@ -505,15 +467,9 @@ function Dashboard() {
                     {stage.stage}
                   </div>
 
-                  <div className="mt-1 font-display text-xl font-semibold">
-                    {stage.count}
-                  </div>
+                  <div className="mt-1 font-display text-xl font-semibold">{stage.count}</div>
 
-                  <div className="text-xs text-primary">
-                    {fmtCurrency(
-                      stage.value,
-                    )}
-                  </div>
+                  <div className="text-xs text-primary">{fmtCurrency(stage.value)}</div>
 
                   <div className="mt-2 inline-flex items-center gap-1 text-[10px] text-muted-foreground group-hover:text-primary">
                     View stage
@@ -529,9 +485,7 @@ function Dashboard() {
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-primary" />
 
-            <h2 className="font-display text-lg font-semibold">
-              At a glance
-            </h2>
+            <h2 className="font-display text-lg font-semibold">At a glance</h2>
           </div>
 
           <div className="mt-4 space-y-1 text-sm">
@@ -551,10 +505,7 @@ function Dashboard() {
               label="Overdue tasks"
               value={stats?.overdueTasks ?? 0}
               to="/operations/tasks"
-              warning={
-                (stats?.overdueTasks ?? 0) >
-                0
-              }
+              warning={(stats?.overdueTasks ?? 0) > 0}
             />
 
             <DashboardMetricRow
@@ -572,17 +523,94 @@ function Dashboard() {
         </section>
       </div>
 
+      <section className="glass-card p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <UsersRound className="h-4 w-4 text-primary" />
+              <h2 className="font-display text-lg font-semibold">AI Workforce owner briefing</h2>
+            </div>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Live records for Cossa's controlled social, content, account-growth and paid-media
+              planning team. Pending handoffs are not completed work, and external actions remain
+              disabled until you approve an authorised connection.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/ai/workforce">
+              <Button
+                variant="outline"
+                className="border-primary/40 text-primary hover:bg-primary/10"
+              >
+                <UsersRound className="mr-1.5 h-4 w-4" />
+                Manage workforce
+              </Button>
+            </Link>
+            <Link to="/ai/ceo">
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
+                <Brain className="mr-1.5 h-4 w-4" />
+                Open AI CEO briefing
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {workforceLoading ? (
+          <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading workforce recordsâ€¦
+          </div>
+        ) : (
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <WorkforceMetric
+              label="Active workforce profiles"
+              value={String(
+                (workforceEmployeesQuery.data ?? []).filter(
+                  (employee) => employee.status === "active",
+                ).length,
+              )}
+              detail="Installed AI workers"
+            />
+            <WorkforceMetric
+              label="Growth coordination plans"
+              value={String(growthCoordinationMissions.length)}
+              detail={latestGrowthMission ? latestGrowthMission.status : "No plan recorded"}
+            />
+            <WorkforceMetric
+              label="Pending internal handoffs"
+              value={String(pendingGrowthHandoffs.length)}
+              detail="Waiting for recorded progress"
+              warning={pendingGrowthHandoffs.length > 0}
+            />
+            <WorkforceMetric
+              label="Approvals awaiting owner"
+              value={String((workforceApprovalsQuery.data ?? []).length)}
+              detail="No approval means no external action"
+              warning={(workforceApprovalsQuery.data ?? []).length > 0}
+            />
+          </div>
+        )}
+
+        {latestGrowthMission ? (
+          <div className="mt-4 flex items-start gap-2 rounded-lg border border-border/60 bg-card/40 p-3 text-sm">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div>
+              <span className="font-medium">Latest recorded objective: </span>
+              {latestGrowthMission.objective}
+              <span className="ml-2 text-xs uppercase tracking-widest text-muted-foreground">
+                {latestGrowthMission.status}
+              </span>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="glass-card p-6">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold">
-              Tasks
-            </h2>
+            <h2 className="font-display text-lg font-semibold">Tasks</h2>
 
-            <Link
-              to="/operations/tasks"
-              className="text-xs text-primary hover:underline"
-            >
+            <Link to="/operations/tasks" className="text-xs text-primary hover:underline">
               All tasks
             </Link>
           </div>
@@ -595,10 +623,7 @@ function Dashboard() {
           ) : openTasks.length === 0 ? (
             <div className="mt-4 text-sm text-muted-foreground">
               No open tasks.{" "}
-              <Link
-                to="/operations/tasks"
-                className="text-primary hover:underline"
-              >
+              <Link to="/operations/tasks" className="text-primary hover:underline">
                 Add one
               </Link>
               .
@@ -613,20 +638,14 @@ function Dashboard() {
                   >
                     <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
 
-                    <span className="min-w-0 flex-1 truncate">
-                      {task.title}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate">{task.title}</span>
 
                     <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
                       {task.priority}
                     </span>
 
                     <span className="text-xs text-primary">
-                      {task.due_at
-                        ? fmtDateTime(
-                            task.due_at,
-                          )
-                        : "No due date"}
+                      {task.due_at ? fmtDateTime(task.due_at) : "No due date"}
                     </span>
                   </Link>
                 </li>
@@ -640,15 +659,10 @@ function Dashboard() {
             <div className="flex items-center gap-2">
               <CalendarDays className="h-4 w-4 text-primary" />
 
-              <h2 className="font-display text-lg font-semibold">
-                Upcoming
-              </h2>
+              <h2 className="font-display text-lg font-semibold">Upcoming</h2>
             </div>
 
-            <Link
-              to="/operations/calendar"
-              className="text-xs text-primary hover:underline"
-            >
+            <Link to="/operations/calendar" className="text-xs text-primary hover:underline">
               Calendar
             </Link>
           </div>
@@ -658,40 +672,30 @@ function Dashboard() {
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading appointments…
             </div>
-          ) : upcomingAppointments.length ===
-            0 ? (
+          ) : upcomingAppointments.length === 0 ? (
             <div className="mt-4 text-sm text-muted-foreground">
               Nothing is currently scheduled.{" "}
-              <Link
-                to="/sales/appointments"
-                className="text-primary hover:underline"
-              >
+              <Link to="/sales/appointments" className="text-primary hover:underline">
                 Book an appointment
               </Link>
               .
             </div>
           ) : (
             <ul className="mt-4 space-y-3 text-sm">
-              {upcomingAppointments.map(
-                (appointment) => (
-                  <li key={appointment.id}>
-                    <Link
-                      to="/sales/appointments"
-                      className="flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-primary/5"
-                    >
-                      <span className="w-32 shrink-0 text-xs text-primary">
-                        {fmtDateTime(
-                          appointment.starts_at,
-                        )}
-                      </span>
+              {upcomingAppointments.map((appointment) => (
+                <li key={appointment.id}>
+                  <Link
+                    to="/sales/appointments"
+                    className="flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-primary/5"
+                  >
+                    <span className="w-32 shrink-0 text-xs text-primary">
+                      {fmtDateTime(appointment.starts_at)}
+                    </span>
 
-                      <span>
-                        {appointment.title}
-                      </span>
-                    </Link>
-                  </li>
-                ),
-              )}
+                    <span>{appointment.title}</span>
+                  </Link>
+                </li>
+              ))}
             </ul>
           )}
         </section>
@@ -701,15 +705,11 @@ function Dashboard() {
         <div className="flex items-center gap-2">
           <LineChart className="h-4 w-4 text-primary" />
 
-          <h2 className="font-display text-lg font-semibold">
-            Build the operating record
-          </h2>
+          <h2 className="font-display text-lg font-semibold">Build the operating record</h2>
         </div>
 
         <p className="mt-2 text-sm text-muted-foreground">
-          Keep adding verified business
-          records so Cossa AI and the
-          dashboard can provide stronger,
+          Keep adding verified business records so Cossa AI and the dashboard can provide stronger,
           evidence-based decisions.
         </p>
 
@@ -753,6 +753,34 @@ function Dashboard() {
   );
 }
 
+function WorkforceMetric({
+  label,
+  value,
+  detail,
+  warning = false,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  warning?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/40 p-4">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div
+        className={
+          warning
+            ? "mt-2 font-display text-2xl font-semibold text-warning"
+            : "mt-2 font-display text-2xl font-semibold"
+        }
+      >
+        {value}
+      </div>
+      <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
+    </div>
+  );
+}
+
 function DashboardMetricRow({
   label,
   value,
@@ -761,11 +789,7 @@ function DashboardMetricRow({
 }: {
   label: string;
   value: number;
-  to:
-    | "/sales/customers"
-    | "/operations/tasks"
-    | "/sales/quotations"
-    | "/sales/leads";
+  to: "/sales/customers" | "/operations/tasks" | "/sales/quotations" | "/sales/leads";
   warning?: boolean;
 }) {
   return (
@@ -773,19 +797,9 @@ function DashboardMetricRow({
       to={to}
       className="group flex items-center justify-between rounded-lg px-2 py-2 transition-colors hover:bg-primary/5"
     >
-      <span className="text-muted-foreground group-hover:text-foreground">
-        {label}
-      </span>
+      <span className="text-muted-foreground group-hover:text-foreground">{label}</span>
 
-      <span
-        className={
-          warning
-            ? "font-semibold text-destructive"
-            : "font-semibold"
-        }
-      >
-        {value}
-      </span>
+      <span className={warning ? "font-semibold text-destructive" : "font-semibold"}>{value}</span>
     </Link>
   );
 }
