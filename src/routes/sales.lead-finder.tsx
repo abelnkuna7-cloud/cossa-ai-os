@@ -762,12 +762,21 @@ function LeadHunterPage() {
     );
   }
 
+  function showHuntValidationError(
+    message: string,
+  ) {
+    setResult(null);
+    setHuntError(message);
+    setHuntState("error");
+    toast.error(message);
+  }
+
   async function runHunt() {
     if (
       request.companies.length ===
       0
     ) {
-      toast.error(
+      showHuntValidationError(
         "Choose at least one Cossa company.",
       );
       return;
@@ -777,7 +786,7 @@ function LeadHunterPage() {
       request.services.length ===
       0
     ) {
-      toast.error(
+      showHuntValidationError(
         "Choose at least one service.",
       );
       return;
@@ -790,7 +799,7 @@ function LeadHunterPage() {
       !instruction &&
       !request.search_everything
     ) {
-      toast.error(
+      showHuntValidationError(
         "Tell Lead Hunter exactly what you want it to find.",
       );
       return;
@@ -868,7 +877,7 @@ function LeadHunterPage() {
     if (
       misplacedCossaCompany
     ) {
-      toast.error(
+      showHuntValidationError(
         `Remove "${misplacedCossaCompany}" from Organisation types. Cossa companies belong in the Cossa companies selector; Organisation types must describe buyers.`,
       );
       return;
@@ -896,7 +905,7 @@ function LeadHunterPage() {
       finalRequest.services.length >
       serviceQueryBudget
     ) {
-      toast.error(
+      showHuntValidationError(
         `${searchDepth === "economy" ? "Economy" : "This"} search depth can cover at most ${serviceQueryBudget} selected services per hunt. Run focused service batches or choose a deeper search depth.`,
       );
       return;
@@ -918,7 +927,7 @@ function LeadHunterPage() {
       cities.length === 0 &&
       suburbs.length === 0
     ) {
-      toast.error(
+      showHuntValidationError(
         "Enter at least one location, province, city or suburb for this search scope.",
       );
       return;
