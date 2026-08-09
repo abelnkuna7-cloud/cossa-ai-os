@@ -1038,6 +1038,26 @@ function validateRequest(
       20,
     );
 
+  const misplacedCossaCompany =
+    organisationTypes.find(
+      (
+        organisationType,
+      ) =>
+        COSSA_FIRST_PARTY_NAME_PATTERN.test(
+          organisationType,
+        ),
+    );
+
+  if (
+    misplacedCossaCompany
+  ) {
+    return {
+      valid: false,
+      error:
+        `"${misplacedCossaCompany}" is one of Cossa's sellers, not a buyer organisation type. Choose the Cossa company in the Company selector and use buyer types such as Property manager, Warehouse or Retail centre here.`,
+    };
+  }
+
   const tenderKeywords =
     cleanArray(
       candidate.tender_keywords,
@@ -1148,6 +1168,28 @@ function validateRequest(
     SEARCH_DEPTH_QUERY_BUDGETS[
       searchDepth
     ];
+
+  const effectiveQueryBudget =
+    Math.min(
+      maxSearchQueries,
+      depthQueryBudget,
+    );
+
+  /*
+   * Each selected service must have a search plan. Quietly truncating a long
+   * list would make the UI claim that services were searched when they were
+   * not. Focus the hunt or deliberately choose a deeper paid search instead.
+   */
+  if (
+    services.length >
+    effectiveQueryBudget
+  ) {
+    return {
+      valid: false,
+      error:
+        `${searchDepth === "economy" ? "Economy" : "This"} search depth can cover at most ${effectiveQueryBudget} selected service${effectiveQueryBudget === 1 ? "" : "s"} per hunt. Run focused service batches or choose a deeper search depth.`,
+    };
+  }
 
   const revenueMode =
     candidate.revenue_mode ??
@@ -1323,10 +1365,7 @@ function validateRequest(
         false,
 
       max_search_queries:
-        Math.min(
-          maxSearchQueries,
-          depthQueryBudget,
-        ),
+        effectiveQueryBudget,
 
       use_cached_results:
         candidate.use_cached_results !==

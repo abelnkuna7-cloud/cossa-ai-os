@@ -298,6 +298,9 @@ const SERVICE_OPTIONS: Array<{
   },
 ];
 
+const COSSA_COMPANY_AS_ORGANISATION_TYPE_PATTERN =
+  /\b(?:cossa nexus(?: holdings| construction)?|cossa facility services|cossa tech|cossa ai growth|cossa store|nexdocs)\b/i;
+
 function LeadHunterPage() {
   const abortRef =
     useRef<AbortController | null>(
@@ -851,6 +854,53 @@ function LeadHunterPage() {
             keywordInput,
           ),
       };
+
+    const misplacedCossaCompany =
+      finalRequest.organisation_types.find(
+        (
+          organisationType,
+        ) =>
+          COSSA_COMPANY_AS_ORGANISATION_TYPE_PATTERN.test(
+            organisationType,
+          ),
+      );
+
+    if (
+      misplacedCossaCompany
+    ) {
+      toast.error(
+        `Remove "${misplacedCossaCompany}" from Organisation types. Cossa companies belong in the Cossa companies selector; Organisation types must describe buyers.`,
+      );
+      return;
+    }
+
+    const searchDepth =
+      finalRequest.search_depth ??
+      "economy";
+
+    const requestedQueryBudget =
+      finalRequest.max_search_queries ??
+      maxQueriesForDepth(
+        searchDepth,
+      );
+
+    const serviceQueryBudget =
+      Math.min(
+        maxQueriesForDepth(
+          searchDepth,
+        ),
+        requestedQueryBudget,
+      );
+
+    if (
+      finalRequest.services.length >
+      serviceQueryBudget
+    ) {
+      toast.error(
+        `${searchDepth === "economy" ? "Economy" : "This"} search depth can cover at most ${serviceQueryBudget} selected services per hunt. Run focused service batches or choose a deeper search depth.`,
+      );
+      return;
+    }
 
     const scope =
       finalRequest.search_scope;
