@@ -53,6 +53,7 @@ import {
   maxQueriesForDepth,
   requestFromStrategy,
   saveProspectToCrm,
+  validateSearchRequest,
   type LeadHunterCompany,
   type LeadHunterDeliveryModel,
   type LeadHunterProspect,
@@ -830,8 +831,14 @@ function LeadHunterPage() {
         suburbInput,
       );
 
-    const finalRequest:
-      LeadHunterSearchRequest = {
+    /*
+     * The mission may explicitly narrow services, companies, sector and
+     * opportunity evidence. Normalise it before local validation so the
+     * visible Hunt summary, the pre-flight rules and the server receive the
+     * same request.
+     */
+    const finalRequest =
+      validateSearchRequest({
         ...request,
 
         search_instruction:
@@ -862,7 +869,7 @@ function LeadHunterPage() {
           parseCommaSeparated(
             keywordInput,
           ),
-      };
+      });
 
     const misplacedCossaCompany =
       finalRequest.organisation_types.find(
