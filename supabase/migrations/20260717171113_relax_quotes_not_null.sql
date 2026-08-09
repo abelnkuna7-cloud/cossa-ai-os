@@ -1,0 +1,2 @@
+ALTER TABLE public.quotes ALTER COLUMN full_name DROP NOT NULL;
+ALTER TABLE public.quotes ALTER COLUMN phone DROP NOT NULL;;
