@@ -213,7 +213,8 @@ const integrations: Integration[] = [
   {
     name: "Meta (Facebook & Instagram)",
     group: "Communication",
-    blurb: "Future authorised access to business pages and customer conversations.",
+    blurb:
+      "No approved Facebook or Instagram business-page URL is recorded yet. Authorised access remains pending.",
     short: "MT",
     activation:
       "Requires ownership approval, a scoped authorised connection and an approved customer-response process.",
@@ -268,7 +269,7 @@ const integrations: Integration[] = [
     name: "Google Ads",
     group: "Marketing",
     blurb:
-      "Future approved reporting and campaign management for an authorised advertiser account.",
+      "No advertiser account is connected. An owner-supplied R300 test ceiling still requires Founder and CEO approval before any spend.",
     short: "GA",
     activation:
       "Requires advertiser ownership approval, a restricted data scope, a spend-control process and a server-side implementation.",
@@ -287,7 +288,7 @@ const integrations: Integration[] = [
     name: "Meta Ads",
     group: "Marketing",
     blurb:
-      "Future approved reporting and campaign management for an authorised advertiser account.",
+      "No advertiser account is connected. An owner-supplied R300 test ceiling still requires Founder and CEO approval before any spend.",
     short: "MA",
     activation:
       "Requires advertiser ownership approval, a restricted data scope, a spend-control process and a server-side implementation.",
