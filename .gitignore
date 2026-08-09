@@ -14,6 +14,9 @@ dist-ssr
 .vinxi
 .tanstack/**
 .nitro
+.vercel/
+.npm-cache/
+supabase/.temp/
 *.local
 
 # Environment configuration and secrets
