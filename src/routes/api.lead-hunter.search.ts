@@ -171,6 +171,26 @@ const INFORMATIONAL_PAGE_PATTERN =
 const RECRUITMENT_OR_JOB_SOURCE_PATTERN =
   /\b(?:recruitment (?:agency|company|firm|services?)|specialist recruitment|staffing (?:agency|company|services?|solutions)|employment agency|job (?:board|portal|vacancies|listings?)|submit your cv|find talent|find a job|career placement)\b/i;
 
+const RECRUITMENT_HOST_PATTERNS = [
+  "werkie",
+  "bebee",
+  "careers24",
+  "careerjunction",
+  "jobmail",
+  "pnet",
+  "indeed",
+  "glassdoor",
+  "talent.com",
+  "adzuna",
+  "jobrapido",
+  "jobisjob",
+  "jobleads",
+  "executiveplacements",
+];
+
+const VACANCY_LISTING_PATTERN =
+  /\b(?:vacanc(?:y|ies)|position available|job description|job title|apply (?:now|for (?:this|the) job)|salary(?:\s+range)?|our client is (?:a|an)|employment type|minimum requirements?)\b/i;
+
 /*
  * Regulations, advice and community discussions sometimes mention works,
  * contractors or quotations. They describe a topic; they are not a buyer
@@ -4910,8 +4930,26 @@ function isRecruitmentOrJobSource(
   candidate: SearchCandidate,
   inspection: PageInspection,
 ): boolean {
-  return RECRUITMENT_OR_JOB_SOURCE_PATTERN.test(
-    `${candidate.title} ${candidate.snippet} ${inspection.title ?? ""} ${inspection.text.slice(0, 6_000)}`,
+  const pageIdentity =
+    `${candidate.title} ${candidate.snippet} ${inspection.title ?? ""} ${candidate.url}`;
+
+  const host =
+    getHostname(
+      inspection.finalUrl ||
+        candidate.url,
+    );
+
+  return (
+    RECRUITMENT_HOST_PATTERNS.some(
+      (pattern) =>
+        host.includes(pattern),
+    ) ||
+    RECRUITMENT_OR_JOB_SOURCE_PATTERN.test(
+      pageIdentity,
+    ) ||
+    VACANCY_LISTING_PATTERN.test(
+      pageIdentity,
+    )
   );
 }
 
