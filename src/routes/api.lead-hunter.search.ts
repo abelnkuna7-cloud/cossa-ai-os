@@ -564,6 +564,49 @@ function cleanText(
   return cleaned || null;
 }
 
+function opportunitySignalFromInstruction(
+  instruction: string | null,
+): boolean | null {
+  if (!instruction) {
+    return null;
+  }
+
+  const value =
+    instruction
+      .match(
+        /\brequire\s+opportunity\s+(?:signal|evidence)\s*:\s*(yes|no|true|false|on|off)\b/i,
+      )?.[1]
+      ?.toLowerCase();
+
+  if (
+    [
+      "yes",
+      "true",
+      "on",
+    ].includes(
+      value ??
+      "",
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    [
+      "no",
+      "false",
+      "off",
+    ].includes(
+      value ??
+      "",
+    )
+  ) {
+    return false;
+  }
+
+  return null;
+}
+
 function lowerText(
   value: unknown,
 ): string {
@@ -1122,6 +1165,11 @@ function validateRequest(
       candidate.notes,
     );
 
+  const missionOpportunitySignal =
+    opportunitySignalFromInstruction(
+      searchInstruction,
+    );
+
   /**
    * IMPORTANT:
    * Preserve explicit UI sector controls.
@@ -1301,8 +1349,9 @@ function validateRequest(
         true,
 
       require_opportunity_signal:
+        missionOpportunitySignal ??
         candidate.require_opportunity_signal ===
-        true,
+          true,
 
       tender_keywords:
         tenderKeywords,

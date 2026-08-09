@@ -2059,6 +2059,54 @@ function extractMissionField(
   );
 }
 
+/*
+ * Boolean instruction fields often appear immediately before free-form prose.
+ * `extractMissionField` intentionally captures longer text fields, so it can
+ * include that prose when the boolean field is the final structured line.
+ * Read the leading boolean token directly instead.
+ */
+function extractMissionBooleanField(
+  instruction: string,
+  fieldPattern: string,
+): boolean | null {
+  const match =
+    instruction.match(
+      new RegExp(
+        `\\b(?:${fieldPattern})\\s*:\\s*(yes|no|true|false|on|off)\\b`,
+        "i",
+      ),
+    );
+
+  const value =
+    match?.[1]?.toLowerCase();
+
+  if (
+    [
+      "yes",
+      "true",
+      "on",
+    ].includes(
+      value ?? "",
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    [
+      "no",
+      "false",
+      "off",
+    ].includes(
+      value ?? "",
+    )
+  ) {
+    return false;
+  }
+
+  return null;
+}
+
 function inferCompaniesFromInstruction(
   instruction: string,
 ): LeadHunterCompany[] {
@@ -2524,23 +2572,17 @@ function applyInstructionIntent(
       inferredLocations;
   }
 
-  const privateField =
-    extractMissionField(
+  const privateFieldValue =
+    extractMissionBooleanField(
       instruction,
       "Private sector",
     );
 
-  const governmentField =
-    extractMissionField(
+  const governmentFieldValue =
+    extractMissionBooleanField(
       instruction,
       "Government",
     );
-
-  const privateFieldValue =
-    privateField?.toLowerCase();
-
-  const governmentFieldValue =
-    governmentField?.toLowerCase();
 
   const explicitPrivateOnly =
     /\bprivate[\s-]*sector\s+only\b/i.test(
@@ -2552,14 +2594,7 @@ function applyInstructionIntent(
     /\bno government\b/i.test(
       instruction,
     ) ||
-    [
-      "no",
-      "false",
-      "off",
-    ].includes(
-      governmentFieldValue ??
-      "",
-    );
+    governmentFieldValue === false;
 
   const explicitGovernmentOnly =
     /\bgovernment[\s-]*sector\s+only\b/i.test(
@@ -2568,14 +2603,7 @@ function applyInstructionIntent(
     /\bgovernment opportunities only\b/i.test(
       instruction,
     ) ||
-    [
-      "no",
-      "false",
-      "off",
-    ].includes(
-      privateFieldValue ??
-      "",
-    );
+    privateFieldValue === false;
 
   if (
     explicitPrivateOnly &&
@@ -2831,10 +2859,10 @@ function applyInstructionIntent(
       );
   }
 
-  const requireSignalField =
-    extractMissionField(
+  const requireOpportunitySignal =
+    extractMissionBooleanField(
       instruction,
-      "Require opportunity signal",
+      "Require opportunity (?:signal|evidence)",
     );
 
   /*
@@ -2853,34 +2881,12 @@ function applyInstructionIntent(
   if (allowsResearchProspects) {
     next.require_opportunity_signal =
       false;
-  } else if (requireSignalField) {
-    const normalised =
-      requireSignalField
-        .toLowerCase();
-
-    if (
-      [
-        "no",
-        "false",
-        "off",
-      ].includes(
-        normalised,
-      )
-    ) {
-      next.require_opportunity_signal =
-        false;
-    } else if (
-      [
-        "yes",
-        "true",
-        "on",
-      ].includes(
-        normalised,
-      )
-    ) {
-      next.require_opportunity_signal =
-        true;
-    }
+  } else if (
+    requireOpportunitySignal !==
+    null
+  ) {
+    next.require_opportunity_signal =
+      requireOpportunitySignal;
   }
 
   if (
