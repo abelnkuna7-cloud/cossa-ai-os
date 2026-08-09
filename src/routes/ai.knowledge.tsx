@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Library, Plus, Search, Trash2, Loader2, FileText, Tag } from "lucide-react";
+import { CheckCircle2, ExternalLink, Library, Plus, Search, Trash2, Loader2, FileText, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
@@ -22,7 +22,24 @@ export const Route = createFileRoute("/ai/knowledge")({
   }),
 });
 
-const CATEGORIES = ["Company", "Products", "Pricing", "Policies", "Customers", "Playbooks"];
+const CATEGORIES = [
+  "Company facts",
+  "Legal & compliance",
+  "Services",
+  "Brand",
+  "Products",
+  "Pricing",
+  "Policies",
+  "Customers",
+  "Playbooks",
+];
+
+function normaliseTags(value: string): string[] {
+  return [...new Set(value
+    .split(",")
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean))];
+}
 
 function KnowledgeBase() {
   const qc = useQueryClient();
@@ -53,10 +70,13 @@ function KnowledgeBase() {
         title: editing.title.trim(),
         body: editing.body.trim(),
         category: editing.category ?? null,
-        tags: editing.tags ?? [],
+        tags: editing.tags?.length ? editing.tags : ["company-wide"],
         source: editing.source ?? null,
+        sourceUrl: editing.source_url ?? null,
       });
-      toast.success(editing.id ? "Document updated" : "Document saved");
+      toast.success(editing.id ? "Company knowledge updated" : "Company knowledge saved", {
+        description: "Verified knowledge will be available to Cossa AI and its specialist chats on their next request.",
+      });
       setEditing(null);
       await qc.invalidateQueries({ queryKey: ["ai-knowledge"] });
     } catch (e) {
@@ -92,14 +112,21 @@ function KnowledgeBase() {
               Knowledge <span className="text-gradient-gold">Base</span>
             </h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              The single source of truth about your business. Cossa AI reads from here so answers always match reality.
+              Add or update an approved Cossa fact once. It becomes verified internal knowledge for Cossa AI, AI CEO and every specialist chat on their next request.
             </p>
           </div>
           <Button
-            onClick={() => setEditing({ title: "", body: "", category: null, tags: [], source: null })}
+            onClick={() => setEditing({
+              title: "",
+              body: "",
+              category: "Company facts",
+              tags: ["company-wide"],
+              source: "Owner-provided Cossa record",
+              source_url: null,
+            })}
             className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
           >
-            <Plus className="mr-1.5 h-4 w-4" /> Add document
+            <Plus className="mr-1.5 h-4 w-4" /> Add company knowledge
           </Button>
         </div>
       </section>
@@ -143,7 +170,14 @@ function KnowledgeBase() {
             Start with the essentials: company description, product list, pricing, ideal customer, and top FAQs.
           </p>
           <Button
-            onClick={() => setEditing({ title: "", body: "", category: "Company", tags: [], source: null })}
+            onClick={() => setEditing({
+              title: "",
+              body: "",
+              category: "Company facts",
+              tags: ["company-wide"],
+              source: "Owner-provided Cossa record",
+              source_url: null,
+            })}
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
           >
             <Plus className="mr-1.5 h-4 w-4" /> Add your first document
@@ -162,6 +196,9 @@ function KnowledgeBase() {
                   </div>
                 </div>
               </header>
+              <div className="mb-2 inline-flex w-fit items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] text-success">
+                <CheckCircle2 className="h-3 w-3" /> Verified company knowledge
+              </div>
               <p className="line-clamp-5 flex-1 text-xs text-muted-foreground">{d.body}</p>
               {d.tags.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
@@ -173,6 +210,17 @@ function KnowledgeBase() {
                 </div>
               )}
               <div className="mt-3 flex items-center justify-end gap-1">
+                {d.source_url ? (
+                  <a
+                    href={d.source_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-md p-1.5 text-muted-foreground hover:bg-card/60 hover:text-primary"
+                    aria-label="Open source"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                ) : null}
                 <button
                   onClick={() => setEditing(d)}
                   className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-card/60 hover:text-foreground"
@@ -195,12 +243,15 @@ function KnowledgeBase() {
       {editing && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => !saving && setEditing(null)}>
           <div className="glass-card w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-display text-lg font-semibold">{editing.id ? "Edit document" : "New document"}</h2>
+            <h2 className="font-display text-lg font-semibold">{editing.id ? "Edit company knowledge" : "New company knowledge"}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Save only facts you are authorised to approve. This record becomes verified internal Cossa knowledge, not a public website claim.
+            </p>
             <div className="mt-4 space-y-3">
               <input
                 value={editing.title ?? ""}
                 onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                placeholder="Title (e.g. 'Company overview' or 'Product pricing 2026')"
+                placeholder="Title (e.g. 'CIPC company registration' or 'Cossa service list')"
                 className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm outline-none focus:border-primary/50"
               />
               <textarea
@@ -214,6 +265,19 @@ function KnowledgeBase() {
                 value={editing.source ?? ""}
                 onChange={(e) => setEditing({ ...editing, source: e.target.value })}
                 placeholder="Source (optional) — URL or document reference"
+                className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm outline-none focus:border-primary/50"
+              />
+              <input
+                value={editing.source_url ?? ""}
+                onChange={(e) => setEditing({ ...editing, source_url: e.target.value })}
+                placeholder="Source URL (optional)"
+                type="url"
+                className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm outline-none focus:border-primary/50"
+              />
+              <input
+                value={(editing.tags ?? []).join(", ")}
+                onChange={(e) => setEditing({ ...editing, tags: normaliseTags(e.target.value) })}
+                placeholder="Tags (comma-separated). Keep company-wide to include this in every Cossa AI context."
                 className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm outline-none focus:border-primary/50"
               />
               <div className="flex flex-wrap items-center gap-2">
@@ -233,7 +297,7 @@ function KnowledgeBase() {
               <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>Cancel</Button>
               <Button onClick={handleSave} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
                 {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-                Save document
+                Save verified knowledge
               </Button>
             </div>
           </div>

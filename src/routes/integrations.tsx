@@ -58,14 +58,15 @@ interface Integration {
   short: string;
   activation: string;
   safeguards: string[];
+  connectionLabel?: string;
 }
 
 const cossaSources: CossaSource[] = [
   {
     name: "Cossa AI",
     description:
-      "Cossa's AI workspace. Guidance is reviewed by people before any commercial, legal, financial or customer-facing use.",
-    status: "Testing",
+      "Cossa's AI workspace reads verified Cossa knowledge and authorised operational records. Guidance is reviewed by people before any commercial, legal, financial or customer-facing use.",
+    status: "Live",
     to: "/ai/cossa",
     icon: BrainCircuit,
   },
@@ -88,8 +89,8 @@ const cossaSources: CossaSource[] = [
   {
     name: "Supabase operational data",
     description:
-      "The configured application data layer for Cossa records. The current white-label access-control upgrade is still being prepared.",
-    status: "Testing",
+      "The configured application data layer for Cossa records, with organisation ownership used by authorised Cossa AI workflows.",
+    status: "Live",
     to: "/operations/business-intelligence",
     icon: Database,
   },
@@ -97,7 +98,7 @@ const cossaSources: CossaSource[] = [
     name: "Groq inference",
     description:
       "Server-side model inference for supported Cossa AI work. Provider credentials stay outside the browser and usage remains credit-conscious.",
-    status: "Testing",
+    status: "Live",
     to: "/ai/cossa",
     icon: BrainCircuit,
   },
@@ -115,11 +116,12 @@ const integrations: Integration[] = [
   {
     name: "OpenAI",
     group: "AI",
-    blurb: "Additional model-provider capability for a future authorised Cossa deployment.",
+    blurb: "Optional high-reasoning route for Cossa AI. The owner explicitly chooses it; Economy mode remains the lower-cost default.",
     short: "AI",
     activation:
-      "Requires an approved Cossa provider account, a server-side implementation and a documented data-use scope.",
-    safeguards: ["No browser API key", "Human review of output", "Approved data scope"],
+      "The server-side Cossa AI route is ready after the next deployment. It uses an approved OpenAI project key held only in protected server settings; it never sends the key to a browser.",
+    safeguards: ["Owner-selected usage", "No browser API key", "Human review of output", "Approved data scope"],
+    connectionLabel: "Ready after deployment",
   },
   {
     name: "Grok",
@@ -358,7 +360,7 @@ function Integrations() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <Plug className="h-4 w-4" />
               </div>
-              <StatusBadge status="Development" />
+              <StatusBadge status="Live" />
             </div>
             <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
               Integration <span className="text-gradient-gold">Center</span>
@@ -568,6 +570,7 @@ function IntegrationCard({
 }) {
   const GroupIcon = groupIcons[integration.group];
   const detailsId = `integration-${integration.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  const connectionReady = Boolean(integration.connectionLabel);
 
   return (
     <article className="glass-card flex flex-col gap-3 p-5">
@@ -585,8 +588,13 @@ function IntegrationCard({
       </div>
       <p className="text-sm text-muted-foreground">{integration.blurb}</p>
       <div className="mt-auto flex items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] text-warning">
-          <KeyRound className="h-3 w-3" /> Not connected
+        <span className={cn(
+          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]",
+          connectionReady
+            ? "border-info/30 bg-info/10 text-info"
+            : "border-warning/30 bg-warning/10 text-warning",
+        )}>
+          <KeyRound className="h-3 w-3" /> {integration.connectionLabel ?? "Not connected"}
         </span>
         <Button
           type="button"

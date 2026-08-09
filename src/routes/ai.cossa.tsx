@@ -32,7 +32,7 @@ import {
   type AiConversation,
   type AiMessage,
 } from "@/lib/ai-data";
-import { streamChat } from "@/lib/ai-stream";
+import { streamChat, type CossaAiProvider } from "@/lib/ai-stream";
 
 export const Route = createFileRoute("/ai/cossa")({
   component: AiChatWorkspace,
@@ -135,6 +135,7 @@ function AiChatWorkspace() {
   const [streaming, setStreaming] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [provider, setProvider] = useState<CossaAiProvider>("groq");
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -320,6 +321,8 @@ function AiChatWorkspace() {
           setStreaming((current) => `${current ?? ""}${chunk}`);
         },
         abortRef.current.signal,
+        undefined,
+        provider,
       );
 
       if (!finalResponse.trim()) {
@@ -393,14 +396,29 @@ function AiChatWorkspace() {
             </div>
           </div>
 
-          <Button
-            type="button"
-            onClick={handleNew}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            New chat
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <label className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-xs text-muted-foreground">
+              <span className="whitespace-nowrap">Reply mode</span>
+              <select
+                value={provider}
+                onChange={(event) => setProvider(event.target.value as CossaAiProvider)}
+                disabled={sending}
+                aria-label="Cossa AI reply mode"
+                className="bg-transparent text-foreground outline-none disabled:cursor-not-allowed"
+              >
+                <option value="groq">Economy (Groq)</option>
+                <option value="openai">Strategic reasoning (OpenAI)</option>
+              </select>
+            </label>
+            <Button
+              type="button"
+              onClick={handleNew}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              New chat
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -496,8 +514,11 @@ function AiChatWorkspace() {
                 {activeConversation?.title ?? "New conversation"}
               </div>
 
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              <div className="sr-only">
                 Cossa Nexus AI • Live CRM • Verified knowledge • Groq inference
+              </div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Cossa Nexus AI / Live CRM / Verified knowledge / {provider === "groq" ? "Economy Groq" : "Strategic OpenAI"}
               </div>
             </div>
           </div>
@@ -606,8 +627,10 @@ function AiChatWorkspace() {
             </form>
 
             <p className="mx-auto mt-2 max-w-3xl text-center text-[10px] text-muted-foreground">
-              Cossa AI uses authorised operational records and verified company knowledge. Human
-              approval remains required for external, financial, legal and irreversible actions.
+              {provider === "groq"
+                ? "Economy mode uses Groq to conserve higher-cost reasoning usage."
+                : "Strategic reasoning uses the authorised OpenAI provider and may incur paid API usage."}{" "}
+              Cossa AI uses authorised operational records and verified company knowledge. Human approval remains required for external, financial, legal and irreversible actions.
             </p>
           </div>
         </section>

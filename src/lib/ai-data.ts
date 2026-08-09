@@ -1,6 +1,5 @@
 // Client-side data access for AI core (conversations, messages, prompts, knowledge).
-// Tables live in Supabase; policies are currently open to anon because auth is not
-// enabled yet. When auth ships, tighten policies to auth.uid() and remove anon grants.
+// These records are protected by Supabase authentication and organisation-scoped RLS.
 import { supabase } from "@/integrations/supabase/client";
 import { COSSA_ORGANISATION_ID } from "@/lib/workforce-data";
 
@@ -46,6 +45,9 @@ export type AiKnowledgeDoc = {
   category: string | null;
   tags: string[];
   source: string | null;
+  source_url: string | null;
+  verification_status: "unverified" | "verified" | "rejected" | "expired";
+  confidentiality: "public" | "internal" | "confidential" | "restricted";
   created_at: string;
   updated_at: string;
 };
@@ -193,7 +195,11 @@ export async function upsertKnowledge(input: {
   category?: string | null;
   tags?: string[];
   source?: string | null;
+  sourceUrl?: string | null;
 }): Promise<AiKnowledgeDoc> {
+  // Knowledge entered through this owner/manager workspace is an approved Cossa
+  // record. The chat gateway deliberately reads only verified knowledge, so saving
+  // without this status would make a document appear in the list but not reach Cossa AI.
   const payload = {
     organisation_id: COSSA_ORGANISATION_ID,
     title: input.title,
@@ -201,6 +207,10 @@ export async function upsertKnowledge(input: {
     category: input.category ?? null,
     tags: input.tags ?? [],
     source: input.source ?? null,
+    source_url: input.sourceUrl ?? null,
+    confidentiality: "internal" as const,
+    verification_status: "verified" as const,
+    verified_at: new Date().toISOString(),
   };
   const query = input.id
     ? db.from("ai_knowledge_documents").update(payload).eq("id", input.id).select("*").single()

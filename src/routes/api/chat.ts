@@ -3,17 +3,23 @@ import { createFileRoute } from "@tanstack/react-router";
 const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 
 const GROQ_MODEL = "llama-3.3-70b-versatile";
+// OpenAI's current model family provides a strong quality/cost balance through
+// the Terra tier. It is opt-in in the UI; Groq remains the default economy route.
+const OPENAI_MODEL = "gpt-5.6-terra";
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 12_000;
 const MAX_TOTAL_MESSAGE_LENGTH = 60_000;
 const MAX_GROQ_HISTORY_MESSAGES = 12;
 const MAX_GROQ_HISTORY_LENGTH = 16_000;
 const MAX_KNOWLEDGE_CONTEXT_LENGTH = 8_000;
+const MAX_SELECTED_KNOWLEDGE_DOCUMENTS = 12;
 const MAX_OPERATIONAL_CONTEXT_LENGTH = 8_000;
 const MAX_WORKFORCE_CONTEXT_LENGTH = 4_500;
 const MAX_GROQ_COMPLETION_TOKENS = 700;
+const MAX_OPENAI_COMPLETION_TOKENS = 900;
 
 type ChatRole = "system" | "user" | "assistant";
+type ChatProvider = "groq" | "openai";
 
 interface ChatMessage {
   role: ChatRole;
@@ -23,6 +29,7 @@ interface ChatMessage {
 interface ChatPayload {
   messages?: ChatMessage[];
   system?: string;
+  provider?: ChatProvider;
 }
 
 interface SupabaseUser {
@@ -33,6 +40,8 @@ interface SupabaseUser {
 interface KnowledgeDocument {
   title: string;
   body: string;
+  category: string | null;
+  tags: string[];
   source: string | null;
   source_url: string | null;
   updated_at: string;
@@ -52,6 +61,7 @@ function trimTrailingSlash(value: string): string {
 
 function getEnvironment() {
   const groqApiKey = process.env.GROQ_API_KEY;
+  const openAiApiKey = process.env.OPENAI_API_KEY;
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 
@@ -66,12 +76,13 @@ function getEnvironment() {
     process.env.VITE_COSSA_ORGANISATION_ID ||
     DEFAULT_COSSA_ORGANISATION_ID;
 
-  if (!groqApiKey || !supabaseUrl || !supabaseKey) {
+  if ((!groqApiKey && !openAiApiKey) || !supabaseUrl || !supabaseKey) {
     return null;
   }
 
   return {
     groqApiKey,
+    openAiApiKey,
     supabaseUrl: trimTrailingSlash(supabaseUrl),
     supabaseKey,
     organisationId,
@@ -299,6 +310,15 @@ function selectRelevantKnowledge(
     "company overview",
   ];
 
+  const companyWideCategories = [
+    "company facts",
+    "company",
+    "legal & compliance",
+    "services",
+    "brand",
+    "policies",
+  ];
+
   return knowledge
     .map((document) => {
       const searchable = `${document.title} ${document.body}`.toLowerCase();
@@ -316,13 +336,27 @@ function selectRelevantKnowledge(
         document.title.toLowerCase().includes(title),
       );
 
+      const tags = new Set(document.tags.map((tag) => tag.toLowerCase().trim()));
+      const isCompanyWide =
+        tags.has("company-wide") ||
+        tags.has("always-include") ||
+        companyWideCategories.includes(document.category?.toLowerCase().trim() ?? "");
+
       return {
         document,
         relevance,
         isCore,
+        isCompanyWide,
       };
     })
-    .sort((a, b) => Number(b.isCore) - Number(a.isCore) || b.relevance - a.relevance)
+    .sort(
+      (a, b) =>
+        Number(b.isCompanyWide) - Number(a.isCompanyWide) ||
+        Number(b.isCore) - Number(a.isCore) ||
+        b.relevance - a.relevance ||
+        Date.parse(b.document.updated_at) - Date.parse(a.document.updated_at),
+    )
+    .slice(0, MAX_SELECTED_KNOWLEDGE_DOCUMENTS)
     .map(({ document }) => document);
 }
 
@@ -831,6 +865,54 @@ function createPlainTextStream(
   });
 }
 
+function createTextResponseStream(text: string): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(text));
+      controller.close();
+    },
+  });
+}
+
+function extractOpenAiResponseText(response: unknown): string {
+  if (!response || typeof response !== "object") {
+    return "";
+  }
+
+  const payload = response as {
+    output_text?: unknown;
+    output?: Array<{
+      content?: Array<{
+        type?: unknown;
+        text?: unknown;
+      }>;
+    }>;
+  };
+
+  if (typeof payload.output_text === "string") {
+    return payload.output_text.trim();
+  }
+
+  return (payload.output ?? [])
+    .flatMap((item) => item.content ?? [])
+    .filter((item) => item.type === "output_text" && typeof item.text === "string")
+    .map((item) => item.text as string)
+    .join("")
+    .trim();
+}
+
+function chatResponseHeaders(provider: ChatProvider): HeadersInit {
+  return {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    "X-Accel-Buffering": "no",
+    "X-Content-Type-Options": "nosniff",
+    "X-Cossa-AI-Provider": provider,
+  };
+}
+
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
@@ -896,13 +978,33 @@ export const Route = createFileRoute("/api/chat")({
 
         const messages = validation.messages;
 
+        const provider: ChatProvider = payload.provider ?? "groq";
+
+        if (provider !== "groq" && provider !== "openai") {
+          return new Response("Unsupported Cossa AI provider.", { status: 400 });
+        }
+
+        if (provider === "groq" && !environment.groqApiKey) {
+          return new Response(
+            "The Economy (Groq) route is not configured. Choose Strategic reasoning or ask an owner to configure Groq.",
+            { status: 503 },
+          );
+        }
+
+        if (provider === "openai" && !environment.openAiApiKey) {
+          return new Response(
+            "The Strategic reasoning route is not configured. Add OPENAI_API_KEY to the server environment and redeploy.",
+            { status: 503 },
+          );
+        }
+
         const latestUserMessage =
           [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
 
         const knowledge = await restSelect<KnowledgeDocument>({
           table: "ai_knowledge_documents",
           query: new URLSearchParams({
-            select: "title,body,source,source_url,updated_at",
+            select: "title,body,category,tags,source,source_url,updated_at",
             organisation_id: `eq.${environment.organisationId}`,
             verification_status: "eq.verified",
             order: "updated_at.desc",
@@ -952,13 +1054,68 @@ export const Route = createFileRoute("/api/chat")({
             }
           : null;
 
-        const groqMessages: ChatMessage[] = [
+        const providerMessages: ChatMessage[] = [
           systemPreamble,
           ...(safetyGuard ? [safetyGuard] : []),
           ...selectGroqHistory(messages),
         ];
 
-        const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        if (provider === "openai") {
+          /*
+           * The OpenAI route is deliberately selected by the owner in the UI;
+           * it is never a hidden fallback for Groq. This keeps usage and spend
+           * visible while giving complex planning work a higher-reasoning option.
+           */
+          const openAiResponse = await fetch("https://api.openai.com/v1/responses", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${environment.openAiApiKey}`,
+            },
+            body: JSON.stringify({
+              model: OPENAI_MODEL,
+              instructions: providerMessages
+                .filter((message) => message.role === "system")
+                .map((message) => message.content)
+                .join("\n\n"),
+              input: providerMessages
+                .filter((message) => message.role !== "system")
+                .map((message) => ({ role: message.role, content: message.content })),
+              reasoning: { effort: "medium" },
+              text: { verbosity: "medium" },
+              max_output_tokens: MAX_OPENAI_COMPLETION_TOKENS,
+              store: false,
+            }),
+            signal: request.signal,
+          });
+
+          if (!openAiResponse.ok) {
+            const errorText = await openAiResponse.text().catch(() => "");
+
+            console.error("OpenAI request failed:", openAiResponse.status, errorText);
+
+            const responseStatus =
+              openAiResponse.status === 402 || openAiResponse.status === 429
+                ? openAiResponse.status
+                : 502;
+
+            return new Response(errorText || "Cossa AI provider error.", {
+              status: responseStatus,
+            });
+          }
+
+          const responseText = extractOpenAiResponseText(await openAiResponse.json());
+
+          if (!responseText) {
+            return new Response("Cossa AI returned an empty OpenAI response.", { status: 502 });
+          }
+
+          return new Response(createTextResponseStream(responseText), {
+            headers: chatResponseHeaders(provider),
+          });
+        }
+
+        const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -969,33 +1126,26 @@ export const Route = createFileRoute("/api/chat")({
             stream: true,
             temperature: 0.2,
             max_tokens: MAX_GROQ_COMPLETION_TOKENS,
-            messages: groqMessages,
+            messages: providerMessages,
           }),
           signal: request.signal,
         });
 
-        if (!upstream.ok || !upstream.body) {
-          const errorText = await upstream.text().catch(() => "");
+        if (!groqResponse.ok || !groqResponse.body) {
+          const errorText = await groqResponse.text().catch(() => "");
 
-          console.error("Groq request failed:", upstream.status, errorText);
+          console.error("Groq request failed:", groqResponse.status, errorText);
 
           const responseStatus =
-            upstream.status === 402 || upstream.status === 429 ? upstream.status : 502;
+            groqResponse.status === 402 || groqResponse.status === 429 ? groqResponse.status : 502;
 
           return new Response(errorText || "Cossa AI gateway error.", {
             status: responseStatus,
           });
         }
 
-        const responseStream = createPlainTextStream(upstream.body);
-
-        return new Response(responseStream, {
-          headers: {
-            "Content-Type": "text/plain; charset=utf-8",
-            "Cache-Control": "no-cache, no-transform",
-            "X-Accel-Buffering": "no",
-            "X-Content-Type-Options": "nosniff",
-          },
+        return new Response(createPlainTextStream(groqResponse.body), {
+          headers: chatResponseHeaders(provider),
         });
       },
     },

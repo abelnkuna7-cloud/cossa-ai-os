@@ -1,11 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import {
-  BookOpen, Users, TrendingUp, Search, Facebook, Handshake, Repeat, Cog,
-  Heart, ArrowRight, Play, Clock, Star, Filter,
-} from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, BookOpen, FileText, Loader2, Plus, Search, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
+import { listKnowledge, type AiKnowledgeDoc } from "@/lib/ai-data";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/playbooks")({
@@ -13,28 +12,50 @@ export const Route = createFileRoute("/playbooks")({
   head: () => ({
     meta: [
       { title: "Business Playbooks — Cossa AI" },
-      { name: "description", content: "Proven business playbooks — from first 100 customers to full automation — every one wired into Cossa AI." },
+      {
+        name: "description",
+        content: "Owner-approved Cossa operating playbooks drawn from the shared Knowledge Base.",
+      },
       { property: "og:title", content: "Business Playbooks — Cossa AI" },
     ],
   }),
 });
 
-const categories = ["All", "Growth", "Sales", "Marketing", "Automation", "Service"];
-
-const playbooks = [
-  { icon: Users, cat: "Growth", title: "How to Get Your First 100 Customers", steps: 12, time: "30 days", rating: 4.9, desc: "A field-tested playbook for reaching your first 100 paying customers." },
-  { icon: Handshake, cat: "Sales", title: "How to Build a Sales System", steps: 18, time: "60 days", rating: 4.8, desc: "Pipeline, cadences, forecasting and coaching — end to end." },
-  { icon: Search, cat: "Marketing", title: "How to Grow on Google", steps: 14, time: "90 days", rating: 4.7, desc: "SEO fundamentals, content briefs, and a publishing rhythm." },
-  { icon: Facebook, cat: "Marketing", title: "How to Launch Facebook Ads", steps: 9, time: "14 days", rating: 4.6, desc: "From pixel setup to your first profitable campaign." },
-  { icon: TrendingUp, cat: "Sales", title: "How to Close More Deals", steps: 11, time: "45 days", rating: 4.9, desc: "Discovery, objection handling and a closer's checklist." },
-  { icon: Repeat, cat: "Growth", title: "How to Build a Referral Machine", steps: 8, time: "30 days", rating: 4.8, desc: "Systematic referral requests without feeling awkward." },
-  { icon: Cog, cat: "Automation", title: "How to Automate Your Business", steps: 15, time: "60 days", rating: 4.7, desc: "Identify, prioritise and ship your first 10 automations." },
-  { icon: Heart, cat: "Service", title: "How to Improve Customer Service", steps: 10, time: "30 days", rating: 4.8, desc: "SLA design, review flow and a repeatable service standard." },
-];
+function isPlaybook(document: AiKnowledgeDoc): boolean {
+  return document.category?.trim().toLowerCase() === "playbooks" ||
+    document.tags.some((tag) => tag.trim().toLowerCase() === "playbook");
+}
 
 function Playbooks() {
-  const [cat, setCat] = useState("All");
-  const shown = cat === "All" ? playbooks : playbooks.filter((p) => p.cat === cat);
+  const [search, setSearch] = useState("");
+  const [selectedTag, setSelectedTag] = useState("All");
+  const [preview, setPreview] = useState<AiKnowledgeDoc | null>(null);
+  const knowledge = useQuery({ queryKey: ["ai-knowledge"], queryFn: listKnowledge });
+
+  const playbooks = useMemo(
+    () => (knowledge.data ?? []).filter(isPlaybook),
+    [knowledge.data],
+  );
+
+  const tags = useMemo(
+    () => [
+      "All",
+      ...[...new Set(playbooks.flatMap((playbook) => playbook.tags))]
+        .filter((tag) => tag !== "company-wide")
+        .sort((a, b) => a.localeCompare(b)),
+    ],
+    [playbooks],
+  );
+
+  const shown = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return playbooks.filter((playbook) => {
+      const matchesTag = selectedTag === "All" || playbook.tags.includes(selectedTag);
+      const searchable = `${playbook.title} ${playbook.body} ${playbook.tags.join(" ")}`.toLowerCase();
+      return matchesTag && (!query || searchable.includes(query));
+    });
+  }, [playbooks, search, selectedTag]);
 
   return (
     <div className="mx-auto flex max-w-[1600px] flex-col gap-6">
@@ -46,72 +67,114 @@ function Playbooks() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <BookOpen className="h-4 w-4" />
               </div>
-              <StatusBadge status="Design" />
+              <StatusBadge status="Live" />
             </div>
             <h1 className="mt-3 font-display text-3xl md:text-4xl font-semibold">
               Business <span className="text-gradient-gold">Playbooks</span>
             </h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              Proven step-by-step plays for growing your business — every one wired directly into Cossa AI so you can run it, not just read it.
+              Owner-approved Cossa operating guides. Add or change a playbook in the Knowledge Base once; Cossa AI and every specialist can use it as verified context.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/10">
-              <Filter className="mr-1.5 h-4 w-4" /> Filter
-            </Button>
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
-              Suggest a playbook
-            </Button>
-          </div>
+          <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
+            <Link to="/ai/knowledge">
+              <Plus className="mr-1.5 h-4 w-4" /> Add or update a playbook
+            </Link>
+          </Button>
         </div>
       </section>
 
-      <div className="flex flex-wrap gap-1.5">
-        {categories.map((c) => (
-          <button
-            key={c}
-            onClick={() => setCat(c)}
-            className={cn(
-              "rounded-full border px-3 py-1 text-xs transition-colors",
-              cat === c
-                ? "border-primary/60 bg-primary/15 text-primary"
-                : "border-border/60 bg-card/40 text-muted-foreground hover:border-primary/40 hover:text-primary",
-            )}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-
-      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {shown.map((p) => (
-          <article key={p.title} className="glass-card group flex flex-col p-5 transition-all hover:border-primary/40">
-            <div className="flex items-start justify-between">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
-                <p.icon className="h-5 w-5" />
-              </div>
-              <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">{p.cat}</span>
-            </div>
-            <h3 className="mt-4 font-display text-base font-semibold">{p.title}</h3>
-            <p className="mt-1 flex-1 text-xs text-muted-foreground">{p.desc}</p>
-
-            <div className="mt-4 flex items-center gap-3 text-[10px] uppercase tracking-widest text-muted-foreground">
-              <span className="inline-flex items-center gap-1"><Play className="h-3 w-3" /> {p.steps} steps</span>
-              <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> {p.time}</span>
-              <span className="ml-auto inline-flex items-center gap-1 text-primary"><Star className="h-3 w-3" /> {p.rating}</span>
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <Button size="sm" variant="outline" className="flex-1 border-primary/40 text-primary hover:bg-primary/10">
-                Preview
-              </Button>
-              <Button size="sm" className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
-                Run <ArrowRight className="ml-1 h-3 w-3" />
-              </Button>
-            </div>
-          </article>
-        ))}
+      <section className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => setSelectedTag(tag)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs transition-colors",
+                selectedTag === tag
+                  ? "border-primary/60 bg-primary/15 text-primary"
+                  : "border-border/60 bg-card/40 text-muted-foreground hover:border-primary/40 hover:text-primary",
+              )}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/40 px-3 py-2 text-sm text-muted-foreground">
+          <Search className="h-4 w-4" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="min-w-0 bg-transparent outline-none"
+            placeholder="Search approved playbooks"
+          />
+        </label>
       </section>
+
+      {knowledge.isLoading ? (
+        <section className="glass-card flex items-center justify-center gap-2 p-10 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading approved playbooks...
+        </section>
+      ) : shown.length === 0 ? (
+        <section className="glass-card p-10 text-center">
+          <FileText className="mx-auto h-6 w-6 text-primary" />
+          <h2 className="mt-3 font-display text-lg font-semibold">No approved playbooks yet</h2>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+            This page never invents ratings, outcomes or timelines. Create a Knowledge Base document with the category “Playbooks” or the tag “playbook” to add a real Cossa guide here.
+          </p>
+          <Button asChild className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
+            <Link to="/ai/knowledge"><Plus className="mr-1.5 h-4 w-4" /> Create a playbook</Link>
+          </Button>
+        </section>
+      ) : (
+        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {shown.map((playbook) => (
+            <article key={playbook.id} className="glass-card group flex flex-col p-5 transition-all hover:border-primary/40">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-success">Verified</span>
+              </div>
+              <h3 className="mt-4 font-display text-base font-semibold">{playbook.title}</h3>
+              <p className="mt-1 line-clamp-5 flex-1 text-xs text-muted-foreground">{playbook.body}</p>
+              <div className="mt-4 flex flex-wrap gap-1">
+                {playbook.tags.filter((tag) => tag !== "company-wide").map((tag) => (
+                  <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">
+                    <Tag className="h-2.5 w-2.5" /> {tag}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-4 flex gap-2">
+                <Button size="sm" variant="outline" className="flex-1 border-primary/40 text-primary hover:bg-primary/10" onClick={() => setPreview(playbook)}>
+                  Preview
+                </Button>
+                <Button asChild size="sm" className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
+                  <Link to="/ai/cossa">Ask Cossa AI <ArrowRight className="ml-1 h-3 w-3" /></Link>
+                </Button>
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
+
+      {preview ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setPreview(null)}>
+          <article className="glass-card w-full max-w-2xl p-6" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-primary">Verified Cossa playbook</p>
+                <h2 className="mt-1 font-display text-xl font-semibold">{preview.title}</h2>
+              </div>
+              <Button variant="outline" onClick={() => setPreview(null)}>Close</Button>
+            </div>
+            <div className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{preview.body}</div>
+            {preview.source ? <p className="mt-4 text-xs text-muted-foreground">Source: {preview.source}</p> : null}
+          </article>
+        </div>
+      ) : null}
     </div>
   );
 }
