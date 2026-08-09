@@ -17,6 +17,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  GrowthEagleArtwork,
+  GrowthFullArtwork,
+  ParentBrandEndorsement,
+} from "@/components/brand/growth-brand";
 import { PublicSiteShell } from "@/components/public-site-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { GROWTH_BRAND } from "@/lib/brand";
@@ -293,6 +298,11 @@ function GrowthHome() {
         className="relative overflow-hidden px-4 py-10 md:py-14"
       >
         <div className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-primary/15 blur-3xl" />
+        <GrowthEagleArtwork
+          eager
+          className="pointer-events-none absolute right-0 top-0 hidden h-[620px] w-[45%] object-cover object-[center_34%] opacity-35 lg:block"
+        />
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-2/3 bg-gradient-to-l from-background via-background/75 to-transparent lg:block" />
 
         <div className="relative mx-auto grid max-w-6xl items-center gap-8 lg:grid-cols-[1.15fr_0.85fr]">
           <div>
@@ -364,10 +374,35 @@ function GrowthHome() {
             </p>
           </div>
 
+          <div className="space-y-5">
+            <aside className="relative isolate min-h-[248px] overflow-hidden rounded-2xl border border-primary/35 bg-black p-5 shadow-[0_18px_60px_rgba(0,0,0,0.42)] md:p-6">
+              <GrowthEagleArtwork
+                eager
+                className="absolute inset-0 h-full w-full object-cover object-[center_40%] opacity-60"
+              />
+              <div className="absolute inset-0 bg-[linear-gradient(105deg,rgba(0,0,0,0.97),rgba(0,0,0,0.63),rgba(0,0,0,0.4))]" />
+
+              <div className="relative flex h-full min-h-[200px] flex-col justify-between">
+                <div className="max-w-[58%]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+                    {GROWTH_BRAND.productDescriptor}
+                  </p>
+
+                  <p className="mt-3 text-sm font-semibold leading-6 text-foreground md:text-base">
+                    {GROWTH_BRAND.brandPromise}
+                  </p>
+
+                  <ParentBrandEndorsement className="mt-4" />
+                </div>
+
+                <GrowthFullArtwork className="absolute -bottom-9 -right-9 w-[74%] max-w-[340px] drop-shadow-[0_14px_32px_rgba(0,0,0,0.8)]" />
+              </div>
+            </aside>
+
           <form
             id="quote-request"
             onSubmit={submitQuoteRequest}
-            className="rounded-2xl border border-primary/30 bg-card/80 p-5 shadow-[0_16px_60px_rgba(0,0,0,0.22)] md:p-6"
+            className="rounded-2xl border border-primary/30 bg-card/95 p-5 shadow-[0_16px_60px_rgba(0,0,0,0.22)] md:p-6"
           >
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
               Tell us what you need
@@ -506,6 +541,7 @@ function GrowthHome() {
               </p>
             )}
           </form>
+          </div>
         </div>
       </section>
 

@@ -7,14 +7,18 @@ interface BrandClassNameProps {
 
 export function GrowthSymbol({ className }: BrandClassNameProps) {
   return (
-    <img
-      src={GROWTH_BRAND.assets.growthSymbol}
-      alt=""
+    <span
       aria-hidden="true"
-      width={64}
-      height={64}
-      className={cn("shrink-0 object-contain", className)}
-    />
+      className={cn("relative block shrink-0 overflow-hidden rounded-[28%] bg-black", className)}
+    >
+      <img
+        src={GROWTH_BRAND.assets.growthFull}
+        alt=""
+        width={1536}
+        height={1024}
+        className="pointer-events-none absolute left-[-80%] top-0 w-[256%] max-w-none"
+      />
+    </span>
   );
 }
 
@@ -57,14 +61,18 @@ export function ParentBrandEndorsement({
       )}
     >
       {showMark && (
-        <img
-          src={GROWTH_BRAND.assets.parentMark}
-          alt=""
+        <span
           aria-hidden="true"
-          width={28}
-          height={28}
-          className="h-7 w-7 shrink-0 object-contain"
-        />
+          className="relative block h-7 w-7 shrink-0 overflow-hidden rounded-[28%] bg-black"
+        >
+          <img
+            src={GROWTH_BRAND.assets.parentLogo}
+            alt=""
+            width={832}
+            height={1248}
+            className="pointer-events-none absolute left-[-42%] top-[-60%] w-[185%] max-w-none"
+          />
+        </span>
       )}
 
       <span>{GROWTH_BRAND.parentEndorsement}</span>

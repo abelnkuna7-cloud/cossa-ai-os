@@ -175,7 +175,7 @@ export const Route = createRootRouteWithContext<{
       {
         rel: "icon",
         href: GROWTH_BRAND.assets.growthSymbol,
-        type: "image/svg+xml",
+        type: "image/jpeg",
       },
     ],
   }),

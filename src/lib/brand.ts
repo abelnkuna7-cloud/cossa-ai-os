@@ -5,9 +5,9 @@ export const GROWTH_BRAND = {
   parentEndorsement: "A Cossa Nexus Holdings Platform",
   brandPromise: "GROWING BUSINESSES. CREATING VALUE. BUILDING TOMORROW.",
   assets: {
-    growthSymbol: "/brand/growth/growth-symbol.svg",
+    growthSymbol: "/brand/growth/growth-full.jpg",
     growthFull: "/brand/growth/growth-full.jpg",
-    parentMark: "/brand/cossa-nexus-holdings/parent-mark.svg",
+    parentMark: "/brand/cossa-nexus-holdings/parent-logo.png",
     parentLogo: "/brand/cossa-nexus-holdings/parent-logo.png",
     eagle: "/brand/eagle/growth-eagle.jpg",
   },
