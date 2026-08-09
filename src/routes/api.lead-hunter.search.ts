@@ -4550,6 +4550,124 @@ function isOfficialPublicSectorSource(
   );
 }
 
+function requiresSouthAfricanPresence(
+  request: LeadHunterSearchRequest,
+): boolean {
+  if (
+    request.delivery_model !==
+    "physical"
+  ) {
+    return false;
+  }
+
+  if (
+    request.search_scope ===
+    "south_africa"
+  ) {
+    return true;
+  }
+
+  return [
+    ...request.locations,
+    ...(request.countries ?? []),
+  ].some(
+    (value) =>
+      value.toLowerCase() ===
+      "south africa",
+  );
+}
+
+function hasVerifiedSouthAfricanPresence(
+  request: LeadHunterSearchRequest,
+  candidate: SearchCandidate,
+  inspection: PageInspection,
+): boolean {
+  if (
+    !requiresSouthAfricanPresence(
+      request,
+    )
+  ) {
+    return true;
+  }
+
+  const host =
+    getHostname(
+      inspection.finalUrl ||
+        candidate.url,
+    );
+
+  if (
+    host.endsWith(
+      ".co.za",
+    ) ||
+    host.endsWith(
+      ".org.za",
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    inspection.phones.some(
+      (phone) =>
+        /^\+?27\d{9,10}$/.test(
+          phone.replace(
+            /[^\d+]/g,
+            "",
+          ),
+        ),
+    )
+  ) {
+    return true;
+  }
+
+  /*
+   * Do not treat a passing mention of South Africa in an article, a global
+   * shipping selector or an events calendar as local presence. A city or
+   * province selected for this physical-service hunt must appear in the
+   * organisation's own page identity or leading page content.
+   */
+  const localities = [
+    ...(request.cities ?? []),
+    ...(request.suburbs ?? []),
+    ...(request.provinces ?? []),
+    ...request.locations,
+  ].filter(
+    (value) =>
+      value.toLowerCase() !==
+      "south africa",
+  );
+
+  const localIdentity =
+    lowerText(
+      `${candidate.title} ${inspection.title ?? ""} ${candidate.url} ${inspection.finalUrl} ${inspection.text.slice(
+        0,
+        2_500,
+      )}`,
+    );
+
+  return localities.some(
+    (locality) =>
+      localIdentity.includes(
+        locality.toLowerCase(),
+      ),
+  );
+}
+
+function isEventOrTradeShowSource(
+  candidate: SearchCandidate,
+  inspection: PageInspection,
+): boolean {
+  const identity =
+    lowerText(
+      `${candidate.title} ${inspection.title ?? ""} ${candidate.url}`,
+    );
+
+  return /\b(?:expo|exhibition|trade\s*show|exhibitor|conference|event\s+schedule|event\s+calendar)\b/i.test(
+    identity,
+  );
+}
+
 function organisationIdentitySupportsBuyerTarget(
   candidate: SearchCandidate,
   inspection: PageInspection,
@@ -5052,6 +5170,66 @@ function assessCandidate(
       ),
       reasons: [
         "The page is regulatory guidance, a FAQ or a forum discussion rather than a buyer notice.",
+      ],
+      probableBuyerRole: null,
+      competitorForServices: competitors,
+    };
+  }
+
+  if (
+    !hasVerifiedSouthAfricanPresence(
+      request,
+      candidate,
+      inspection,
+    )
+  ) {
+    return {
+      disposition: "irrelevant",
+      buyerFit: 0,
+      sourceTrust,
+      reasons: [
+        "The source does not verify that this physical-service prospect operates in the requested South African area.",
+      ],
+      probableBuyerRole: null,
+      competitorForServices: competitors,
+    };
+  }
+
+  if (
+    sector === "private" &&
+    request.organisation_types.length > 0 &&
+    !organisationIdentitySupportsBuyerTarget(
+      candidate,
+      inspection,
+    )
+  ) {
+    return {
+      disposition: "irrelevant",
+      buyerFit: 0,
+      sourceTrust,
+      reasons: [
+        "The official page identity does not support one of the requested buyer types.",
+      ],
+      probableBuyerRole: null,
+      competitorForServices: competitors,
+    };
+  }
+
+  if (
+    isEventOrTradeShowSource(
+      candidate,
+      inspection,
+    )
+  ) {
+    return {
+      disposition: "informational",
+      buyerFit: 0,
+      sourceTrust: Math.min(
+        sourceTrust,
+        35,
+      ),
+      reasons: [
+        "The source is an event, exhibition or trade-show page rather than the official page of a customer organisation.",
       ],
       probableBuyerRole: null,
       competitorForServices: competitors,
