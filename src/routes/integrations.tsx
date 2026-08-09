@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
+import { COSSA_SOCIAL_PROFILES } from "@/lib/cossa-marketing-profile";
 import type { ModuleStatus } from "@/lib/modules";
 import { cn } from "@/lib/utils";
 
@@ -214,11 +215,25 @@ const integrations: Integration[] = [
     name: "Meta (Facebook & Instagram)",
     group: "Communication",
     blurb:
-      "No approved Facebook or Instagram business-page URL is recorded yet. Authorised access remains pending.",
+      "Owner-listed Facebook and Instagram public profiles appear above. Authorised account access remains pending.",
     short: "MT",
     activation:
       "Requires ownership approval, a scoped authorised connection and an approved customer-response process.",
     safeguards: ["Business-owner approval", "No unsolicited outreach", "Auditable activity"],
+  },
+  {
+    name: "LinkedIn",
+    group: "Communication",
+    blurb:
+      "No Cossa Company Page exists yet. The connection plan is ready for owner setup; Cossa AI will remain draft-only until LinkedIn authorisation is complete.",
+    short: "LI",
+    activation:
+      "Create or claim the Cossa Nexus Holdings Company Page, create a LinkedIn Developer application, register a secure HTTPS callback URL, and approve only the minimum required OAuth permissions. Store credentials only in server-side environment settings.",
+    safeguards: [
+      "Owner signs in on LinkedIn",
+      "Least-privilege OAuth scopes",
+      "No publishing without approval",
+    ],
   },
   {
     name: "SMS",
@@ -388,6 +403,27 @@ function Integrations() {
         </div>
       </section>
 
+      <section className="glass-card p-5">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+              Owner-listed public profiles
+            </p>
+            <h2 className="mt-1 font-display text-xl font-semibold">Cossa social presence</h2>
+          </div>
+          <p className="max-w-xl text-sm text-muted-foreground">
+            These public links identify Cossa profiles for marketing planning and approved website
+            references. They do not grant analytics, inbox, publishing or advertising access.
+          </p>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {COSSA_SOCIAL_PROFILES.map((profile) => (
+            <SocialProfileCard key={profile.id} profile={profile} />
+          ))}
+        </div>
+      </section>
+
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -477,6 +513,47 @@ function CossaSourceCard({ source }: { source: CossaSource }) {
     <Link to={source.to!} className={className}>
       {content}
     </Link>
+  );
+}
+
+function SocialProfileCard({ profile }: { profile: (typeof COSSA_SOCIAL_PROFILES)[number] }) {
+  const connectionTone =
+    profile.connectionState === "Public profile listed"
+      ? "border-success/30 bg-success/10 text-success"
+      : profile.connectionState === "Click-to-chat only"
+        ? "border-info/30 bg-info/10 text-info"
+        : "border-warning/30 bg-warning/10 text-warning";
+
+  const content = (
+    <>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 font-display text-xs font-semibold text-primary">
+        {profile.platform.slice(0, 2).toUpperCase()}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-semibold">{profile.platform}</h3>
+          <span className={cn("rounded-full border px-2 py-0.5 text-[10px]", connectionTone)}>
+            {profile.connectionState}
+          </span>
+        </div>
+        <p className="mt-1 text-sm text-foreground">{profile.label}</p>
+        <p className="mt-1 break-all text-xs text-muted-foreground">{profile.handle}</p>
+        <p className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+          {profile.source}
+        </p>
+      </div>
+      {profile.url ? <ExternalLink className="mt-1 h-4 w-4 shrink-0 text-primary" /> : null}
+    </>
+  );
+
+  const className = "glass-card flex min-h-36 gap-3 p-4 transition-colors hover:border-primary/40";
+
+  return profile.url ? (
+    <a href={profile.url} target="_blank" rel="noreferrer" className={className}>
+      {content}
+    </a>
+  ) : (
+    <article className={className}>{content}</article>
   );
 }
 

@@ -15,24 +15,19 @@ import {
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  GrowthProductBrand,
-  ParentBrandEndorsement,
-} from "@/components/brand/growth-brand";
+import { GrowthProductBrand, ParentBrandEndorsement } from "@/components/brand/growth-brand";
 import { CossaReceptionist } from "@/components/cossa-receptionist";
 import { GROWTH_BRAND } from "@/lib/brand";
+import { COSSA_SOCIAL_PROFILES } from "@/lib/cossa-marketing-profile";
 
 const phoneNumber = "067 801 1907";
 const phoneHref = "tel:+27678011907";
 const whatsappHref = "https://wa.me/27678011907";
-const emailHref =
-  "mailto:cossa@cossanexusholdings.co.za";
+const emailHref = "mailto:cossa@cossanexusholdings.co.za";
 
-const mainWebsiteHref =
-  "https://cossanexusholdings.co.za";
+const mainWebsiteHref = "https://cossanexusholdings.co.za";
 
-const nexDocsHref =
-  "https://nexdocs.cossanexusholdings.co.za";
+const nexDocsHref = "https://nexdocs.cossanexusholdings.co.za";
 
 interface PublicSiteShellProps {
   children: ReactNode;
@@ -65,11 +60,8 @@ const publicNavigation = [
   },
 ];
 
-export function PublicSiteShell({
-  children,
-}: PublicSiteShellProps) {
-  const [mobileMenuOpen, setMobileMenuOpen] =
-    useState(false);
+export function PublicSiteShell({ children }: PublicSiteShellProps) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   function closeMobileMenu() {
     setMobileMenuOpen(false);
@@ -136,13 +128,9 @@ export function PublicSiteShell({
               >
                 <LockKeyhole className="mr-1.5 h-3.5 w-3.5" />
 
-                <span className="hidden sm:inline">
-                  Workspace
-                </span>
+                <span className="hidden sm:inline">Workspace</span>
 
-                <span className="sm:hidden">
-                  Login
-                </span>
+                <span className="sm:hidden">Login</span>
               </Button>
             </Link>
 
@@ -151,23 +139,11 @@ export function PublicSiteShell({
               size="icon"
               variant="ghost"
               className="xl:hidden"
-              aria-label={
-                mobileMenuOpen
-                  ? "Close navigation menu"
-                  : "Open navigation menu"
-              }
+              aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
               aria-expanded={mobileMenuOpen}
-              onClick={() =>
-                setMobileMenuOpen(
-                  (current) => !current,
-                )
-              }
+              onClick={() => setMobileMenuOpen((current) => !current)}
             >
-              {mobileMenuOpen ? (
-                <X className="h-5 w-5" />
-              ) : (
-                <Menu className="h-5 w-5" />
-              )}
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
           </div>
         </div>
@@ -235,15 +211,12 @@ export function PublicSiteShell({
             </p>
 
             <h2 className="mt-2 font-display text-2xl font-semibold">
-              Speak with Cossa about the service
-              or business result you need.
+              Speak with Cossa about the service or business result you need.
             </h2>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Call, WhatsApp, email or use the
-              Cossa Receptionist. Your enquiry
-              will be recorded in our customer
-              follow-up system.
+              Call, WhatsApp, email or use the Cossa Receptionist. Your enquiry will be recorded in
+              our customer follow-up system.
             </p>
           </div>
 
@@ -255,11 +228,7 @@ export function PublicSiteShell({
               </Button>
             </a>
 
-            <a
-              href={whatsappHref}
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a href={whatsappHref} target="_blank" rel="noreferrer">
               <Button
                 variant="outline"
                 className="w-full border-primary/40 text-primary hover:bg-primary/10"
@@ -283,20 +252,15 @@ export function PublicSiteShell({
       </section>
 
       <footer className="border-t border-border/60 px-4 py-10 text-sm text-muted-foreground">
-        <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 lg:grid-cols-4">
+        <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 lg:grid-cols-5">
           <div>
-            <Link
-              to="/"
-              className="inline-flex items-center gap-2"
-            >
+            <Link to="/" className="inline-flex items-center gap-2">
               <GrowthProductBrand />
             </Link>
 
             <p className="mt-4 max-w-sm text-xs leading-5">
-              GROWTH gives growing businesses
-              a clearer way to capture leads,
-              strengthen follow-up, improve
-              marketing and organise operations.
+              GROWTH gives growing businesses a clearer way to capture leads, strengthen follow-up,
+              improve marketing and organise operations.
             </p>
 
             <ParentBrandEndorsement className="mt-4" />
@@ -308,31 +272,19 @@ export function PublicSiteShell({
             </h2>
 
             <div className="mt-3 grid gap-2 text-xs">
-              <Link
-                to="/construction-growth"
-                className="hover:text-primary"
-              >
+              <Link to="/construction-growth" className="hover:text-primary">
                 Construction growth
               </Link>
 
-              <Link
-                to="/facility-services-growth"
-                className="hover:text-primary"
-              >
+              <Link to="/facility-services-growth" className="hover:text-primary">
                 Facility services growth
               </Link>
 
-              <Link
-                to="/sme-growth"
-                className="hover:text-primary"
-              >
+              <Link to="/sme-growth" className="hover:text-primary">
                 SME growth solutions
               </Link>
 
-              <a
-                href="/#contact"
-                className="hover:text-primary"
-              >
+              <a href="/#contact" className="hover:text-primary">
                 Request a quotation
               </a>
             </div>
@@ -366,10 +318,7 @@ export function PublicSiteShell({
                 <ExternalLink className="h-3 w-3" />
               </a>
 
-              <Link
-                to="/login"
-                className="inline-flex items-center gap-1 hover:text-primary"
-              >
+              <Link to="/login" className="inline-flex items-center gap-1 hover:text-primary">
                 <LockKeyhole className="h-3.5 w-3.5" />
                 GROWTH Workspace
               </Link>
@@ -382,10 +331,7 @@ export function PublicSiteShell({
             </h2>
 
             <div className="mt-3 grid gap-2 text-xs">
-              <a
-                href={phoneHref}
-                className="inline-flex items-center gap-2 hover:text-primary"
-              >
+              <a href={phoneHref} className="inline-flex items-center gap-2 hover:text-primary">
                 <Phone className="h-3.5 w-3.5" />
                 {phoneNumber}
               </a>
@@ -409,18 +355,35 @@ export function PublicSiteShell({
               </a>
             </div>
           </div>
+
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-foreground">
+              Follow Cossa
+            </h2>
+
+            <div className="mt-3 grid gap-2 text-xs">
+              {COSSA_SOCIAL_PROFILES.filter((profile) => profile.url).map((profile) => (
+                <a
+                  key={profile.id}
+                  href={profile.url!}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 break-all hover:text-primary"
+                >
+                  {profile.platform}: {profile.handle}
+                  <ExternalLink className="h-3 w-3 shrink-0" />
+                </a>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="mx-auto mt-8 flex max-w-7xl flex-col justify-between gap-3 border-t border-border/60 pt-6 text-xs md:flex-row md:items-center">
           <span>
-            © {new Date().getFullYear()} Cossa
-            Nexus Holdings (Pty) Ltd. All rights
-            reserved.
+            © {new Date().getFullYear()} Cossa Nexus Holdings (Pty) Ltd. All rights reserved.
           </span>
 
-          <span>
-            {GROWTH_BRAND.brandPromise}
-          </span>
+          <span>{GROWTH_BRAND.brandPromise}</span>
         </div>
       </footer>
 
