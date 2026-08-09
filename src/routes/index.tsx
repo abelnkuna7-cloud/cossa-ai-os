@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PublicSiteShell } from "@/components/public-site-shell";
 import { supabase } from "@/integrations/supabase/client";
+import { GROWTH_BRAND } from "@/lib/brand";
 
 const phoneNumber = "067 801 1907";
 const phoneHref = "tel:+27678011907";
@@ -58,21 +59,21 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       {
-        title: "Cossa AI | Turn more business enquiries into customers",
+        title: "GROWTH | Business Growth Intelligence",
       },
       {
         name: "description",
         content:
-          "Get a clearer way to capture leads, follow up, organise operations and make better business decisions. Call, WhatsApp, email or request a quote from Cossa AI.",
+          "GROWTH gives businesses a clearer way to capture leads, follow up, organise operations and make better decisions.",
       },
       {
         property: "og:title",
-        content: "Cossa AI | Turn more enquiries into customers",
+        content: "GROWTH | Business Growth Intelligence",
       },
       {
         property: "og:description",
         content:
-          "Practical business growth systems for businesses that need clearer leads, follow-up and operations.",
+          "Business growth intelligence for clearer leads, follow-up, operations and measurable growth.",
       },
       {
         property: "og:type",
@@ -84,7 +85,7 @@ export const Route = createFileRoute("/")({
       },
       {
         property: "og:site_name",
-        content: "Cossa AI",
+        content: "GROWTH",
       },
       {
         property: "og:locale",
@@ -96,16 +97,20 @@ export const Route = createFileRoute("/")({
       },
       {
         name: "twitter:title",
-        content: "Cossa AI | Turn more enquiries into customers",
+        content: "GROWTH | Business Growth Intelligence",
       },
       {
         name: "twitter:description",
         content:
-          "Practical business growth systems for businesses that need clearer leads, follow-up and operations.",
+          "Business growth intelligence for clearer leads, follow-up, operations and measurable growth.",
       },
       {
         name: "robots",
         content: "index, follow",
+      },
+      {
+        property: "og:image",
+        content: GROWTH_BRAND.assets.growthFull,
       },
     ],
     links: [
@@ -168,7 +173,7 @@ function GrowthHome() {
     url: "https://growth.cossanexusholdings.co.za",
     email: "cossa@cossanexusholdings.co.za",
     telephone: "+27678011907",
-    slogan: "United Roots. Strategic Future.",
+    slogan: GROWTH_BRAND.brandPromise,
     sameAs: [
       "https://cossanexusholdings.co.za",
       "https://nexdocs.cossanexusholdings.co.za",
@@ -304,7 +309,7 @@ function GrowthHome() {
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
-              Cossa AI helps businesses turn enquiries into
+              GROWTH helps businesses turn enquiries into
               organised leads, stronger follow-up and better
               decisions — while keeping a real person easy to reach
               when you need one.

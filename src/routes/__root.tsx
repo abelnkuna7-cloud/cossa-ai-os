@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { AppShell } from "@/components/app-shell";
 import { AuthGate } from "@/components/auth-gate";
+import { GROWTH_BRAND } from "@/lib/brand";
 
 const PUBLIC_ROUTES = new Set([
   "/",
@@ -49,7 +50,7 @@ function NotFoundComponent() {
         </h2>
 
         <p className="mt-2 text-sm text-muted-foreground">
-          The page you requested could not be found in the Cossa AI workspace.
+          The page you requested could not be found in the GROWTH workspace.
         </p>
 
         <div className="mt-6">
@@ -72,7 +73,7 @@ function ErrorComponent({
   error: Error;
   reset: () => void;
 }) {
-  console.error("Cossa AI route error:", error);
+  console.error("GROWTH route error:", error);
 
   const router = useRouter();
 
@@ -89,7 +90,7 @@ function ErrorComponent({
         </h1>
 
         <p className="mt-2 text-sm text-muted-foreground">
-          We could not load this part of the Cossa AI workspace. Please try
+          We could not load this part of the GROWTH workspace. Please try
           again or return to the Command Centre.
         </p>
 
@@ -125,16 +126,16 @@ export const Route = createRootRouteWithContext<{
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Cossa AI — Cossa Nexus Holdings Command Centre",
+        title: "GROWTH — Business Growth Intelligence",
       },
       {
         name: "description",
         content:
-          "Cossa AI is the AI business operating system for South African SMEs, supporting marketing, sales, operations and automation through one connected platform.",
+          "GROWTH is Cossa Nexus Holdings' business growth intelligence platform for marketing, sales, operations and AI-supported execution.",
       },
       {
         name: "author",
-        content: "Cossa Nexus Holdings",
+        content: GROWTH_BRAND.parentCompany,
       },
       {
         name: "robots",
@@ -142,11 +143,15 @@ export const Route = createRootRouteWithContext<{
       },
       {
         property: "og:site_name",
-        content: "Cossa Nexus Holdings",
+        content: GROWTH_BRAND.productName,
       },
       {
         property: "og:type",
         content: "website",
+      },
+      {
+        property: "og:image",
+        content: GROWTH_BRAND.assets.growthFull,
       },
     ],
     links: [
@@ -169,8 +174,8 @@ export const Route = createRootRouteWithContext<{
       },
       {
         rel: "icon",
-        href: "/favicon.ico",
-        type: "image/x-icon",
+        href: GROWTH_BRAND.assets.growthSymbol,
+        type: "image/svg+xml",
       },
     ],
   }),

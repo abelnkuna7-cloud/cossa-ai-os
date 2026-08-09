@@ -1,8 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Sparkles } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -12,6 +12,11 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  GrowthProductBrand,
+  GrowthSymbol,
+  ParentBrandEndorsement,
+} from "@/components/brand/growth-brand";
 import { MODULES } from "@/lib/modules";
 
 export function AppSidebar() {
@@ -22,15 +27,11 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-[0_0_20px_-4px_var(--gold)]">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          {!collapsed && (
-            <div className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold tracking-wide text-gradient-gold font-display">COSSA AI</span>
-              <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Nexus Holdings</span>
-            </div>
+        <div className="px-2 py-2">
+          {collapsed ? (
+            <GrowthSymbol className="mx-auto h-9 w-9" />
+          ) : (
+            <GrowthProductBrand />
           )}
         </div>
       </SidebarHeader>
@@ -59,6 +60,14 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border">
+        {collapsed ? (
+          <GrowthSymbol className="mx-auto h-6 w-6 opacity-75" />
+        ) : (
+          <ParentBrandEndorsement className="px-1 py-1" />
+        )}
+      </SidebarFooter>
     </Sidebar>
   );
 }

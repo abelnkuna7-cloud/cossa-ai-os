@@ -35,6 +35,11 @@ import {
   fmtCurrency,
   fmtDateTime,
 } from "@/components/crud-workspace";
+import {
+  GrowthEagleArtwork,
+  ParentBrandEndorsement,
+} from "@/components/brand/growth-brand";
+import { GROWTH_BRAND } from "@/lib/brand";
 
 export const Route = createFileRoute(
   "/command-center",
@@ -44,12 +49,12 @@ export const Route = createFileRoute(
     meta: [
       {
         title:
-          "Command Center — Cossa AI",
+          "GROWTH Command Center — Business Growth Intelligence",
       },
       {
         name: "description",
         content:
-          "Monitor live CRM, sales pipeline, quotations, projects, tasks and appointments inside the Cossa AI production workspace.",
+          "Monitor live CRM, sales pipeline, quotations, projects, tasks and appointments inside GROWTH, a Cossa Nexus Holdings platform.",
       },
     ],
   }),
@@ -235,6 +240,8 @@ function Dashboard() {
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
       <section className="glass-card relative overflow-hidden p-6 md:p-8">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+        <GrowthEagleArtwork className="pointer-events-none absolute -right-10 -top-24 hidden h-[420px] w-[210px] object-cover object-[center_38%] opacity-[0.13] lg:block" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/2 bg-gradient-to-l from-background/80 to-transparent lg:block" />
 
         <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
@@ -242,25 +249,24 @@ function Dashboard() {
               <StatusBadge status="Production" />
 
               <span className="text-xs text-muted-foreground">
-                Command Center
+                GROWTH Command Center
               </span>
             </div>
 
             <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
-              Welcome back.{" "}
+              Welcome back to {" "}
               <span className="text-gradient-gold">
-                Here&apos;s your business
-                today.
+                {GROWTH_BRAND.productName}.
               </span>
             </h1>
 
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              CRM, leads, opportunities,
-              quotations, projects, tasks and
-              appointments are connected to
-              the Cossa AI production
-              workspace.
+              {GROWTH_BRAND.productDescriptor} connects CRM, leads,
+              opportunities, quotations, projects, tasks and appointments
+              in one production workspace.
             </p>
+
+            <ParentBrandEndorsement className="mt-4" />
           </div>
 
           <div className="flex flex-col items-start gap-3 md:items-end">

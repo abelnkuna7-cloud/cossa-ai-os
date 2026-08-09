@@ -10,13 +10,17 @@ import {
   Menu,
   MessageCircle,
   Phone,
-  Sparkles,
   X,
 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  GrowthProductBrand,
+  ParentBrandEndorsement,
+} from "@/components/brand/growth-brand";
 import { CossaReceptionist } from "@/components/cossa-receptionist";
+import { GROWTH_BRAND } from "@/lib/brand";
 
 const phoneNumber = "067 801 1907";
 const phoneHref = "tel:+27678011907";
@@ -78,22 +82,10 @@ export function PublicSiteShell({
           <Link
             to="/"
             className="flex min-w-0 items-center gap-2"
-            aria-label="Cossa AI home"
+            aria-label="GROWTH home"
             onClick={closeMobileMenu}
           >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground gold-glow">
-              <Sparkles className="h-4 w-4" />
-            </span>
-
-            <span className="min-w-0">
-              <strong className="block truncate font-display text-sm text-gradient-gold">
-                COSSA AI
-              </strong>
-
-              <span className="block truncate text-[10px] uppercase tracking-widest text-muted-foreground">
-                Business Growth OS
-              </span>
-            </span>
+            <GrowthProductBrand />
           </Link>
 
           <nav
@@ -297,27 +289,17 @@ export function PublicSiteShell({
               to="/"
               className="inline-flex items-center gap-2"
             >
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground">
-                <Sparkles className="h-4 w-4" />
-              </span>
-
-              <span>
-                <strong className="block font-display text-sm text-gradient-gold">
-                  COSSA AI
-                </strong>
-
-                <span className="block text-[10px] uppercase tracking-widest">
-                  Business Growth OS
-                </span>
-              </span>
+              <GrowthProductBrand />
             </Link>
 
             <p className="mt-4 max-w-sm text-xs leading-5">
-              A Cossa Nexus Holdings platform
-              designed to help businesses capture
-              leads, strengthen follow-up, improve
+              GROWTH gives growing businesses
+              a clearer way to capture leads,
+              strengthen follow-up, improve
               marketing and organise operations.
             </p>
+
+            <ParentBrandEndorsement className="mt-4" />
           </div>
 
           <div>
@@ -389,7 +371,7 @@ export function PublicSiteShell({
                 className="inline-flex items-center gap-1 hover:text-primary"
               >
                 <LockKeyhole className="h-3.5 w-3.5" />
-                Cossa AI Workspace
+                GROWTH Workspace
               </Link>
             </div>
           </div>
@@ -437,7 +419,7 @@ export function PublicSiteShell({
           </span>
 
           <span>
-            United Roots. Strategic Future.
+            {GROWTH_BRAND.brandPromise}
           </span>
         </div>
       </footer>

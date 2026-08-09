@@ -3,6 +3,7 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { Search, Command, Bell, User } from "lucide-react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { GrowthSymbol } from "@/components/brand/growth-brand";
 import { Button } from "@/components/ui/button";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -24,6 +25,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex flex-1 flex-col min-w-0">
           <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border/60 bg-background/70 px-3 backdrop-blur-xl">
             <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
+            <Link
+              to="/command-center"
+              className="flex items-center gap-1.5 md:hidden"
+              aria-label="GROWTH command center"
+            >
+              <GrowthSymbol className="h-7 w-7" />
+              <span className="font-display text-xs font-semibold tracking-[0.15em] text-gradient-gold">
+                GROWTH
+              </span>
+            </Link>
             <div className="hidden md:flex items-center gap-2 rounded-lg border border-border/60 bg-card/40 px-3 py-1.5 text-sm text-muted-foreground w-[420px] max-w-full">
               <Search className="h-4 w-4" />
               <span className="flex-1 truncate">Search customers, deals, docs, campaigns…</span>

@@ -1,0 +1,14 @@
+export const GROWTH_BRAND = {
+  productName: "GROWTH",
+  productDescriptor: "Business Growth Intelligence",
+  parentCompany: "Cossa Nexus Holdings",
+  parentEndorsement: "A Cossa Nexus Holdings Platform",
+  brandPromise: "GROWING BUSINESSES. CREATING VALUE. BUILDING TOMORROW.",
+  assets: {
+    growthSymbol: "/brand/growth/growth-symbol.svg",
+    growthFull: "/brand/growth/growth-full.jpg",
+    parentMark: "/brand/cossa-nexus-holdings/parent-mark.svg",
+    parentLogo: "/brand/cossa-nexus-holdings/parent-logo.png",
+    eagle: "/brand/eagle/growth-eagle.jpg",
+  },
+} as const;
