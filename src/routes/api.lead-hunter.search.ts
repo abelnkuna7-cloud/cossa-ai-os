@@ -607,6 +607,41 @@ function opportunitySignalFromInstruction(
   return null;
 }
 
+function buyerTargetsFromInstruction(
+  instruction: string | null,
+): string[] {
+  if (!instruction) {
+    return [];
+  }
+
+  const clause =
+    instruction.match(
+      /\b(?:find|target|return)\s+(?:(?:private|public|government|nonprofit)\s+)?([^.\n!]{3,180}?)(?=\s+(?:that|who)\s+(?:could|can|may|need|needs|want|wants|have|has)\b|\s+needing\b)/i,
+    )?.[1];
+
+  if (!clause) {
+    return [];
+  }
+
+  const genericTarget =
+    /^(?:real|verified|qualified)?\s*(?:customer|buyer|lead|prospect|organisation|organization|company|business)(?:s|es)?$/i;
+
+  return [
+    ...new Set(
+      clause
+        .split(
+          /[,;]|\s+(?:and|&)\s+/i,
+        )
+        .map((item) => cleanText(item))
+        .filter(
+          (item): item is string =>
+            typeof item === "string" &&
+            !genericTarget.test(item),
+        ),
+    ),
+  ].slice(0, 6);
+}
+
 function lowerText(
   value: unknown,
 ): string {
@@ -1170,6 +1205,11 @@ function validateRequest(
       searchInstruction,
     );
 
+  const missionBuyerTargets =
+    buyerTargetsFromInstruction(
+      searchInstruction,
+    );
+
   /**
    * IMPORTANT:
    * Preserve explicit UI sector controls.
@@ -1298,7 +1338,9 @@ function validateRequest(
 
       industries,
       organisation_types:
-        organisationTypes,
+        missionBuyerTargets.length > 0
+          ? missionBuyerTargets
+          : organisationTypes,
 
       result_count:
         resultCount,
@@ -1748,6 +1790,30 @@ function buyerTargetsForService(
   );
 }
 
+function buyerTargetSearchExpression(
+  target: string,
+): string {
+  const normalised =
+    target
+      .replace(/"/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  if (/\bproperty managers?\b/i.test(normalised)) {
+    return '("property manager" OR "property management")';
+  }
+
+  if (/\bwarehouse operators?\b/i.test(normalised)) {
+    return '(warehouse OR "warehouse operator" OR logistics)';
+  }
+
+  if (/\bretail[\s-]*(?:centre|center) managers?\b/i.test(normalised)) {
+    return '("retail centre" OR "retail center" OR "shopping centre" OR "shopping center")';
+  }
+
+  return `"${normalised || "business"}"`;
+}
+
 function createSearchQueries(
   request: LeadHunterSearchRequest,
 ): SearchPlan[] {
@@ -1874,6 +1940,16 @@ function createSearchQueries(
       ] ??
       target1;
 
+    const target1Query =
+      buyerTargetSearchExpression(
+        target1,
+      );
+
+    const target2Query =
+      buyerTargetSearchExpression(
+        target2,
+      );
+
     const label =
       serviceLabel(
         service,
@@ -1882,7 +1958,7 @@ function createSearchQueries(
     if (shouldPrivate) {
       plans.push({
         query:
-          `"${target1}" ${locationQuery} official website contact`,
+          `${target1Query} ${locationQuery} official website contact`,
 
         purpose:
           "buyer_discovery",
@@ -1895,7 +1971,7 @@ function createSearchQueries(
 
       plans.push({
         query:
-          `"${target2}" ${locationQuery} official organisation contact`,
+          `${target2Query} ${locationQuery} official organisation contact`,
 
         purpose:
           "buyer_discovery",
@@ -1908,7 +1984,7 @@ function createSearchQueries(
 
       plans.push({
         query:
-          `${locationQuery} "${target1}" ("new branch" OR expansion OR development OR refurbishment OR upgrade OR investment OR "new premises") "${label}"`,
+          `${locationQuery} ${target1Query} ("new branch" OR expansion OR development OR refurbishment OR upgrade OR investment OR "new premises") "${label}"`,
 
         purpose:
           "growth_signal",
@@ -1938,7 +2014,7 @@ function createSearchQueries(
       ) {
         plans.push({
           query:
-            `"${target1}" ${locationQuery} official website contact business`,
+            `${target1Query} ${locationQuery} official website contact business`,
 
           purpose:
             "website_gap",

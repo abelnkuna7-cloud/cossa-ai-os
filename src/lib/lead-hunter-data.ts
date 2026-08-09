@@ -2493,6 +2493,55 @@ function inferLocationsFromInstruction(
 }
 
 /*
+ * When a mission names the buyer types directly, they take priority over
+ * broad values left in the form from a previous hunt. This keeps a small
+ * search budget focused on the customers the user asked for.
+ */
+function inferBuyerTargetsFromInstruction(
+  instruction: string,
+): string[] {
+  const clause =
+    instruction.match(
+      /\b(?:find|target|return)\s+(?:(?:private|public|government|nonprofit)\s+)?([^.\n!]{3,180}?)(?=\s+(?:that|who)\s+(?:could|can|may|need|needs|want|wants|have|has)\b|\s+needing\b)/i,
+    )?.[1];
+
+  if (
+    !clause
+  ) {
+    return [];
+  }
+
+  const genericTarget =
+    /^(?:real|verified|qualified)?\s*(?:customer|buyer|lead|prospect|organisation|organization|company|business)(?:s|es)?$/i;
+
+  return [
+    ...new Set(
+      clause
+        .split(
+          /[,;]|\s+(?:and|&)\s+/i,
+        )
+        .map(
+          (item) =>
+            cleanText(
+              item,
+            ),
+        )
+        .filter(
+          (item): item is string =>
+            typeof item ===
+              "string" &&
+            !genericTarget.test(
+              item,
+            ),
+        ),
+    ),
+  ].slice(
+    0,
+    6,
+  );
+}
+
+/*
  * Natural-language mission reconciliation.
  *
  * This does NOT attempt unrestricted AI guessing.
@@ -2570,6 +2619,19 @@ function applyInstructionIntent(
   ) {
     next.locations =
       inferredLocations;
+  }
+
+  const inferredBuyerTargets =
+    inferBuyerTargetsFromInstruction(
+      instruction,
+    );
+
+  if (
+    inferredBuyerTargets.length >
+    0
+  ) {
+    next.organisation_types =
+      inferredBuyerTargets;
   }
 
   const privateFieldValue =
@@ -4360,6 +4422,17 @@ export function buildHuntSummary(
   ) {
     summary.push(
       `Cities: ${request.cities.join(
+        ", ",
+      )}`,
+    );
+  }
+
+  if (
+    request.organisation_types.length >
+    0
+  ) {
+    summary.push(
+      `Buyer types: ${request.organisation_types.join(
         ", ",
       )}`,
     );
