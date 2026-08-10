@@ -75,7 +75,12 @@ interface Integration {
   activation: string;
   safeguards: string[];
   connectionLabel?: string;
-  connectionState?: "checking" | "credential-configured" | "not-connected" | "error";
+  connectionState?:
+    | "checking"
+    | "credential-configured"
+    | "verified-observation"
+    | "not-connected"
+    | "error";
 }
 
 const cossaSources: CossaSource[] = [
@@ -327,11 +332,19 @@ const integrations: Integration[] = [
   {
     name: "Google Analytics",
     group: "Marketing",
-    blurb: "Future approved reporting for an authorised web-property account.",
+    blurb:
+      "GROWTH's Google Tag Manager container is verified sending GA4 page views. GROWTH does not yet import private Analytics reports.",
     short: "G4",
     activation:
-      "Requires property-owner approval, a restricted reporting scope and a server-side implementation.",
-    safeguards: ["Read-only first", "Source-labelled reporting", "No fabricated metrics"],
+      "To import GA4 reporting into GROWTH, a Cossa property owner must authorise a restricted, server-side, read-only Google Analytics connection. The verified website tag alone does not grant report access.",
+    safeguards: [
+      "GROWTH tag verified",
+      "Read-only property connection needed",
+      "Source-labelled reporting",
+      "No fabricated metrics",
+    ],
+    connectionLabel: "GROWTH tag verified · GA4 G-EWW4BPZN6R",
+    connectionState: "verified-observation",
   },
   {
     name: "Meta Ads",
@@ -778,6 +791,7 @@ function IntegrationCard({
   const GroupIcon = groupIcons[integration.group];
   const detailsId = `integration-${integration.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   const connectionCredentialConfigured = integration.connectionState === "credential-configured";
+  const connectionVerified = integration.connectionState === "verified-observation";
   const connectionChecking = integration.connectionState === "checking";
   const connectionError = integration.connectionState === "error";
 
@@ -800,16 +814,23 @@ function IntegrationCard({
         <span
           className={cn(
             "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]",
-            connectionCredentialConfigured
-              ? "border-warning/30 bg-warning/10 text-warning"
-              : connectionChecking
-                ? "border-border/60 bg-card/40 text-muted-foreground"
-                : connectionError
-                  ? "border-destructive/30 bg-destructive/10 text-destructive"
-                  : "border-warning/30 bg-warning/10 text-warning",
+            connectionVerified
+              ? "border-success/30 bg-success/10 text-success"
+              : connectionCredentialConfigured
+                ? "border-warning/30 bg-warning/10 text-warning"
+                : connectionChecking
+                  ? "border-border/60 bg-card/40 text-muted-foreground"
+                  : connectionError
+                    ? "border-destructive/30 bg-destructive/10 text-destructive"
+                    : "border-warning/30 bg-warning/10 text-warning",
           )}
         >
-          <KeyRound className="h-3 w-3" /> {integration.connectionLabel ?? "Not connected"}
+          {connectionVerified ? (
+            <CheckCircle2 className="h-3 w-3" />
+          ) : (
+            <KeyRound className="h-3 w-3" />
+          )}
+          {integration.connectionLabel ?? "Not connected"}
         </span>
         <Button
           type="button"
