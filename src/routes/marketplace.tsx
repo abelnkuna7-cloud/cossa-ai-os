@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
 import type { ModuleStatus } from "@/lib/modules";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute("/marketplace")({
   component: Marketplace,
@@ -79,7 +80,7 @@ const items: Item[] = [
     category: "Sales",
     description:
       "Research buyer-fit organisations with service, sector, evidence and duplicate protection.",
-    status: "Testing",
+    status: "Production",
     availability: "Live research workspace",
     to: "/sales/lead-finder",
     icon: Radar,
@@ -90,7 +91,7 @@ const items: Item[] = [
     category: "Sales",
     description:
       "Review only CRM-backed overdue follow-ups, quotations, opportunities and high-scoring new leads.",
-    status: "Testing",
+    status: "Production",
     availability: "Verified CRM signals",
     to: "/opportunity-radar",
     icon: Gauge,
@@ -132,7 +133,7 @@ const items: Item[] = [
     category: "Marketing",
     description:
       "Use Groq-powered strategy guidance. It does not publish, spend advertising budget or message customers without a connected account and approval.",
-    status: "Testing",
+    status: "Production",
     availability: "AI guidance workspace",
     to: "/marketing/ai-director",
     icon: Megaphone,
@@ -152,7 +153,7 @@ const items: Item[] = [
     category: "NexDocs",
     description:
       "Use the document specialist for drafting guidance. E-signature, payment and document-template automation remain separate activation work.",
-    status: "Testing",
+    status: "Production",
     availability: "AI guidance workspace",
     to: "/operations/nexdocs",
     icon: FileStack,
@@ -172,7 +173,7 @@ const items: Item[] = [
     category: "Automation",
     description:
       "Plan safe, approval-based automation steps before an external message, spend or data-changing action is permitted.",
-    status: "Testing",
+    status: "Production",
     availability: "AI guidance workspace",
     to: "/integrations",
     icon: Workflow,
@@ -225,7 +226,7 @@ function Marketplace() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <Store className="h-4 w-4" />
               </div>
-              <StatusBadge status="Testing" />
+              <StatusBadge status={workspaceRuntimeStatus()} />
             </div>
             <h1 className="mt-3 font-display text-3xl md:text-4xl font-semibold">
               Cossa <span className="text-gradient-gold">Marketplace</span>

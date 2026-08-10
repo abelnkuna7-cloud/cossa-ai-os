@@ -83,7 +83,7 @@ const cossaSources: CossaSource[] = [
     name: "Cossa AI",
     description:
       "Cossa's AI workspace reads verified Cossa knowledge and authorised operational records. Guidance is reviewed by people before any commercial, legal, financial or customer-facing use.",
-    status: "Testing",
+    status: "Production",
     to: "/ai/cossa",
     icon: BrainCircuit,
   },
@@ -99,7 +99,7 @@ const cossaSources: CossaSource[] = [
     name: "AI Memory",
     description:
       "The workspace for reviewing retained Cossa operational context. It must never be treated as a source of unverified facts.",
-    status: "Testing",
+    status: "Production",
     to: "/ai/memory",
     icon: BrainCircuit,
   },
@@ -115,7 +115,7 @@ const cossaSources: CossaSource[] = [
     name: "Groq inference",
     description:
       "The lower-cost Cossa AI route when its protected provider setting has available usage. Provider credentials stay outside the browser.",
-    status: "Testing",
+    status: "Production",
     to: "/ai/cossa",
     icon: BrainCircuit,
   },
@@ -131,7 +131,7 @@ const cossaSources: CossaSource[] = [
     name: "Website Watch",
     description:
       "A controlled, read-only homepage health check for the official Cossa website. It identifies only live availability, response time, title and noindex signals.",
-    status: "Testing",
+    status: "Production",
     to: "/marketing/monitoring",
     icon: Activity,
   },

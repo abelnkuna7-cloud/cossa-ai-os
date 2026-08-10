@@ -24,11 +24,13 @@ import {
   salesOpportunities,
 } from "@/lib/business-data";
 import { supabase } from "@/integrations/supabase/client";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 // The generated Supabase types lag behind the existing production tables.
 // Keep this narrowly-scoped adapter until the types are regenerated from the
 // linked project; runtime data remains validated by the query and UI model.
 const db = supabase as unknown as {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   from: (table: string) => any;
 };
 
@@ -226,7 +228,7 @@ function CrmHub() {
               <Users className="h-5 w-5" />
             </div>
 
-            <StatusBadge status="Testing" />
+            <StatusBadge status={workspaceRuntimeStatus()} />
           </div>
 
           <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">

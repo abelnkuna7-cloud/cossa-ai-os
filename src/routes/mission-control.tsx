@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute("/mission-control")({
   component: MissionControl,
@@ -364,7 +365,7 @@ function MissionControl() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <Rocket className="h-4 w-4" />
               </div>
-              <StatusBadge status="Testing" />
+              <StatusBadge status={workspaceRuntimeStatus()} />
             </div>
             <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
               Mission <span className="text-gradient-gold">Control</span>
@@ -436,7 +437,7 @@ function MissionControl() {
                 {activeMission.emoji} {activeMission.title}
               </h3>
             </div>
-            <StatusBadge status="Testing" />
+            <StatusBadge status={workspaceRuntimeStatus()} />
           </div>
 
           <ol className="space-y-3">

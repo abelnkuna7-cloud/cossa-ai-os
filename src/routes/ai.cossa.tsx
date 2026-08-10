@@ -19,7 +19,6 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
-import type { ModuleStatus } from "@/lib/modules";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -33,6 +32,7 @@ import {
   type AiMessage,
 } from "@/lib/ai-data";
 import { streamChat, type CossaAiProvider } from "@/lib/ai-stream";
+import { workspaceRuntimeDescription, workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute("/ai/cossa")({
   component: AiChatWorkspace,
@@ -78,54 +78,6 @@ const starterPrompts = [
   },
 ];
 
-type WorkspaceEnvironment = "production" | "preview" | "development";
-
-function resolveWorkspaceEnvironment(): WorkspaceEnvironment {
-  const configuredEnvironment = import.meta.env.VITE_APP_ENV?.trim().toLowerCase();
-
-  if (configuredEnvironment === "production") {
-    return "production";
-  }
-
-  if (configuredEnvironment === "preview" || configuredEnvironment === "staging") {
-    return "preview";
-  }
-
-  if (configuredEnvironment === "development") {
-    return "development";
-  }
-
-  /*
-   * Vite sets import.meta.env.PROD to true for a production build.
-   * This provides a safe fallback if VITE_APP_ENV has not yet been added.
-   */
-  return import.meta.env.PROD ? "production" : "development";
-}
-
-function getEnvironmentStatus(environment: WorkspaceEnvironment): ModuleStatus {
-  if (environment === "production") {
-    return "Production";
-  }
-
-  if (environment === "preview") {
-    return "Testing";
-  }
-
-  return "Development";
-}
-
-function getEnvironmentDescription(environment: WorkspaceEnvironment): string {
-  if (environment === "production") {
-    return "Production Cossa workspace. Available information depends on authorised source connections; verify every AI recommendation before acting.";
-  }
-
-  if (environment === "preview") {
-    return "Preview environment for controlled validation before production release.";
-  }
-
-  return "Development environment for local implementation and testing.";
-}
-
 function AiChatWorkspace() {
   const queryClient = useQueryClient();
 
@@ -140,11 +92,9 @@ function AiChatWorkspace() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const workspaceEnvironment = resolveWorkspaceEnvironment();
+  const environmentStatus = workspaceRuntimeStatus();
 
-  const environmentStatus = getEnvironmentStatus(workspaceEnvironment);
-
-  const environmentDescription = getEnvironmentDescription(workspaceEnvironment);
+  const environmentDescription = workspaceRuntimeDescription();
 
   const conversations = useQuery({
     queryKey: ["ai-conversations"],

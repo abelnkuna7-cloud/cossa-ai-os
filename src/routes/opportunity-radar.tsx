@@ -23,6 +23,7 @@ import {
   type GrowthSignalImpact,
 } from "@/lib/growth-signals";
 import { fmtCurrency } from "@/components/crud-workspace";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute("/opportunity-radar")({
   component: OpportunityRadar,
@@ -67,7 +68,7 @@ function OpportunityRadar() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <Crosshair className="h-4 w-4" />
               </div>
-              <StatusBadge status="Testing" />
+              <StatusBadge status={workspaceRuntimeStatus()} />
             </div>
             <h1 className="mt-3 font-display text-3xl md:text-4xl font-semibold">
               Opportunity <span className="text-gradient-gold">Radar</span>

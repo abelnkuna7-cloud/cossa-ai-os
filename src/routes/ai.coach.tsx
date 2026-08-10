@@ -21,6 +21,7 @@ import {
   type GrowthSignalImpact,
 } from "@/lib/growth-signals";
 import { cn } from "@/lib/utils";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute("/ai/coach")({
   component: AiCoach,
@@ -59,7 +60,7 @@ function AiCoach() {
               <div className="gold-glow flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
                 <GraduationCap className="h-4 w-4" />
               </div>
-              <StatusBadge status="Testing" />
+              <StatusBadge status={workspaceRuntimeStatus()} />
             </div>
             <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
               AI Business <span className="text-gradient-gold">Coach</span>

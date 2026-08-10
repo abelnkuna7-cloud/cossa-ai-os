@@ -22,6 +22,7 @@ import {
   type GrowthSignalImpact,
 } from "@/lib/growth-signals";
 import { fmtCurrency } from "@/components/crud-workspace";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute("/ai-recommendations")({
   component: Recommendations,
@@ -65,7 +66,7 @@ function Recommendations() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <Sparkles className="h-4 w-4" />
               </div>
-              <StatusBadge status="Testing" />
+              <StatusBadge status={workspaceRuntimeStatus()} />
             </div>
             <h1 className="mt-3 font-display text-3xl md:text-4xl font-semibold">
               Verified <span className="text-gradient-gold">Recommendations</span>

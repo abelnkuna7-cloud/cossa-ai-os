@@ -41,6 +41,7 @@ import {
 } from "@/lib/workforce-data";
 import { streamChat } from "@/lib/ai-stream";
 import { checkOfficialWebsite, type OfficialWebsiteHealthReport } from "@/lib/website-health";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute("/ai/workforce")({
   component: AiWorkforce,
@@ -410,7 +411,7 @@ function AiWorkforce() {
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <UsersRound className="h-5 w-5" />
               </div>
-              <StatusBadge status="Testing" />
+              <StatusBadge status={workspaceRuntimeStatus()} />
             </div>
             <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
               Cossa <span className="text-gradient-gold">AI Workforce</span>

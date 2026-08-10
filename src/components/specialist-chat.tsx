@@ -33,6 +33,7 @@ import { streamChat } from "@/lib/ai-stream";
 import { capabilityForRoute } from "@/lib/capability-matrix";
 import { getModule } from "@/lib/modules";
 import { specialistFor } from "@/lib/specialists";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 interface Props {
   to: string;
@@ -183,7 +184,7 @@ export function SpecialistChat({ to }: Props) {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="font-display text-xl md:text-2xl font-semibold">{title}</h1>
-                <StatusBadge status="Testing" />
+                <StatusBadge status={workspaceRuntimeStatus()} />
                 <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
                   {capability.label}
                 </span>

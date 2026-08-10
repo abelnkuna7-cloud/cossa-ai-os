@@ -14,6 +14,7 @@ import {
 import { StatusBadge } from "@/components/status-badge";
 import { fmtCurrency } from "@/components/crud-workspace";
 import { dashboardStats } from "@/lib/business-data";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute("/operations/business-intelligence")({
   component: BusinessIntelligence,
@@ -78,7 +79,7 @@ function BusinessIntelligence() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <StatusBadge status="Testing" />
+                <StatusBadge status={workspaceRuntimeStatus()} />
               </div>
               <h1 className="mt-1 font-display text-3xl font-semibold md:text-4xl">
                 Business <span className="text-gradient-gold">Intelligence</span>

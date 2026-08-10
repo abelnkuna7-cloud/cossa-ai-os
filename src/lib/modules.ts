@@ -68,6 +68,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { capabilityForRoute } from "@/lib/capability-matrix";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export type ModuleStatus =
   | "Planning"
@@ -116,7 +117,7 @@ const s = (
       ? "Live"
       : capability.state === "not-connected"
         ? "Planning"
-        : "Testing";
+        : workspaceRuntimeStatus();
 
   return {
     title,
@@ -637,7 +638,7 @@ export const MODULES: ModuleGroup[] = [
         "AI Workforce",
         "/ai/workforce",
         UsersRound,
-        "Testing",
+        "Production",
         "Controlled AI growth team",
         "Set up Cossa's social planning, content, scheduling, account-growth and paid-media workers, then hand verified work to the AI CEO for an owner briefing.",
         "Coordinate work without automatic posts, messages, account changes or advertising spend.",
