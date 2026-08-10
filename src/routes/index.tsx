@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   GrowthEagleArtwork,
-  GrowthFullArtwork,
+  GrowthProductBrand,
   ParentBrandEndorsement,
 } from "@/components/brand/growth-brand";
 import { PublicSiteShell } from "@/components/public-site-shell";
@@ -48,12 +48,8 @@ interface DatabaseError {
 }
 
 interface PublicGrowthDatabaseClient {
-  from: (
-    table: "contact_messages" | "leads",
-  ) => {
-    insert: (
-      row: Record<string, unknown>,
-    ) => Promise<{
+  from: (table: "contact_messages" | "leads") => {
+    insert: (row: Record<string, unknown>) => Promise<{
       error: DatabaseError | null;
     }>;
   };
@@ -147,27 +143,24 @@ function createLeadNotes(message: string): string {
 
 function GrowthHome() {
   const [form, setForm] = useState(initialFormState);
-  const [submitState, setSubmitState] =
-    useState<SubmitState>("idle");
-  const [submitError, setSubmitError] = useState<string | null>(
-    null,
-  );
+  const [submitState, setSubmitState] = useState<SubmitState>("idle");
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const capabilities = [
     {
       icon: Users,
-      title: "Stop leads going cold",
-      text: "Bring enquiries, follow-up and customer information into a clearer working process.",
+      title: "Keep serious enquiries moving",
+      text: "Capture the customer need clearly and give the right person a practical next step.",
     },
     {
       icon: Bot,
-      title: "Get practical AI support",
-      text: "Use AI guidance that is grounded in approved company knowledge instead of invented facts.",
+      title: "Work from trusted information",
+      text: "Use practical support grounded in approved company knowledge and clear human review.",
     },
     {
       icon: LineChart,
-      title: "See what is working",
-      text: "Connect the right channels and measure the work before making bigger spending decisions.",
+      title: "Improve with evidence",
+      text: "Bring the right customer channels and operational information together before making bigger decisions.",
     },
   ];
 
@@ -179,15 +172,10 @@ function GrowthHome() {
     email: "cossa@cossanexusholdings.co.za",
     telephone: "+27678011907",
     slogan: GROWTH_BRAND.brandPromise,
-    sameAs: [
-      "https://cossanexusholdings.co.za",
-      "https://nexdocs.cossanexusholdings.co.za",
-    ],
+    sameAs: ["https://cossanexusholdings.co.za", "https://nexdocs.cossanexusholdings.co.za"],
   };
 
-  async function submitQuoteRequest(
-    event: FormEvent<HTMLFormElement>,
-  ) {
+  async function submitQuoteRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (submitState === "sending") {
@@ -210,8 +198,7 @@ function GrowthHome() {
     setSubmitState("sending");
     setSubmitError(null);
 
-    const database =
-      supabase as unknown as PublicGrowthDatabaseClient;
+    const database = supabase as unknown as PublicGrowthDatabaseClient;
 
     /*
      * Record 1: original public enquiry.
@@ -219,22 +206,17 @@ function GrowthHome() {
      * This remains the unedited customer submission and can be used by the
      * future receptionist, enquiry inbox and audit workflow.
      */
-    const { error: contactMessageError } = await database
-      .from("contact_messages")
-      .insert({
-        name,
-        phone,
-        email,
-        subject: "Growth website quote request",
-        message,
-        status: "unread",
-      });
+    const { error: contactMessageError } = await database.from("contact_messages").insert({
+      name,
+      phone,
+      email,
+      subject: "Growth website quote request",
+      message,
+      status: "unread",
+    });
 
     if (contactMessageError) {
-      console.error(
-        "Unable to save Growth contact message:",
-        contactMessageError,
-      );
+      console.error("Unable to save Growth contact message:", contactMessageError);
 
       setSubmitState("error");
       setSubmitError(
@@ -249,29 +231,24 @@ function GrowthHome() {
      * The Command Center and Sales → Leads currently calculate their figures
      * from public.leads, so the website enquiry must also create a lead.
      */
-    const { error: leadError } = await database
-      .from("leads")
-      .insert({
-        full_name: name,
-        name,
-        phone,
-        email,
-        service: "Business enquiry",
-        location: null,
-        source: "growth_website_quote_request",
-        status: "New",
-        stage: "New",
-        notes: createLeadNotes(message),
-        score: 40,
-        value: 0,
-        estimated_value: 0,
-      });
+    const { error: leadError } = await database.from("leads").insert({
+      full_name: name,
+      name,
+      phone,
+      email,
+      service: "Business enquiry",
+      location: null,
+      source: "growth_website_quote_request",
+      status: "New",
+      stage: "New",
+      notes: createLeadNotes(message),
+      score: 40,
+      value: 0,
+      estimated_value: 0,
+    });
 
     if (leadError) {
-      console.error(
-        "The enquiry was saved but the CRM lead could not be created:",
-        leadError,
-      );
+      console.error("The enquiry was saved but the CRM lead could not be created:", leadError);
 
       setSubmitState("error");
       setSubmitError(
@@ -293,36 +270,30 @@ function GrowthHome() {
         }}
       />
 
-      <section
-        id="contact"
-        className="relative overflow-hidden px-4 py-10 md:py-14"
-      >
-        <div className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-primary/15 blur-3xl" />
-        <GrowthEagleArtwork
-          eager
-          className="pointer-events-none absolute right-0 top-0 hidden h-[620px] w-[45%] object-cover object-[center_34%] opacity-35 lg:block"
-        />
-        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-2/3 bg-gradient-to-l from-background via-background/75 to-transparent lg:block" />
+      <section id="contact" className="relative overflow-hidden px-4 py-12 md:py-16">
+        <div className="pointer-events-none absolute -left-32 top-8 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
+        <div className="pointer-events-none absolute right-0 top-0 hidden h-full w-[42%] bg-[radial-gradient(ellipse_at_top_right,rgba(217,177,36,0.12),transparent_70%)] lg:block" />
 
-        <div className="relative mx-auto grid max-w-6xl items-center gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="relative mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.08fr_0.92fr]">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
-              More leads. Clearer follow-up. Less business leakage.
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+              Cossa Nexus Holdings | Business Growth Intelligence
+            </div>
+
+            <p className="mt-6 text-xs font-semibold uppercase tracking-[0.22em] text-primary">
+              Clear enquiry capture. Accountable follow-up. Better decisions.
             </p>
 
             <h1 className="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.08] md:text-5xl lg:text-6xl">
-              Stop losing good customers because your business is
-              too slow to{" "}
-              <span className="text-gradient-gold">
-                respond.
-              </span>
+              Turn every serious enquiry into a clearer{" "}
+              <span className="text-gradient-gold">next step.</span>
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
-              GROWTH helps businesses turn enquiries into
-              organised leads, stronger follow-up and better
-              decisions — while keeping a real person easy to reach
-              when you need one.
+              GROWTH is Cossa&apos;s practical business growth platform for organisations that want
+              a more disciplined way to capture customer needs, organise follow-up and keep the
+              right people close to important decisions.
             </p>
 
             <div className="mt-6 grid max-w-2xl gap-3 sm:grid-cols-2">
@@ -333,11 +304,7 @@ function GrowthHome() {
                 </Button>
               </a>
 
-              <a
-                href={whatsappHref}
-                target="_blank"
-                rel="noreferrer"
-              >
+              <a href={whatsappHref} target="_blank" rel="noreferrer">
                 <Button
                   variant="outline"
                   className="w-full border-primary/40 text-primary hover:bg-primary/10"
@@ -368,190 +335,190 @@ function GrowthHome() {
               </a>
             </div>
 
+            <div className="mt-5 grid max-w-2xl gap-2 text-sm text-muted-foreground sm:grid-cols-3">
+              {[
+                "Direct Cossa contact",
+                "Structured customer records",
+                "Human review where needed",
+              ].map((item) => (
+                <span key={item} className="inline-flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                  {item}
+                </span>
+              ))}
+            </div>
+
             <p className="mt-4 text-sm text-muted-foreground">
-              Not comfortable with WhatsApp? Call, email or send a
-              quote request instead.
+              Prefer another route? Call, email or send a quote request instead.
             </p>
           </div>
 
           <div className="space-y-5">
-            <aside className="relative isolate min-h-[248px] overflow-hidden rounded-2xl border border-primary/35 bg-black p-5 shadow-[0_18px_60px_rgba(0,0,0,0.42)] md:p-6">
+            <aside className="relative isolate min-h-[300px] overflow-hidden rounded-2xl border border-primary/35 bg-black p-6 shadow-[0_20px_70px_rgba(0,0,0,0.5)] md:min-h-[340px] md:p-8">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(217,177,36,0.16),transparent_52%)]" />
               <GrowthEagleArtwork
                 eager
-                className="absolute inset-0 h-full w-full object-cover object-[center_40%] opacity-60"
+                className="absolute -bottom-10 -right-10 h-[118%] w-[70%] object-contain object-[center_58%] opacity-100 md:-right-4 md:w-[64%]"
               />
-              <div className="absolute inset-0 bg-[linear-gradient(105deg,rgba(0,0,0,0.97),rgba(0,0,0,0.63),rgba(0,0,0,0.4))]" />
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.98)_0%,rgba(0,0,0,0.92)_43%,rgba(0,0,0,0.34)_76%,rgba(0,0,0,0.1)_100%)]" />
 
-              <div className="relative flex h-full min-h-[200px] flex-col justify-between">
-                <div className="max-w-[58%]">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
-                    {GROWTH_BRAND.productDescriptor}
+              <div className="relative flex min-h-[252px] flex-col justify-between md:min-h-[276px]">
+                <div className="max-w-[59%] sm:max-w-[54%]">
+                  <GrowthProductBrand className="max-w-full" />
+
+                  <p className="mt-7 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
+                    Business growth intelligence
                   </p>
 
-                  <p className="mt-3 text-sm font-semibold leading-6 text-foreground md:text-base">
-                    {GROWTH_BRAND.brandPromise}
-                  </p>
+                  <h2 className="mt-3 font-display text-2xl font-semibold leading-tight text-foreground md:text-3xl">
+                    Strengthen the work behind every customer relationship.
+                  </h2>
 
-                  <ParentBrandEndorsement className="mt-4" />
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                    Cossa combines practical growth support with clear customer and operations
+                    information.
+                  </p>
                 </div>
 
-                <GrowthFullArtwork className="absolute -bottom-9 -right-9 w-[74%] max-w-[340px] drop-shadow-[0_14px_32px_rgba(0,0,0,0.8)]" />
+                <ParentBrandEndorsement className="max-w-[60%]" />
               </div>
             </aside>
 
-          <form
-            id="quote-request"
-            onSubmit={submitQuoteRequest}
-            className="rounded-2xl border border-primary/30 bg-card/95 p-5 shadow-[0_16px_60px_rgba(0,0,0,0.22)] md:p-6"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Tell us what you need
-            </p>
-
-            <h2 className="mt-2 font-display text-2xl font-semibold">
-              Request a quote or speak with us
-            </h2>
-
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Share the essential details. Your request will be
-              recorded securely and reviewed by Cossa. For immediate
-              assistance, call {phoneNumber}.
-            </p>
-
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Your name</Label>
-
-                <Input
-                  id="name"
-                  name="name"
-                  autoComplete="name"
-                  required
-                  maxLength={120}
-                  value={form.name}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone number</Label>
-
-                <Input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  required
-                  maxLength={30}
-                  value={form.phone}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      phone: event.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="email">
-                  Email address{" "}
-                  <span className="text-muted-foreground">
-                    (optional)
-                  </span>
-                </Label>
-
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  maxLength={254}
-                  value={form.email}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      email: event.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="message">
-                  What can we help with?
-                </Label>
-
-                <Textarea
-                  id="message"
-                  name="message"
-                  required
-                  rows={4}
-                  minLength={10}
-                  maxLength={3000}
-                  placeholder="Describe the service, project or business challenge, including the location and preferred timeline where relevant."
-                  value={form.message}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      message: event.target.value,
-                    }))
-                  }
-                />
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              disabled={submitState === "sending"}
-              className="mt-5 w-full bg-primary text-primary-foreground hover:bg-primary/90"
+            <form
+              id="quote-request"
+              onSubmit={submitQuoteRequest}
+              className="rounded-2xl border border-primary/30 bg-card/95 p-5 shadow-[0_16px_60px_rgba(0,0,0,0.22)] md:p-6"
             >
-              {submitState === "sending"
-                ? "Recording your request…"
-                : "Send quote request"}
-
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-
-            {submitState === "sent" && (
-              <p
-                role="status"
-                className="mt-3 text-sm text-emerald-500"
-              >
-                Thank you. Your request has been recorded and added
-                to our customer follow-up system. Call {phoneNumber}{" "}
-                for urgent assistance.
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+                Tell us what you need
               </p>
-            )}
 
-            {submitState === "error" && (
-              <p
-                role="alert"
-                className="mt-3 text-sm text-destructive"
-              >
-                {submitError ??
-                  `We could not complete your request. Please call ${phoneNumber}, WhatsApp us, or email cossa@cossanexusholdings.co.za.`}
+              <h2 className="mt-2 font-display text-2xl font-semibold">
+                Request a quote or speak with us
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Share the essential details. Your request will be recorded securely and reviewed by
+                Cossa. For immediate assistance, call {phoneNumber}.
               </p>
-            )}
-          </form>
+
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Your name</Label>
+
+                  <Input
+                    id="name"
+                    name="name"
+                    autoComplete="name"
+                    required
+                    maxLength={120}
+                    value={form.name}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone number</Label>
+
+                  <Input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    required
+                    maxLength={30}
+                    value={form.phone}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        phone: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="email">
+                    Email address <span className="text-muted-foreground">(optional)</span>
+                  </Label>
+
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    maxLength={254}
+                    value={form.email}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        email: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="message">What can we help with?</Label>
+
+                  <Textarea
+                    id="message"
+                    name="message"
+                    required
+                    rows={4}
+                    minLength={10}
+                    maxLength={3000}
+                    placeholder="Describe the service, project or business challenge, including the location and preferred timeline where relevant."
+                    value={form.message}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        message: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={submitState === "sending"}
+                className="mt-5 w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {submitState === "sending" ? "Recording your request…" : "Send quote request"}
+
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+
+              {submitState === "sent" && (
+                <p role="status" className="mt-3 text-sm text-emerald-500">
+                  Thank you. Your request has been recorded and added to our customer follow-up
+                  system. Call {phoneNumber} for urgent assistance.
+                </p>
+              )}
+
+              {submitState === "error" && (
+                <p role="alert" className="mt-3 text-sm text-destructive">
+                  {submitError ??
+                    `We could not complete your request. Please call ${phoneNumber}, WhatsApp us, or email cossa@cossanexusholdings.co.za.`}
+                </p>
+              )}
+            </form>
           </div>
         </div>
       </section>
 
-      <section
-        id="solutions"
-        className="border-y border-border/60 bg-card/30 px-4 py-10 md:py-14"
-      >
+      <section id="solutions" className="border-y border-border/60 bg-card/30 px-4 py-10 md:py-14">
         <div className="mx-auto max-w-6xl">
           <h2 className="font-display text-3xl font-semibold">
-            A practical answer to the work that slows growth
+            Built for the work behind sustainable growth
           </h2>
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
@@ -562,13 +529,9 @@ function GrowthHome() {
               >
                 <item.icon className="h-6 w-6 text-primary" />
 
-                <h3 className="mt-3 text-lg font-semibold">
-                  {item.title}
-                </h3>
+                <h3 className="mt-3 text-lg font-semibold">{item.title}</h3>
 
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {item.text}
-                </p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.text}</p>
               </article>
             ))}
           </div>
@@ -579,28 +542,24 @@ function GrowthHome() {
         <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-2">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              Built for businesses that want better control
+              Start with the customer need
             </p>
 
             <h2 className="mt-3 font-display text-3xl font-semibold">
-              One clear place to capture opportunities and take the
-              next right step.
+              Build the right response around it.
             </h2>
 
             <p className="mt-3 text-muted-foreground">
-              Whether you need help with customer growth,
-              construction, facility services, technology or an
-              online store, Cossa starts with the problem you need
-              solved — not a one-size-fits-all pitch.
+              Whether you need help with customer growth, construction, facility services,
+              technology or an online store, Cossa starts with the problem you need solved and
+              brings the right people and information to the next step.
             </p>
           </div>
 
           <div className="rounded-xl border border-primary/25 bg-primary/5 p-6">
             <ShieldCheck className="h-6 w-6 text-primary" />
 
-            <h3 className="mt-3 font-semibold">
-              Controlled by people, not hype
-            </h3>
+            <h3 className="mt-3 font-semibold">Built with accountable control</h3>
 
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
               {[

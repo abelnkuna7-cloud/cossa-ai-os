@@ -207,16 +207,16 @@ export function PublicSiteShell({ children }: PublicSiteShellProps) {
         <div className="mx-auto grid max-w-7xl gap-6 rounded-2xl border border-primary/25 bg-primary/5 p-6 md:grid-cols-[1fr_auto] md:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              Ready to discuss your project?
+              Speak with a Cossa specialist
             </p>
 
             <h2 className="mt-2 font-display text-2xl font-semibold">
-              Speak with Cossa about the service or business result you need.
+              Start with the problem you need solved.
             </h2>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Call, WhatsApp, email or use the Cossa Receptionist. Your enquiry will be recorded in
-              our customer follow-up system.
+              Tell us what you need, where it is needed and when it matters. Cossa will record your
+              enquiry for appropriate follow-up.
             </p>
           </div>
 
@@ -252,15 +252,15 @@ export function PublicSiteShell({ children }: PublicSiteShellProps) {
       </section>
 
       <footer className="border-t border-border/60 px-4 py-10 text-sm text-muted-foreground">
-        <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 lg:grid-cols-5">
+        <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 lg:grid-cols-[1.25fr_0.95fr_1fr_1fr_1.4fr]">
           <div>
             <Link to="/" className="inline-flex items-center gap-2">
               <GrowthProductBrand />
             </Link>
 
             <p className="mt-4 max-w-sm text-xs leading-5">
-              GROWTH gives growing businesses a clearer way to capture leads, strengthen follow-up,
-              improve marketing and organise operations.
+              GROWTH provides a clearer way to capture customer needs, strengthen follow-up and
+              organise the work that supports sustainable growth.
             </p>
 
             <ParentBrandEndorsement className="mt-4" />
@@ -361,16 +361,18 @@ export function PublicSiteShell({ children }: PublicSiteShellProps) {
               Follow Cossa
             </h2>
 
-            <div className="mt-3 grid gap-2 text-xs">
+            <div className="mt-3 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               {COSSA_SOCIAL_PROFILES.filter((profile) => profile.url).map((profile) => (
                 <a
                   key={profile.id}
                   href={profile.url!}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 break-all hover:text-primary"
+                  className="inline-flex min-w-0 items-center gap-1 hover:text-primary"
                 >
-                  {profile.platform}: {profile.handle}
+                  <span className="truncate">
+                    {profile.platform}: {profile.handle}
+                  </span>
                   <ExternalLink className="h-3 w-3 shrink-0" />
                 </a>
               ))}
