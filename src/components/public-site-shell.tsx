@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { GrowthProductBrand, ParentBrandEndorsement } from "@/components/brand/growth-brand";
 import { CossaReceptionist } from "@/components/cossa-receptionist";
 import { GROWTH_BRAND } from "@/lib/brand";
-import { COSSA_SOCIAL_PROFILES } from "@/lib/cossa-marketing-profile";
 
 const phoneNumber = "067 801 1907";
 const phoneHref = "tel:+27678011907";
@@ -252,7 +251,7 @@ export function PublicSiteShell({ children }: PublicSiteShellProps) {
       </section>
 
       <footer className="border-t border-border/60 px-4 py-10 text-sm text-muted-foreground">
-        <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 lg:grid-cols-[1.25fr_0.95fr_1fr_1fr_1.4fr]">
+        <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2 lg:grid-cols-[1.25fr_0.95fr_1fr_1fr]">
           <div>
             <Link to="/" className="inline-flex items-center gap-2">
               <GrowthProductBrand />
@@ -353,29 +352,6 @@ export function PublicSiteShell({ children }: PublicSiteShellProps) {
                 <Mail className="h-3.5 w-3.5 shrink-0" />
                 cossa@cossanexusholdings.co.za
               </a>
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-foreground">
-              Follow Cossa
-            </h2>
-
-            <div className="mt-3 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              {COSSA_SOCIAL_PROFILES.filter((profile) => profile.url).map((profile) => (
-                <a
-                  key={profile.id}
-                  href={profile.url!}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex min-w-0 items-center gap-1 hover:text-primary"
-                >
-                  <span className="truncate">
-                    {profile.platform}: {profile.handle}
-                  </span>
-                  <ExternalLink className="h-3 w-3 shrink-0" />
-                </a>
-              ))}
             </div>
           </div>
         </div>
