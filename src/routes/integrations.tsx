@@ -135,7 +135,7 @@ const cossaSources: CossaSource[] = [
   {
     name: "Website Watch",
     description:
-      "A controlled, read-only homepage health check for the official Cossa website. It identifies only live availability, response time, title and noindex signals.",
+      "A controlled, read-only homepage health check for the GROWTH website. It identifies only live availability, response time, title and noindex signals.",
     status: "Production",
     to: "/marketing/monitoring",
     icon: Activity,

@@ -63,7 +63,7 @@ const ROUTE_OVERRIDES: Record<string, Partial<CapabilityDefinition>> = {
     evidence: "It is not yet an independent long-term memory engine for every worker.",
   },
   "/marketing/monitoring": {
-    summary: "Website Watch performs a read-only health check of the official Cossa homepage.",
+    summary: "Website Watch performs a read-only health check of the GROWTH homepage.",
     evidence:
       "It reports availability, response time, title and noindex signals only; it is not analytics, SEO ranking, security or social monitoring.",
   },

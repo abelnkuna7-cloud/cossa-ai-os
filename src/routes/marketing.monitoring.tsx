@@ -14,7 +14,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
-import { getGrowthAnalyticsReport, startGrowthAnalyticsOAuth } from "@/lib/growth-analytics";
+import {
+  getGrowthAnalyticsReport,
+  GrowthAnalyticsError,
+  startGrowthAnalyticsOAuth,
+} from "@/lib/growth-analytics";
 import { checkOfficialWebsite } from "@/lib/website-health";
 import { cn } from "@/lib/utils";
 import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
@@ -52,6 +56,12 @@ function WebsiteMonitoring() {
   });
   const report = websiteCheck.data;
   const analytics = analyticsCheck.data;
+  const analyticsError = analyticsConnection.error ?? analyticsCheck.error;
+  const analyticsConfigurationPending =
+    analyticsError instanceof GrowthAnalyticsError &&
+    analyticsError.code === "configuration-pending";
+  const analyticsApprovalRequired =
+    analyticsError instanceof GrowthAnalyticsError && analyticsError.code === "approval-required";
   const isChecking = websiteCheck.isFetching;
   const isHealthy = report?.availability === "healthy";
   const isUnavailable = report?.availability === "unavailable";
@@ -128,7 +138,7 @@ function WebsiteMonitoring() {
             <Button
               type="button"
               onClick={() => analyticsConnection.mutate()}
-              disabled={analyticsConnection.isPending}
+              disabled={analyticsConnection.isPending || analyticsConfigurationPending}
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {analyticsConnection.isPending ? (
@@ -136,7 +146,7 @@ function WebsiteMonitoring() {
               ) : (
                 <ShieldCheck className="mr-1.5 h-4 w-4" />
               )}
-              Connect Google Analytics
+              {analyticsConfigurationPending ? "Secure setup pending" : "Connect Google Analytics"}
             </Button>
             <Button
               type="button"
@@ -155,7 +165,31 @@ function WebsiteMonitoring() {
           </div>
         </div>
 
-        {analyticsConnection.isError ? (
+        {analyticsConfigurationPending ? (
+          <div className="mt-5 flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/10 p-4 text-sm">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div>
+              <p className="font-medium text-foreground">
+                Secure Google Analytics setup is pending
+              </p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                No Analytics data has been accessed. A Cossa owner must finish the protected server
+                configuration and redeploy GROWTH before Google approval can begin.
+              </p>
+            </div>
+          </div>
+        ) : analyticsApprovalRequired ? (
+          <div className="mt-5 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-medium">Google approval is still required</p>
+              <p className="mt-1 text-xs leading-5">
+                A Cossa owner or admin can select Connect Google Analytics to start the read-only
+                approval flow.
+              </p>
+            </div>
+          </div>
+        ) : analyticsConnection.isError ? (
           <div className="mt-5 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <p className="text-xs leading-5">
@@ -166,7 +200,8 @@ function WebsiteMonitoring() {
           </div>
         ) : null}
 
-        {analyticsCheck.isError ? (
+        {analyticsConfigurationPending ||
+        analyticsApprovalRequired ? null : analyticsCheck.isError ? (
           <div className="mt-5 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>

@@ -29,6 +29,54 @@ interface GrowthAnalyticsOAuthStart {
   authorization_url: string;
 }
 
+export type GrowthAnalyticsErrorCode =
+  | "approval-required"
+  | "configuration-pending"
+  | "request-failed";
+
+export class GrowthAnalyticsError extends Error {
+  constructor(
+    public readonly code: GrowthAnalyticsErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "GrowthAnalyticsError";
+  }
+}
+
+function readAnalyticsError(
+  payload: { error?: string } | null,
+  status: number,
+): GrowthAnalyticsError {
+  const serverError = payload?.error || "";
+
+  if (status === 503 && serverError.includes("awaiting protected client settings")) {
+    return new GrowthAnalyticsError(
+      "configuration-pending",
+      "Secure Google Analytics setup is pending.",
+    );
+  }
+
+  if (status === 409 && serverError.includes("needs owner approval")) {
+    return new GrowthAnalyticsError(
+      "approval-required",
+      "Google Analytics is awaiting owner approval.",
+    );
+  }
+
+  if (status === 403) {
+    return new GrowthAnalyticsError(
+      "request-failed",
+      "Your Cossa role is not authorised to use Google Analytics reporting.",
+    );
+  }
+
+  return new GrowthAnalyticsError(
+    "request-failed",
+    "Google Analytics could not complete the request. No settings or reporting data were changed.",
+  );
+}
+
 async function getAuthenticatedGrowthAnalyticsResponse(
   path: string,
   init: RequestInit = {},
@@ -59,11 +107,7 @@ export async function getGrowthAnalyticsReport(): Promise<GrowthAnalyticsReport>
     | null;
 
   if (!response.ok) {
-    throw new Error(
-      payload && "error" in payload && payload.error
-        ? payload.error
-        : `Google Analytics reporting failed (${response.status})`,
-    );
+    throw readAnalyticsError(payload && "error" in payload ? payload : null, response.status);
   }
 
   return payload as GrowthAnalyticsReport;
@@ -80,11 +124,7 @@ export async function startGrowthAnalyticsOAuth(): Promise<string> {
     | null;
 
   if (!response.ok || !payload || !("authorization_url" in payload)) {
-    throw new Error(
-      payload && "error" in payload && payload.error
-        ? payload.error
-        : `Google Analytics connection could not start (${response.status})`,
-    );
+    throw readAnalyticsError(payload && "error" in payload ? payload : null, response.status);
   }
 
   return payload.authorization_url;
