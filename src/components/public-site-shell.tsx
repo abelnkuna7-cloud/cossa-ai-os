@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   ArrowRight,
   Building2,
@@ -12,8 +12,6 @@ import {
   Phone,
   X,
 } from "lucide-react";
-import { useState } from "react";
-
 import { Button } from "@/components/ui/button";
 import { GrowthProductBrand, ParentBrandEndorsement } from "@/components/brand/growth-brand";
 import { CossaReceptionist } from "@/components/cossa-receptionist";
@@ -27,6 +25,7 @@ const emailHref = "mailto:cossa@cossanexusholdings.co.za";
 const mainWebsiteHref = "https://cossanexusholdings.co.za";
 
 const nexDocsHref = "https://nexdocs.cossanexusholdings.co.za";
+const cookiePreferenceKey = "cossa-growth-cookie-preference";
 
 interface PublicSiteShellProps {
   children: ReactNode;
@@ -47,6 +46,61 @@ const publicNavigation = [
     href: "/#quote-request",
   },
 ];
+
+type CookiePreference = "essential" | "acknowledged";
+
+function CookiePreferenceNotice() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    setIsVisible(window.localStorage.getItem(cookiePreferenceKey) === null);
+  }, []);
+
+  function savePreference(preference: CookiePreference) {
+    window.localStorage.setItem(cookiePreferenceKey, preference);
+    setIsVisible(false);
+  }
+
+  if (!isVisible) {
+    return null;
+  }
+
+  return (
+    <aside
+      role="region"
+      aria-label="Cookie preference"
+      className="fixed bottom-4 left-4 z-50 w-[calc(100%-2rem)] max-w-md rounded-2xl border border-primary/30 bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.48)] sm:bottom-6 sm:left-6"
+    >
+      <p className="font-display text-base font-semibold">Your privacy matters</p>
+
+      <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
+        GROWTH currently uses essential browser storage only to remember this choice. This notice
+        does not activate advertising, social-media or analytics tracking.
+      </p>
+
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="border-primary/40 text-primary hover:bg-primary/10"
+          onClick={() => savePreference("essential")}
+        >
+          Essential only
+        </Button>
+
+        <Button
+          type="button"
+          size="sm"
+          className="bg-primary text-primary-foreground hover:bg-primary/90"
+          onClick={() => savePreference("acknowledged")}
+        >
+          Save choice
+        </Button>
+      </div>
+    </aside>
+  );
+}
 
 export function PublicSiteShell({ children, showCallToAction = true }: PublicSiteShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -241,37 +295,114 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
         </section>
       )}
 
-      <footer className="border-t border-border/60 px-4 py-6 text-sm text-muted-foreground">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <Link to="/" className="inline-flex items-center gap-2">
-            <GrowthProductBrand />
-          </Link>
-
-          <p className="max-w-xl text-xs leading-5">
-            Business growth intelligence for business owners, teams and white-label partners.
-          </p>
-
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-            <a href={phoneHref} className="inline-flex items-center gap-1.5 hover:text-primary">
-              <Phone className="h-3.5 w-3.5" />
-              {phoneNumber}
-            </a>
-
-            <a href={emailHref} className="inline-flex items-center gap-1.5 hover:text-primary">
-              <Mail className="h-3.5 w-3.5" />
-              Email Cossa
-            </a>
-
-            <Link to="/login" className="inline-flex items-center gap-1.5 hover:text-primary">
-              <LockKeyhole className="h-3.5 w-3.5" />
-              Workspace
+      <footer className="border-t border-border/60 bg-card/20 px-4 py-10 text-sm text-muted-foreground">
+        <div className="mx-auto grid max-w-7xl gap-8 sm:grid-cols-2 xl:grid-cols-[1.25fr_0.9fr_0.9fr_0.9fr]">
+          <div>
+            <Link to="/" className="inline-flex items-center gap-2" aria-label="GROWTH home">
+              <GrowthProductBrand />
             </Link>
+
+            <p className="mt-4 max-w-xs text-sm leading-6">
+              Business growth intelligence for business owners, teams and white-label partners.
+            </p>
+
+            <div className="mt-5">
+              <ParentBrandEndorsement />
+            </div>
           </div>
+
+          <nav aria-label="GROWTH information">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">
+              GROWTH for business
+            </h2>
+
+            <div className="mt-4 grid gap-3 text-sm">
+              <a href="/#contact" className="w-fit hover:text-primary">
+                For business owners
+              </a>
+
+              <a href={emailHref} className="w-fit hover:text-primary">
+                White-label partnerships
+              </a>
+
+              <a href="/#quote-request" className="w-fit hover:text-primary">
+                Start a conversation
+              </a>
+            </div>
+          </nav>
+
+          <nav aria-label="Cossa platforms">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">
+              Cossa platforms
+            </h2>
+
+            <div className="mt-4 grid gap-3 text-sm">
+              <a
+                href={mainWebsiteHref}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex w-fit items-center gap-1.5 hover:text-primary"
+              >
+                Cossa Nexus Holdings
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+
+              <a
+                href={nexDocsHref}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex w-fit items-center gap-1.5 hover:text-primary"
+              >
+                NexDocs
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+
+              <Link
+                to="/login"
+                className="inline-flex w-fit items-center gap-1.5 hover:text-primary"
+              >
+                <LockKeyhole className="h-3.5 w-3.5" />
+                GROWTH Workspace
+              </Link>
+            </div>
+          </nav>
+
+          <address className="not-italic">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">
+              Contact Cossa
+            </h2>
+
+            <div className="mt-4 grid gap-3 text-sm">
+              <a
+                href={phoneHref}
+                className="inline-flex w-fit items-center gap-2 hover:text-primary"
+              >
+                <Phone className="h-4 w-4" />
+                {phoneNumber}
+              </a>
+
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex w-fit items-center gap-2 hover:text-primary"
+              >
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp Cossa
+              </a>
+
+              <a
+                href={emailHref}
+                className="inline-flex w-fit items-center gap-2 hover:text-primary"
+              >
+                <Mail className="h-4 w-4" />
+                cossa@cossanexusholdings.co.za
+              </a>
+            </div>
+          </address>
         </div>
 
-        <div className="mx-auto mt-5 flex max-w-7xl flex-col justify-between gap-3 border-t border-border/60 pt-4 text-xs md:flex-row md:items-center">
-          <ParentBrandEndorsement />
-
+        <div className="mx-auto mt-10 flex max-w-7xl flex-col justify-between gap-3 border-t border-border/60 pt-5 text-xs md:flex-row md:items-center">
           <span>
             © {new Date().getFullYear()} Cossa Nexus Holdings (Pty) Ltd. All rights reserved.
           </span>
@@ -280,6 +411,7 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
         </div>
       </footer>
 
+      <CookiePreferenceNotice />
       <CossaReceptionist />
     </div>
   );

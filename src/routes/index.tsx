@@ -241,11 +241,14 @@ function GrowthHome() {
         }}
       />
 
-      <section id="contact" className="relative overflow-hidden px-4 py-8 md:py-10">
+      <section
+        id="contact"
+        className="relative flex min-h-[calc(100dvh-4rem)] items-center overflow-hidden px-4 py-8 md:py-10"
+      >
         <div className="pointer-events-none absolute -left-32 top-8 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
         <div className="pointer-events-none absolute right-0 top-0 hidden h-full w-[42%] bg-[radial-gradient(ellipse_at_top_right,rgba(217,177,36,0.12),transparent_70%)] lg:block" />
 
-        <div className="relative mx-auto grid max-w-6xl items-start gap-8 lg:grid-cols-[1.08fr_0.92fr]">
+        <div className="relative mx-auto grid w-full max-w-6xl items-start gap-8 lg:grid-cols-[1.08fr_0.92fr]">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
               Business Growth Intelligence for ambitious teams
