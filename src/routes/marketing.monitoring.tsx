@@ -21,11 +21,11 @@ export const Route = createFileRoute("/marketing/monitoring")({
   component: WebsiteMonitoring,
   head: () => ({
     meta: [
-      { title: "Website Watch — Cossa AI" },
+      { title: "Website Watch — GROWTH" },
       {
         name: "description",
         content:
-          "A controlled health check for the official Cossa Nexus Holdings website, with no website changes or publishing.",
+          "A controlled health check for the public GROWTH website, with no website changes or publishing.",
       },
     ],
   }),
@@ -60,9 +60,9 @@ function WebsiteMonitoring() {
             </h1>
             <p className="mt-2 max-w-3xl text-muted-foreground">
               A direct, read-only check of{" "}
-              <span className="font-medium text-foreground">cossanexusholdings.co.za</span>. It
-              checks the public homepage without editing it, publishing content or claiming a full
-              SEO audit.
+              <span className="font-medium text-foreground">growth.cossanexusholdings.co.za</span>.
+              It checks the public homepage without editing it, publishing content or claiming a
+              full SEO audit.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -77,15 +77,15 @@ function WebsiteMonitoring() {
               ) : (
                 <RefreshCw className="mr-1.5 h-4 w-4" />
               )}
-              {isChecking ? "Checking official website..." : "Run website check"}
+              {isChecking ? "Checking GROWTH..." : "Run website check"}
             </Button>
             <Button
               asChild
               variant="outline"
               className="border-primary/40 text-primary hover:bg-primary/10"
             >
-              <a href="https://cossanexusholdings.co.za" target="_blank" rel="noreferrer">
-                Open official website <ExternalLink className="ml-1.5 h-4 w-4" />
+              <a href="https://growth.cossanexusholdings.co.za" target="_blank" rel="noreferrer">
+                Open GROWTH website <ExternalLink className="ml-1.5 h-4 w-4" />
               </a>
             </Button>
           </div>
@@ -99,7 +99,7 @@ function WebsiteMonitoring() {
               <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
                 Verified check result
               </p>
-              <h2 className="mt-1 font-display text-xl font-semibold">Official homepage health</h2>
+              <h2 className="mt-1 font-display text-xl font-semibold">GROWTH homepage health</h2>
             </div>
             {report ? (
               <span

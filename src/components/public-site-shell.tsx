@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { GrowthProductBrand, ParentBrandEndorsement } from "@/components/brand/growth-brand";
 import { CossaReceptionist } from "@/components/cossa-receptionist";
 import { GROWTH_BRAND } from "@/lib/brand";
+import {
+  GROWTH_COOKIE_PREFERENCES_EVENT,
+  getGrowthMeasurementPreference,
+  openGrowthCookiePreferences,
+  saveGrowthMeasurementPreference,
+  type GrowthMeasurementPreference,
+} from "@/lib/growth-measurement";
 
 const phoneNumber = "067 801 1907";
 const phoneHref = "tel:+27678011907";
@@ -25,7 +32,6 @@ const emailHref = "mailto:cossa@cossanexusholdings.co.za";
 const mainWebsiteHref = "https://cossanexusholdings.co.za";
 
 const nexDocsHref = "https://nexdocs.cossanexusholdings.co.za";
-const cookiePreferenceKey = "cossa-growth-cookie-preference";
 
 interface PublicSiteShellProps {
   children: ReactNode;
@@ -47,17 +53,22 @@ const publicNavigation = [
   },
 ];
 
-type CookiePreference = "essential" | "acknowledged";
-
 function CookiePreferenceNotice() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    setIsVisible(window.localStorage.getItem(cookiePreferenceKey) === null);
+    const showCookiePreferences = () => setIsVisible(true);
+
+    setIsVisible(getGrowthMeasurementPreference() === null);
+    window.addEventListener(GROWTH_COOKIE_PREFERENCES_EVENT, showCookiePreferences);
+
+    return () => {
+      window.removeEventListener(GROWTH_COOKIE_PREFERENCES_EVENT, showCookiePreferences);
+    };
   }, []);
 
-  function savePreference(preference: CookiePreference) {
-    window.localStorage.setItem(cookiePreferenceKey, preference);
+  function savePreference(preference: GrowthMeasurementPreference) {
+    saveGrowthMeasurementPreference(preference);
     setIsVisible(false);
   }
 
@@ -74,8 +85,9 @@ function CookiePreferenceNotice() {
       <p className="font-display text-base font-semibold">Your privacy matters</p>
 
       <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
-        GROWTH currently uses essential browser storage only to remember this choice. This notice
-        does not activate advertising, social-media or analytics tracking.
+        GROWTH uses essential browser storage to remember this choice. If you allow anonymous
+        measurement, the approved Google Tag Manager container can measure website use. It does not
+        connect your social accounts or send Cossa your private messages.
       </p>
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
@@ -93,9 +105,9 @@ function CookiePreferenceNotice() {
           type="button"
           size="sm"
           className="bg-primary text-primary-foreground hover:bg-primary/90"
-          onClick={() => savePreference("acknowledged")}
+          onClick={() => savePreference("measurement")}
         >
-          Save choice
+          Allow anonymous measurement
         </Button>
       </div>
     </aside>
@@ -408,6 +420,14 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
           </span>
 
           <span>{GROWTH_BRAND.brandPromise}</span>
+
+          <button
+            type="button"
+            onClick={openGrowthCookiePreferences}
+            className="w-fit text-left hover:text-primary"
+          >
+            Cookie preferences
+          </button>
         </div>
       </footer>
 

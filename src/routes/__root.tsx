@@ -8,12 +8,16 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { AppShell } from "@/components/app-shell";
 import { AuthGate } from "@/components/auth-gate";
 import { GROWTH_BRAND } from "@/lib/brand";
+import {
+  GROWTH_MEASUREMENT_CHANGE_EVENT,
+  hasGrowthMeasurementConsent,
+} from "@/lib/growth-measurement";
 
 const PUBLIC_ROUTES = new Set([
   "/",
@@ -41,13 +45,9 @@ function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-gradient-gold font-display">
-          404
-        </h1>
+        <h1 className="text-7xl font-bold text-gradient-gold font-display">404</h1>
 
-        <h2 className="mt-4 text-xl font-semibold text-foreground">
-          Page not found
-        </h2>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
 
         <p className="mt-2 text-sm text-muted-foreground">
           The page you requested could not be found in the GROWTH workspace.
@@ -66,13 +66,7 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({
-  error,
-  reset,
-}: {
-  error: Error;
-  reset: () => void;
-}) {
+function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error("GROWTH route error:", error);
 
   const router = useRouter();
@@ -90,8 +84,8 @@ function ErrorComponent({
         </h1>
 
         <p className="mt-2 text-sm text-muted-foreground">
-          We could not load this part of the GROWTH workspace. Please try
-          again or return to the Command Centre.
+          We could not load this part of the GROWTH workspace. Please try again or return to the
+          Command Centre.
         </p>
 
         <div className="mt-6 flex flex-wrap justify-center gap-2">
@@ -201,10 +195,25 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function GoogleTagManager() {
+  const [measurementEnabled, setMeasurementEnabled] = useState(false);
+
+  useEffect(() => {
+    const refreshMeasurementConsent = () => {
+      setMeasurementEnabled(hasGrowthMeasurementConsent());
+    };
+
+    refreshMeasurementConsent();
+    window.addEventListener(GROWTH_MEASUREMENT_CHANGE_EVENT, refreshMeasurementConsent);
+
+    return () => {
+      window.removeEventListener(GROWTH_MEASUREMENT_CHANGE_EVENT, refreshMeasurementConsent);
+    };
+  }, []);
+
   useEffect(() => {
     const containerId = import.meta.env.VITE_GTM_CONTAINER_ID?.trim();
 
-    if (!containerId) {
+    if (!containerId || !measurementEnabled) {
       return;
     }
 
@@ -227,9 +236,7 @@ function GoogleTagManager() {
 
     script.id = "cossa-gtm";
     script.async = true;
-    script.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(
-      containerId,
-    )}`;
+    script.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(containerId)}`;
 
     script.onerror = () => {
       console.warn("Google Tag Manager failed to load.");
@@ -240,7 +247,7 @@ function GoogleTagManager() {
     return () => {
       script.onerror = null;
     };
-  }, []);
+  }, [measurementEnabled]);
 
   return null;
 }

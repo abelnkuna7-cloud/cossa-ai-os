@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
-const OFFICIAL_WEBSITE_URL = "https://cossanexusholdings.co.za";
+const OFFICIAL_WEBSITE_URL = "https://growth.cossanexusholdings.co.za";
 const WEBSITE_CHECK_TIMEOUT_MS = 12_000;
 const MAX_HTML_BYTES = 160_000;
 
@@ -208,7 +208,8 @@ export const Route = createFileRoute("/api/website-health")({
             redirect: "follow",
             signal: controller.signal,
             headers: {
-              "User-Agent": "Cossa-Website-Watch/1.0 (+https://cossanexusholdings.co.za)",
+              "User-Agent":
+                "Cossa-Growth-Website-Watch/1.0 (+https://growth.cossanexusholdings.co.za)",
               Accept: "text/html,application/xhtml+xml",
             },
           });
@@ -227,10 +228,14 @@ export const Route = createFileRoute("/api/website-health")({
             issues.push("A page title could not be detected in the homepage response.");
           }
           if (noindexDetected) {
-            issues.push("The homepage response indicates noindex, which can prevent search indexing.");
+            issues.push(
+              "The homepage response indicates noindex, which can prevent search indexing.",
+            );
           }
           if (response.ok && responseTime > 5_000) {
-            issues.push(`Homepage response was slow (${(responseTime / 1_000).toFixed(1)} seconds).`);
+            issues.push(
+              `Homepage response was slow (${(responseTime / 1_000).toFixed(1)} seconds).`,
+            );
           }
 
           return responseJson({

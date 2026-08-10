@@ -14,6 +14,7 @@ import {
 import { PublicSiteShell } from "@/components/public-site-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { GROWTH_BRAND } from "@/lib/brand";
+import { trackGrowthMeasurementEvent } from "@/lib/growth-measurement";
 
 const phoneNumber = "067 801 1907";
 const phoneHref = "tel:+27678011907";
@@ -230,6 +231,9 @@ function GrowthHome() {
 
     setForm(initialFormState);
     setSubmitState("sent");
+    trackGrowthMeasurementEvent("growth_quote_request_submitted", {
+      source: "growth_website",
+    });
   }
 
   return (
@@ -265,14 +269,32 @@ function GrowthHome() {
             </p>
 
             <div className="mt-7 flex max-w-xl flex-col gap-3 sm:flex-row">
-              <a href={phoneHref}>
+              <a
+                href={phoneHref}
+                onClick={() =>
+                  trackGrowthMeasurementEvent("growth_contact_click", {
+                    method: "phone",
+                    placement: "hero",
+                  })
+                }
+              >
                 <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 sm:min-w-52">
                   <Phone className="mr-2 h-4 w-4" />
                   Talk to Cossa
                 </Button>
               </a>
 
-              <a href={whatsappHref} target="_blank" rel="noreferrer">
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() =>
+                  trackGrowthMeasurementEvent("growth_contact_click", {
+                    method: "whatsapp",
+                    placement: "hero",
+                  })
+                }
+              >
                 <Button
                   variant="outline"
                   className="w-full border-primary/40 text-primary hover:bg-primary/10 sm:min-w-52"
@@ -285,6 +307,12 @@ function GrowthHome() {
 
             <a
               href={emailHref}
+              onClick={() =>
+                trackGrowthMeasurementEvent("growth_contact_click", {
+                  method: "email",
+                  placement: "hero",
+                })
+              }
               className="mt-4 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
             >
               <Mail className="h-4 w-4" />
