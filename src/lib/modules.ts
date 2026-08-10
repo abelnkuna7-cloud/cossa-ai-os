@@ -67,6 +67,7 @@ import {
   Trophy,
   type LucideIcon,
 } from "lucide-react";
+import { capabilityForRoute } from "@/lib/capability-matrix";
 
 export type ModuleStatus =
   | "Planning"
@@ -97,36 +98,40 @@ const s = (
   title: string,
   to: string,
   icon: LucideIcon,
-  status: ModuleStatus,
-  tagline: string,
-  description: string,
-  value: string,
-  benefits: string[],
+  _status: ModuleStatus,
+  _tagline: string,
+  _description: string,
+  _value: string,
+  _benefits: string[],
   roadmap: string[],
 ): ModuleItem => {
-  // A screen existing is not the same as a production integration existing.
-  // Keep the navigation honest until each module has data, authorization,
-  // evidence/audit logging and an end-to-end production test.
-  const foundationRoutes = new Set([
-    "/command-center",
-    "/ai/cossa",
-    "/sales/leads",
-    "/sales/customers",
-    "/sales/appointments",
-    "/sales/quotations",
-    "/operations/projects",
-    "/operations/tasks",
-  ]);
+  /*
+   * A menu route is not evidence that its advertised integration exists. The
+   * capability matrix supplies one factual status and description for every
+   * route, including the metadata used by these pages.
+   */
+  const capability = capabilityForRoute(to);
+  const resolvedStatus: ModuleStatus =
+    capability.state === "live-data"
+      ? "Live"
+      : capability.state === "not-connected"
+        ? "Planning"
+        : "Testing";
 
   return {
     title,
     to,
     icon,
-    status: status === "Live" ? (foundationRoutes.has(to) ? "Testing" : "Development") : status,
-    tagline,
-    description,
-    value,
-    benefits,
+    status: resolvedStatus,
+    tagline: capability.label,
+    description: `${capability.summary} ${capability.evidence}`,
+    value:
+      capability.state === "live-data"
+        ? "Work from Cossa records currently available in this workspace."
+        : capability.state === "controlled-plan"
+          ? "Create a reviewable plan while external actions remain disabled."
+          : "Prepare internal guidance that remains subject to human review.",
+    benefits: [capability.summary, capability.evidence],
     roadmap,
   };
 };

@@ -905,6 +905,51 @@ function extractOpenAiResponseText(response: unknown): string {
     .trim();
 }
 
+interface ProviderErrorBody {
+  error?: {
+    code?: string | null;
+    type?: string | null;
+    message?: string | null;
+  };
+}
+
+/**
+ * Provider error bodies are useful in protected logs, but should not be shown
+ * verbatim to the browser. Return a clear owner action without exposing a
+ * provider payload, credential detail or implementation trace.
+ */
+function safeProviderFailure(provider: ChatProvider, status: number, errorText: string): string {
+  let body: ProviderErrorBody | null = null;
+
+  try {
+    body = JSON.parse(errorText) as ProviderErrorBody;
+  } catch {
+    // Non-JSON provider errors are intentionally not sent back to the browser.
+  }
+
+  const code = body?.error?.code?.toLowerCase() ?? "";
+  const type = body?.error?.type?.toLowerCase() ?? "";
+
+  if (
+    provider === "openai" &&
+    (code === "credit_balance_exhausted" ||
+      code === "insufficient_quota" ||
+      type === "insufficient_quota")
+  ) {
+    return "OpenAI API credit is exhausted for this project. Add credit at https://platform.openai.com/settings/organization/billing/ and then retry. Economy (Groq) remains available only when it is configured and has its own available usage.";
+  }
+
+  if (status === 429) {
+    return `${provider === "openai" ? "OpenAI" : "Groq"} is temporarily rate-limiting this request. Wait briefly, then try again.`;
+  }
+
+  if (status === 401 || status === 403) {
+    return `${provider === "openai" ? "OpenAI" : "Groq"} could not authorise this Cossa AI request. Ask an owner to review the protected server provider setting.`;
+  }
+
+  return `${provider === "openai" ? "OpenAI" : "Groq"} could not complete this Cossa AI request. No Cossa record was changed; please retry or ask an owner to review the provider connection.`;
+}
+
 function chatResponseHeaders(provider: ChatProvider): HeadersInit {
   return {
     "Content-Type": "text/plain; charset=utf-8",
@@ -1101,7 +1146,7 @@ export const Route = createFileRoute("/api/chat")({
                 ? openAiResponse.status
                 : 502;
 
-            return new Response(errorText || "Cossa AI provider error.", {
+            return new Response(safeProviderFailure("openai", openAiResponse.status, errorText), {
               status: responseStatus,
             });
           }
@@ -1141,7 +1186,7 @@ export const Route = createFileRoute("/api/chat")({
           const responseStatus =
             groqResponse.status === 402 || groqResponse.status === 429 ? groqResponse.status : 502;
 
-          return new Response(errorText || "Cossa AI gateway error.", {
+          return new Response(safeProviderFailure("groq", groqResponse.status, errorText), {
             status: responseStatus,
           });
         }

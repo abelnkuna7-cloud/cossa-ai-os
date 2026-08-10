@@ -27,7 +27,12 @@ import {
   type OpenAiConnectionCheck,
 } from "@/lib/ai-provider-status";
 import { COSSA_SOCIAL_PROFILES } from "@/lib/cossa-marketing-profile";
-import type { ModuleStatus } from "@/lib/modules";
+import {
+  CAPABILITY_STATE_LABELS,
+  EXTERNAL_CAPABILITY_GAPS,
+  capabilityForRoute,
+} from "@/lib/capability-matrix";
+import { MODULES, type ModuleStatus } from "@/lib/modules";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/integrations")({
@@ -70,7 +75,7 @@ interface Integration {
   activation: string;
   safeguards: string[];
   connectionLabel?: string;
-  connectionState?: "checking" | "configured" | "not-connected" | "error";
+  connectionState?: "checking" | "credential-configured" | "not-connected" | "error";
 }
 
 const cossaSources: CossaSource[] = [
@@ -78,7 +83,7 @@ const cossaSources: CossaSource[] = [
     name: "Cossa AI",
     description:
       "Cossa's AI workspace reads verified Cossa knowledge and authorised operational records. Guidance is reviewed by people before any commercial, legal, financial or customer-facing use.",
-    status: "Live",
+    status: "Testing",
     to: "/ai/cossa",
     icon: BrainCircuit,
   },
@@ -109,8 +114,8 @@ const cossaSources: CossaSource[] = [
   {
     name: "Groq inference",
     description:
-      "Server-side model inference for supported Cossa AI work. Provider credentials stay outside the browser and usage remains credit-conscious.",
-    status: "Live",
+      "The lower-cost Cossa AI route when its protected provider setting has available usage. Provider credentials stay outside the browser.",
+    status: "Testing",
     to: "/ai/cossa",
     icon: BrainCircuit,
   },
@@ -136,12 +141,18 @@ const integrations: Integration[] = [
   {
     name: "OpenAI",
     group: "AI",
-    blurb: "Optional high-reasoning route for Cossa AI. The owner explicitly chooses it; Economy mode remains the lower-cost default.",
+    blurb:
+      "Optional high-reasoning route for Cossa AI. The owner explicitly chooses it; Economy mode remains the lower-cost default.",
     short: "AI",
     activation:
       "The protected server setting is checked from this page after deployment. The credential is never exposed to the browser. Run the owner connection check to verify that the configured OpenAI project can access the selected model; it sends no Cossa data and creates no chat completion.",
-    safeguards: ["Owner-selected usage", "No browser API key", "Human review of output", "Approved data scope"],
-    connectionLabel: "Checking deployment…",
+    safeguards: [
+      "Owner-selected usage",
+      "No browser API key",
+      "Human review of output",
+      "Approved data scope",
+    ],
+    connectionLabel: "Checking protected setting…",
     connectionState: "checking",
   },
   {
@@ -344,6 +355,14 @@ const GROUPS: Group[] = [
   "Marketing",
 ];
 
+const CAPABILITY_MATRIX = MODULES.flatMap((group) =>
+  group.items.map((module) => ({
+    group: group.label,
+    module,
+    capability: capabilityForRoute(module.to),
+  })),
+);
+
 const groupIcons = {
   AI: BrainCircuit,
   Data: Database,
@@ -390,8 +409,8 @@ function Integrations() {
       if (providerStatus.data?.openai.configured) {
         return {
           ...integration,
-          connectionLabel: "Server key configured",
-          connectionState: "configured" as const,
+          connectionLabel: "Key configured — credit unverified",
+          connectionState: "credential-configured" as const,
         };
       }
 
@@ -492,6 +511,8 @@ function Integrations() {
         </div>
       </section>
 
+      <CapabilityMatrix />
+
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -556,6 +577,109 @@ function Integrations() {
         )}
       </section>
     </div>
+  );
+}
+
+function CapabilityMatrix() {
+  const states = ["live-data", "draft-only", "controlled-plan", "not-connected"] as const;
+  const toneFor = (state: (typeof states)[number]) =>
+    state === "live-data"
+      ? "border-success/30 bg-success/10 text-success"
+      : state === "draft-only"
+        ? "border-info/30 bg-info/10 text-info"
+        : state === "controlled-plan"
+          ? "border-primary/30 bg-primary/10 text-primary"
+          : "border-warning/30 bg-warning/10 text-warning";
+
+  return (
+    <section className="glass-card p-5">
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+            Capability matrix
+          </p>
+          <h2 className="mt-1 font-display text-xl font-semibold">
+            What each Cossa workspace can do today
+          </h2>
+        </div>
+        <p className="max-w-xl text-sm text-muted-foreground">
+          This is a factual operating view, not a product promise. A chat screen can prepare a
+          draft; it cannot publish, message customers, spend money or change an external account.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {states.map((state) => {
+          const count =
+            CAPABILITY_MATRIX.filter((entry) => entry.capability.state === state).length +
+            EXTERNAL_CAPABILITY_GAPS.filter((entry) => entry.state === state).length;
+          return (
+            <div key={state} className="rounded-xl border border-border/60 bg-card/40 p-4">
+              <span
+                className={cn(
+                  "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                  toneFor(state),
+                )}
+              >
+                {CAPABILITY_STATE_LABELS[state]}
+              </span>
+              <p className="mt-2 text-2xl font-display font-semibold">{count}</p>
+              <p className="text-xs text-muted-foreground">listed capabilities</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-5 grid gap-3 lg:grid-cols-2">
+        {CAPABILITY_MATRIX.map(({ group, module, capability }) => (
+          <Link
+            key={module.to}
+            to={module.to}
+            className="rounded-xl border border-border/60 bg-card/40 p-4 transition-colors hover:border-primary/40"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  {group}
+                </p>
+                <h3 className="mt-1 text-sm font-semibold">{module.title}</h3>
+              </div>
+              <span
+                className={cn(
+                  "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                  toneFor(capability.state),
+                )}
+              >
+                {capability.label}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">{capability.summary}</p>
+          </Link>
+        ))}
+        {EXTERNAL_CAPABILITY_GAPS.map((gap) => (
+          <article key={gap.name} className="rounded-xl border border-warning/30 bg-warning/5 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  External capability
+                </p>
+                <h3 className="mt-1 text-sm font-semibold">{gap.name}</h3>
+              </div>
+              <span
+                className={cn(
+                  "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                  toneFor(gap.state),
+                )}
+              >
+                {CAPABILITY_STATE_LABELS[gap.state]}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">{gap.scope}</p>
+            <p className="mt-2 text-xs text-warning">Needs: {gap.requirement}</p>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -653,7 +777,7 @@ function IntegrationCard({
 }) {
   const GroupIcon = groupIcons[integration.group];
   const detailsId = `integration-${integration.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-  const connectionReady = integration.connectionState === "configured";
+  const connectionCredentialConfigured = integration.connectionState === "credential-configured";
   const connectionChecking = integration.connectionState === "checking";
   const connectionError = integration.connectionState === "error";
 
@@ -673,16 +797,18 @@ function IntegrationCard({
       </div>
       <p className="text-sm text-muted-foreground">{integration.blurb}</p>
       <div className="mt-auto flex items-center justify-between gap-3">
-        <span className={cn(
-          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]",
-          connectionReady
-            ? "border-info/30 bg-info/10 text-info"
-            : connectionChecking
-              ? "border-border/60 bg-card/40 text-muted-foreground"
-              : connectionError
-                ? "border-destructive/30 bg-destructive/10 text-destructive"
-                : "border-warning/30 bg-warning/10 text-warning",
-        )}>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]",
+            connectionCredentialConfigured
+              ? "border-warning/30 bg-warning/10 text-warning"
+              : connectionChecking
+                ? "border-border/60 bg-card/40 text-muted-foreground"
+                : connectionError
+                  ? "border-destructive/30 bg-destructive/10 text-destructive"
+                  : "border-warning/30 bg-warning/10 text-warning",
+          )}
+        >
           <KeyRound className="h-3 w-3" /> {integration.connectionLabel ?? "Not connected"}
         </span>
         <Button
@@ -720,16 +846,26 @@ function IntegrationCard({
                 disabled={openAiCheck.isChecking}
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                {openAiCheck.isChecking ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <KeyRound className="mr-1.5 h-3.5 w-3.5" />}
-                {openAiCheck.isChecking ? "Checking protected connection…" : "Check OpenAI connection"}
+                {openAiCheck.isChecking ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <KeyRound className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                {openAiCheck.isChecking ? "Checking protected key…" : "Check key and model access"}
               </Button>
               <p className="mt-2 text-[11px] leading-relaxed">
-                This verifies the protected key and model access only. It sends no Cossa information and does not create a paid chat completion.
+                This verifies the protected key and model access only. It sends no Cossa information
+                and does not create a paid chat completion, so it cannot verify available API
+                credit.
               </p>
               {openAiCheck.result?.connected ? (
                 <p className="mt-3 flex items-start gap-2 text-[11px] leading-relaxed text-success">
                   <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>Connected to {openAiCheck.result.model}. {openAiCheck.result.scope}</span>
+                  <span>
+                    Key and model access verified for {openAiCheck.result.model}.{" "}
+                    {openAiCheck.result.scope} Usable API credit is still unverified until a
+                    successful owner-selected Cossa AI response.
+                  </span>
                 </p>
               ) : null}
               {openAiCheck.error ? (

@@ -17,6 +17,8 @@ export const COSSA_ORGANISATION_ID = resolveOrganisationId();
  * all Workforce AI tables.
  */
 const db = supabase as unknown as {
+  // The generated schema types do not yet include the existing workforce tables.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   from: (table: string) => any;
 };
 
@@ -507,6 +509,17 @@ export function listMissionRuns(
   );
 }
 
+export function listWorkforceRuns(organisationId = COSSA_ORGANISATION_ID): Promise<MissionRun[]> {
+  return rows<MissionRun>(
+    "Unable to load workforce runs",
+    db
+      .from("mission_runs")
+      .select("*")
+      .eq("organisation_id", organisationId)
+      .order("created_at", { ascending: false }),
+  );
+}
+
 export function listPendingApprovals(organisationId = COSSA_ORGANISATION_ID): Promise<Approval[]> {
   return rows<Approval>(
     "Unable to load pending approvals",
@@ -594,6 +607,321 @@ export async function queueMission(
   return data as Mission;
 }
 
+export interface ControlledWorkforceRunInput {
+  mission: Pick<Mission, "id" | "objective" | "instruction" | "target_market" | "target_location">;
+  handoff: Pick<
+    EmployeeHandoff,
+    "id" | "mission_id" | "to_employee_id" | "reason" | "context" | "status"
+  >;
+  employee: Pick<AiEmployee, "id" | "employee_key" | "name" | "title">;
+  provider: "groq" | "openai";
+  modelName: string;
+  priorOutputs: string[];
+  authorisedEvidence?: string[];
+}
+
+export interface ControlledReviewableOutput {
+  kind: "reviewable_draft";
+  worker_key: string;
+  worker_name: string;
+  created_at: string;
+  external_actions_enabled: false;
+  source_scope: string[];
+  content: string;
+}
+
+function compactPriorOutputs(outputs: string[]): string[] {
+  return outputs
+    .map((output) => output.trim())
+    .filter(Boolean)
+    .slice(-3)
+    .map((output) => output.slice(0, 4_000));
+}
+
+/**
+ * Starts exactly one internal workforce stage. The UI subsequently calls the
+ * existing authenticated Cossa AI route; no model key is stored or exposed
+ * here, and this function cannot perform an external action.
+ */
+export async function startControlledWorkforceRun(
+  input: ControlledWorkforceRunInput,
+  organisationId = COSSA_ORGANISATION_ID,
+): Promise<MissionRun> {
+  if (input.handoff.status !== "pending") {
+    throw new Error("This handoff is no longer pending and cannot be started again.");
+  }
+
+  if (input.handoff.mission_id !== input.mission.id) {
+    throw new Error("The handoff does not belong to the selected mission.");
+  }
+
+  if (input.handoff.to_employee_id !== input.employee.id) {
+    throw new Error("The selected workforce profile does not own this handoff.");
+  }
+
+  const startedAt = new Date().toISOString();
+  const runInput = {
+    kind: "controlled_workforce_stage",
+    objective: input.mission.objective,
+    instruction: input.mission.instruction,
+    target_market: input.mission.target_market,
+    target_location: input.mission.target_location,
+    handoff_reason: input.handoff.reason,
+    handoff_context: input.handoff.context,
+    prior_reviewable_outputs: compactPriorOutputs(input.priorOutputs),
+    authorised_evidence: (input.authorisedEvidence ?? [])
+      .map((evidence) => evidence.trim())
+      .filter(Boolean)
+      .slice(0, 5)
+      .map((evidence) => evidence.slice(0, 4_000)),
+    external_actions_enabled: false,
+  };
+
+  const { data: run, error: runError } = await db
+    .from("mission_runs")
+    .insert({
+      organisation_id: organisationId,
+      mission_id: input.mission.id,
+      employee_id: input.employee.id,
+      status: "running",
+      model_provider: input.provider,
+      model_name: input.modelName,
+      knowledge_version_ids: [],
+      input: runInput,
+      started_at: startedAt,
+    })
+    .select("*")
+    .single();
+
+  if (runError || !run) {
+    throw createDatabaseError("Unable to start the controlled workforce run", runError);
+  }
+
+  const { data: acceptedHandoff, error: handoffError } = await db
+    .from("employee_handoffs")
+    .update({
+      status: "accepted",
+      run_id: run.id,
+      accepted_at: startedAt,
+    })
+    .eq("id", input.handoff.id)
+    .eq("organisation_id", organisationId)
+    .eq("status", "pending")
+    .select("id")
+    .single();
+
+  if (handoffError || !acceptedHandoff) {
+    await db
+      .from("mission_runs")
+      .update({
+        status: "failed",
+        error_code: "handoff_acceptance_failed",
+        error_message: "The run could not claim its pending handoff.",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", run.id)
+      .eq("organisation_id", organisationId);
+    throw createDatabaseError("Unable to claim the controlled workforce handoff", handoffError);
+  }
+
+  const { error: missionError } = await db
+    .from("missions")
+    .update({ status: "running", updated_at: startedAt })
+    .eq("id", input.mission.id)
+    .eq("organisation_id", organisationId);
+
+  if (missionError) {
+    throw createDatabaseError("Unable to mark the mission as running", missionError);
+  }
+
+  return run as MissionRun;
+}
+
+export async function completeControlledWorkforceRun(
+  input: {
+    run: Pick<MissionRun, "id" | "mission_id">;
+    handoff: Pick<EmployeeHandoff, "id" | "mission_id">;
+    employee: Pick<AiEmployee, "id" | "employee_key" | "name">;
+    content: string;
+  },
+  organisationId = COSSA_ORGANISATION_ID,
+): Promise<{ run: MissionRun; finalStage: boolean; approval: Approval | null }> {
+  const content = requireNonEmptyValue(input.content, "Reviewable workforce output");
+  const completedAt = new Date().toISOString();
+  const output: ControlledReviewableOutput = {
+    kind: "reviewable_draft",
+    worker_key: input.employee.employee_key,
+    worker_name: input.employee.name,
+    created_at: completedAt,
+    external_actions_enabled: false,
+    source_scope: [
+      "verified Cossa Knowledge Base selected by the Cossa AI route when relevant",
+      "authorised operational records selected by the Cossa AI route when relevant",
+      "additional authorised read-only evidence recorded in the mission run input when used",
+      "recorded mission objective and earlier reviewable workforce outputs",
+    ],
+    content,
+  };
+
+  const { data: run, error: runError } = await db
+    .from("mission_runs")
+    .update({
+      status: "completed",
+      output,
+      completed_at: completedAt,
+      error_code: null,
+      error_message: null,
+    })
+    .eq("id", input.run.id)
+    .eq("mission_id", input.run.mission_id)
+    .eq("organisation_id", organisationId)
+    .eq("status", "running")
+    .select("*")
+    .single();
+
+  if (runError || !run) {
+    throw createDatabaseError("Unable to save the reviewable workforce output", runError);
+  }
+
+  const { error: handoffError } = await db
+    .from("employee_handoffs")
+    .update({
+      status: "completed",
+      run_id: run.id,
+      completed_at: completedAt,
+    })
+    .eq("id", input.handoff.id)
+    .eq("mission_id", input.run.mission_id)
+    .eq("organisation_id", organisationId)
+    .eq("run_id", run.id)
+    .eq("status", "accepted");
+
+  if (handoffError) {
+    throw createDatabaseError("Unable to mark the workforce handoff complete", handoffError);
+  }
+
+  const remaining = await rows<Pick<EmployeeHandoff, "id">>(
+    "Unable to check remaining workforce handoffs",
+    db
+      .from("employee_handoffs")
+      .select("id")
+      .eq("organisation_id", organisationId)
+      .eq("mission_id", input.run.mission_id)
+      .eq("status", "pending"),
+  );
+  const finalStage = remaining.length === 0;
+
+  const { error: missionError } = await db
+    .from("missions")
+    .update({
+      status: finalStage ? "awaiting_approval" : "running",
+      updated_at: completedAt,
+    })
+    .eq("id", input.run.mission_id)
+    .eq("organisation_id", organisationId);
+
+  if (missionError) {
+    throw createDatabaseError("Unable to update the controlled mission status", missionError);
+  }
+
+  if (!finalStage) {
+    return { run: run as MissionRun, finalStage: false, approval: null };
+  }
+
+  const { data: existingApproval, error: existingApprovalError } = await db
+    .from("approvals")
+    .select("*")
+    .eq("organisation_id", organisationId)
+    .eq("mission_id", input.run.mission_id)
+    .eq("action_type", "review_growth_coordination_output")
+    .eq("status", "pending")
+    .maybeSingle();
+
+  if (existingApprovalError) {
+    throw createDatabaseError(
+      "Unable to check the final workforce review request",
+      existingApprovalError,
+    );
+  }
+
+  if (existingApproval) {
+    return { run: run as MissionRun, finalStage: true, approval: existingApproval as Approval };
+  }
+
+  const { data: approval, error: approvalError } = await db
+    .from("approvals")
+    .insert({
+      organisation_id: organisationId,
+      mission_id: input.run.mission_id,
+      run_id: run.id,
+      requested_by_employee_id: input.employee.id,
+      action_type: "review_growth_coordination_output",
+      action_payload: {
+        external_actions_enabled: false,
+        requested_decision: "Review the final internal workforce briefing only.",
+      },
+      risk_level: "medium",
+      justification:
+        "All controlled workforce stages have saved reviewable drafts. Owner review is required before this internal coordination mission can be closed. This approval does not authorise publication, messaging, spend or account changes.",
+      status: "pending",
+    })
+    .select("*")
+    .single();
+
+  if (approvalError || !approval) {
+    throw createDatabaseError("Unable to create the final workforce review request", approvalError);
+  }
+
+  return { run: run as MissionRun, finalStage: true, approval: approval as Approval };
+}
+
+export async function failControlledWorkforceRun(
+  input: {
+    run: Pick<MissionRun, "id" | "mission_id">;
+    handoff: Pick<EmployeeHandoff, "id">;
+    errorMessage: string;
+  },
+  organisationId = COSSA_ORGANISATION_ID,
+): Promise<void> {
+  const completedAt = new Date().toISOString();
+  const errorMessage =
+    input.errorMessage.trim().slice(0, 1_000) || "The provider did not return a reviewable output.";
+
+  const { error: runError } = await db
+    .from("mission_runs")
+    .update({
+      status: "failed",
+      error_code: "provider_or_output_failure",
+      error_message: errorMessage,
+      completed_at: completedAt,
+    })
+    .eq("id", input.run.id)
+    .eq("mission_id", input.run.mission_id)
+    .eq("organisation_id", organisationId)
+    .eq("status", "running");
+
+  if (runError) {
+    throw createDatabaseError("Unable to record the workforce run failure", runError);
+  }
+
+  const { error: handoffError } = await db
+    .from("employee_handoffs")
+    .update({
+      status: "pending",
+      run_id: null,
+      accepted_at: null,
+      completed_at: null,
+    })
+    .eq("id", input.handoff.id)
+    .eq("organisation_id", organisationId)
+    .eq("run_id", input.run.id)
+    .eq("status", "accepted");
+
+  if (handoffError) {
+    throw createDatabaseError("Unable to return the handoff to pending state", handoffError);
+  }
+}
+
 export async function decideApproval(
   approvalId: string,
   decision: "approved" | "rejected",
@@ -636,6 +964,82 @@ export async function decideApproval(
     throw new Error(
       "Unable to update approval: It may already have been decided or may not belong to this organisation",
     );
+  }
+
+  /*
+   * This approval closes only the internal workforce review. It deliberately
+   * does not unlock publication, customer contact, spend or any account
+   * change; those remain separate, provider-specific owner decisions.
+   */
+  if (
+    decision === "approved" &&
+    data.action_type === "review_growth_coordination_output" &&
+    data.mission_id
+  ) {
+    const { error: missionError } = await db
+      .from("missions")
+      .update({ status: "completed", updated_at: new Date().toISOString() })
+      .eq("id", data.mission_id)
+      .eq("organisation_id", organisationId)
+      .eq("status", "awaiting_approval");
+
+    if (missionError) {
+      throw createDatabaseError(
+        "The review was recorded but the mission could not be closed",
+        missionError,
+      );
+    }
+  }
+
+  if (
+    decision === "rejected" &&
+    data.action_type === "review_growth_coordination_output" &&
+    data.mission_id
+  ) {
+    const { data: finalHandoff, error: finalHandoffError } = await db
+      .from("employee_handoffs")
+      .select("*")
+      .eq("organisation_id", organisationId)
+      .eq("mission_id", data.mission_id)
+      .eq("status", "completed")
+      .order("completed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (finalHandoffError || !finalHandoff) {
+      throw createDatabaseError(
+        "The review was recorded but no final handoff could be reopened",
+        finalHandoffError,
+      );
+    }
+
+    const { error: reopenHandoffError } = await db
+      .from("employee_handoffs")
+      .update({ status: "pending", run_id: null, accepted_at: null, completed_at: null })
+      .eq("id", finalHandoff.id)
+      .eq("organisation_id", organisationId)
+      .eq("status", "completed");
+
+    if (reopenHandoffError) {
+      throw createDatabaseError(
+        "The review was recorded but the final handoff could not be reopened",
+        reopenHandoffError,
+      );
+    }
+
+    const { error: missionError } = await db
+      .from("missions")
+      .update({ status: "running", updated_at: new Date().toISOString() })
+      .eq("id", data.mission_id)
+      .eq("organisation_id", organisationId)
+      .eq("status", "awaiting_approval");
+
+    if (missionError) {
+      throw createDatabaseError(
+        "The review was recorded but the mission could not be reopened",
+        missionError,
+      );
+    }
   }
 
   return data as Approval;

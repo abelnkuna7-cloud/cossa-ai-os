@@ -30,6 +30,7 @@ import {
   type AiMessage,
 } from "@/lib/ai-data";
 import { streamChat } from "@/lib/ai-stream";
+import { capabilityForRoute } from "@/lib/capability-matrix";
 import { getModule } from "@/lib/modules";
 import { specialistFor } from "@/lib/specialists";
 
@@ -167,8 +168,8 @@ export function SpecialistChat({ to }: Props) {
   const activeConvo = (convos.data ?? []).find((c) => c.id === activeId) ?? null;
   const hasMessages = (messages.data?.length ?? 0) > 0 || streaming !== null;
   const title = mod?.title ?? spec?.title ?? "Specialist";
-  const tagline = spec?.tagline ?? mod?.tagline ?? "";
   const starters = spec?.starters ?? [];
+  const capability = capabilityForRoute(to);
 
   return (
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-[1600px] flex-col gap-4">
@@ -183,8 +184,14 @@ export function SpecialistChat({ to }: Props) {
               <div className="flex items-center gap-2">
                 <h1 className="font-display text-xl md:text-2xl font-semibold">{title}</h1>
                 <StatusBadge status="Testing" />
+                <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                  {capability.label}
+                </span>
               </div>
-              <p className="text-xs text-muted-foreground">{tagline}</p>
+              <p className="text-xs text-muted-foreground">{capability.summary}</p>
+              <p className="mt-1 max-w-3xl text-[11px] text-muted-foreground">
+                {capability.evidence}
+              </p>
             </div>
           </div>
           <Button
@@ -290,8 +297,8 @@ export function SpecialistChat({ to }: Props) {
                 {activeConvo?.title ?? "New chat"}
               </div>
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Cossa Nexus AI guidance • Groq inference • external actions require a connected
-                account
+                {capability.label} • Economy Groq route when configured • external actions require a
+                connected account
               </div>
             </div>
           </div>
@@ -306,7 +313,7 @@ export function SpecialistChat({ to }: Props) {
                   <h2 className="font-display text-2xl font-semibold">
                     Talk to <span className="text-gradient-gold">{title}</span>
                   </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">{tagline}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{capability.summary}</p>
                 </div>
                 <div className="grid w-full max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
                   {starters.map((label) => (

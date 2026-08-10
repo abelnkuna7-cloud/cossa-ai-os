@@ -515,10 +515,12 @@ function AiChatWorkspace() {
               </div>
 
               <div className="sr-only">
-                Cossa Nexus AI • Live CRM • Verified knowledge • Groq inference
+                Cossa Nexus AI • verified knowledge • authorised CRM records when relevant •
+                owner-selected provider
               </div>
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Cossa Nexus AI / Live CRM / Verified knowledge / {provider === "groq" ? "Economy Groq" : "Strategic OpenAI"}
+                Cossa Nexus AI / verified knowledge / selected CRM records when relevant /{" "}
+                {provider === "groq" ? "Economy Groq route" : "Strategic OpenAI route"}
               </div>
             </div>
           </div>
@@ -628,9 +630,10 @@ function AiChatWorkspace() {
 
             <p className="mx-auto mt-2 max-w-3xl text-center text-[10px] text-muted-foreground">
               {provider === "groq"
-                ? "Economy mode uses Groq to conserve higher-cost reasoning usage."
-                : "Strategic reasoning uses the authorised OpenAI provider and may incur paid API usage."}{" "}
-              Cossa AI uses authorised operational records and verified company knowledge. Human approval remains required for external, financial, legal and irreversible actions.
+                ? "Economy mode requests Groq to conserve higher-cost reasoning usage; it requires an available provider configuration and usage."
+                : "Strategic reasoning requests the authorised OpenAI provider and requires available API credit."}{" "}
+              Cossa AI uses authorised operational records and verified company knowledge. Human
+              approval remains required for external, financial, legal and irreversible actions.
             </p>
           </div>
         </section>
