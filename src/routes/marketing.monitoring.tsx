@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
-import { getGrowthAnalyticsReport } from "@/lib/growth-analytics";
+import { getGrowthAnalyticsReport, startGrowthAnalyticsOAuth } from "@/lib/growth-analytics";
 import { checkOfficialWebsite } from "@/lib/website-health";
 import { cn } from "@/lib/utils";
 import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
@@ -45,6 +45,10 @@ function WebsiteMonitoring() {
     queryFn: getGrowthAnalyticsReport,
     retry: false,
     staleTime: 5 * 60_000,
+  });
+  const analyticsConnection = useMutation({
+    mutationFn: startGrowthAnalyticsOAuth,
+    onSuccess: (authorizationUrl) => window.location.assign(authorizationUrl),
   });
   const report = websiteCheck.data;
   const analytics = analyticsCheck.data;
@@ -115,26 +119,52 @@ function WebsiteMonitoring() {
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                 Confirmed property <span className="font-medium text-foreground">542695998</span>{" "}
                 and measurement ID <span className="font-medium text-foreground">G-EWW4BPZN6R</span>
-                . The workspace can read aggregate reporting only after the protected Cossa service
-                account is authorised as a Viewer.
+                . The workspace can read aggregate reporting only after a Cossa owner approves the
+                protected, read-only Google OAuth connection.
               </p>
             </div>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void analyticsCheck.refetch()}
-            disabled={analyticsCheck.isFetching}
-            className="shrink-0 border-primary/40 text-primary hover:bg-primary/10"
-          >
-            {analyticsCheck.isFetching ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-1.5 h-4 w-4" />
-            )}
-            Refresh GA4 report
-          </Button>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => analyticsConnection.mutate()}
+              disabled={analyticsConnection.isPending}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              {analyticsConnection.isPending ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="mr-1.5 h-4 w-4" />
+              )}
+              Connect Google Analytics
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void analyticsCheck.refetch()}
+              disabled={analyticsCheck.isFetching}
+              className="border-primary/40 text-primary hover:bg-primary/10"
+            >
+              {analyticsCheck.isFetching ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 h-4 w-4" />
+              )}
+              Refresh GA4 report
+            </Button>
+          </div>
         </div>
+
+        {analyticsConnection.isError ? (
+          <div className="mt-5 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p className="text-xs leading-5">
+              {analyticsConnection.error instanceof Error
+                ? analyticsConnection.error.message
+                : "Google Analytics connection could not be started."}
+            </p>
+          </div>
+        ) : null}
 
         {analyticsCheck.isError ? (
           <div className="mt-5 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">

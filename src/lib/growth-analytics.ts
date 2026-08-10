@@ -25,7 +25,14 @@ export interface GrowthAnalyticsReport {
   reporting_scope: string;
 }
 
-export async function getGrowthAnalyticsReport(): Promise<GrowthAnalyticsReport> {
+interface GrowthAnalyticsOAuthStart {
+  authorization_url: string;
+}
+
+async function getAuthenticatedGrowthAnalyticsResponse(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -34,11 +41,17 @@ export async function getGrowthAnalyticsReport(): Promise<GrowthAnalyticsReport>
     throw new Error("Your session has expired. Please sign in again.");
   }
 
-  const response = await fetch("/api/growth-analytics", {
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-    },
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${session.access_token}`);
+
+  return fetch(path, {
+    ...init,
+    headers,
   });
+}
+
+export async function getGrowthAnalyticsReport(): Promise<GrowthAnalyticsReport> {
+  const response = await getAuthenticatedGrowthAnalyticsResponse("/api/growth-analytics");
 
   const payload = (await response.json().catch(() => null)) as
     | GrowthAnalyticsReport
@@ -54,4 +67,25 @@ export async function getGrowthAnalyticsReport(): Promise<GrowthAnalyticsReport>
   }
 
   return payload as GrowthAnalyticsReport;
+}
+
+export async function startGrowthAnalyticsOAuth(): Promise<string> {
+  const response = await getAuthenticatedGrowthAnalyticsResponse(
+    "/api/growth-analytics/oauth/start",
+    { method: "POST" },
+  );
+  const payload = (await response.json().catch(() => null)) as
+    | GrowthAnalyticsOAuthStart
+    | { error?: string }
+    | null;
+
+  if (!response.ok || !payload || !("authorization_url" in payload)) {
+    throw new Error(
+      payload && "error" in payload && payload.error
+        ? payload.error
+        : `Google Analytics connection could not start (${response.status})`,
+    );
+  }
+
+  return payload.authorization_url;
 }

@@ -333,18 +333,18 @@ const integrations: Integration[] = [
     name: "Google Analytics",
     group: "Marketing",
     blurb:
-      "GROWTH's Google Tag Manager container is verified sending GA4 page views. GROWTH does not yet import private Analytics reports.",
+      "A secure, read-only OAuth reporting connector is ready for the confirmed GROWTH property. It remains disconnected until an authorised Cossa owner completes Google approval.",
     short: "G4",
     activation:
-      "To import GA4 reporting into GROWTH, a Cossa property owner must authorise a restricted, server-side, read-only Google Analytics connection. The verified website tag alone does not grant report access.",
+      "A Cossa owner or admin starts the restricted Google OAuth connection from Website Monitoring. The server stores the resulting refresh credential encrypted; GROWTH can read aggregate reports only and cannot change Google tags, ads or account settings.",
     safeguards: [
       "GROWTH tag verified",
-      "Read-only property connection needed",
+      "GA4 OAuth approval pending",
       "Source-labelled reporting",
       "No fabricated metrics",
     ],
     connectionLabel: "GROWTH tag verified · GA4 G-EWW4BPZN6R",
-    connectionState: "verified-observation",
+    connectionState: "not-connected",
   },
   {
     name: "Meta Ads",

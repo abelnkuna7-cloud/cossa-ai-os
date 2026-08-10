@@ -91,6 +91,8 @@ import { Route as AiCoachRouteImport } from './routes/ai.coach'
 import { Route as AiCeoRouteImport } from './routes/ai.ceo'
 import { Route as AiAutomationRouteImport } from './routes/ai.automation'
 import { Route as ApiLeadHunterSearchRouteImport } from './routes/api.lead-hunter.search'
+import { Route as ApiGrowthAnalyticsOauthStartRouteImport } from './routes/api/growth-analytics.oauth.start'
+import { Route as ApiGrowthAnalyticsOauthCallbackRouteImport } from './routes/api/growth-analytics.oauth.callback'
 
 const SmeGrowthRoute = SmeGrowthRouteImport.update({
   id: '/sme-growth',
@@ -503,6 +505,18 @@ const ApiLeadHunterSearchRoute = ApiLeadHunterSearchRouteImport.update({
   path: '/api/lead-hunter/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGrowthAnalyticsOauthStartRoute =
+  ApiGrowthAnalyticsOauthStartRouteImport.update({
+    id: '/oauth/start',
+    path: '/oauth/start',
+    getParentRoute: () => ApiGrowthAnalyticsRoute,
+  } as any)
+const ApiGrowthAnalyticsOauthCallbackRoute =
+  ApiGrowthAnalyticsOauthCallbackRouteImport.update({
+    id: '/oauth/callback',
+    path: '/oauth/callback',
+    getParentRoute: () => ApiGrowthAnalyticsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -545,7 +559,7 @@ export interface FileRoutesByFullPath {
   '/ai/workforce': typeof AiWorkforceRoute
   '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/growth-analytics': typeof ApiGrowthAnalyticsRoute
+  '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
@@ -587,6 +601,8 @@ export interface FileRoutesByFullPath {
   '/sales/quotations': typeof SalesQuotationsRoute
   '/sales/win-probability': typeof SalesWinProbabilityRoute
   '/api/lead-hunter/search': typeof ApiLeadHunterSearchRoute
+  '/api/growth-analytics/oauth/callback': typeof ApiGrowthAnalyticsOauthCallbackRoute
+  '/api/growth-analytics/oauth/start': typeof ApiGrowthAnalyticsOauthStartRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -629,7 +645,7 @@ export interface FileRoutesByTo {
   '/ai/workforce': typeof AiWorkforceRoute
   '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/growth-analytics': typeof ApiGrowthAnalyticsRoute
+  '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
@@ -671,6 +687,8 @@ export interface FileRoutesByTo {
   '/sales/quotations': typeof SalesQuotationsRoute
   '/sales/win-probability': typeof SalesWinProbabilityRoute
   '/api/lead-hunter/search': typeof ApiLeadHunterSearchRoute
+  '/api/growth-analytics/oauth/callback': typeof ApiGrowthAnalyticsOauthCallbackRoute
+  '/api/growth-analytics/oauth/start': typeof ApiGrowthAnalyticsOauthStartRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -714,7 +732,7 @@ export interface FileRoutesById {
   '/ai/workforce': typeof AiWorkforceRoute
   '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
-  '/api/growth-analytics': typeof ApiGrowthAnalyticsRoute
+  '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
@@ -756,6 +774,8 @@ export interface FileRoutesById {
   '/sales/quotations': typeof SalesQuotationsRoute
   '/sales/win-probability': typeof SalesWinProbabilityRoute
   '/api/lead-hunter/search': typeof ApiLeadHunterSearchRoute
+  '/api/growth-analytics/oauth/callback': typeof ApiGrowthAnalyticsOauthCallbackRoute
+  '/api/growth-analytics/oauth/start': typeof ApiGrowthAnalyticsOauthStartRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -842,6 +862,8 @@ export interface FileRouteTypes {
     | '/sales/quotations'
     | '/sales/win-probability'
     | '/api/lead-hunter/search'
+    | '/api/growth-analytics/oauth/callback'
+    | '/api/growth-analytics/oauth/start'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -926,6 +948,8 @@ export interface FileRouteTypes {
     | '/sales/quotations'
     | '/sales/win-probability'
     | '/api/lead-hunter/search'
+    | '/api/growth-analytics/oauth/callback'
+    | '/api/growth-analytics/oauth/start'
   id:
     | '__root__'
     | '/'
@@ -1010,6 +1034,8 @@ export interface FileRouteTypes {
     | '/sales/quotations'
     | '/sales/win-probability'
     | '/api/lead-hunter/search'
+    | '/api/growth-analytics/oauth/callback'
+    | '/api/growth-analytics/oauth/start'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1053,7 +1079,7 @@ export interface RootRouteChildren {
   AiWorkforceRoute: typeof AiWorkforceRoute
   ApiAiProviderStatusRoute: typeof ApiAiProviderStatusRoute
   ApiChatRoute: typeof ApiChatRoute
-  ApiGrowthAnalyticsRoute: typeof ApiGrowthAnalyticsRoute
+  ApiGrowthAnalyticsRoute: typeof ApiGrowthAnalyticsRouteWithChildren
   ApiWebsiteHealthRoute: typeof ApiWebsiteHealthRoute
   MarketingAiDirectorRoute: typeof MarketingAiDirectorRoute
   MarketingBrandRoute: typeof MarketingBrandRoute
@@ -1673,8 +1699,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLeadHunterSearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/growth-analytics/oauth/start': {
+      id: '/api/growth-analytics/oauth/start'
+      path: '/oauth/start'
+      fullPath: '/api/growth-analytics/oauth/start'
+      preLoaderRoute: typeof ApiGrowthAnalyticsOauthStartRouteImport
+      parentRoute: typeof ApiGrowthAnalyticsRoute
+    }
+    '/api/growth-analytics/oauth/callback': {
+      id: '/api/growth-analytics/oauth/callback'
+      path: '/oauth/callback'
+      fullPath: '/api/growth-analytics/oauth/callback'
+      preLoaderRoute: typeof ApiGrowthAnalyticsOauthCallbackRouteImport
+      parentRoute: typeof ApiGrowthAnalyticsRoute
+    }
   }
 }
+
+interface ApiGrowthAnalyticsRouteChildren {
+  ApiGrowthAnalyticsOauthCallbackRoute: typeof ApiGrowthAnalyticsOauthCallbackRoute
+  ApiGrowthAnalyticsOauthStartRoute: typeof ApiGrowthAnalyticsOauthStartRoute
+}
+
+const ApiGrowthAnalyticsRouteChildren: ApiGrowthAnalyticsRouteChildren = {
+  ApiGrowthAnalyticsOauthCallbackRoute: ApiGrowthAnalyticsOauthCallbackRoute,
+  ApiGrowthAnalyticsOauthStartRoute: ApiGrowthAnalyticsOauthStartRoute,
+}
+
+const ApiGrowthAnalyticsRouteWithChildren =
+  ApiGrowthAnalyticsRoute._addFileChildren(ApiGrowthAnalyticsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -1717,7 +1770,7 @@ const rootRouteChildren: RootRouteChildren = {
   AiWorkforceRoute: AiWorkforceRoute,
   ApiAiProviderStatusRoute: ApiAiProviderStatusRoute,
   ApiChatRoute: ApiChatRoute,
-  ApiGrowthAnalyticsRoute: ApiGrowthAnalyticsRoute,
+  ApiGrowthAnalyticsRoute: ApiGrowthAnalyticsRouteWithChildren,
   ApiWebsiteHealthRoute: ApiWebsiteHealthRoute,
   MarketingAiDirectorRoute: MarketingAiDirectorRoute,
   MarketingBrandRoute: MarketingBrandRoute,
