@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
+  BarChart3,
   CheckCircle2,
   ExternalLink,
   Globe2,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
+import { getGrowthAnalyticsReport } from "@/lib/growth-analytics";
 import { checkOfficialWebsite } from "@/lib/website-health";
 import { cn } from "@/lib/utils";
 import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
@@ -38,7 +40,14 @@ function WebsiteMonitoring() {
     retry: false,
     staleTime: 30_000,
   });
+  const analyticsCheck = useQuery({
+    queryKey: ["growth-analytics-report"],
+    queryFn: getGrowthAnalyticsReport,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
   const report = websiteCheck.data;
+  const analytics = analyticsCheck.data;
   const isChecking = websiteCheck.isFetching;
   const isHealthy = report?.availability === "healthy";
   const isUnavailable = report?.availability === "unavailable";
@@ -90,6 +99,104 @@ function WebsiteMonitoring() {
             </Button>
           </div>
         </div>
+      </section>
+
+      <section className="glass-card p-5 md:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <BarChart3 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                Authorised reporting source
+              </p>
+              <h2 className="mt-1 font-display text-xl font-semibold">GROWTH Google Analytics</h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                Confirmed property <span className="font-medium text-foreground">542695998</span>{" "}
+                and measurement ID <span className="font-medium text-foreground">G-EWW4BPZN6R</span>
+                . The workspace can read aggregate reporting only after the protected Cossa service
+                account is authorised as a Viewer.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void analyticsCheck.refetch()}
+            disabled={analyticsCheck.isFetching}
+            className="shrink-0 border-primary/40 text-primary hover:bg-primary/10"
+          >
+            {analyticsCheck.isFetching ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1.5 h-4 w-4" />
+            )}
+            Refresh GA4 report
+          </Button>
+        </div>
+
+        {analyticsCheck.isError ? (
+          <div className="mt-5 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-medium">GA4 reporting is not connected yet</p>
+              <p className="mt-1 text-xs leading-5">
+                {analyticsCheck.error instanceof Error
+                  ? analyticsCheck.error.message
+                  : "The authorised GA4 report could not be loaded."}
+              </p>
+            </div>
+          </div>
+        ) : analytics ? (
+          <>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <Metric label="Active users" value={String(analytics.active_users)} />
+              <Metric label="New users" value={String(analytics.new_users)} />
+              <Metric label="Sessions" value={String(analytics.sessions)} />
+              <Metric label="Page views" value={String(analytics.page_views)} />
+              <Metric label="Engaged sessions" value={String(analytics.engaged_sessions)} />
+              <Metric label="Key events" value={String(analytics.key_events)} />
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-lg border border-border/60 bg-card/40 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  Top acquisition channels
+                </p>
+                {analytics.channels.length === 0 ? (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    No channel rows were returned.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {analytics.channels.map((channel) => (
+                      <div
+                        key={channel.name}
+                        className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 text-sm"
+                      >
+                        <span className="truncate font-medium">{channel.name}</span>
+                        <span className="text-muted-foreground">{channel.sessions} sessions</span>
+                        <span className="text-primary">{channel.key_events} key events</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="rounded-lg border border-border/60 bg-card/40 p-4 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Reporting boundary</p>
+                <p className="mt-2 text-xs leading-5">{analytics.reporting_scope}</p>
+                <p className="mt-3 text-xs">
+                  Last refreshed {new Date(analytics.fetched_at).toLocaleString()}.
+                </p>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading authorised GA4 status…
+          </div>
+        )}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
@@ -224,10 +331,10 @@ function WebsiteMonitoring() {
           <div>
             <p className="font-medium">Current monitoring boundary</p>
             <p className="mt-1 text-xs leading-5">
-              This is a real on-demand homepage check. It does not yet send an alert while nobody is
-              signed in, monitor every page, check security certificates or make website changes.
-              Automatic alerting needs a separately approved scheduling and delivery connection; it
-              is intentionally not claimed as active here.
+              This is a real on-demand homepage check. The GA4 section can read only aggregate data
+              from the confirmed GROWTH property after its protected service-account connection is
+              authorised. Neither feature sends alerts while nobody is signed in, monitors every
+              page, checks security certificates or makes website changes.
             </p>
           </div>
         </div>

@@ -68,6 +68,7 @@ import { Route as MarketingCampaignsRouteImport } from './routes/marketing.campa
 import { Route as MarketingBrandRouteImport } from './routes/marketing.brand'
 import { Route as MarketingAiDirectorRouteImport } from './routes/marketing.ai-director'
 import { Route as ApiWebsiteHealthRouteImport } from './routes/api/website-health'
+import { Route as ApiGrowthAnalyticsRouteImport } from './routes/api/growth-analytics'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiAiProviderStatusRouteImport } from './routes/api/ai-provider-status'
 import { Route as AiWorkforceRouteImport } from './routes/ai.workforce'
@@ -387,6 +388,11 @@ const ApiWebsiteHealthRoute = ApiWebsiteHealthRouteImport.update({
   path: '/api/website-health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGrowthAnalyticsRoute = ApiGrowthAnalyticsRouteImport.update({
+  id: '/api/growth-analytics',
+  path: '/api/growth-analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
@@ -539,6 +545,7 @@ export interface FileRoutesByFullPath {
   '/ai/workforce': typeof AiWorkforceRoute
   '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/growth-analytics': typeof ApiGrowthAnalyticsRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
@@ -622,6 +629,7 @@ export interface FileRoutesByTo {
   '/ai/workforce': typeof AiWorkforceRoute
   '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/growth-analytics': typeof ApiGrowthAnalyticsRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
@@ -706,6 +714,7 @@ export interface FileRoutesById {
   '/ai/workforce': typeof AiWorkforceRoute
   '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/growth-analytics': typeof ApiGrowthAnalyticsRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
@@ -791,6 +800,7 @@ export interface FileRouteTypes {
     | '/ai/workforce'
     | '/api/ai-provider-status'
     | '/api/chat'
+    | '/api/growth-analytics'
     | '/api/website-health'
     | '/marketing/ai-director'
     | '/marketing/brand'
@@ -874,6 +884,7 @@ export interface FileRouteTypes {
     | '/ai/workforce'
     | '/api/ai-provider-status'
     | '/api/chat'
+    | '/api/growth-analytics'
     | '/api/website-health'
     | '/marketing/ai-director'
     | '/marketing/brand'
@@ -957,6 +968,7 @@ export interface FileRouteTypes {
     | '/ai/workforce'
     | '/api/ai-provider-status'
     | '/api/chat'
+    | '/api/growth-analytics'
     | '/api/website-health'
     | '/marketing/ai-director'
     | '/marketing/brand'
@@ -1041,6 +1053,7 @@ export interface RootRouteChildren {
   AiWorkforceRoute: typeof AiWorkforceRoute
   ApiAiProviderStatusRoute: typeof ApiAiProviderStatusRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiGrowthAnalyticsRoute: typeof ApiGrowthAnalyticsRoute
   ApiWebsiteHealthRoute: typeof ApiWebsiteHealthRoute
   MarketingAiDirectorRoute: typeof MarketingAiDirectorRoute
   MarketingBrandRoute: typeof MarketingBrandRoute
@@ -1499,6 +1512,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebsiteHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/growth-analytics': {
+      id: '/api/growth-analytics'
+      path: '/api/growth-analytics'
+      fullPath: '/api/growth-analytics'
+      preLoaderRoute: typeof ApiGrowthAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/chat': {
       id: '/api/chat'
       path: '/api/chat'
@@ -1697,6 +1717,7 @@ const rootRouteChildren: RootRouteChildren = {
   AiWorkforceRoute: AiWorkforceRoute,
   ApiAiProviderStatusRoute: ApiAiProviderStatusRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiGrowthAnalyticsRoute: ApiGrowthAnalyticsRoute,
   ApiWebsiteHealthRoute: ApiWebsiteHealthRoute,
   MarketingAiDirectorRoute: MarketingAiDirectorRoute,
   MarketingBrandRoute: MarketingBrandRoute,
