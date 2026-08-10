@@ -276,13 +276,8 @@ function GrowthHome() {
 
         <div className="relative mx-auto grid max-w-6xl items-start gap-8 lg:grid-cols-[1.08fr_0.92fr]">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
               Cossa Nexus Holdings | Business Growth Intelligence
-            </div>
-
-            <p className="mt-6 text-xs font-semibold uppercase tracking-[0.22em] text-primary">
-              Clear enquiry capture. Accountable follow-up. Better decisions.
             </p>
 
             <h1 className="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.08] md:text-5xl lg:text-6xl">
@@ -334,61 +329,43 @@ function GrowthHome() {
                 </Button>
               </a>
             </div>
-
-            <div className="mt-5 grid max-w-2xl gap-2 text-sm text-muted-foreground sm:grid-cols-3">
-              {[
-                "Direct Cossa contact",
-                "Structured customer records",
-                "Human review where needed",
-              ].map((item) => (
-                <span key={item} className="inline-flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                  {item}
-                </span>
-              ))}
-            </div>
-
-            <p className="mt-4 text-sm text-muted-foreground">
-              Prefer another route? Call, email or send a quote request instead.
-            </p>
           </div>
 
-          <div className="space-y-5">
-            <aside className="relative isolate min-h-[300px] overflow-hidden rounded-2xl border border-primary/35 bg-black p-6 shadow-[0_20px_70px_rgba(0,0,0,0.5)] md:min-h-[340px] md:p-8">
+          <form
+            id="quote-request"
+            onSubmit={submitQuoteRequest}
+            className="relative isolate overflow-hidden rounded-2xl border border-primary/35 bg-card/95 shadow-[0_20px_70px_rgba(0,0,0,0.5)]"
+          >
+            <section className="relative min-h-[248px] overflow-hidden border-b border-primary/25 bg-black p-6 md:min-h-[270px] md:p-7">
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(217,177,36,0.16),transparent_52%)]" />
               <GrowthEagleArtwork
                 eager
-                className="absolute -bottom-10 -right-10 h-[118%] w-[70%] object-contain object-[center_58%] opacity-100 md:-right-4 md:w-[64%]"
+                className="absolute -bottom-10 -right-10 h-[118%] w-[70%] object-contain object-[center_58%] opacity-100 md:-right-2 md:w-[62%]"
               />
               <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.98)_0%,rgba(0,0,0,0.92)_43%,rgba(0,0,0,0.34)_76%,rgba(0,0,0,0.1)_100%)]" />
 
-              <div className="relative flex min-h-[252px] flex-col justify-between md:min-h-[276px]">
+              <div className="relative flex min-h-[200px] flex-col justify-between md:min-h-[214px]">
                 <div className="max-w-[59%] sm:max-w-[54%]">
                   <GrowthProductBrand className="max-w-full" />
 
-                  <p className="mt-7 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
+                  <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
                     Business growth intelligence
                   </p>
 
-                  <h2 className="mt-3 font-display text-2xl font-semibold leading-tight text-foreground md:text-3xl">
-                    Strengthen the work behind every customer relationship.
+                  <h2 className="mt-2 font-display text-2xl font-semibold leading-tight text-foreground">
+                    Build stronger customer relationships.
                   </h2>
 
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                    Cossa combines practical growth support with clear customer and operations
-                    information.
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    A clear route from enquiry to response.
                   </p>
                 </div>
 
                 <ParentBrandEndorsement className="max-w-[60%]" />
               </div>
-            </aside>
+            </section>
 
-            <form
-              id="quote-request"
-              onSubmit={submitQuoteRequest}
-              className="rounded-2xl border border-primary/30 bg-card/95 p-5 shadow-[0_16px_60px_rgba(0,0,0,0.22)] md:p-6"
-            >
+            <div className="relative p-5 md:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
                 Tell us what you need
               </p>
@@ -510,8 +487,8 @@ function GrowthHome() {
                     `We could not complete your request. Please call ${phoneNumber}, WhatsApp us, or email cossa@cossanexusholdings.co.za.`}
                 </p>
               )}
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
       </section>
 
