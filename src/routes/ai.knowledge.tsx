@@ -41,6 +41,18 @@ function normaliseTags(value: string): string[] {
     .filter(Boolean))];
 }
 
+function hasTag(tags: string[] | undefined, tag: string): boolean {
+  return (tags ?? []).some((current) => current.trim().toLowerCase() === tag);
+}
+
+function withTag(tags: string[] | undefined, tag: string, enabled: boolean): string[] {
+  const normalised = normaliseTags((tags ?? []).join(","));
+
+  return enabled
+    ? [...new Set([...normalised, tag])]
+    : normalised.filter((current) => current !== tag);
+}
+
 function KnowledgeBase() {
   const qc = useQueryClient();
   const { data: docs, isLoading } = useQuery({ queryKey: ["ai-knowledge"], queryFn: listKnowledge });
@@ -59,16 +71,29 @@ function KnowledgeBase() {
   }, [docs, search, cat]);
 
   async function handleSave() {
-    if (!editing?.title?.trim() || !editing.body?.trim()) {
-      toast.error("Title and body are required");
+    const title = editing?.title?.trim() ?? "";
+    const body = editing?.body?.trim() ?? "";
+    const content = body || title;
+
+    if (!content) {
+      toast.error("Enter the company knowledge you want Cossa AI to use");
       return;
     }
+
+    // A single fact is enough. If someone used the old title field as the
+    // fact field, preserve it as the document body instead of rejecting it.
+    const documentTitle = body && title
+      ? title
+      : content.length > 72
+        ? `${content.slice(0, 69).trimEnd()}...`
+        : content;
+
     setSaving(true);
     try {
       await upsertKnowledge({
         id: editing.id,
-        title: editing.title.trim(),
-        body: editing.body.trim(),
+        title: documentTitle,
+        body: content,
         category: editing.category ?? null,
         tags: editing.tags?.length ? editing.tags : ["company-wide"],
         source: editing.source ?? null,
@@ -248,12 +273,17 @@ function KnowledgeBase() {
               Save only facts you are authorised to approve. This record becomes verified internal Cossa knowledge, not a public website claim.
             </p>
             <div className="mt-4 space-y-3">
-              <input
-                value={editing.title ?? ""}
-                onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                placeholder="Title (e.g. 'CIPC company registration' or 'Cossa service list')"
-                className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm outline-none focus:border-primary/50"
-              />
+              <label className="grid gap-1.5 text-sm font-medium">
+                Short title (optional)
+                <input
+                  value={editing.title ?? ""}
+                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                  placeholder="For example: CIPC company registration or JSE listing target"
+                  className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm outline-none focus:border-primary/50"
+                />
+              </label>
+              <label className="grid gap-1.5 text-sm font-medium">
+                Company fact, rule, registration or approved target
               <textarea
                 value={editing.body ?? ""}
                 onChange={(e) => setEditing({ ...editing, body: e.target.value })}
@@ -261,6 +291,24 @@ function KnowledgeBase() {
                 rows={10}
                 className="w-full resize-none rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm outline-none focus:border-primary/50"
               />
+                <span className="text-xs font-normal text-muted-foreground">
+                  This is the main field Cossa AI reads. A short title above is optional.
+                </span>
+              </label>
+              <label className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                <input
+                  type="checkbox"
+                  checked={hasTag(editing.tags, "owner-target")}
+                  onChange={(event) => setEditing({
+                    ...editing,
+                    tags: withTag(editing.tags, "owner-target", event.target.checked),
+                  })}
+                  className="mt-0.5 h-3.5 w-3.5 accent-primary"
+                />
+                <span>
+                  This is an owner-approved future target or plan. Cossa AI must describe it as a target, not as a completed or public claim.
+                </span>
+              </label>
               <input
                 value={editing.source ?? ""}
                 onChange={(e) => setEditing({ ...editing, source: e.target.value })}

@@ -6,6 +6,7 @@ import {
   BrainCircuit,
   CheckCircle2,
   FilePenLine,
+  Globe2,
   KeyRound,
   Megaphone,
   PanelTop,
@@ -44,6 +45,12 @@ export const Route = createFileRoute("/ai/workforce")({
 const GROWTH_MISSION_PREFIX = "Growth coordination:";
 
 const WORKFLOW = [
+  {
+    key: "website-seo-monitor",
+    label: "Check website",
+    description: "Runs the approved read-only Cossa homepage check and flags verified issues.",
+    icon: Globe2,
+  },
   {
     key: "social-strategy-planner",
     label: "Plan",
@@ -246,7 +253,7 @@ function AiWorkforce() {
             simulate completed work or claim a social account is connected.
           </p>
         </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-7">
           {WORKFLOW.map((step, index) => {
             const Icon = step.icon;
             const employee = employeesByKey.get(step.key);
@@ -322,8 +329,7 @@ function AiWorkforce() {
             </div>
             {!canCreateCoordination ? (
               <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-                Set up the six workforce profiles first. No worker will be installed automatically
-                without your click.
+                Set up all {COSSA_GROWTH_WORKFORCE.length} workforce profiles first. No worker will be installed automatically without your click.
               </p>
             ) : null}
             <Button

@@ -369,6 +369,7 @@ function formatKnowledgeContext(knowledge: KnowledgeDocument[]): string {
     .map((document) =>
       [
         `DOCUMENT: ${document.title}`,
+        document.tags.length > 0 ? `TAGS: ${document.tags.join(", ")}` : null,
         document.source ? `SOURCE: ${document.source}` : null,
         document.source_url ? `SOURCE URL: ${document.source_url}` : null,
         document.body,
@@ -733,6 +734,7 @@ OPERATING RULES
 21. Do not infer customer segments, Cossa services, market positioning, website weaknesses, campaign performance or customer needs from CRM counts, job titles, a mission objective or general knowledge. Put those items under "Missing evidence" or "Proposed work" instead.
 22. Never propose, draft or imply a customer success story, testimonial, case study, customer name or performance result unless the supplied verified context specifically supports it and the owner has authorised its use. Do not use testimonials as filler content.
 23. Every proposed content item must be framed as a draft idea, not a proven claim. If it refers to a Cossa service or result, state the source title that verifies it; otherwise ask the owner to provide or approve the source.
+24. A document tagged "owner-target", "planned" or "requires-review" records an owner-approved intention. Describe it as a future target or plan, never as an achieved result, guaranteed outcome or public announcement. For legal, financial, listing or regulatory targets, say formal professional advice and required approvals remain necessary.
 
 VERIFIED COMPANY KNOWLEDGE
 

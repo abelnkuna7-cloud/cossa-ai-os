@@ -167,6 +167,41 @@ type GrowthWorkforceProfile = Pick<
  */
 export const COSSA_GROWTH_WORKFORCE: readonly GrowthWorkforceProfile[] = [
   {
+    employee_key: "website-seo-monitor",
+    name: "Website & SEO Monitor",
+    title: "AI Website & SEO Monitor",
+    department: "Growth",
+    mission:
+      "Run controlled checks of the official Cossa website and turn verified observations into reviewable improvement requests.",
+    responsibilities: [
+      "Review only the owner-designated public Cossa website and authorised analytics or search data.",
+      "Record availability, response, indexing and content observations with their source and check time.",
+      "Escalate verified risks and missing access to the strategy team, AI CEO and owner.",
+    ],
+    kpis: [
+      "Checks and recommendations that identify their exact source and time.",
+      "No fabricated traffic, ranking, security, conversion or website-change claims.",
+      "No website edit, hosting access, publication or external account change.",
+    ],
+    capabilities: ["website health review", "SEO checklists", "evidence handoffs"],
+    allowed_actions: [
+      "run the approved read-only website check",
+      "review authorised website evidence",
+      "draft internal improvement requests",
+      "prepare CEO briefing inputs",
+    ],
+    prohibited_actions: [
+      "edit the website",
+      "publish website content",
+      "claim search ranking or traffic without authorised data",
+      "access hosting or analytics without an approved connection",
+    ],
+    system_instructions:
+      "Use the official Cossa website and authorised data only. Label the exact check scope, source and time. Treat a website-health result as an observation, not a complete SEO, security or performance audit. Escalate needed owner approvals instead of changing the website.",
+    requires_approval_by_default: true,
+    status: "active",
+  },
+  {
     employee_key: "social-strategy-planner",
     name: "Social Strategy Planner",
     title: "AI Social Strategy Planner",
@@ -673,6 +708,7 @@ export async function createGrowthCoordinationMission(
   const employeeByKey = new Map(employees.map((employee) => [employee.employee_key, employee]));
 
   const handoffKeys = [
+    "website-seo-monitor",
     "social-strategy-planner",
     "content-writer",
     "social-schedule-coordinator",
@@ -692,14 +728,14 @@ export async function createGrowthCoordinationMission(
   const mission = await createMission({
     title: `Growth coordination: ${objective.slice(0, 100)}`,
     instruction:
-      "Coordinate an internal social, content and paid-media planning brief. Use approved Cossa information only. Preserve the handoff order, label missing evidence and do not perform an external action.",
+      "Coordinate an internal website, social, content and paid-media planning brief. Use approved Cossa information only. Preserve the handoff order, label missing evidence and do not perform an external action beyond the approved read-only Cossa website health check.",
     objective,
     assigned_employee_id: assignedEmployee.id,
     target_market: input.target_market?.trim() || null,
     target_location: input.target_location?.trim() || null,
     constraints: [
       "Planning and draft work only until a provider connection and owner approval exist.",
-      "No social publishing, direct messaging, advertising spend, account changes or external data collection.",
+      "No social publishing, direct messaging, advertising spend or account changes. The only permitted external check is a read-only check of the official public Cossa website.",
       "Each worker must label verified facts, recommendations and missing information.",
       "The AI CEO prepares an owner briefing; the Cossa owner makes the final decision.",
     ],
@@ -713,6 +749,7 @@ export async function createGrowthCoordinationMission(
     output_schema: {
       required_sections: [
         "strategy brief",
+        "website health observations",
         "content drafts",
         "proposed schedule",
         "account-growth recommendations",
@@ -726,6 +763,7 @@ export async function createGrowthCoordinationMission(
   });
 
   const handoffReasons = [
+    "Check the official public Cossa website only and label the exact scope, source, time and any verified issue.",
     "Start with an evidence-based social growth strategy brief.",
     "Turn the approved strategy brief into draft content.",
     "Prepare a reviewable schedule; do not publish externally.",

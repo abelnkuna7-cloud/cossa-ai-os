@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
+  Activity,
   ArrowRight,
   BrainCircuit,
   Database,
@@ -40,7 +41,8 @@ type IntegrationRoute =
   | "/ai/cossa"
   | "/ai/knowledge"
   | "/ai/memory"
-  | "/operations/business-intelligence";
+  | "/operations/business-intelligence"
+  | "/marketing/monitoring";
 
 interface CossaSource {
   name: string;
@@ -105,10 +107,18 @@ const cossaSources: CossaSource[] = [
   {
     name: "Cossa Nexus Holdings website",
     description:
-      "The official public Cossa reference. It is opened as a source; the platform does not silently copy or fabricate website content.",
+      "The official public Cossa reference. Open the live website; this is not a hosting, analytics or editing connection.",
     status: "Live",
     href: "https://cossanexusholdings.co.za",
     icon: ExternalLink,
+  },
+  {
+    name: "Website Watch",
+    description:
+      "A controlled, read-only homepage health check for the official Cossa website. It identifies only live availability, response time, title and noindex signals.",
+    status: "Testing",
+    to: "/marketing/monitoring",
+    icon: Activity,
   },
 ];
 
