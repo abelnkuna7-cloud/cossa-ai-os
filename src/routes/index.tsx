@@ -270,11 +270,11 @@ function GrowthHome() {
         }}
       />
 
-      <section id="contact" className="relative overflow-hidden px-4 py-12 md:py-16">
+      <section id="contact" className="relative overflow-hidden px-4 py-10 md:py-12">
         <div className="pointer-events-none absolute -left-32 top-8 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
         <div className="pointer-events-none absolute right-0 top-0 hidden h-full w-[42%] bg-[radial-gradient(ellipse_at_top_right,rgba(217,177,36,0.12),transparent_70%)] lg:block" />
 
-        <div className="relative mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.08fr_0.92fr]">
+        <div className="relative mx-auto grid max-w-6xl items-start gap-8 lg:grid-cols-[1.08fr_0.92fr]">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" />
