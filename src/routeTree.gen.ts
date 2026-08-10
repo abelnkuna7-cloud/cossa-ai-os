@@ -69,6 +69,7 @@ import { Route as MarketingBrandRouteImport } from './routes/marketing.brand'
 import { Route as MarketingAiDirectorRouteImport } from './routes/marketing.ai-director'
 import { Route as ApiWebsiteHealthRouteImport } from './routes/api/website-health'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiAiProviderStatusRouteImport } from './routes/api/ai-provider-status'
 import { Route as AiWorkforceRouteImport } from './routes/ai.workforce'
 import { Route as AiWorkflowRouteImport } from './routes/ai.workflow'
 import { Route as AiVoiceRouteImport } from './routes/ai.voice'
@@ -391,6 +392,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAiProviderStatusRoute = ApiAiProviderStatusRouteImport.update({
+  id: '/api/ai-provider-status',
+  path: '/api/ai-provider-status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AiWorkforceRoute = AiWorkforceRouteImport.update({
   id: '/ai/workforce',
   path: '/ai/workforce',
@@ -531,6 +537,7 @@ export interface FileRoutesByFullPath {
   '/ai/voice': typeof AiVoiceRoute
   '/ai/workflow': typeof AiWorkflowRoute
   '/ai/workforce': typeof AiWorkforceRoute
+  '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
@@ -613,6 +620,7 @@ export interface FileRoutesByTo {
   '/ai/voice': typeof AiVoiceRoute
   '/ai/workflow': typeof AiWorkflowRoute
   '/ai/workforce': typeof AiWorkforceRoute
+  '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
@@ -696,6 +704,7 @@ export interface FileRoutesById {
   '/ai/voice': typeof AiVoiceRoute
   '/ai/workflow': typeof AiWorkflowRoute
   '/ai/workforce': typeof AiWorkforceRoute
+  '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
@@ -780,6 +789,7 @@ export interface FileRouteTypes {
     | '/ai/voice'
     | '/ai/workflow'
     | '/ai/workforce'
+    | '/api/ai-provider-status'
     | '/api/chat'
     | '/api/website-health'
     | '/marketing/ai-director'
@@ -862,6 +872,7 @@ export interface FileRouteTypes {
     | '/ai/voice'
     | '/ai/workflow'
     | '/ai/workforce'
+    | '/api/ai-provider-status'
     | '/api/chat'
     | '/api/website-health'
     | '/marketing/ai-director'
@@ -944,6 +955,7 @@ export interface FileRouteTypes {
     | '/ai/voice'
     | '/ai/workflow'
     | '/ai/workforce'
+    | '/api/ai-provider-status'
     | '/api/chat'
     | '/api/website-health'
     | '/marketing/ai-director'
@@ -1027,6 +1039,7 @@ export interface RootRouteChildren {
   AiVoiceRoute: typeof AiVoiceRoute
   AiWorkflowRoute: typeof AiWorkflowRoute
   AiWorkforceRoute: typeof AiWorkforceRoute
+  ApiAiProviderStatusRoute: typeof ApiAiProviderStatusRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiWebsiteHealthRoute: typeof ApiWebsiteHealthRoute
   MarketingAiDirectorRoute: typeof MarketingAiDirectorRoute
@@ -1493,6 +1506,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/ai-provider-status': {
+      id: '/api/ai-provider-status'
+      path: '/api/ai-provider-status'
+      fullPath: '/api/ai-provider-status'
+      preLoaderRoute: typeof ApiAiProviderStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ai/workforce': {
       id: '/ai/workforce'
       path: '/ai/workforce'
@@ -1675,6 +1695,7 @@ const rootRouteChildren: RootRouteChildren = {
   AiVoiceRoute: AiVoiceRoute,
   AiWorkflowRoute: AiWorkflowRoute,
   AiWorkforceRoute: AiWorkforceRoute,
+  ApiAiProviderStatusRoute: ApiAiProviderStatusRoute,
   ApiChatRoute: ApiChatRoute,
   ApiWebsiteHealthRoute: ApiWebsiteHealthRoute,
   MarketingAiDirectorRoute: MarketingAiDirectorRoute,

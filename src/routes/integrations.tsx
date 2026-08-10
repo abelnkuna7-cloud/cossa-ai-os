@@ -1,13 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
   Activity,
+  AlertTriangle,
   ArrowRight,
   BrainCircuit,
+  CheckCircle2,
   Database,
   ExternalLink,
   FileSearch,
   KeyRound,
+  Loader2,
   Mail,
   Megaphone,
   Plug,
@@ -17,6 +21,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
+import {
+  checkOpenAiConnection,
+  getAiProviderStatus,
+  type OpenAiConnectionCheck,
+} from "@/lib/ai-provider-status";
 import { COSSA_SOCIAL_PROFILES } from "@/lib/cossa-marketing-profile";
 import type { ModuleStatus } from "@/lib/modules";
 import { cn } from "@/lib/utils";
@@ -61,6 +70,7 @@ interface Integration {
   activation: string;
   safeguards: string[];
   connectionLabel?: string;
+  connectionState?: "checking" | "configured" | "not-connected" | "error";
 }
 
 const cossaSources: CossaSource[] = [
@@ -129,9 +139,10 @@ const integrations: Integration[] = [
     blurb: "Optional high-reasoning route for Cossa AI. The owner explicitly chooses it; Economy mode remains the lower-cost default.",
     short: "AI",
     activation:
-      "The server-side Cossa AI route is ready after the next deployment. It uses an approved OpenAI project key held only in protected server settings; it never sends the key to a browser.",
+      "The protected server setting is checked from this page after deployment. The credential is never exposed to the browser. Run the owner connection check to verify that the configured OpenAI project can access the selected model; it sends no Cossa data and creates no chat completion.",
     safeguards: ["Owner-selected usage", "No browser API key", "Human review of output", "Approved data scope"],
-    connectionLabel: "Ready after deployment",
+    connectionLabel: "Checking deployment…",
+    connectionState: "checking",
   },
   {
     name: "Grok",
@@ -346,10 +357,55 @@ function Integrations() {
   const [group, setGroup] = useState<Group>("All");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const providerStatus = useQuery({
+    queryKey: ["ai-provider-status"],
+    queryFn: getAiProviderStatus,
+    retry: false,
+    staleTime: 30_000,
+  });
+  const openAiConnection = useMutation({ mutationFn: checkOpenAiConnection });
+
+  const resolvedIntegrations = useMemo(() => {
+    return integrations.map((integration) => {
+      if (integration.name !== "OpenAI") {
+        return integration;
+      }
+
+      if (providerStatus.isPending) {
+        return {
+          ...integration,
+          connectionLabel: "Checking deployment…",
+          connectionState: "checking" as const,
+        };
+      }
+
+      if (providerStatus.isError) {
+        return {
+          ...integration,
+          connectionLabel: "Status check unavailable",
+          connectionState: "error" as const,
+        };
+      }
+
+      if (providerStatus.data?.openai.configured) {
+        return {
+          ...integration,
+          connectionLabel: "Server key configured",
+          connectionState: "configured" as const,
+        };
+      }
+
+      return {
+        ...integration,
+        connectionLabel: "Not configured on this deployment",
+        connectionState: "not-connected" as const,
+      };
+    });
+  }, [providerStatus.data, providerStatus.isError, providerStatus.isPending]);
 
   const list = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return integrations.filter((integration) => {
+    return resolvedIntegrations.filter((integration) => {
       const groupMatches = group === "All" || integration.group === group;
       const searchMatches =
         !query ||
@@ -358,7 +414,7 @@ function Integrations() {
           .includes(query);
       return groupMatches && searchMatches;
     });
-  }, [group, search]);
+  }, [group, resolvedIntegrations, search]);
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
@@ -481,6 +537,16 @@ function Integrations() {
                 key={integration.name}
                 integration={integration}
                 expanded={expanded === integration.name}
+                openAiCheck={
+                  integration.name === "OpenAI"
+                    ? {
+                        result: openAiConnection.data,
+                        error: openAiConnection.error,
+                        isChecking: openAiConnection.isPending,
+                        onCheck: () => openAiConnection.mutate(),
+                      }
+                    : undefined
+                }
                 onToggle={() =>
                   setExpanded((current) => (current === integration.name ? null : integration.name))
                 }
@@ -572,15 +638,24 @@ function SocialProfileCard({ profile }: { profile: (typeof COSSA_SOCIAL_PROFILES
 function IntegrationCard({
   integration,
   expanded,
+  openAiCheck,
   onToggle,
 }: {
   integration: Integration;
   expanded: boolean;
+  openAiCheck?: {
+    result?: OpenAiConnectionCheck;
+    error: Error | null;
+    isChecking: boolean;
+    onCheck: () => void;
+  };
   onToggle: () => void;
 }) {
   const GroupIcon = groupIcons[integration.group];
   const detailsId = `integration-${integration.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-  const connectionReady = Boolean(integration.connectionLabel);
+  const connectionReady = integration.connectionState === "configured";
+  const connectionChecking = integration.connectionState === "checking";
+  const connectionError = integration.connectionState === "error";
 
   return (
     <article className="glass-card flex flex-col gap-3 p-5">
@@ -602,7 +677,11 @@ function IntegrationCard({
           "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]",
           connectionReady
             ? "border-info/30 bg-info/10 text-info"
-            : "border-warning/30 bg-warning/10 text-warning",
+            : connectionChecking
+              ? "border-border/60 bg-card/40 text-muted-foreground"
+              : connectionError
+                ? "border-destructive/30 bg-destructive/10 text-destructive"
+                : "border-warning/30 bg-warning/10 text-warning",
         )}>
           <KeyRound className="h-3 w-3" /> {integration.connectionLabel ?? "Not connected"}
         </span>
@@ -632,6 +711,35 @@ function IntegrationCard({
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
             <span>{integration.safeguards.join(" · ")}</span>
           </div>
+          {openAiCheck ? (
+            <div className="mt-4 border-t border-primary/15 pt-3">
+              <Button
+                type="button"
+                size="sm"
+                onClick={openAiCheck.onCheck}
+                disabled={openAiCheck.isChecking}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {openAiCheck.isChecking ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <KeyRound className="mr-1.5 h-3.5 w-3.5" />}
+                {openAiCheck.isChecking ? "Checking protected connection…" : "Check OpenAI connection"}
+              </Button>
+              <p className="mt-2 text-[11px] leading-relaxed">
+                This verifies the protected key and model access only. It sends no Cossa information and does not create a paid chat completion.
+              </p>
+              {openAiCheck.result?.connected ? (
+                <p className="mt-3 flex items-start gap-2 text-[11px] leading-relaxed text-success">
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>Connected to {openAiCheck.result.model}. {openAiCheck.result.scope}</span>
+                </p>
+              ) : null}
+              {openAiCheck.error ? (
+                <p className="mt-3 flex items-start gap-2 text-[11px] leading-relaxed text-destructive">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>{openAiCheck.error.message}</span>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </article>

@@ -71,8 +71,14 @@ function KnowledgeBase() {
   }, [docs, search, cat]);
 
   async function handleSave() {
-    const title = editing?.title?.trim() ?? "";
-    const body = editing?.body?.trim() ?? "";
+    const draft = editing;
+
+    if (!draft) {
+      return;
+    }
+
+    const title = draft.title?.trim() ?? "";
+    const body = draft.body?.trim() ?? "";
     const content = body || title;
 
     if (!content) {
@@ -91,15 +97,15 @@ function KnowledgeBase() {
     setSaving(true);
     try {
       await upsertKnowledge({
-        id: editing.id,
+        id: draft.id,
         title: documentTitle,
         body: content,
-        category: editing.category ?? null,
-        tags: editing.tags?.length ? editing.tags : ["company-wide"],
-        source: editing.source ?? null,
-        sourceUrl: editing.source_url ?? null,
+        category: draft.category ?? null,
+        tags: draft.tags?.length ? draft.tags : ["company-wide"],
+        source: draft.source ?? null,
+        sourceUrl: draft.source_url ?? null,
       });
-      toast.success(editing.id ? "Company knowledge updated" : "Company knowledge saved", {
+      toast.success(draft.id ? "Company knowledge updated" : "Company knowledge saved", {
         description: "Verified knowledge will be available to Cossa AI and its specialist chats on their next request.",
       });
       setEditing(null);
