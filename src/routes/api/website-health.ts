@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
-const OFFICIAL_WEBSITE_URL = "https://growth.cossanexusholdings.co.za";
+const OFFICIAL_WEBSITES = [
+  { id: "main", name: "Cossa Nexus Holdings", url: "https://www.cossanexusholdings.co.za" },
+  { id: "store", name: "Cossa Store", url: "https://store.cossanexusholdings.co.za" },
+  { id: "nexdocs", name: "NexDocs", url: "https://nexdocs.cossanexusholdings.co.za" },
+  { id: "growth", name: "GROWTH", url: "https://growth.cossanexusholdings.co.za" },
+] as const;
 const WEBSITE_CHECK_TIMEOUT_MS = 12_000;
 const MAX_HTML_BYTES = 160_000;
 
@@ -149,6 +154,66 @@ function extractTitle(html: string): string | null {
   return title || null;
 }
 
+async function checkWebsite(website: (typeof OFFICIAL_WEBSITES)[number]): Promise<WebsiteHealthCheck> {
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WEBSITE_CHECK_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(website.url, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Cossa-Growth-Website-Watch/1.0 (+https://growth.cossanexusholdings.co.za)",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
+    const responseTime = Date.now() - startedAt;
+    const contentType = response.headers.get("content-type") ?? "";
+    const html = contentType.includes("text/html") ? await readHtmlPreview(response) : "";
+    const pageTitle = extractTitle(html);
+    const robots = `${response.headers.get("x-robots-tag") ?? ""} ${html.match(/<meta[^>]+name=["']robots["'][^>]*content=["']([^"']*)/i)?.[1] ?? ""}`;
+    const noindexDetected = /\bnoindex\b/i.test(robots);
+    const issues: string[] = [];
+
+    if (!response.ok) issues.push(`The homepage returned HTTP ${response.status}.`);
+    if (response.ok && !pageTitle) issues.push("A page title could not be detected in the homepage response.");
+    if (noindexDetected) issues.push("The homepage response indicates noindex, which can prevent search indexing.");
+    if (response.ok && responseTime > 5_000) issues.push(`Homepage response was slow (${(responseTime / 1_000).toFixed(1)} seconds).`);
+
+    return {
+      id: website.id,
+      name: website.name,
+      website: website.url,
+      final_url: response.url || website.url,
+      availability: response.ok ? (issues.length > 0 ? "degraded" : "healthy") : "unavailable",
+      http_status: response.status,
+      response_time_ms: responseTime,
+      page_title: pageTitle,
+      title_detected: Boolean(pageTitle),
+      noindex_detected: noindexDetected,
+      issues,
+    };
+  } catch {
+    return {
+      id: website.id,
+      name: website.name,
+      website: website.url,
+      final_url: null,
+      availability: "unavailable",
+      http_status: null,
+      response_time_ms: Date.now() - startedAt,
+      page_title: null,
+      title_detected: false,
+      noindex_detected: false,
+      issues: ["The homepage could not be reached before the check timed out."],
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function responseJson(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -198,82 +263,14 @@ export const Route = createFileRoute("/api/website-health")({
         }
 
         const checkedAt = new Date().toISOString();
-        const startedAt = Date.now();
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), WEBSITE_CHECK_TIMEOUT_MS);
+        const checks = await Promise.all(OFFICIAL_WEBSITES.map((website) => checkWebsite(website)));
 
-        try {
-          const response = await fetch(OFFICIAL_WEBSITE_URL, {
-            method: "GET",
-            redirect: "follow",
-            signal: controller.signal,
-            headers: {
-              "User-Agent":
-                "Cossa-Growth-Website-Watch/1.0 (+https://growth.cossanexusholdings.co.za)",
-              Accept: "text/html,application/xhtml+xml",
-            },
-          });
-          const responseTime = Date.now() - startedAt;
-          const contentType = response.headers.get("content-type") ?? "";
-          const html = contentType.includes("text/html") ? await readHtmlPreview(response) : "";
-          const pageTitle = extractTitle(html);
-          const robots = `${response.headers.get("x-robots-tag") ?? ""} ${html.match(/<meta[^>]+name=["']robots["'][^>]*content=["']([^"']*)/i)?.[1] ?? ""}`;
-          const noindexDetected = /\bnoindex\b/i.test(robots);
-          const issues: string[] = [];
-
-          if (!response.ok) {
-            issues.push(`The official website returned HTTP ${response.status}.`);
-          }
-          if (response.ok && !pageTitle) {
-            issues.push("A page title could not be detected in the homepage response.");
-          }
-          if (noindexDetected) {
-            issues.push(
-              "The homepage response indicates noindex, which can prevent search indexing.",
-            );
-          }
-          if (response.ok && responseTime > 5_000) {
-            issues.push(
-              `Homepage response was slow (${(responseTime / 1_000).toFixed(1)} seconds).`,
-            );
-          }
-
-          return responseJson({
-            website: OFFICIAL_WEBSITE_URL,
-            final_url: response.url || OFFICIAL_WEBSITE_URL,
-            availability: response.ok
-              ? issues.length > 0
-                ? "degraded"
-                : "healthy"
-              : "unavailable",
-            http_status: response.status,
-            response_time_ms: responseTime,
-            page_title: pageTitle,
-            title_detected: Boolean(pageTitle),
-            noindex_detected: noindexDetected,
-            checked_at: checkedAt,
-            issues,
-            monitoring_scope:
-              "On-demand check of the official homepage only: availability, response time, page title and noindex indication. It does not change the website, publish content or replace a full security, uptime or SEO service.",
-          });
-        } catch {
-          return responseJson({
-            website: OFFICIAL_WEBSITE_URL,
-            final_url: null,
-            availability: "unavailable",
-            http_status: null,
-            response_time_ms: Date.now() - startedAt,
-            page_title: null,
-            title_detected: false,
-            noindex_detected: false,
-            checked_at: checkedAt,
-            issues: ["The official website could not be reached before the check timed out."],
-            monitoring_scope:
-              "On-demand check of the official homepage only: availability, response time, page title and noindex indication. It does not change the website, publish content or replace a full security, uptime or SEO service.",
-          });
-        } finally {
-          clearTimeout(timeout);
-        }
+        return responseJson({
+          checks,
+          checked_at: checkedAt,
+          monitoring_scope:
+            "On-demand checks of the public homepages for Cossa Nexus Holdings, Cossa Store, NexDocs and GROWTH: availability, response time, page title and noindex indication. The checks are read-only; they do not change websites, publish content or replace full security, uptime or SEO services.",
+        });
       },
     },
   },
