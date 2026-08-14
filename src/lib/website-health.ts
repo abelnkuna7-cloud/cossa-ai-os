@@ -2,7 +2,9 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type WebsiteAvailability = "healthy" | "degraded" | "unavailable";
 
-export interface OfficialWebsiteHealthReport {
+export interface CossaWebsiteHealthCheck {
+  id: string;
+  name: string;
   website: string;
   final_url: string | null;
   availability: WebsiteAvailability;
@@ -11,12 +13,16 @@ export interface OfficialWebsiteHealthReport {
   page_title: string | null;
   title_detected: boolean;
   noindex_detected: boolean;
-  checked_at: string;
   issues: string[];
+}
+
+export interface CossaWebsiteHealthReport {
+  checks: CossaWebsiteHealthCheck[];
+  checked_at: string;
   monitoring_scope: string;
 }
 
-export async function checkOfficialWebsite(): Promise<OfficialWebsiteHealthReport> {
+export async function checkCossaWebsites(): Promise<CossaWebsiteHealthReport> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -31,8 +37,8 @@ export async function checkOfficialWebsite(): Promise<OfficialWebsiteHealthRepor
     },
   });
 
-  const payload = await response.json().catch(() => null) as
-    | OfficialWebsiteHealthReport
+  const payload = (await response.json().catch(() => null)) as
+    | CossaWebsiteHealthReport
     | { error?: string }
     | null;
 
@@ -44,5 +50,5 @@ export async function checkOfficialWebsite(): Promise<OfficialWebsiteHealthRepor
     );
   }
 
-  return payload as OfficialWebsiteHealthReport;
+  return payload as CossaWebsiteHealthReport;
 }
