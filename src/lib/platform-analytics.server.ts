@@ -44,6 +44,15 @@ interface GoogleAnalyticsRunReportResponse {
   rows?: GoogleAnalyticsRow[];
 }
 
+class PlatformAnalyticsConnectionError extends Error {
+  constructor(
+    readonly stage: string,
+    readonly upstreamStatus?: number,
+  ) {
+    super(stage);
+  }
+}
+
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
@@ -195,12 +204,17 @@ async function exchangeVercelIdentityForGoogleToken(
   });
 
   if (!response.ok) {
-    throw new Error("Google workload exchange failed.");
+    throw new PlatformAnalyticsConnectionError(
+      "workload_identity_exchange",
+      response.status,
+    );
   }
 
   const payload = (await response.json()) as GoogleTokenResponse;
   if (!payload.access_token) {
-    throw new Error("Google workload exchange returned no access token.");
+    throw new PlatformAnalyticsConnectionError(
+      "workload_identity_exchange_token",
+    );
   }
 
   return payload.access_token;
@@ -228,12 +242,17 @@ async function impersonateAnalyticsReader(
   );
 
   if (!response.ok) {
-    throw new Error("Google service account impersonation failed.");
+    throw new PlatformAnalyticsConnectionError(
+      "service_account_impersonation",
+      response.status,
+    );
   }
 
   const payload = (await response.json()) as GoogleTokenResponse;
   if (!payload.access_token) {
-    throw new Error("Google service account returned no access token.");
+    throw new PlatformAnalyticsConnectionError(
+      "service_account_impersonation_token",
+    );
   }
 
   return payload.access_token;
@@ -258,7 +277,10 @@ async function runReport(
   );
 
   if (!response.ok) {
-    throw new Error("Google Analytics did not return a report.");
+    throw new PlatformAnalyticsConnectionError(
+      "ga4_report",
+      response.status,
+    );
   }
 
   return (await response.json()) as GoogleAnalyticsRunReportResponse;
@@ -308,6 +330,9 @@ export async function getPlatformAnalyticsResponse(request: Request): Promise<Re
   const oidcToken =
     request.headers.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN;
   if (!oidcToken) {
+    console.warn("[platform-analytics] connection unavailable", {
+      stage: "vercel_oidc_token",
+    });
     return responseJson(
       {
         error:
@@ -374,7 +399,18 @@ export async function getPlatformAnalyticsResponse(request: Request): Promise<Re
       reporting_scope:
         "Private, read-only aggregate traffic for connected Cossa platforms over the last 28 days. This dashboard never receives visitor identities, Google passwords, advertising controls or long-lived Google keys.",
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof PlatformAnalyticsConnectionError) {
+      console.error("[platform-analytics] connection failed", {
+        stage: error.stage,
+        upstream_status: error.upstreamStatus ?? null,
+      });
+    } else {
+      console.error("[platform-analytics] connection failed", {
+        stage: "unexpected",
+      });
+    }
+
     return responseJson(
       {
         error:
