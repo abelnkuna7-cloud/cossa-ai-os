@@ -76,7 +76,7 @@ function WebsiteMonitoring() {
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <Globe2 className="h-5 w-5" />
               </div>
-              <StatusBadge status={report ? "Live" : workspaceRuntimeStatus()} />
+              <StatusBadge status={reports.length > 0 ? "Live" : workspaceRuntimeStatus()} />
             </div>
             <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
               Website <span className="text-gradient-gold">Watch</span>
