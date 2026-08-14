@@ -1,17 +1,15 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  Activity,
   AlertTriangle,
   BarChart3,
-  CheckCircle2,
   ExternalLink,
   Globe2,
   Loader2,
   RefreshCw,
   ShieldCheck,
-  UserRoundCheck,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import {
@@ -19,6 +17,10 @@ import {
   GrowthAnalyticsError,
   startGrowthAnalyticsOAuth,
 } from "@/lib/growth-analytics";
+import {
+  getPlatformAnalyticsReport,
+  PlatformAnalyticsError,
+} from "@/lib/platform-analytics";
 import { checkCossaWebsites } from "@/lib/website-health";
 import { cn } from "@/lib/utils";
 import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
@@ -31,7 +33,7 @@ export const Route = createFileRoute("/marketing/monitoring")({
       {
         name: "description",
         content:
-          "A controlled health check for the public GROWTH website, with no website changes or publishing.",
+          "A controlled, private reporting view for Cossa websites and connected platform traffic.",
       },
     ],
   }),
@@ -44,6 +46,12 @@ function WebsiteMonitoring() {
     retry: false,
     staleTime: 30_000,
   });
+  const platformCheck = useQuery({
+    queryKey: ["cossa-platform-analytics"],
+    queryFn: getPlatformAnalyticsReport,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
   const analyticsCheck = useQuery({
     queryKey: ["growth-analytics-report"],
     queryFn: getGrowthAnalyticsReport,
@@ -54,17 +62,27 @@ function WebsiteMonitoring() {
     mutationFn: startGrowthAnalyticsOAuth,
     onSuccess: (authorizationUrl) => window.location.assign(authorizationUrl),
   });
+
   const reports = websiteCheck.data?.checks ?? [];
+  const platformSources = platformCheck.data?.sources ?? [];
   const analytics = analyticsCheck.data;
   const analyticsError = analyticsConnection.error ?? analyticsCheck.error;
   const analyticsConfigurationPending =
     analyticsError instanceof GrowthAnalyticsError &&
     analyticsError.code === "configuration-pending";
   const analyticsApprovalRequired =
-    analyticsError instanceof GrowthAnalyticsError && analyticsError.code === "approval-required";
+    analyticsError instanceof GrowthAnalyticsError &&
+    analyticsError.code === "approval-required";
+  const platformConfigurationPending =
+    platformCheck.error instanceof PlatformAnalyticsError &&
+    platformCheck.error.code === "configuration-pending";
   const isChecking = websiteCheck.isFetching;
-  const unavailableCount = reports.filter((report) => report.availability === "unavailable").length;
-  const healthyCount = reports.filter((report) => report.availability === "healthy").length;
+  const unavailableCount = reports.filter(
+    (report) => report.availability === "unavailable",
+  ).length;
+  const healthyCount = reports.filter(
+    (report) => report.availability === "healthy",
+  ).length;
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
@@ -76,15 +94,17 @@ function WebsiteMonitoring() {
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <Globe2 className="h-5 w-5" />
               </div>
-              <StatusBadge status={reports.length > 0 ? "Live" : workspaceRuntimeStatus()} />
+              <StatusBadge
+                status={reports.length > 0 ? "Live" : workspaceRuntimeStatus()}
+              />
             </div>
             <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
               Website <span className="text-gradient-gold">Watch</span>
             </h1>
             <p className="mt-2 max-w-3xl text-muted-foreground">
-              A direct, read-only check of the Cossa Nexus Holdings, Store, NexDocs and GROWTH
-              homepages. It checks public availability and indexing signals without editing,
-              publishing or claiming a full SEO audit.
+              One private Cossa workspace for public website health and connected
+              traffic summaries. It is read-only: it does not publish, edit a
+              website, control advertising or expose visitor identities.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -106,7 +126,11 @@ function WebsiteMonitoring() {
               variant="outline"
               className="border-primary/40 text-primary hover:bg-primary/10"
             >
-              <a href="https://www.cossanexusholdings.co.za" target="_blank" rel="noreferrer">
+              <a
+                href="https://www.cossanexusholdings.co.za"
+                target="_blank"
+                rel="noreferrer"
+              >
                 Open main website <ExternalLink className="ml-1.5 h-4 w-4" />
               </a>
             </Button>
@@ -122,14 +146,159 @@ function WebsiteMonitoring() {
             </div>
             <div>
               <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                Authorised reporting source
+                Connected platform traffic
               </p>
-              <h2 className="mt-1 font-display text-xl font-semibold">GROWTH Google Analytics</h2>
+              <h2 className="mt-1 font-display text-xl font-semibold">
+                Cossa platform performance
+              </h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Confirmed property <span className="font-medium text-foreground">542695998</span>{" "}
-                and measurement ID <span className="font-medium text-foreground">G-EWW4BPZN6R</span>
-                . The workspace can read aggregate reporting only after a Cossa owner approves the
-                protected, read-only Google OAuth connection.
+                NexDocs is the first connected source. Main website and Store
+                traffic will appear here after their own read-only GA4 access is
+                connected. This report uses short-lived server identity, not a
+                Google password or a key file.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void platformCheck.refetch()}
+            disabled={platformCheck.isFetching}
+            className="shrink-0 border-primary/40 text-primary hover:bg-primary/10"
+          >
+            {platformCheck.isFetching ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1.5 h-4 w-4" />
+            )}
+            Refresh platform traffic
+          </Button>
+        </div>
+
+        {platformConfigurationPending ? (
+          <Notice
+            tone="primary"
+            title="Secure NexDocs reporting is waiting for its protected server settings"
+          >
+            Add the five non-secret connection identifiers to the live GROWTH
+            project, then redeploy. No Google key, password or visitor record is
+            requested or stored.
+          </Notice>
+        ) : platformCheck.isError ? (
+          <Notice tone="warning" title="Platform traffic is not available yet">
+            {platformCheck.error instanceof Error
+              ? platformCheck.error.message
+              : "The private connected traffic report could not be loaded."}
+          </Notice>
+        ) : platformSources.length > 0 ? (
+          <>
+            <div className="mt-5 grid gap-4 xl:grid-cols-2">
+              {platformSources.map((source) => (
+                <article
+                  key={source.id}
+                  className="rounded-xl border border-border/60 bg-card/40 p-4"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                        Connected source
+                      </p>
+                      <h3 className="mt-1 text-lg font-semibold">{source.name}</h3>
+                      <a
+                        className="mt-1 inline-flex items-center text-xs text-muted-foreground transition-colors hover:text-primary"
+                        href={source.site_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {source.site_url.replace(/^https:\/\//, "")}
+                        <ExternalLink className="ml-1 h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                    <span className="rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[10px] font-medium uppercase tracking-widest text-success">
+                      Read only
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                    <Metric label="Active users" value={String(source.active_users)} />
+                    <Metric label="Sessions" value={String(source.sessions)} />
+                    <Metric label="Page views" value={String(source.page_views)} />
+                    <Metric label="New users" value={String(source.new_users)} />
+                    <Metric
+                      label="Engaged sessions"
+                      value={String(source.engaged_sessions)}
+                    />
+                    <Metric label="Key events" value={String(source.key_events)} />
+                  </div>
+
+                  <div className="mt-4 rounded-lg border border-border/60 bg-background/20 p-3">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      Top acquisition channels
+                    </p>
+                    {source.channels.length === 0 ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        No channel rows were returned for this period.
+                      </p>
+                    ) : (
+                      <div className="mt-2 space-y-2">
+                        {source.channels.map((channel) => (
+                          <div
+                            key={channel.name}
+                            className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 text-xs"
+                          >
+                            <span className="truncate font-medium">{channel.name}</span>
+                            <span className="text-muted-foreground">
+                              {channel.sessions} sessions
+                            </span>
+                            <span className="text-primary">
+                              {channel.key_events} key events
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="mt-4 rounded-lg border border-border/60 bg-card/40 p-4 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">Reporting boundary</p>
+              <p className="mt-1 leading-5">
+                {platformCheck.data?.reporting_scope}
+              </p>
+              <p className="mt-2">
+                Last refreshed{" "}
+                {new Date(platformCheck.data?.fetched_at ?? "").toLocaleString()}.
+              </p>
+            </div>
+          </>
+        ) : (
+          <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading private platform traffic…
+          </div>
+        )}
+      </section>
+
+      <section className="glass-card p-5 md:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <BarChart3 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                Existing GROWTH Analytics
+              </p>
+              <h2 className="mt-1 font-display text-xl font-semibold">
+                GROWTH Google Analytics
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                Confirmed GROWTH property{" "}
+                <span className="font-medium text-foreground">542695998</span>{" "}
+                and measurement ID{" "}
+                <span className="font-medium text-foreground">G-EWW4BPZN6R</span>.
+                This original read-only connection remains available separately.
               </p>
             </div>
           </div>
@@ -137,7 +306,9 @@ function WebsiteMonitoring() {
             <Button
               type="button"
               onClick={() => analyticsConnection.mutate()}
-              disabled={analyticsConnection.isPending || analyticsConfigurationPending}
+              disabled={
+                analyticsConnection.isPending || analyticsConfigurationPending
+              }
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {analyticsConnection.isPending ? (
@@ -145,7 +316,9 @@ function WebsiteMonitoring() {
               ) : (
                 <ShieldCheck className="mr-1.5 h-4 w-4" />
               )}
-              {analyticsConfigurationPending ? "Secure setup pending" : "Connect Google Analytics"}
+              {analyticsConfigurationPending
+                ? "Secure setup pending"
+                : "Connect GROWTH Analytics"}
             </Button>
             <Button
               type="button"
@@ -159,59 +332,39 @@ function WebsiteMonitoring() {
               ) : (
                 <RefreshCw className="mr-1.5 h-4 w-4" />
               )}
-              Refresh GA4 report
+              Refresh GROWTH report
             </Button>
           </div>
         </div>
 
         {analyticsConfigurationPending ? (
-          <div className="mt-5 flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/10 p-4 text-sm">
-            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <div>
-              <p className="font-medium text-foreground">
-                Secure Google Analytics setup is pending
-              </p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                No Analytics data has been accessed. A Cossa owner must finish the protected server
-                configuration and redeploy GROWTH before Google approval can begin.
-              </p>
-            </div>
-          </div>
+          <Notice
+            tone="primary"
+            title="Secure GROWTH Analytics setup is pending"
+          >
+            No Analytics data has been accessed. A Cossa owner must finish the
+            protected server configuration before the original approval flow can
+            begin.
+          </Notice>
         ) : analyticsApprovalRequired ? (
-          <div className="mt-5 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <p className="font-medium">Google approval is still required</p>
-              <p className="mt-1 text-xs leading-5">
-                A Cossa owner or admin can select Connect Google Analytics to start the read-only
-                approval flow.
-              </p>
-            </div>
-          </div>
+          <Notice tone="warning" title="GROWTH Analytics approval is still required">
+            A Cossa owner or admin can select Connect GROWTH Analytics to start
+            the read-only approval flow.
+          </Notice>
         ) : analyticsConnection.isError ? (
-          <div className="mt-5 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p className="text-xs leading-5">
-              {analyticsConnection.error instanceof Error
-                ? analyticsConnection.error.message
-                : "Google Analytics connection could not be started."}
-            </p>
-          </div>
+          <Notice tone="danger" title="GROWTH Analytics connection could not start">
+            {analyticsConnection.error instanceof Error
+              ? analyticsConnection.error.message
+              : "Google Analytics connection could not be started."}
+          </Notice>
         ) : null}
 
-        {analyticsConfigurationPending ||
-        analyticsApprovalRequired ? null : analyticsCheck.isError ? (
-          <div className="mt-5 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <p className="font-medium">GA4 reporting is not connected yet</p>
-              <p className="mt-1 text-xs leading-5">
-                {analyticsCheck.error instanceof Error
-                  ? analyticsCheck.error.message
-                  : "The authorised GA4 report could not be loaded."}
-              </p>
-            </div>
-          </div>
+        {analyticsConfigurationPending || analyticsApprovalRequired ? null : analyticsCheck.isError ? (
+          <Notice tone="warning" title="GROWTH Analytics is not connected yet">
+            {analyticsCheck.error instanceof Error
+              ? analyticsCheck.error.message
+              : "The authorised GROWTH GA4 report could not be loaded."}
+          </Notice>
         ) : analytics ? (
           <>
             <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -219,7 +372,10 @@ function WebsiteMonitoring() {
               <Metric label="New users" value={String(analytics.new_users)} />
               <Metric label="Sessions" value={String(analytics.sessions)} />
               <Metric label="Page views" value={String(analytics.page_views)} />
-              <Metric label="Engaged sessions" value={String(analytics.engaged_sessions)} />
+              <Metric
+                label="Engaged sessions"
+                value={String(analytics.engaged_sessions)}
+              />
               <Metric label="Key events" value={String(analytics.key_events)} />
             </div>
 
@@ -240,8 +396,12 @@ function WebsiteMonitoring() {
                         className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 text-sm"
                       >
                         <span className="truncate font-medium">{channel.name}</span>
-                        <span className="text-muted-foreground">{channel.sessions} sessions</span>
-                        <span className="text-primary">{channel.key_events} key events</span>
+                        <span className="text-muted-foreground">
+                          {channel.sessions} sessions
+                        </span>
+                        <span className="text-primary">
+                          {channel.key_events} key events
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -249,16 +409,20 @@ function WebsiteMonitoring() {
               </div>
               <div className="rounded-lg border border-border/60 bg-card/40 p-4 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground">Reporting boundary</p>
-                <p className="mt-2 text-xs leading-5">{analytics.reporting_scope}</p>
+                <p className="mt-2 text-xs leading-5">
+                  {analytics.reporting_scope}
+                </p>
                 <p className="mt-3 text-xs">
-                  Last refreshed {new Date(analytics.fetched_at).toLocaleString()}.
+                  Last refreshed{" "}
+                  {new Date(analytics.fetched_at).toLocaleString()}.
                 </p>
               </div>
             </div>
           </>
         ) : (
           <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading authorised GA4 status…
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading authorised GROWTH GA4 status…
           </div>
         )}
       </section>
@@ -269,7 +433,9 @@ function WebsiteMonitoring() {
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
               Verified check result
             </p>
-            <h2 className="mt-1 font-display text-xl font-semibold">Cossa website estate health</h2>
+            <h2 className="mt-1 font-display text-xl font-semibold">
+              Cossa website estate health
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Four public homepages checked from one read-only Growth workspace.
             </p>
@@ -293,14 +459,11 @@ function WebsiteMonitoring() {
         </div>
 
         {websiteCheck.isError ? (
-          <div className="mt-5 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              {websiteCheck.error instanceof Error
-                ? websiteCheck.error.message
-                : "The website checks could not be completed."}
-            </span>
-          </div>
+          <Notice tone="danger" title="The website checks could not be completed">
+            {websiteCheck.error instanceof Error
+              ? websiteCheck.error.message
+              : "The website checks could not be completed."}
+          </Notice>
         ) : reports.length > 0 ? (
           <>
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -331,24 +494,32 @@ function WebsiteMonitoring() {
                     <span>HTTP: {report.http_status ?? "—"}</span>
                     <span>{report.response_time_ms ?? "—"} ms</span>
                     <span>{report.title_detected ? "Title found" : "No title"}</span>
-                    <span>{report.noindex_detected ? "Noindex found" : "Indexable"}</span>
+                    <span>
+                      {report.noindex_detected ? "Noindex found" : "Indexable"}
+                    </span>
                   </div>
                   {report.issues.length > 0 ? (
-                    <p className="mt-3 text-xs leading-5 text-warning">{report.issues[0]}</p>
+                    <p className="mt-3 text-xs leading-5 text-warning">
+                      {report.issues[0]}
+                    </p>
                   ) : (
-                    <p className="mt-3 text-xs text-success">No issue found by this limited check.</p>
+                    <p className="mt-3 text-xs text-success">
+                      No issue found by this limited check.
+                    </p>
                   )}
                 </a>
               ))}
             </div>
             <p className="mt-4 text-xs text-muted-foreground">
-              Checked {new Date(websiteCheck.data?.checked_at ?? "").toLocaleString()}.{" "}
-              {websiteCheck.data?.monitoring_scope}
+              Checked{" "}
+              {new Date(websiteCheck.data?.checked_at ?? "").toLocaleString()}.
+              {" "}{websiteCheck.data?.monitoring_scope}
             </p>
           </>
         ) : (
           <div className="mt-5 rounded-lg border border-dashed border-border/60 p-5 text-sm text-muted-foreground">
-            The first live check starts automatically while this page opens. You can check all Cossa sites at any time.
+            The first live check starts automatically while this page opens. You
+            can check all Cossa sites at any time.
           </div>
         )}
       </section>
@@ -359,10 +530,11 @@ function WebsiteMonitoring() {
           <div>
             <p className="font-medium">Current monitoring boundary</p>
             <p className="mt-1 text-xs leading-5">
-              This is a real on-demand check of the four public homepages. The GA4 section currently
-              reads aggregate data only from the approved GROWTH property. Sitewide traffic requires
-              the relevant GA4 properties to be approved separately. Neither feature changes a
-              website, publishes content or replaces full security, uptime or SEO monitoring.
+              Website Watch performs real on-demand checks of four public
+              homepages. Connected platform traffic is private, read-only,
+              aggregate GA4 data. The report never changes a website, publishes
+              content, controls advertising or replaces full security, uptime or
+              SEO monitoring.
             </p>
           </div>
         </div>
@@ -371,10 +543,42 @@ function WebsiteMonitoring() {
   );
 }
 
+function Notice({
+  children,
+  title,
+  tone,
+}: {
+  children: React.ReactNode;
+  title: string;
+  tone: "primary" | "warning" | "danger";
+}) {
+  const toneClassName = {
+    primary: "border-primary/30 bg-primary/10",
+    warning: "border-warning/30 bg-warning/10 text-warning",
+    danger: "border-destructive/30 bg-destructive/10 text-destructive",
+  }[tone];
+
+  return (
+    <div className={cn("mt-5 flex items-start gap-3 rounded-lg p-4 text-sm", toneClassName)}>
+      {tone === "danger" || tone === "warning" ? (
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      ) : (
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+      )}
+      <div>
+        <p className="font-medium text-foreground">{title}</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{children}</p>
+      </div>
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border/60 bg-card/40 p-3">
-      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-1 text-sm font-semibold">{value}</p>
     </div>
   );
