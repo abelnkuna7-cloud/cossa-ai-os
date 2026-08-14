@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -548,7 +549,7 @@ function Notice({
   title,
   tone,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   title: string;
   tone: "primary" | "warning" | "danger";
 }) {
