@@ -52,3 +52,29 @@ export async function checkCossaWebsites(): Promise<CossaWebsiteHealthReport> {
 
   return payload as CossaWebsiteHealthReport;
 }
+
+/**
+ * Keeps the AI Workforce website stage compatible with the previous one-site
+ * evidence format while using the same controlled, read-only endpoint.
+ */
+export interface OfficialWebsiteHealthReport extends CossaWebsiteHealthCheck {
+  checked_at: string;
+  monitoring_scope: string;
+}
+
+export async function checkOfficialWebsite(): Promise<OfficialWebsiteHealthReport> {
+  const report = await checkCossaWebsites();
+  const main =
+    report.checks.find((check) => check.id === "main") ??
+    report.checks[0];
+
+  if (!main) {
+    throw new Error("The website health check returned no Cossa sites.");
+  }
+
+  return {
+    ...main,
+    checked_at: report.checked_at,
+    monitoring_scope: report.monitoring_scope,
+  };
+}
