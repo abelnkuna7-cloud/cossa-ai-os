@@ -168,6 +168,11 @@ export const Route = createRootRouteWithContext<{
       },
       {
         rel: "icon",
+        href: "/favicon.svg",
+        type: "image/svg+xml",
+      },
+      {
+        rel: "apple-touch-icon",
         href: GROWTH_BRAND.assets.growthSymbol,
         type: "image/jpeg",
       },

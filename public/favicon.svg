@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <title>Cossa Growth</title>
+  <defs>
+    <linearGradient id="gold" x1="6" y1="4" x2="42" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD56A"/>
+      <stop offset="0.48" stop-color="#DDAE2B"/>
+      <stop offset="1" stop-color="#9C6812"/>
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="12" fill="#071426"/>
+  <path d="M24 5.5a18.5 18.5 0 1 0 16.8 26.3v-9.1H25.1v6.4h8.7a12.2 12.2 0 1 1-2.7-13.2l4.8-4.7A18.4 18.4 0 0 0 24 5.5Z" fill="url(#gold)"/>
+  <path d="M27.2 23.3h13.6v14.1H27.2z" fill="#071426"/>
+  <path d="M40.8 22.7H25.1v6.4h9.1a12.3 12.3 0 0 1-1.7 4.1l4.7 4.8a18.4 18.4 0 0 0 3.6-10.9v-4.4Z" fill="url(#gold)"/>
+  <circle cx="39.2" cy="9.2" r="3.3" fill="#28C7C0"/>
+</svg>
