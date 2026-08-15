@@ -43,7 +43,6 @@ import {
   COSSA_GROWTH_WORKFORCE,
   completeControlledWorkforceRun,
   createGrowthCoordinationMission,
-  decideApproval,
   failControlledWorkforceRun,
   installCossaGrowthWorkforce,
   listEmployeeHandoffs,
@@ -103,62 +102,82 @@ const DEFAULT_WORKFORCE_MODEL =
   "llama-3.3-70b-versatile";
 
 /**
- * IMPORTANT
+ * This must match the real Growth workflow created in workforce-data.ts.
  *
- * This array represents the workflow that createGrowthCoordinationMission()
- * currently creates in workforce-data.ts.
+ * The source of truth is now the full nine-stage collaboration line:
  *
- * Do not add a worker here as an executable stage until workforce-data.ts
- * creates a real handoff for that employee.
+ * Website
+ * → Strategy
+ * → Content
+ * → Creative
+ * → Schedule
+ * → Social Management
+ * → Growth Analysis
+ * → Paid Media
+ * → AI CEO
  */
 const EXECUTABLE_GROWTH_WORKFLOW = [
   {
     key: "website-seo-monitor",
     label: "Website intelligence",
     description:
-      "Checks authorised Cossa web properties and passes verified observations into the growth system.",
+      "Checks authorised Cossa web properties and passes verified website, SEO and content observations into the Growth system.",
     icon: Globe2,
   },
   {
     key: "social-strategy-planner",
     label: "Social strategy",
     description:
-      "Builds channel strategy, audience direction, campaign angles and marketing priorities from verified information.",
+      "Builds channel strategy, audience direction, campaign angles, positioning and marketing priorities from verified information.",
     icon: Megaphone,
   },
   {
     key: "content-writer",
     label: "Content production",
     description:
-      "Produces accurate marketing, educational, awareness, pain-point and conversion-focused written content.",
+      "Produces accurate marketing, educational, awareness, pain-point, solution and conversion-focused written content.",
     icon: FilePenLine,
+  },
+  {
+    key: "creative-media-producer",
+    label: "Creative media",
+    description:
+      "Turns content and campaign requirements into production-ready visual briefs, brochures, graphics, banners and media requirements.",
+    icon: ImageIcon,
   },
   {
     key: "social-schedule-coordinator",
     label: "Content coordination",
     description:
-      "Organises approved content into channel schedules and hands execution requirements forward.",
+      "Organises complete copy-and-creative packages into practical channel schedules and publishing queues.",
     icon: PanelTop,
+  },
+  {
+    key: "social-media-manager",
+    label: "Social management",
+    description:
+      "Owns day-to-day channel readiness, publishing preparation, campaign continuity and authorised social execution.",
+    icon: Megaphone,
   },
   {
     key: "account-growth-analyst",
     label: "Growth analysis",
     description:
-      "Analyses authorised account evidence and identifies growth, audience and conversion opportunities.",
+      "Analyses authorised account and campaign evidence to identify audience, content and conversion improvements.",
     icon: UsersRound,
   },
   {
     key: "paid-media-specialist",
     label: "Paid media",
     description:
-      "Prepares advertising strategy while keeping spending, budget and campaign-launch authority owner-controlled.",
+      "Prepares advertising strategy, targeting and optimisation recommendations while spend and launch authority remain owner-controlled.",
     icon: KeyRound,
   },
   {
     key: "ai-ceo",
     label: "AI CEO",
     description:
-      "Synthesises workforce outputs, resolves ordinary internal questions and escalates genuine owner decisions.",
+      "Synthesises workforce outputs, resolves ordinary internal questions and escalates only genuine owner decisions.",
     icon: BrainCircuit,
   },
 ] as const;
@@ -171,65 +190,7 @@ const EXECUTABLE_GROWTH_WORKFLOW_KEYS =
   );
 
 /**
- * Target Growth operating model.
- *
- * These two additional workers are required for the upgraded social operating
- * system, but they should only become executable workflow stages after the
- * workforce-data.ts handoff creator includes them.
- */
-const TARGET_SOCIAL_WORKFLOW = [
-  {
-    key: "website-seo-monitor",
-    label: "Website intelligence",
-    icon: Globe2,
-  },
-  {
-    key: "social-strategy-planner",
-    label: "Social strategy",
-    icon: Megaphone,
-  },
-  {
-    key: "content-writer",
-    label: "Content writer",
-    icon: FilePenLine,
-  },
-  {
-    key: "creative-media-producer",
-    label: "Creative media",
-    icon: ImageIcon,
-  },
-  {
-    key: "social-schedule-coordinator",
-    label: "Schedule",
-    icon: PanelTop,
-  },
-  {
-    key: "social-media-manager",
-    label: "Social manager",
-    icon: Megaphone,
-  },
-  {
-    key: "account-growth-analyst",
-    label: "Growth analysis",
-    icon: UsersRound,
-  },
-  {
-    key: "paid-media-specialist",
-    label: "Paid media",
-    icon: KeyRound,
-  },
-  {
-    key: "ai-ceo",
-    label: "AI CEO",
-    icon: BrainCircuit,
-  },
-] as const;
-
-/**
  * Required specialist roles across the wider Cossa operating system.
- *
- * A role may appear here before its live profile exists. That is intentional:
- * missing operating capability should be visible rather than silently hidden.
  */
 const BUSINESS_OPERATING_ROLES = [
   {
@@ -651,14 +612,9 @@ function employeeOperationalView({
           )
         : "",
 
-      latestHandoff?.completed_at ??
-        "",
-
-      latestHandoff?.accepted_at ??
-        "",
-
-      latestHandoff?.created_at ??
-        "",
+      latestHandoff?.completed_at ?? "",
+      latestHandoff?.accepted_at ?? "",
+      latestHandoff?.created_at ?? "",
     ].filter(Boolean);
 
   const latestActivity =
@@ -670,8 +626,7 @@ function employeeOperationalView({
         right.localeCompare(
           left,
         ),
-    )[0] ??
-    null;
+    )[0] ?? null;
 
   const currentTask =
     acceptedHandoffs[0]?.reason ??
@@ -719,7 +674,8 @@ function employeeOperationalView({
     return {
       ...common,
 
-      state: "inactive",
+      state:
+        "inactive",
 
       label:
         `${formatStatus(
@@ -738,13 +694,52 @@ function employeeOperationalView({
   }
 
   if (
+    activeRuns.length >
+      0 ||
+    acceptedHandoffs.length >
+      0
+  ) {
+    return {
+      ...common,
+
+      state:
+        "working",
+
+      label:
+        "Active — Working",
+
+      detail:
+        "A real workforce run or accepted handoff is currently recorded for this employee.",
+    };
+  }
+
+  if (
+    employeeApprovals.length >
+    0
+  ) {
+    return {
+      ...common,
+
+      state:
+        "approval",
+
+      label:
+        "Active — Approval required",
+
+      detail:
+        "Recorded work has reached an approval-controlled checkpoint.",
+    };
+  }
+
+  if (
     latestRun?.status ===
     "failed"
   ) {
     return {
       ...common,
 
-      state: "attention",
+      state:
+        "attention",
 
       label:
         "Active — Needs attention",
@@ -756,49 +751,14 @@ function employeeOperationalView({
   }
 
   if (
-    employeeApprovals.length >
-    0
-  ) {
-    return {
-      ...common,
-
-      state: "approval",
-
-      label:
-        "Active — Approval required",
-
-      detail:
-        "Recorded work has reached an approval-controlled checkpoint.",
-    };
-  }
-
-  if (
-    activeRuns.length >
-      0 ||
-    acceptedHandoffs.length >
-      0
-  ) {
-    return {
-      ...common,
-
-      state: "working",
-
-      label:
-        "Active — Working",
-
-      detail:
-        "A real workforce run or accepted handoff is currently recorded for this employee.",
-    };
-  }
-
-  if (
     pendingHandoffs.length >
     0
   ) {
     return {
       ...common,
 
-      state: "waiting",
+      state:
+        "waiting",
 
       label:
         "Active — Assigned",
@@ -811,7 +771,8 @@ function employeeOperationalView({
   return {
     ...common,
 
-    state: "idle",
+    state:
+      "idle",
 
     label:
       "Active — Available",
@@ -954,7 +915,7 @@ function controlledStagePrompt({
 
     "Do not behave like a placeholder. If the work can safely be completed with the supplied knowledge and evidence, complete it now.",
 
-    "Do not request owner approval merely for internal analysis, planning, drafting, research synthesis, SEO recommendations, content creation, content scheduling, catalogue review, supplier-candidate analysis or employee-to-employee handoffs.",
+    "Do not request owner approval merely for internal analysis, planning, drafting, research synthesis, SEO recommendations, content creation, creative briefing, content scheduling, catalogue review, supplier-candidate analysis or employee-to-employee handoffs.",
 
     "Escalate only when a genuinely high-risk action requires owner authority, including spending money, legal commitments, signed contracts, supplier orders, credential changes, irreversible account changes or sensitive external communication.",
 
@@ -1459,8 +1420,8 @@ function AiWorkforce() {
         "active",
     ).length;
 
-  const targetSocialRolesActive =
-    TARGET_SOCIAL_WORKFLOW.filter(
+  const executableGrowthRolesActive =
+    EXECUTABLE_GROWTH_WORKFLOW.filter(
       (
         stage,
       ) =>
@@ -1574,37 +1535,76 @@ function AiWorkforce() {
           )
       : [];
 
-  const nextHandoff =
+  /**
+   * Important workflow-order rule:
+   *
+   * We always inspect the FIRST incomplete handoff.
+   *
+   * We never skip an accepted, rejected or otherwise incomplete earlier
+   * employee merely because a later employee is still pending.
+   */
+  const firstIncompleteHandoff =
     selectedMissionHandoffs.find(
       (
         handoff,
       ) =>
-        handoff.status ===
-        "pending",
-    ) ??
-    null;
+        handoff.status !==
+        "completed",
+    ) ?? null;
+
+  const nextHandoff =
+    firstIncompleteHandoff?.status ===
+    "pending"
+      ? firstIncompleteHandoff
+      : null;
+
+  const blockedHandoff =
+    firstIncompleteHandoff &&
+    firstIncompleteHandoff.status !==
+      "pending"
+      ? firstIncompleteHandoff
+      : null;
 
   const nextEmployee =
-    nextHandoff
+    firstIncompleteHandoff
       ? employees.find(
           (
             employee,
           ) =>
             employee.id ===
-            nextHandoff.to_employee_id,
-        ) ??
-        null
+            firstIncompleteHandoff.to_employee_id,
+        ) ?? null
       : null;
 
+  /**
+   * Execution context must flow in chronological order.
+   *
+   * listWorkforceRuns() returns newest-first, so we explicitly sort the
+   * selected mission's runs oldest → newest before passing outputs forward.
+   */
   const selectedMissionRuns =
     selectedMission
-      ? runs.filter(
-          (
-            run,
-          ) =>
-            run.mission_id ===
-            selectedMission.id,
-        )
+      ? runs
+          .filter(
+            (
+              run,
+            ) =>
+              run.mission_id ===
+              selectedMission.id,
+          )
+          .sort(
+            (
+              left,
+              right,
+            ) =>
+              latestRunTime(
+                left,
+              ).localeCompare(
+                latestRunTime(
+                  right,
+                ),
+              ),
+          )
       : [];
 
   const reviewableOutputs =
@@ -1636,18 +1636,13 @@ function AiWorkforce() {
           ),
       );
 
-  const workforceReviewApprovals =
-    approvals.filter(
-      (
-        approval,
-      ) =>
-        approval.action_type ===
-          "review_growth_coordination_output" &&
-        coordinationMissionIds.has(
-          approval.mission_id ??
-            "",
-        ),
-    );
+  /**
+   * Visual display may be newest-first.
+   *
+   * This never changes execution order.
+   */
+  const displayReviewableOutputs =
+    [...reviewableOutputs].reverse();
 
   const isLoading =
     employeesQuery.isLoading ||
@@ -1699,6 +1694,15 @@ function AiWorkforce() {
       );
     }
 
+    if (
+      handoff.status !==
+      "pending"
+    ) {
+      throw new Error(
+        `${employee.name}'s handoff is ${handoff.status}, not pending. The workflow will not skip or duplicate this stage.`,
+      );
+    }
+
     const authorisedEvidence =
       employee.employee_key ===
       "website-seo-monitor"
@@ -1733,7 +1737,8 @@ function AiWorkforce() {
         await streamChat(
           [
             {
-              role: "user",
+              role:
+                "user",
 
               content:
                 controlledStagePrompt({
@@ -1824,12 +1829,27 @@ function AiWorkforce() {
       mutationFn:
         async () => {
           if (
-            !selectedMission ||
+            !selectedMission
+          ) {
+            throw new Error(
+              "Select a Growth coordination mission first.",
+            );
+          }
+
+          if (
+            blockedHandoff
+          ) {
+            throw new Error(
+              `The next workflow stage is currently ${blockedHandoff.status}. Cossa AI will not skip that earlier stage.`,
+            );
+          }
+
+          if (
             !nextHandoff ||
             !nextEmployee
           ) {
             throw new Error(
-              "Select a coordination mission with a pending workforce stage first.",
+              "This mission has no executable pending workforce stage.",
             );
           }
 
@@ -1863,13 +1883,13 @@ function AiWorkforce() {
 
           toast.success(
             finalStage
-              ? "Workforce chain reached its review checkpoint"
+              ? "Growth workforce chain completed"
               : "Employee stage completed",
             {
               description:
                 finalStage
-                  ? "All recorded Growth stages completed. The mission has reached its current review checkpoint."
-                  : "The employee completed its work and the next recorded handoff is ready.",
+                  ? "All recorded Growth stages completed successfully. The mission can now be reviewed as a completed internal workflow."
+                  : "The employee completed its internal work and the next recorded handoff is ready.",
             },
           );
         },
@@ -1909,30 +1929,108 @@ function AiWorkforce() {
 
           if (
             selectedMission.status ===
-              "completed" ||
-            selectedMission.status ===
-              "awaiting_approval"
+            "completed"
           ) {
             throw new Error(
-              "This mission has no safe pending workflow stages available to run.",
+              "This mission is already completed.",
             );
           }
 
-          const pending =
+          if (
+            selectedMission.status ===
+            "awaiting_approval"
+          ) {
+            throw new Error(
+              "This mission is currently paused at an approval-controlled action.",
+            );
+          }
+
+          const incomplete =
             selectedMissionHandoffs.filter(
               (
                 handoff,
               ) =>
-                handoff.status ===
-                "pending",
+                handoff.status !==
+                "completed",
             );
 
           if (
-            pending.length ===
+            incomplete.length ===
             0
           ) {
             throw new Error(
-              "This mission has no pending workforce handoffs.",
+              "This mission has no incomplete workforce stages.",
+            );
+          }
+
+          /**
+           * Never jump over an earlier handoff.
+           */
+          const firstIncomplete =
+            incomplete[0];
+
+          if (
+            firstIncomplete.status ===
+            "accepted"
+          ) {
+            const employee =
+              employees.find(
+                (
+                  candidate,
+                ) =>
+                  candidate.id ===
+                  firstIncomplete.to_employee_id,
+              );
+
+            throw new Error(
+              `${
+                employee?.name ??
+                "The next employee"
+              } already owns the next workflow stage. The chain will not skip that accepted handoff.`,
+            );
+          }
+
+          if (
+            firstIncomplete.status !==
+            "pending"
+          ) {
+            throw new Error(
+              `The next workflow stage is ${firstIncomplete.status}. Automatic execution will not skip it.`,
+            );
+          }
+
+          /**
+           * Only collect the contiguous pending sequence.
+           *
+           * If any later non-pending incomplete stage appears, execution stops
+           * before it rather than jumping over it.
+           */
+          const pendingSequence:
+            EmployeeHandoff[] =
+            [];
+
+          for (
+            const handoff of
+              incomplete
+          ) {
+            if (
+              handoff.status !==
+              "pending"
+            ) {
+              break;
+            }
+
+            pendingSequence.push(
+              handoff,
+            );
+          }
+
+          if (
+            pendingSequence.length ===
+            0
+          ) {
+            throw new Error(
+              "No executable pending workflow stage is available.",
             );
           }
 
@@ -1952,7 +2050,7 @@ function AiWorkforce() {
 
           for (
             const handoff of
-              pending
+              pendingSequence
           ) {
             const employee =
               employees.find(
@@ -2051,67 +2149,6 @@ function AiWorkforce() {
     });
 
   /* ------------------------------------------------------------------------ */
-  /* APPROVAL                                                                 */
-  /* ------------------------------------------------------------------------ */
-
-  const reviewMutation =
-    useMutation({
-      mutationFn:
-        ({
-          approvalId,
-          decision,
-        }: {
-          approvalId:
-            string;
-
-          decision:
-            | "approved"
-            | "rejected";
-        }) =>
-          decideApproval(
-            approvalId,
-
-            decision,
-
-            decision ===
-              "approved"
-              ? "Owner approved the recorded internal workforce briefing. This does not authorise unrelated external high-risk actions."
-              : "Owner requested changes to the recorded internal workforce briefing.",
-          ),
-
-      onSuccess:
-        async (
-          _,
-          variables,
-        ) => {
-          await refreshWorkforce();
-
-          toast.success(
-            variables.decision ===
-            "approved"
-              ? "Internal briefing approved"
-              : "Changes requested",
-          );
-        },
-
-      onError:
-        (
-          error,
-        ) => {
-          toast.error(
-            "Owner decision could not be recorded",
-            {
-              description:
-                error instanceof
-                Error
-                  ? error.message
-                  : "Unknown approval error.",
-            },
-          );
-        },
-    });
-
-  /* ------------------------------------------------------------------------ */
   /* RENDER                                                                   */
   /* ------------------------------------------------------------------------ */
 
@@ -2119,12 +2156,12 @@ function AiWorkforce() {
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
       {/* HERO */}
 
-      <section className="glass-card relative overflow-hidden p-6 md:p-8">
+      <section className="glass-card relative overflow-hidden p-5 sm:p-6 md:p-8">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
 
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <Workflow className="h-5 w-5" />
               </div>
@@ -2143,7 +2180,7 @@ function AiWorkforce() {
               </span>
             </h1>
 
-            <p className="mt-2 max-w-3xl text-muted-foreground">
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">
               Cossa AI employees operate
               as one coordinated business
               system. Safe internal work
@@ -2156,7 +2193,7 @@ function AiWorkforce() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
             <Button
               type="button"
               variant="outline"
@@ -2166,7 +2203,7 @@ function AiWorkforce() {
               disabled={
                 isLoading
               }
-              className="border-primary/40 text-primary hover:bg-primary/10"
+              className="w-full border-primary/40 text-primary hover:bg-primary/10 sm:w-auto"
             >
               <RefreshCw className="mr-1.5 h-4 w-4" />
 
@@ -2181,7 +2218,7 @@ function AiWorkforce() {
               disabled={
                 installMutation.isPending
               }
-              className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow sm:w-auto"
             >
               <UsersRound className="mr-1.5 h-4 w-4" />
 
@@ -2195,7 +2232,7 @@ function AiWorkforce() {
 
       {/* TOP METRICS */}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <section className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Metric
           label="Total employees"
           value={String(
@@ -2251,9 +2288,9 @@ function AiWorkforce() {
         />
       </section>
 
-      {/* TARGET SOCIAL OPERATING LINE */}
+      {/* REAL SOCIAL OPERATING LINE */}
 
-      <section className="glass-card p-5">
+      <section className="glass-card p-4 sm:p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
@@ -2261,46 +2298,45 @@ function AiWorkforce() {
             </p>
 
             <h2 className="mt-1 font-display text-xl font-semibold">
-              Target nine-stage social
-              collaboration line
+              Nine-stage executable
+              Growth collaboration line
             </h2>
 
-            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              This shows the complete
-              operating model we are
-              building. A worker is only
-              marked active when a live
-              employee profile exists.
-              The executable mission line
-              below remains tied to real
-              handoffs created by the
-              backend.
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+              This is no longer a target
+              diagram. It now represents
+              the same nine employees
+              expected by the Growth
+              mission backend. A stage is
+              marked active only when the
+              corresponding live employee
+              profile is active.
             </p>
           </div>
 
-          <div className="grid min-w-64 grid-cols-2 gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-64">
             <MiniMetric
               label="Required"
               value={
-                TARGET_SOCIAL_WORKFLOW.length
+                EXECUTABLE_GROWTH_WORKFLOW.length
               }
             />
 
             <MiniMetric
               label="Active"
               value={
-                targetSocialRolesActive
+                executableGrowthRolesActive
               }
               warning={
-                targetSocialRolesActive <
-                TARGET_SOCIAL_WORKFLOW.length
+                executableGrowthRolesActive <
+                EXECUTABLE_GROWTH_WORKFLOW.length
               }
             />
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-9">
-          {TARGET_SOCIAL_WORKFLOW.map(
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-9">
+          {EXECUTABLE_GROWTH_WORKFLOW.map(
             (
               stage,
               index,
@@ -2322,10 +2358,10 @@ function AiWorkforce() {
                   key={
                     stage.key
                   }
-                  className="relative rounded-xl border border-border/60 bg-card/40 p-3"
+                  className="relative min-w-0 rounded-xl border border-border/60 bg-card/40 p-3"
                 >
                   {index <
-                  TARGET_SOCIAL_WORKFLOW.length -
+                  EXECUTABLE_GROWTH_WORKFLOW.length -
                     1 ? (
                     <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 rounded-full bg-background p-1 text-primary xl:block" />
                   ) : null}
@@ -2334,7 +2370,7 @@ function AiWorkforce() {
                     <Icon className="h-4 w-4" />
                   </div>
 
-                  <p className="mt-3 text-xs font-semibold">
+                  <p className="mt-3 break-words text-xs font-semibold">
                     {
                       stage.label
                     }
@@ -2366,7 +2402,7 @@ function AiWorkforce() {
 
       {/* BUSINESS WORKFORCE READINESS */}
 
-      <section className="glass-card p-5">
+      <section className="glass-card p-4 sm:p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
@@ -2378,7 +2414,7 @@ function AiWorkforce() {
               Revenue readiness
             </h2>
 
-            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
               Specialist coverage is
               checked directly against
               live employee records.
@@ -2388,7 +2424,7 @@ function AiWorkforce() {
             </p>
           </div>
 
-          <div className="grid min-w-64 grid-cols-2 gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-64">
             <MiniMetric
               label="Required"
               value={
@@ -2425,11 +2461,11 @@ function AiWorkforce() {
                   className="rounded-xl border border-border/60 bg-card/40 p-4"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
                       <Icon className="h-5 w-5" />
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="text-sm font-semibold">
                         {
                           business.business
@@ -2465,15 +2501,15 @@ function AiWorkforce() {
                             }
                             className="rounded-lg border border-border/50 bg-background/30 p-3"
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
                                 <p className="text-xs font-medium">
                                   {
                                     role.name
                                   }
                                 </p>
 
-                                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                                <p className="mt-1 break-words text-[11px] leading-relaxed text-muted-foreground">
                                   {
                                     role.responsibility
                                   }
@@ -2483,10 +2519,10 @@ function AiWorkforce() {
                               <span
                                 className={
                                   active
-                                    ? "shrink-0 rounded-full border border-success/35 bg-success/10 px-2 py-1 text-[9px] uppercase tracking-wider text-success"
+                                    ? "w-fit shrink-0 rounded-full border border-success/35 bg-success/10 px-2 py-1 text-[9px] uppercase tracking-wider text-success"
                                     : employee
-                                      ? "shrink-0 rounded-full border border-warning/35 bg-warning/10 px-2 py-1 text-[9px] uppercase tracking-wider text-warning"
-                                      : "shrink-0 rounded-full border border-border bg-secondary/40 px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground"
+                                      ? "w-fit shrink-0 rounded-full border border-warning/35 bg-warning/10 px-2 py-1 text-[9px] uppercase tracking-wider text-warning"
+                                      : "w-fit shrink-0 rounded-full border border-border bg-secondary/40 px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground"
                                 }
                               >
                                 {active
@@ -2521,12 +2557,9 @@ function AiWorkforce() {
                 live employee table.
                 Synchronising the
                 workforce installs only
-                profiles that actually
-                exist in
+                source profiles that
+                actually exist in
                 COSSA_GROWTH_WORKFORCE.
-                Missing roles must first
-                be added to
-                workforce-data.ts.
               </p>
             </div>
           </div>
@@ -2535,7 +2568,7 @@ function AiWorkforce() {
 
       {/* SOURCE WORKFORCE STATUS */}
 
-      <section className="glass-card p-5">
+      <section className="glass-card p-4 sm:p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
@@ -2546,7 +2579,7 @@ function AiWorkforce() {
               Source-defined workforce
             </h2>
 
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
               Existing custom employees
               are preserved. Missing
               source profiles can be
@@ -2556,7 +2589,7 @@ function AiWorkforce() {
             </p>
           </div>
 
-          <div className="grid min-w-64 grid-cols-2 gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-64">
             <MiniMetric
               label="Installed"
               value={
@@ -2573,7 +2606,7 @@ function AiWorkforce() {
           </div>
         </div>
 
-        <div className="mt-4 text-xs text-muted-foreground">
+        <div className="mt-4 break-words text-xs text-muted-foreground">
           Source profiles:{" "}
           <strong className="text-foreground">
             {
@@ -2612,7 +2645,7 @@ function AiWorkforce() {
 
       {/* FULL WORKFORCE DIRECTORY */}
 
-      <section className="glass-card p-5">
+      <section className="glass-card p-4 sm:p-5">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
@@ -2624,7 +2657,7 @@ function AiWorkforce() {
             </h2>
           </div>
 
-          <p className="max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Working, assigned,
             available, failed and
             approval states are derived
@@ -2666,17 +2699,17 @@ function AiWorkforce() {
                     key={
                       employee.id
                     }
-                    className="rounded-xl border border-border/60 bg-card/40 p-4"
+                    className="min-w-0 rounded-xl border border-border/60 bg-card/40 p-4"
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <p className="truncate text-base font-semibold">
+                        <p className="break-words text-base font-semibold">
                           {
                             employee.name
                           }
                         </p>
 
-                        <p className="mt-0.5 text-xs text-muted-foreground">
+                        <p className="mt-0.5 break-words text-xs text-muted-foreground">
                           {
                             employee.title
                           }
@@ -2739,14 +2772,14 @@ function AiWorkforce() {
                         Current task
                       </p>
 
-                      <p className="mt-1 text-xs leading-relaxed">
+                      <p className="mt-1 break-words text-xs leading-relaxed">
                         {
                           operational.currentTask
                         }
                       </p>
                     </div>
 
-                    <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                    <p className="mt-3 break-words text-xs leading-relaxed text-muted-foreground">
                       {
                         operational.detail
                       }
@@ -2758,7 +2791,7 @@ function AiWorkforce() {
                           Latest failure
                         </p>
 
-                        <p className="mt-1 text-xs leading-relaxed text-destructive">
+                        <p className="mt-1 break-words text-xs leading-relaxed text-destructive">
                           {
                             operational.latestFailure
                           }
@@ -2766,7 +2799,7 @@ function AiWorkforce() {
                       </div>
                     ) : null}
 
-                    <div className="mt-4 grid grid-cols-4 gap-2">
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                       <MiniMetric
                         label="Assigned"
                         value={
@@ -2846,7 +2879,7 @@ function AiWorkforce() {
 
       {/* EXECUTABLE GROWTH WORKFLOW */}
 
-      <section className="glass-card p-5">
+      <section className="glass-card p-4 sm:p-5">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
@@ -2858,17 +2891,17 @@ function AiWorkforce() {
             </h2>
           </div>
 
-          <p className="max-w-xl text-sm text-muted-foreground">
-            These are the employee
-            stages currently expected by
-            the Growth mission backend.
-            The chain can run
-            sequentially without one
-            manual click per employee.
+          <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
+            These nine employee stages
+            now match the current Growth
+            mission backend. The chain
+            runs sequentially and will
+            not skip an earlier
+            incomplete employee stage.
           </p>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-9">
           {EXECUTABLE_GROWTH_WORKFLOW.map(
             (
               step,
@@ -2891,7 +2924,7 @@ function AiWorkforce() {
                   key={
                     step.key
                   }
-                  className="relative rounded-xl border border-border/60 bg-card/40 p-4"
+                  className="relative min-w-0 rounded-xl border border-border/60 bg-card/40 p-4"
                 >
                   {index <
                   EXECUTABLE_GROWTH_WORKFLOW.length -
@@ -2903,13 +2936,13 @@ function AiWorkforce() {
                     <Icon className="h-4 w-4" />
                   </div>
 
-                  <div className="mt-3 text-sm font-semibold">
+                  <div className="mt-3 break-words text-sm font-semibold">
                     {
                       step.label
                     }
                   </div>
 
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 break-words text-xs leading-relaxed text-muted-foreground">
                     {
                       step.description
                     }
@@ -2951,7 +2984,7 @@ function AiWorkforce() {
 
       {/* AUTOMATIC EXECUTION */}
 
-      <section className="glass-card p-5">
+      <section className="glass-card p-4 sm:p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
@@ -2963,20 +2996,23 @@ function AiWorkforce() {
               hand-to-hand
             </h2>
 
-            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              Every pending safe stage
-              can execute sequentially.
-              The output from one worker
-              is supplied to the next.
-              A genuine failure stops the
-              chain and remains visible
-              in the audit history.
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+              Every safe pending stage
+              executes in recorded
+              workflow order. Employee
+              outputs are supplied
+              forward chronologically. If
+              an earlier stage is already
+              accepted, blocked or in an
+              invalid state, the chain
+              stops instead of skipping
+              it.
             </p>
           </div>
 
           {coordinationMissions.length >
           0 ? (
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+            <label className="grid w-full gap-1 text-xs font-medium text-muted-foreground lg:w-auto">
               Coordination mission
 
               <select
@@ -2992,7 +3028,7 @@ function AiWorkforce() {
                       null,
                   )
                 }
-                className="min-w-64 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50 sm:min-w-64"
               >
                 {coordinationMissions.map(
                   (
@@ -3020,26 +3056,58 @@ function AiWorkforce() {
 
         {!selectedMission ? (
           <p className="mt-4 rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-            Create a Growth
-            coordination mission first.
+            Create a Growth coordination
+            mission first.
           </p>
         ) : (
           <div className="mt-5 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
             <div className="rounded-xl border border-border/60 bg-card/40 p-4">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Next employee
+                Current execution position
               </p>
 
-              <h3 className="mt-1 text-sm font-semibold">
+              <h3 className="mt-1 break-words text-sm font-semibold">
                 {nextEmployee
                   ? `${nextEmployee.name} — ${nextEmployee.title}`
-                  : "No pending employee stage"}
+                  : firstIncompleteHandoff
+                    ? "Workflow stage blocked"
+                    : "No incomplete employee stage"}
               </h3>
 
-              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                {nextHandoff?.reason ??
-                  "No pending handoff remains for this mission."}
+              <p className="mt-3 break-words text-xs leading-relaxed text-muted-foreground">
+                {firstIncompleteHandoff?.reason ??
+                  "No incomplete handoff remains for this mission."}
               </p>
+
+              {blockedHandoff ? (
+                <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+
+                    <div>
+                      <p className="text-xs font-medium text-warning">
+                        Earlier stage cannot be skipped
+                      </p>
+
+                      <p className="mt-1 text-[11px] leading-relaxed text-warning">
+                        The first
+                        incomplete handoff is{" "}
+                        <strong>
+                          {formatStatus(
+                            blockedHandoff.status,
+                          )}
+                        </strong>
+                        . The executor
+                        will not run a
+                        later employee
+                        until this stage
+                        is recovered or
+                        completed.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-4 grid gap-2">
                 <Button
@@ -3049,6 +3117,9 @@ function AiWorkforce() {
                   }
                   disabled={
                     !nextHandoff ||
+                    Boolean(
+                      blockedHandoff,
+                    ) ||
                     runSafeWorkflowMutation.isPending ||
                     runNextStageMutation.isPending ||
                     selectedMission.status ===
@@ -3078,6 +3149,9 @@ function AiWorkforce() {
                   disabled={
                     !nextHandoff ||
                     !nextEmployee ||
+                    Boolean(
+                      blockedHandoff,
+                    ) ||
                     nextEmployee.status !==
                       "active" ||
                     runNextStageMutation.isPending ||
@@ -3105,29 +3179,27 @@ function AiWorkforce() {
                 </p>
 
                 <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                  Automatic execution on
-                  this page runs while
-                  the browser request is
+                  This page can run the
+                  safe chain while the
+                  browser request remains
                   active. Permanent
-                  unattended work,
-                  recurring daily
-                  execution, scheduled
-                  posting and autonomous
-                  external publishing
-                  need a server-side
-                  scheduler or worker
-                  together with real
-                  authorised
-                  integrations.
+                  unattended execution,
+                  recurring work,
+                  scheduled posting and
+                  autonomous external
+                  publishing still need a
+                  server-side worker or
+                  scheduler with verified
+                  authorised integrations.
                 </p>
               </div>
             </div>
 
-            <div className="rounded-xl border border-border/60 bg-card/40 p-4">
+            <div className="min-w-0 rounded-xl border border-border/60 bg-card/40 p-4">
               <div className="flex items-center gap-2">
-                <FileCheck2 className="h-4 w-4 text-primary" />
+                <FileCheck2 className="h-4 w-4 shrink-0 text-primary" />
 
-                <div>
+                <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
                     Recorded outputs
                   </p>
@@ -3149,8 +3221,8 @@ function AiWorkforce() {
                   mission yet.
                 </p>
               ) : (
-                <div className="mt-3 max-h-80 space-y-3 overflow-y-auto pr-1">
-                  {reviewableOutputs.map(
+                <div className="mt-3 max-h-96 space-y-3 overflow-y-auto pr-1">
+                  {displayReviewableOutputs.map(
                     ({
                       run,
                       content,
@@ -3169,16 +3241,16 @@ function AiWorkforce() {
                           key={
                             run.id
                           }
-                          className="rounded-lg border border-border/60 bg-background/40 p-3"
+                          className="min-w-0 rounded-lg border border-border/60 bg-background/40 p-3"
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <div>
-                              <span className="text-xs font-medium">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                              <span className="break-words text-xs font-medium">
                                 {worker?.name ??
                                   "Recorded worker"}
                               </span>
 
-                              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                              <p className="mt-0.5 break-words text-[10px] text-muted-foreground">
                                 {run.model_provider ??
                                   "Provider not recorded"}
 
@@ -3188,12 +3260,12 @@ function AiWorkforce() {
                               </p>
                             </div>
 
-                            <span className="text-[10px] uppercase tracking-widest text-success">
+                            <span className="w-fit text-[10px] uppercase tracking-widest text-success">
                               completed
                             </span>
                           </div>
 
-                          <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                          <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-muted-foreground">
                             {
                               content
                             }
@@ -3219,7 +3291,10 @@ function AiWorkforce() {
                     This mission contains
                     one or more recorded
                     failed runs. Audit
-                    history is retained.
+                    history is retained;
+                    failed records are
+                    not converted into
+                    completed work.
                   </p>
                 </div>
               ) : null}
@@ -3236,7 +3311,7 @@ function AiWorkforce() {
             Megaphone
           }
           title="Social media"
-          description="Strategy, copy, visual production, scheduling, social management and account-growth analysis should work as one pipeline. Real unattended publishing requires authenticated social integrations and a background executor."
+          description="Strategy, copy, creative production, scheduling, social management and account-growth analysis now form one nine-stage Growth pipeline. Real unattended publishing still requires authenticated social integrations and a background executor."
         />
 
         <OperatingArea
@@ -3244,7 +3319,7 @@ function AiWorkforce() {
             ShoppingCart
           }
           title="Cossa Store"
-          description="Store operations should coordinate catalogue health, product intelligence, legitimate supplier sourcing, merchandising, product visuals, campaigns and social-commerce growth."
+          description="Store operations coordinate catalogue health, product intelligence, legitimate supplier sourcing, merchandising, product visuals, campaigns and social-commerce growth."
         />
 
         <OperatingArea
@@ -3252,16 +3327,16 @@ function AiWorkforce() {
             Code2
           }
           title="Cossa Tech"
-          description="Cossa Tech should coordinate websites, technical solutions, customer requirements, website content, graphics, SEO quality and delivery rather than leaving technical enquiries without a specialist owner."
+          description="Cossa Tech coordinates websites, technical solutions, customer requirements, website content, graphics, SEO quality and delivery instead of leaving technical enquiries without a specialist owner."
         />
       </section>
 
       {/* CREATE MISSION + OWNER CONTROL */}
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="glass-card p-5">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary" />
+        <section className="glass-card p-4 sm:p-5">
+          <div className="flex items-start gap-2">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
 
             <div>
               <h2 className="font-display text-xl font-semibold">
@@ -3269,10 +3344,12 @@ function AiWorkforce() {
                 coordination mission
               </h2>
 
-              <p className="text-sm text-muted-foreground">
-                Creates real linked
-                employee handoffs ready
-                for automatic safe
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Creates the real
+                nine-stage Growth
+                workforce chain with
+                linked employee handoffs
+                ready for controlled
                 execution.
               </p>
             </div>
@@ -3296,7 +3373,7 @@ function AiWorkforce() {
                 rows={
                   4
                 }
-                className="resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
+                className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
               />
             </label>
 
@@ -3315,7 +3392,7 @@ function AiWorkforce() {
                       event.target.value,
                     )
                   }
-                  className="rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
+                  className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
                 />
               </label>
 
@@ -3333,22 +3410,20 @@ function AiWorkforce() {
                       event.target.value,
                     )
                   }
-                  className="rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
+                  className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
                 />
               </label>
             </div>
 
             {!canCreateCoordination ? (
-              <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-                The currently
-                executable Growth chain
-                requires all{" "}
+              <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs leading-relaxed text-warning">
+                The Growth chain requires
+                all{" "}
                 {
                   EXECUTABLE_GROWTH_WORKFLOW.length
                 }{" "}
-                backend workflow
-                employees to exist and
-                be active.{" "}
+                executable employees to
+                exist and be active.{" "}
                 {
                   activeExecutableWorkflowEmployees.length
                 }{" "}
@@ -3382,13 +3457,13 @@ function AiWorkforce() {
               <Workflow className="mr-1.5 h-4 w-4" />
 
               {coordinationMutation.isPending
-                ? "Creating employee workflow…"
+                ? "Creating nine-stage workflow…"
                 : "Create employee workflow"}
             </Button>
           </div>
         </section>
 
-        <section className="glass-card flex flex-col p-5">
+        <section className="glass-card flex flex-col p-4 sm:p-5">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
             Owner authority
           </p>
@@ -3398,16 +3473,16 @@ function AiWorkforce() {
             high-risk decisions
           </h2>
 
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             Internal research,
             analysis, drafting, content
             creation, visual briefs,
-            scheduling, SEO,
-            catalogue analysis,
-            supplier-candidate research
-            and employee handoffs should
-            continue without unnecessary
-            owner interruption.
+            scheduling, SEO, catalogue
+            analysis, supplier-candidate
+            research and employee
+            handoffs should continue
+            without unnecessary owner
+            interruption.
           </p>
 
           <div className="mt-5 space-y-3 text-sm text-muted-foreground">
@@ -3470,7 +3545,7 @@ function AiWorkforce() {
 
       {/* SAVED MISSIONS */}
 
-      <section className="glass-card p-5">
+      <section className="glass-card p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
@@ -3525,15 +3600,6 @@ function AiWorkforce() {
                         mission.id,
                     );
 
-                  const reviewApproval =
-                    workforceReviewApprovals.find(
-                      (
-                        approval,
-                      ) =>
-                        approval.mission_id ===
-                        mission.id,
-                    );
-
                   const completedHandoffs =
                     missionHandoffs.filter(
                       (
@@ -3543,14 +3609,32 @@ function AiWorkforce() {
                         "completed",
                     ).length;
 
+                  const acceptedHandoffs =
+                    missionHandoffs.filter(
+                      (
+                        handoff,
+                      ) =>
+                        handoff.status ===
+                        "accepted",
+                    ).length;
+
+                  const failedRuns =
+                    missionRuns.filter(
+                      (
+                        run,
+                      ) =>
+                        run.status ===
+                        "failed",
+                    ).length;
+
                   return (
                     <article
                       key={
                         mission.id
                       }
-                      className="rounded-xl border border-border/60 bg-card/40 p-4"
+                      className="min-w-0 rounded-xl border border-border/60 bg-card/40 p-4"
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="text-[10px] uppercase tracking-widest text-primary">
                           {formatStatus(
                             mission.status,
@@ -3569,19 +3653,19 @@ function AiWorkforce() {
                         </span>
                       </div>
 
-                      <h3 className="mt-2 text-sm font-semibold">
+                      <h3 className="mt-2 break-words text-sm font-semibold">
                         {
                           mission.objective
                         }
                       </h3>
 
-                      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                      <p className="mt-2 line-clamp-3 break-words text-xs leading-relaxed text-muted-foreground">
                         {
                           mission.instruction
                         }
                       </p>
 
-                      <div className="mt-3 grid grid-cols-3 gap-2">
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                         <MiniMetric
                           label="Handoffs"
                           value={
@@ -3590,107 +3674,66 @@ function AiWorkforce() {
                         />
 
                         <MiniMetric
-                          label="Runs"
+                          label="Completed"
                           value={
-                            missionRuns.length
+                            completedHandoffs
+                          }
+                        />
+
+                        <MiniMetric
+                          label="Accepted"
+                          value={
+                            acceptedHandoffs
+                          }
+                          warning={
+                            acceptedHandoffs >
+                            0
                           }
                         />
 
                         <MiniMetric
                           label="Failed"
                           value={
-                            missionRuns.filter(
-                              (
-                                run,
-                              ) =>
-                                run.status ===
-                                "failed",
-                            ).length
+                            failedRuns
                           }
                           warning={
-                            missionRuns.some(
-                              (
-                                run,
-                              ) =>
-                                run.status ===
-                                "failed",
-                            )
+                            failedRuns >
+                            0
                           }
                         />
                       </div>
 
-                      {reviewApproval ? (
-                        <div className="mt-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
-                          <p className="text-xs font-medium text-foreground">
-                            Internal review
-                            checkpoint
+                      {acceptedHandoffs >
+                      0 ? (
+                        <div className="mt-3 rounded-lg border border-warning/30 bg-warning/10 p-3">
+                          <p className="flex items-start gap-2 text-xs leading-relaxed text-warning">
+                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+
+                            This mission
+                            currently has
+                            an accepted
+                            handoff. The
+                            executor will
+                            not skip past
+                            it.
                           </p>
+                        </div>
+                      ) : null}
 
-                          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                            This approval
-                            closes the
-                            internal
-                            coordination
-                            briefing. It
-                            does not
-                            authorise
-                            publishing,
-                            spending,
-                            contracting,
-                            customer
-                            messaging or
-                            account
-                            changes.
+                      {failedRuns >
+                      0 ? (
+                        <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+                          <p className="flex items-start gap-2 text-xs leading-relaxed text-destructive">
+                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+
+                            This mission
+                            contains
+                            recorded
+                            failed runs.
+                            Audit history
+                            remains
+                            preserved.
                           </p>
-
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={
-                                reviewMutation.isPending
-                              }
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    "Approve this recorded internal briefing?",
-                                  )
-                                ) {
-                                  reviewMutation.mutate({
-                                    approvalId:
-                                      reviewApproval.id,
-
-                                    decision:
-                                      "approved",
-                                  });
-                                }
-                              }}
-                              className="bg-primary text-primary-foreground hover:bg-primary/90"
-                            >
-                              Approve
-                            </Button>
-
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={
-                                reviewMutation.isPending
-                              }
-                              onClick={() =>
-                                reviewMutation.mutate({
-                                  approvalId:
-                                    reviewApproval.id,
-
-                                  decision:
-                                    "rejected",
-                                })
-                              }
-                              className="border-warning/40 text-warning hover:bg-warning/10"
-                            >
-                              Request changes
-                            </Button>
-                          </div>
                         </div>
                       ) : null}
                     </article>
@@ -3703,7 +3746,7 @@ function AiWorkforce() {
 
       {/* EXECUTION REALITY */}
 
-      <section className="glass-card p-5">
+      <section className="glass-card p-4 sm:p-5">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
 
@@ -3714,26 +3757,27 @@ function AiWorkforce() {
 
             <h2 className="mt-1 font-display text-xl font-semibold">
               Capability must be real,
-              not cosmetic
+              ordered and auditable
             </h2>
 
             <p className="mt-2 max-w-4xl text-sm leading-relaxed text-muted-foreground">
-              An active employee
-              profile proves the worker
-              is allowed to receive
-              work. A running mission
-              run proves execution. A
-              completed run proves an
-              internal result. Social
-              publishing requires a
-              real authenticated
+              An active employee profile
+              proves the worker is
+              allowed to receive work. A
+              pending handoff proves work
+              is assigned. An accepted
+              handoff proves that stage
+              has been claimed. A running
+              mission run proves
+              execution. A completed run
+              proves an internal result.
+              Failed runs remain failed.
+              Social publishing requires
+              a real authenticated
               publishing integration.
               Visual generation requires
               a real media-generation
-              workflow. Supplier
-              discovery requires a
-              legitimate research
-              source. Permanent
+              workflow. Permanent
               unattended operation
               requires a server-side
               executor or scheduler.
@@ -3744,8 +3788,8 @@ function AiWorkforce() {
 
       {/* QUEUE SUMMARY */}
 
-      <section className="glass-card p-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <section className="glass-card p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
               Workforce queue
@@ -3755,6 +3799,21 @@ function AiWorkforce() {
               Current Growth execution
               position
             </h2>
+
+            {selectedMission &&
+            firstIncompleteHandoff ? (
+              <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+                First incomplete stage:{" "}
+                <strong className="text-foreground">
+                  {nextEmployee?.name ??
+                    "Unknown employee"}
+                </strong>
+                {" · "}
+                {formatStatus(
+                  firstIncompleteHandoff.status,
+                )}
+              </p>
+            ) : null}
           </div>
 
           <div className="text-xs text-muted-foreground">
@@ -3793,8 +3852,8 @@ function Metric({
     boolean;
 }) {
   return (
-    <div className="glass-card p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+    <div className="glass-card min-w-0 p-4">
+      <div className="break-words text-[10px] uppercase tracking-widest text-muted-foreground">
         {label}
       </div>
 
@@ -3826,7 +3885,7 @@ function MiniMetric({
     boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border/50 bg-background/30 p-2 text-center">
+    <div className="min-w-0 rounded-lg border border-border/50 bg-background/30 p-2 text-center">
       <div
         className={
           warning
@@ -3837,7 +3896,7 @@ function MiniMetric({
         {value}
       </div>
 
-      <div className="mt-0.5 text-[9px] uppercase tracking-widest text-muted-foreground">
+      <div className="mt-0.5 break-words text-[9px] uppercase tracking-widest text-muted-foreground">
         {label}
       </div>
     </div>
@@ -3855,12 +3914,12 @@ function EmployeeDetail({
     string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <span className="text-muted-foreground">
         {label}
       </span>
 
-      <span className="text-right font-medium text-foreground">
+      <span className="break-words font-medium text-foreground sm:max-w-[58%] sm:text-right">
         {value}
       </span>
     </div>
@@ -3899,16 +3958,16 @@ function OperatingArea({
     string;
 }) {
   return (
-    <article className="glass-card p-5">
+    <article className="glass-card min-w-0 p-5">
       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
         <Icon className="h-5 w-5" />
       </div>
 
-      <h3 className="mt-3 font-display text-lg font-semibold">
+      <h3 className="mt-3 break-words font-display text-lg font-semibold">
         {title}
       </h3>
 
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+      <p className="mt-2 break-words text-sm leading-relaxed text-muted-foreground">
         {description}
       </p>
     </article>
@@ -3945,7 +4004,7 @@ function OperationalBadge({
 
   return (
     <span
-      className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-medium uppercase tracking-wider ${className}`}
+      className={`w-fit max-w-full shrink-0 break-words rounded-full border px-2.5 py-1 text-[9px] font-medium uppercase tracking-wider ${className}`}
     >
       {label}
     </span>
