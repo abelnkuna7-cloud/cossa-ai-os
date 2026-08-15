@@ -19,6 +19,7 @@ import {
   FileCheck2,
   FilePenLine,
   Globe2,
+  ImageIcon,
   KeyRound,
   Megaphone,
   PanelTop,
@@ -82,7 +83,7 @@ export const Route = createFileRoute("/ai/workforce")({
       {
         name: "description",
         content:
-          "Cossa Nexus Holdings AI workforce command centre for automated internal coordination, employee handoffs, business-unit readiness and owner-controlled high-risk actions.",
+          "Cossa Nexus Holdings AI workforce command centre for coordinated internal execution, specialist workforce readiness, employee handoffs and owner-controlled high-risk actions.",
       },
     ],
   }),
@@ -102,33 +103,34 @@ const DEFAULT_WORKFORCE_MODEL =
   "llama-3.3-70b-versatile";
 
 /**
- * Existing executable Growth workflow.
+ * IMPORTANT
  *
- * These employee keys already exist in the current workforce source.
+ * This array represents the workflow that createGrowthCoordinationMission()
+ * currently creates in workforce-data.ts.
  *
- * The workforce-data.ts source should install the wider specialist workforce
- * required by Social Media, Cossa Store, Cossa Tech, Procurement and Revenue.
+ * Do not add a worker here as an executable stage until workforce-data.ts
+ * creates a real handoff for that employee.
  */
-const GROWTH_WORKFLOW = [
+const EXECUTABLE_GROWTH_WORKFLOW = [
   {
     key: "website-seo-monitor",
     label: "Website intelligence",
     description:
-      "Checks authorised Cossa web properties and hands verified observations to the growth team.",
+      "Checks authorised Cossa web properties and passes verified observations into the growth system.",
     icon: Globe2,
   },
   {
     key: "social-strategy-planner",
     label: "Social strategy",
     description:
-      "Turns business objectives and verified company information into channel-aware marketing plans.",
+      "Builds channel strategy, audience direction, campaign angles and marketing priorities from verified information.",
     icon: Megaphone,
   },
   {
     key: "content-writer",
     label: "Content production",
     description:
-      "Creates accurate marketing, awareness, educational, pain-point and conversion-focused copy.",
+      "Produces accurate marketing, educational, awareness, pain-point and conversion-focused written content.",
     icon: FilePenLine,
   },
   {
@@ -142,37 +144,92 @@ const GROWTH_WORKFLOW = [
     key: "account-growth-analyst",
     label: "Growth analysis",
     description:
-      "Uses authorised account evidence to identify growth, audience and conversion opportunities.",
+      "Analyses authorised account evidence and identifies growth, audience and conversion opportunities.",
     icon: UsersRound,
   },
   {
     key: "paid-media-specialist",
     label: "Paid media",
     description:
-      "Prepares advertising strategy and campaigns while leaving spending and budget changes approval-controlled.",
+      "Prepares advertising strategy while keeping spending, budget and campaign-launch authority owner-controlled.",
     icon: KeyRound,
   },
   {
     key: "ai-ceo",
     label: "AI CEO",
     description:
-      "Synthesises employee outputs, resolves normal internal questions and escalates genuine owner decisions.",
+      "Synthesises workforce outputs, resolves ordinary internal questions and escalates genuine owner decisions.",
     icon: BrainCircuit,
   },
 ] as const;
 
-const GROWTH_WORKFLOW_KEYS =
+const EXECUTABLE_GROWTH_WORKFLOW_KEYS =
   new Set<string>(
-    GROWTH_WORKFLOW.map(
+    EXECUTABLE_GROWTH_WORKFLOW.map(
       (step) => step.key,
     ),
   );
 
 /**
- * Required operating roles across the wider Cossa operating system.
+ * Target Growth operating model.
  *
- * These roles remain visible even if the corresponding live employee profile
- * has not yet been installed. Missing capability must be shown truthfully.
+ * These two additional workers are required for the upgraded social operating
+ * system, but they should only become executable workflow stages after the
+ * workforce-data.ts handoff creator includes them.
+ */
+const TARGET_SOCIAL_WORKFLOW = [
+  {
+    key: "website-seo-monitor",
+    label: "Website intelligence",
+    icon: Globe2,
+  },
+  {
+    key: "social-strategy-planner",
+    label: "Social strategy",
+    icon: Megaphone,
+  },
+  {
+    key: "content-writer",
+    label: "Content writer",
+    icon: FilePenLine,
+  },
+  {
+    key: "creative-media-producer",
+    label: "Creative media",
+    icon: ImageIcon,
+  },
+  {
+    key: "social-schedule-coordinator",
+    label: "Schedule",
+    icon: PanelTop,
+  },
+  {
+    key: "social-media-manager",
+    label: "Social manager",
+    icon: Megaphone,
+  },
+  {
+    key: "account-growth-analyst",
+    label: "Growth analysis",
+    icon: UsersRound,
+  },
+  {
+    key: "paid-media-specialist",
+    label: "Paid media",
+    icon: KeyRound,
+  },
+  {
+    key: "ai-ceo",
+    label: "AI CEO",
+    icon: BrainCircuit,
+  },
+] as const;
+
+/**
+ * Required specialist roles across the wider Cossa operating system.
+ *
+ * A role may appear here before its live profile exists. That is intentional:
+ * missing operating capability should be visible rather than silently hidden.
  */
 const BUSINESS_OPERATING_ROLES = [
   {
@@ -193,28 +250,34 @@ const BUSINESS_OPERATING_ROLES = [
           "Marketing copy, educational content, conversion copy and campaign content.",
       },
       {
+        key: "creative-media-producer",
+        name: "Creative Media Producer",
+        responsibility:
+          "Images, promotional graphics, brochures, campaign creatives and social visual assets.",
+      },
+      {
         key: "social-schedule-coordinator",
         name: "Social Schedule Coordinator",
         responsibility:
-          "Content calendar, timing, channel coordination and publishing preparation.",
+          "Content calendars, timing, channel coordination and publishing preparation.",
       },
       {
         key: "social-media-manager",
         name: "Social Media Manager",
         responsibility:
-          "Daily social page management, publishing coordination, channel health and routine content continuity.",
-      },
-      {
-        key: "creative-media-producer",
-        name: "Creative Media Producer",
-        responsibility:
-          "Images, promotional graphics, brochures, product creatives and social media visual assets.",
+          "Daily social channel management, publishing coordination, content continuity and channel health.",
       },
       {
         key: "account-growth-analyst",
         name: "Account Growth Analyst",
         responsibility:
           "Performance analysis, audience growth, conversion opportunities and account improvement.",
+      },
+      {
+        key: "paid-media-specialist",
+        name: "Paid Media Specialist",
+        responsibility:
+          "Advertising planning, creative direction, targeting and measurement without unauthorised spend.",
       },
     ],
   },
@@ -246,13 +309,13 @@ const BUSINESS_OPERATING_ROLES = [
         key: "broker-deal-intelligence-analyst",
         name: "Broker & Deal Intelligence Analyst",
         responsibility:
-          "Commercial opportunities, partners, distributors, supplier relationships and deal intelligence.",
+          "Commercial opportunities, partners, distributors, suppliers and legitimate deal intelligence.",
       },
       {
         key: "creative-media-producer",
         name: "Creative Media Producer",
         responsibility:
-          "Product visuals, catalogue creatives, promotional graphics and social commerce assets.",
+          "Product visuals, catalogue creatives, promotional graphics, brochures and social-commerce assets.",
       },
       {
         key: "social-media-manager",
@@ -302,7 +365,7 @@ const BUSINESS_OPERATING_ROLES = [
         key: "ai-ceo",
         name: "Cossa AI CEO",
         responsibility:
-          "Cross-department reasoning, worker coordination, knowledge escalation and executive decisions.",
+          "Cross-department reasoning, workforce coordination, escalation and executive synthesis.",
       },
     ],
   },
@@ -316,7 +379,7 @@ const BUSINESS_OPERATING_ROLES = [
         key: "customer-reactivation-analyst",
         name: "Customer Reactivation Analyst",
         responsibility:
-          "Retention opportunities, dormant customer analysis and consent-aware reactivation preparation.",
+          "Retention opportunities, dormant-customer analysis and consent-aware reactivation preparation.",
       },
       {
         key: "broker-deal-intelligence-analyst",
@@ -375,11 +438,8 @@ function formatDateTime(
   return date.toLocaleString(
     "en-ZA",
     {
-      dateStyle:
-        "medium",
-
-      timeStyle:
-        "short",
+      dateStyle: "medium",
+      timeStyle: "short",
     },
   );
 }
@@ -514,8 +574,7 @@ function employeeOperationalView({
         approval.requested_by_employee_id ===
           employee.id ||
         (
-          approval.run_id !==
-            null &&
+          approval.run_id !== null &&
           employeeRunIds.has(
             approval.run_id,
           )
@@ -551,9 +610,7 @@ function employeeOperationalView({
     );
 
   const latestHandoff =
-    [
-      ...employeeHandoffs,
-    ].sort(
+    [...employeeHandoffs].sort(
       (
         left,
         right,
@@ -564,9 +621,7 @@ function employeeOperationalView({
     )[0];
 
   const latestRun =
-    [
-      ...employeeRuns,
-    ].sort(
+    [...employeeRuns].sort(
       (
         left,
         right,
@@ -664,8 +719,7 @@ function employeeOperationalView({
     return {
       ...common,
 
-      state:
-        "inactive",
+      state: "inactive",
 
       label:
         `${formatStatus(
@@ -675,10 +729,10 @@ function employeeOperationalView({
       detail:
         employee.status ===
         "paused"
-          ? "This employee has been intentionally paused and cannot start new controlled work."
+          ? "This employee has been intentionally paused and cannot start new work."
           : employee.status ===
               "retired"
-            ? "This employee is retired and cannot start new controlled work."
+            ? "This employee is retired and cannot start new work."
             : "The employee profile exists but is not currently active.",
     };
   }
@@ -690,8 +744,7 @@ function employeeOperationalView({
     return {
       ...common,
 
-      state:
-        "attention",
+      state: "attention",
 
       label:
         "Active — Needs attention",
@@ -709,14 +762,13 @@ function employeeOperationalView({
     return {
       ...common,
 
-      state:
-        "approval",
+      state: "approval",
 
       label:
         "Active — Approval required",
 
       detail:
-        "Recorded work is waiting at an approval-controlled checkpoint.",
+        "Recorded work has reached an approval-controlled checkpoint.",
     };
   }
 
@@ -729,8 +781,7 @@ function employeeOperationalView({
     return {
       ...common,
 
-      state:
-        "working",
+      state: "working",
 
       label:
         "Active — Working",
@@ -747,22 +798,20 @@ function employeeOperationalView({
     return {
       ...common,
 
-      state:
-        "waiting",
+      state: "waiting",
 
       label:
         "Active — Assigned",
 
       detail:
-        "A real task has been assigned and is waiting for the workforce executor to claim it.",
+        "A real task has been assigned and is ready for the workforce executor to claim.",
     };
   }
 
   return {
     ...common,
 
-    state:
-      "idle",
+    state: "idle",
 
     label:
       "Active — Available",
@@ -773,7 +822,7 @@ function employeeOperationalView({
     detail:
       employeeHandoffs.length >
       0
-        ? "This employee has recorded work history and is currently available for the next appropriate task."
+        ? "This employee has recorded work history and is available for the next appropriate task."
         : "The employee is active and available, but no real task has yet been assigned.",
   };
 }
@@ -903,25 +952,29 @@ function controlledStagePrompt({
 
     "Complete the assigned internal stage professionally and hand useful work forward.",
 
-    "Do not behave like a placeholder. If the work can be completed safely with the supplied knowledge and evidence, complete it.",
+    "Do not behave like a placeholder. If the work can safely be completed with the supplied knowledge and evidence, complete it now.",
 
-    "Do not ask for owner approval merely for analysis, planning, drafting, research synthesis, internal scheduling, SEO recommendations, content creation, catalogue review, supplier-candidate analysis or employee-to-employee handoffs.",
+    "Do not request owner approval merely for internal analysis, planning, drafting, research synthesis, SEO recommendations, content creation, content scheduling, catalogue review, supplier-candidate analysis or employee-to-employee handoffs.",
 
-    "Escalate only when a genuinely high-risk action requires owner authority, including spending money, legal commitments, contracts, supplier orders, credential changes, irreversible account changes, sensitive customer communication or another clearly high-risk external action.",
+    "Escalate only when a genuinely high-risk action requires owner authority, including spending money, legal commitments, signed contracts, supplier orders, credential changes, irreversible account changes or sensitive external communication.",
 
     "Use only verified Cossa knowledge, authorised operational records, authorised evidence and earlier workforce outputs.",
 
-    "If information is unavailable, identify the exact missing information or integration rather than inventing it.",
+    "If information is unavailable, identify the exact missing information, source or integration rather than inventing it.",
 
-    "Never invent customers, suppliers, products, inventory, sales, campaign performance, website performance, testimonials, revenue, delivery times, pricing, partnerships or completed external actions.",
+    "Never invent customers, suppliers, products, inventory, sales, campaign performance, website performance, testimonials, revenue, delivery times, prices, partnerships or completed external actions.",
 
-    "Social content must not disclose internal Cossa revenue or confidential business information.",
+    "Social and marketing content must not disclose private Cossa financial or operational information.",
 
-    "Marketing content may use education, awareness, pain-point marketing, solution marketing, trust-building, offers and calls to action when supported by verified company information.",
+    "Marketing work may use education, awareness, pain-point marketing, solution marketing, trust-building, offers and calls to action when supported by verified information.",
 
-    "Where a social or product post requires a visual, explicitly include a visual brief describing the image, graphic, brochure or product creative required. Do not pretend that an image was generated unless a real media-generation workflow produced it.",
+    "Whenever a social, advertising, website or product post would benefit from a visual, include a concrete VISUAL BRIEF covering format, subject, headline, key text, brand treatment, dimensions or channel and the intended call to action.",
 
-    "Use these headings exactly: Verified inputs; Work completed; Missing information or integrations; Handoff to next employee; High-risk owner decisions required; External actions status.",
+    "Do not claim that an image, brochure, banner, video or graphic was generated unless an authorised media-generation workflow actually created that asset.",
+
+    "Do not unnecessarily stop the internal workflow. Complete your safe work and make the next employee's required input explicit.",
+
+    "Use these headings exactly: Verified inputs; Work completed; Visual or media requirements; Missing information or integrations; Handoff to next employee; High-risk owner decisions required; External actions status.",
 
     `Mission objective: ${mission.objective}`,
 
@@ -967,7 +1020,7 @@ function AiWorkforce() {
     setObjective,
   ] =
     useState(
-      "Build and continuously improve Cossa Nexus Holdings' professional social, digital growth and customer-acquisition system using verified company information.",
+      "Build and continuously improve Cossa Nexus Holdings' professional social, digital growth, customer-acquisition and commercial operating system using verified company information.",
     );
 
   const [
@@ -1115,10 +1168,10 @@ function AiWorkforce() {
             ).length;
 
           toast.success(
-            "Cossa workforce checked",
+            "Cossa workforce synchronized",
             {
               description:
-                `${result.length} employee profiles are recorded. ${activeCount} are active. Existing employee records were preserved.`,
+                `${result.length} employee profiles are recorded. ${activeCount} are active. Existing custom employee records were preserved.`,
             },
           );
         },
@@ -1152,7 +1205,7 @@ function AiWorkforce() {
       onSuccess:
         async ({
           mission,
-          handoffs,
+          handoffs: createdHandoffs,
         }) => {
           setSelectedMissionId(
             mission.id,
@@ -1164,7 +1217,7 @@ function AiWorkforce() {
             "Coordination mission created",
             {
               description:
-                `${mission.title} has ${handoffs.length} linked employee stages ready for execution.`,
+                `${mission.title} created ${createdHandoffs.length} real employee handoff stages.`,
             },
           );
         },
@@ -1360,7 +1413,7 @@ function AiWorkforce() {
     );
 
   /* ------------------------------------------------------------------------ */
-  /* REQUIRED BUSINESS ROLE READINESS                                         */
+  /* BUSINESS ROLE READINESS                                                  */
   /* ------------------------------------------------------------------------ */
 
   const requiredRoleKeys =
@@ -1406,6 +1459,17 @@ function AiWorkforce() {
         "active",
     ).length;
 
+  const targetSocialRolesActive =
+    TARGET_SOCIAL_WORKFLOW.filter(
+      (
+        stage,
+      ) =>
+        employeesByKey.get(
+          stage.key,
+        )?.status ===
+        "active",
+    ).length;
+
   /* ------------------------------------------------------------------------ */
   /* SOURCE WORKFORCE STATUS                                                  */
   /* ------------------------------------------------------------------------ */
@@ -1431,8 +1495,8 @@ function AiWorkforce() {
         "active",
     );
 
-  const activeControlledWorkflowEmployees =
-    GROWTH_WORKFLOW.filter(
+  const activeExecutableWorkflowEmployees =
+    EXECUTABLE_GROWTH_WORKFLOW.filter(
       (
         step,
       ) =>
@@ -1593,8 +1657,8 @@ function AiWorkforce() {
     approvalsQuery.isLoading;
 
   const canCreateCoordination =
-    activeControlledWorkflowEmployees.length ===
-      GROWTH_WORKFLOW.length &&
+    activeExecutableWorkflowEmployees.length ===
+      EXECUTABLE_GROWTH_WORKFLOW.length &&
     objective.trim().length >
       0;
 
@@ -1669,8 +1733,7 @@ function AiWorkforce() {
         await streamChat(
           [
             {
-              role:
-                "user",
+              role: "user",
 
               content:
                 controlledStagePrompt({
@@ -1687,8 +1750,7 @@ function AiWorkforce() {
             },
           ],
 
-          () =>
-            undefined,
+          () => undefined,
 
           undefined,
 
@@ -1801,13 +1863,13 @@ function AiWorkforce() {
 
           toast.success(
             finalStage
-              ? "Workforce chain reached its current review checkpoint"
+              ? "Workforce chain reached its review checkpoint"
               : "Employee stage completed",
             {
               description:
                 finalStage
-                  ? "All recorded Growth stages completed. The current workforce-data layer may still create an internal review checkpoint before closing the mission."
-                  : "The completed employee handed work forward to the next pending stage.",
+                  ? "All recorded Growth stages completed. The mission has reached its current review checkpoint."
+                  : "The employee completed its work and the next recorded handoff is ready.",
             },
           );
         },
@@ -1912,7 +1974,7 @@ function AiWorkforce() {
               "active"
             ) {
               throw new Error(
-                `${employee.name} is ${employee.status}. Automatic execution stopped rather than pretending the employee worked.`,
+                `${employee.name} is ${employee.status}. Automatic execution stopped because an inactive employee cannot truthfully execute work.`,
               );
             }
 
@@ -1966,7 +2028,7 @@ function AiWorkforce() {
               : "Safe workforce chain progressed",
             {
               description:
-                `${completedStages} employee stage${completedStages === 1 ? "" : "s"} completed automatically and handed work forward. External high-risk actions were not authorised.`,
+                `${completedStages} employee stage${completedStages === 1 ? "" : "s"} completed and handed work forward. High-risk external authority was not granted.`,
             },
           );
         },
@@ -2082,14 +2144,15 @@ function AiWorkforce() {
             </h1>
 
             <p className="mt-2 max-w-3xl text-muted-foreground">
-              Cossa employees are designed
-              to work as one operating
-              system rather than isolated
-              placeholders. Safe internal
-              work can move employee to
-              employee automatically.
-              Genuine high-risk actions
-              remain owner-controlled.
+              Cossa AI employees operate
+              as one coordinated business
+              system. Safe internal work
+              can move employee to
+              employee automatically,
+              while genuine high-risk,
+              irreversible, legal and
+              financial actions remain
+              owner-controlled.
             </p>
           </div>
 
@@ -2123,8 +2186,8 @@ function AiWorkforce() {
               <UsersRound className="mr-1.5 h-4 w-4" />
 
               {installMutation.isPending
-                ? "Checking workforce…"
-                : "Check workforce setup"}
+                ? "Synchronising workforce…"
+                : "Synchronise workforce"}
             </Button>
           </div>
         </div>
@@ -2188,6 +2251,119 @@ function AiWorkforce() {
         />
       </section>
 
+      {/* TARGET SOCIAL OPERATING LINE */}
+
+      <section className="glass-card p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+              Social operating model
+            </p>
+
+            <h2 className="mt-1 font-display text-xl font-semibold">
+              Target nine-stage social
+              collaboration line
+            </h2>
+
+            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+              This shows the complete
+              operating model we are
+              building. A worker is only
+              marked active when a live
+              employee profile exists.
+              The executable mission line
+              below remains tied to real
+              handoffs created by the
+              backend.
+            </p>
+          </div>
+
+          <div className="grid min-w-64 grid-cols-2 gap-2">
+            <MiniMetric
+              label="Required"
+              value={
+                TARGET_SOCIAL_WORKFLOW.length
+              }
+            />
+
+            <MiniMetric
+              label="Active"
+              value={
+                targetSocialRolesActive
+              }
+              warning={
+                targetSocialRolesActive <
+                TARGET_SOCIAL_WORKFLOW.length
+              }
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-9">
+          {TARGET_SOCIAL_WORKFLOW.map(
+            (
+              stage,
+              index,
+            ) => {
+              const Icon =
+                stage.icon;
+
+              const employee =
+                employeesByKey.get(
+                  stage.key,
+                );
+
+              const active =
+                employee?.status ===
+                "active";
+
+              return (
+                <div
+                  key={
+                    stage.key
+                  }
+                  className="relative rounded-xl border border-border/60 bg-card/40 p-3"
+                >
+                  {index <
+                  TARGET_SOCIAL_WORKFLOW.length -
+                    1 ? (
+                    <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 rounded-full bg-background p-1 text-primary xl:block" />
+                  ) : null}
+
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                    <Icon className="h-4 w-4" />
+                  </div>
+
+                  <p className="mt-3 text-xs font-semibold">
+                    {
+                      stage.label
+                    }
+                  </p>
+
+                  <span
+                    className={
+                      active
+                        ? "mt-2 inline-block text-[9px] uppercase tracking-wider text-success"
+                        : employee
+                          ? "mt-2 inline-block text-[9px] uppercase tracking-wider text-warning"
+                          : "mt-2 inline-block text-[9px] uppercase tracking-wider text-muted-foreground"
+                    }
+                  >
+                    {active
+                      ? "Active"
+                      : employee
+                        ? formatStatus(
+                            employee.status,
+                          )
+                        : "Missing"}
+                  </span>
+                </div>
+              );
+            },
+          )}
+        </div>
+      </section>
+
       {/* BUSINESS WORKFORCE READINESS */}
 
       <section className="glass-card p-5">
@@ -2203,11 +2379,12 @@ function AiWorkforce() {
             </h2>
 
             <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              Missing specialist roles are
-              shown openly. We do not call
-              a capability operational
-              unless a real employee
-              profile exists.
+              Specialist coverage is
+              checked directly against
+              live employee records.
+              Missing roles remain
+              visible until they really
+              exist.
             </p>
           </div>
 
@@ -2339,21 +2516,24 @@ function AiWorkforce() {
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
 
               <p className="text-xs leading-relaxed text-warning">
-                Some specialist operating
-                roles are not yet present
-                in the live employee
-                table. The workforce-data
-                source must install them
-                before this screen can
-                truthfully report them as
-                working employees.
+                Some specialist roles are
+                still absent from the
+                live employee table.
+                Synchronising the
+                workforce installs only
+                profiles that actually
+                exist in
+                COSSA_GROWTH_WORKFORCE.
+                Missing roles must first
+                be added to
+                workforce-data.ts.
               </p>
             </div>
           </div>
         ) : null}
       </section>
 
-      {/* DEFAULT WORKFORCE STATUS */}
+      {/* SOURCE WORKFORCE STATUS */}
 
       <section className="glass-card p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -2363,16 +2543,16 @@ function AiWorkforce() {
             </p>
 
             <h2 className="mt-1 font-display text-xl font-semibold">
-              Current source-defined
-              workforce
+              Source-defined workforce
             </h2>
 
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Existing employees are
-              preserved. Missing source
-              profiles can be installed
-              without deleting custom
-              workforce records.
+              Existing custom employees
+              are preserved. Missing
+              source profiles can be
+              installed without deleting
+              or silently replacing
+              existing workforce records.
             </p>
           </div>
 
@@ -2394,7 +2574,7 @@ function AiWorkforce() {
         </div>
 
         <div className="mt-4 text-xs text-muted-foreground">
-          Current source profiles:{" "}
+          Source profiles:{" "}
           <strong className="text-foreground">
             {
               COSSA_GROWTH_WORKFORCE.length
@@ -2445,11 +2625,11 @@ function AiWorkforce() {
           </div>
 
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Every live employee is shown.
-            Working, assigned, available,
-            failed and approval states are
-            derived from real database
-            records.
+            Working, assigned,
+            available, failed and
+            approval states are derived
+            from real employee, handoff,
+            run and approval records.
           </p>
         </div>
 
@@ -2476,8 +2656,8 @@ function AiWorkforce() {
                 employee,
                 operational,
               }) => {
-                const inGrowthWorkflow =
-                  GROWTH_WORKFLOW_KEYS.has(
+                const inExecutableGrowthWorkflow =
+                  EXECUTABLE_GROWTH_WORKFLOW_KEYS.has(
                     employee.employee_key,
                   );
 
@@ -2536,10 +2716,10 @@ function AiWorkforce() {
                       />
 
                       <EmployeeDetail
-                        label="Growth chain"
+                        label="Growth mission line"
                         value={
-                          inGrowthWorkflow
-                            ? "Included"
+                          inExecutableGrowthWorkflow
+                            ? "Executable stage"
                             : "Specialist / separate workflow"
                         }
                       />
@@ -2670,26 +2850,26 @@ function AiWorkforce() {
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Employee handoff line
+              Real executable handoff line
             </p>
 
             <h2 className="mt-1 font-display text-xl font-semibold">
-              Growth employees work
-              hand-to-hand
+              Current Growth workflow
             </h2>
           </div>
 
           <p className="max-w-xl text-sm text-muted-foreground">
-            The current executable chain
-            can now be progressed
-            automatically instead of
-            requiring one manual click per
-            worker.
+            These are the employee
+            stages currently expected by
+            the Growth mission backend.
+            The chain can run
+            sequentially without one
+            manual click per employee.
           </p>
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-7">
-          {GROWTH_WORKFLOW.map(
+          {EXECUTABLE_GROWTH_WORKFLOW.map(
             (
               step,
               index,
@@ -2714,7 +2894,7 @@ function AiWorkforce() {
                   className="relative rounded-xl border border-border/60 bg-card/40 p-4"
                 >
                   {index <
-                  GROWTH_WORKFLOW.length -
+                  EXECUTABLE_GROWTH_WORKFLOW.length -
                     1 ? (
                     <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 rounded-full bg-background p-1 text-primary xl:block" />
                   ) : null}
@@ -2779,19 +2959,18 @@ function AiWorkforce() {
             </p>
 
             <h2 className="mt-1 font-display text-xl font-semibold">
-              Run the internal chain
-              automatically
+              Run internal employees
+              hand-to-hand
             </h2>
 
             <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              Safe internal workers can
-              execute sequentially and
-              hand their output to the
-              next employee. If a real
-              failure occurs, the chain
-              stops and records the
-              failure instead of
-              pretending success.
+              Every pending safe stage
+              can execute sequentially.
+              The output from one worker
+              is supplied to the next.
+              A genuine failure stops the
+              chain and remains visible
+              in the audit history.
             </p>
           </div>
 
@@ -2922,22 +3101,24 @@ function AiWorkforce() {
 
               <div className="mt-4 rounded-lg border border-border/60 bg-background/30 p-3">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  Automation boundary
+                  Execution boundary
                 </p>
 
                 <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                  This browser workflow can
-                  auto-chain internal
-                  stages while the
-                  execution request is
-                  running. Permanent
-                  background schedules,
-                  daily posting and
-                  unattended external
-                  publishing require a
-                  server worker or cron
-                  workflow plus authorised
-                  social integrations.
+                  Automatic execution on
+                  this page runs while
+                  the browser request is
+                  active. Permanent
+                  unattended work,
+                  recurring daily
+                  execution, scheduled
+                  posting and autonomous
+                  external publishing
+                  need a server-side
+                  scheduler or worker
+                  together with real
+                  authorised
+                  integrations.
                 </p>
               </div>
             </div>
@@ -3047,7 +3228,7 @@ function AiWorkforce() {
         )}
       </section>
 
-      {/* SOCIAL / STORE / TECH */}
+      {/* OPERATING AREAS */}
 
       <section className="grid gap-4 lg:grid-cols-3">
         <OperatingArea
@@ -3055,7 +3236,7 @@ function AiWorkforce() {
             Megaphone
           }
           title="Social media"
-          description="Strategy, copy, visual briefs, scheduling and account-growth work should coordinate continuously. Actual unattended publishing requires authenticated social publishing integrations and a background executor."
+          description="Strategy, copy, visual production, scheduling, social management and account-growth analysis should work as one pipeline. Real unattended publishing requires authenticated social integrations and a background executor."
         />
 
         <OperatingArea
@@ -3063,7 +3244,7 @@ function AiWorkforce() {
             ShoppingCart
           }
           title="Cossa Store"
-          description="Store operations should coordinate catalogue health, product intelligence, legitimate supplier research, merchandising, product creatives and social-commerce campaigns."
+          description="Store operations should coordinate catalogue health, product intelligence, legitimate supplier sourcing, merchandising, product visuals, campaigns and social-commerce growth."
         />
 
         <OperatingArea
@@ -3071,7 +3252,7 @@ function AiWorkforce() {
             Code2
           }
           title="Cossa Tech"
-          description="Cossa Tech should coordinate website delivery, technical solutions, content, visual assets, SEO quality and client requirements instead of leaving technical service requests without an owner."
+          description="Cossa Tech should coordinate websites, technical solutions, customer requirements, website content, graphics, SEO quality and delivery rather than leaving technical enquiries without a specialist owner."
         />
       </section>
 
@@ -3089,9 +3270,10 @@ function AiWorkforce() {
               </h2>
 
               <p className="text-sm text-muted-foreground">
-                Creates linked internal
-                employee stages ready for
-                automatic safe execution.
+                Creates real linked
+                employee handoffs ready
+                for automatic safe
+                execution.
               </p>
             </div>
           </div>
@@ -3158,20 +3340,21 @@ function AiWorkforce() {
 
             {!canCreateCoordination ? (
               <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-                The executable Growth
-                chain requires all{" "}
+                The currently
+                executable Growth chain
+                requires all{" "}
                 {
-                  GROWTH_WORKFLOW.length
+                  EXECUTABLE_GROWTH_WORKFLOW.length
                 }{" "}
-                current workflow
+                backend workflow
                 employees to exist and
                 be active.{" "}
                 {
-                  activeControlledWorkflowEmployees.length
+                  activeExecutableWorkflowEmployees.length
                 }{" "}
                 of{" "}
                 {
-                  GROWTH_WORKFLOW.length
+                  EXECUTABLE_GROWTH_WORKFLOW.length
                 }{" "}
                 are currently active.
               </p>
@@ -3217,11 +3400,12 @@ function AiWorkforce() {
 
           <p className="mt-2 text-sm text-muted-foreground">
             Internal research,
-            analysis, drafting,
-            scheduling, content
-            preparation, SEO,
-            catalogue review and
-            employee handoffs should
+            analysis, drafting, content
+            creation, visual briefs,
+            scheduling, SEO,
+            catalogue analysis,
+            supplier-candidate research
+            and employee handoffs should
             continue without unnecessary
             owner interruption.
           </p>
@@ -3230,28 +3414,30 @@ function AiWorkforce() {
             <OwnerRule>
               Spending money, supplier
               orders and advertising
-              budgets remain
+              budget changes remain
               owner-controlled.
             </OwnerRule>
 
             <OwnerRule>
               Contracts, legal
-              commitments, signatures and
-              binding commercial terms
-              remain owner-controlled.
+              commitments, signatures
+              and binding commercial
+              terms remain
+              owner-controlled.
             </OwnerRule>
 
             <OwnerRule>
               Credentials, destructive
-              changes and irreversible
-              account actions remain
+              operations and
+              irreversible account
+              changes remain
               owner-controlled.
             </OwnerRule>
 
             <OwnerRule>
               Missing integrations must
-              be reported honestly rather
-              than simulated.
+              be identified accurately
+              rather than simulated.
             </OwnerRule>
           </div>
 
@@ -3436,23 +3622,25 @@ function AiWorkforce() {
                       {reviewApproval ? (
                         <div className="mt-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
                           <p className="text-xs font-medium text-foreground">
-                            Current internal
-                            review checkpoint
+                            Internal review
+                            checkpoint
                           </p>
 
                           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                            The present
-                            workforce-data
-                            backend still
-                            records this
-                            final internal
-                            review checkpoint.
-                            It does not
-                            authorise external
-                            spending,
+                            This approval
+                            closes the
+                            internal
+                            coordination
+                            briefing. It
+                            does not
+                            authorise
                             publishing,
-                            contracting or
-                            account changes.
+                            spending,
+                            contracting,
+                            customer
+                            messaging or
+                            account
+                            changes.
                           </p>
 
                           <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -3525,29 +3713,30 @@ function AiWorkforce() {
             </p>
 
             <h2 className="mt-1 font-display text-xl font-semibold">
-              We do not call placeholders
-              employees
+              Capability must be real,
+              not cosmetic
             </h2>
 
             <p className="mt-2 max-w-4xl text-sm leading-relaxed text-muted-foreground">
-              An active profile is an
-              employee that is allowed to
-              receive work. A real run
-              proves execution. A
+              An active employee
+              profile proves the worker
+              is allowed to receive
+              work. A running mission
+              run proves execution. A
               completed run proves an
-              internal result. External
-              social publishing requires a
-              real authorised publishing
-              integration. Daily
+              internal result. Social
+              publishing requires a
+              real authenticated
+              publishing integration.
+              Visual generation requires
+              a real media-generation
+              workflow. Supplier
+              discovery requires a
+              legitimate research
+              source. Permanent
               unattended operation
               requires a server-side
-              scheduler or worker.
-              Supplier discovery requires
-              a real research source. None
-              of those capabilities should
-              be represented as working
-              until their real connection
-              exists.
+              executor or scheduler.
             </p>
           </div>
         </div>
