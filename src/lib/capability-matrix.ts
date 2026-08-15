@@ -473,6 +473,6 @@ export const EXTERNAL_CAPABILITY_GAPS:
       "not-connected",
 
     requirement:
-      "A server-side worker, scheduler or cron execution layer capable of claiming queued Cossa missions, running employees, recording results, retrying failures and stopping correctly at approval-controlled actions.",
+      "A server-side worker workers, scheduler or cron execution layer capable of claiming queued Cossa missions, running employees, recording results, retrying failures and stopping correctly at approval-controlled actions.",
   },
 ];
