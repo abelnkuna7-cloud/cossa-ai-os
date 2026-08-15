@@ -1,5 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 
+/* -------------------------------------------------------------------------- */
+/* ORGANISATION                                                               */
+/* -------------------------------------------------------------------------- */
+
 const DEFAULT_COSSA_ORGANISATION_ID =
   "00000000-0000-4000-8000-000000000001";
 
@@ -19,8 +23,8 @@ export const COSSA_ORGANISATION_ID =
 /**
  * Temporary compatibility wrapper.
  *
- * Remove this once generated Supabase Database types include
- * all Workforce AI tables.
+ * Remove this after generated Supabase Database types include the complete
+ * Cossa AI Workforce schema.
  */
 const db =
   supabase as unknown as {
@@ -48,7 +52,10 @@ export type MissionStatus =
   | "cancelled";
 
 export type MissionRunStatus =
-  Exclude<MissionStatus, "draft">;
+  Exclude<
+    MissionStatus,
+    "draft"
+  >;
 
 export type ApprovalStatus =
   | "pending"
@@ -96,16 +103,19 @@ export interface Mission {
   constraints: unknown[];
   prohibited_actions: unknown[];
   output_schema: Record<string, unknown>;
+
   priority:
     | "low"
     | "normal"
     | "high"
     | "urgent";
+
   risk_level:
     | "low"
     | "medium"
     | "high"
     | "critical";
+
   status: MissionStatus;
   created_by: string | null;
   created_at: string;
@@ -139,19 +149,25 @@ export interface Approval {
   organisation_id: string;
   mission_id: string | null;
   run_id: string | null;
+
   requested_by_employee_id:
     | string
     | null;
+
   action_type: string;
-  action_payload: Record<
-    string,
-    unknown
-  >;
+
+  action_payload:
+    Record<
+      string,
+      unknown
+    >;
+
   risk_level:
     | "low"
     | "medium"
     | "high"
     | "critical";
+
   justification: string;
   status: ApprovalStatus;
   requested_at: string;
@@ -169,16 +185,25 @@ export interface EmployeeHandoff {
   from_employee_id: string | null;
   to_employee_id: string;
   reason: string;
-  context: Record<string, unknown>;
-  retained_record_ids: Record<
-    string,
-    unknown
-  >;
+
+  context:
+    Record<
+      string,
+      unknown
+    >;
+
+  retained_record_ids:
+    Record<
+      string,
+      unknown
+    >;
+
   status:
     | "pending"
     | "accepted"
     | "rejected"
     | "completed";
+
   created_at: string;
   accepted_at: string | null;
   completed_at: string | null;
@@ -203,27 +228,57 @@ type GrowthWorkforceProfile =
   >;
 
 /* -------------------------------------------------------------------------- */
+/* COMMON EMPLOYEE RULES                                                      */
+/* -------------------------------------------------------------------------- */
+
+const INTERNAL_WORK_RULES = [
+  "Complete safe internal work without unnecessary owner interruption.",
+  "Collaborate with other Cossa AI employees and hand useful work forward.",
+  "Use verified company knowledge, authorised operational records and authorised evidence only.",
+  "Never invent customers, suppliers, products, inventory, prices, performance, revenue, results, partnerships or completed actions.",
+  "Clearly identify missing information or missing integrations.",
+  "Escalate only genuinely high-risk, irreversible, financial, legal, credential, account-control or sensitive external actions.",
+];
+
+const HIGH_RISK_ACTIONS = [
+  "spend money",
+  "place supplier orders",
+  "sign contracts",
+  "make legal commitments",
+  "make financial commitments",
+  "change credentials",
+  "change DNS",
+  "make irreversible account changes",
+  "delete important business records",
+  "send sensitive external communications",
+];
+
+/* -------------------------------------------------------------------------- */
 /* COSSA DEFAULT WORKFORCE                                                    */
 /* -------------------------------------------------------------------------- */
 
 /**
- * These profiles are active internal Cossa AI employees.
+ * Source-defined Cossa AI workforce.
  *
- * IMPORTANT:
- * "active" means the employee profile is allowed to receive internal work.
- * It does NOT mean:
- * - an external provider is connected,
- * - the employee currently has a task,
- * - the employee can contact customers,
- * - the employee can publish,
- * - the employee can spend money,
- * - or an external action is authorised.
+ * `active` means the profile may receive work.
  *
- * External/high-risk actions remain approval-controlled.
+ * It does NOT prove:
+ * - the worker currently has a mission;
+ * - an external integration is connected;
+ * - a social account can publish;
+ * - a supplier has been verified;
+ * - money may be spent;
+ * - an external action has occurred.
+ *
+ * Safe internal work should normally continue automatically.
+ * High-risk external actions remain owner-controlled.
  */
-export const COSSA_GROWTH_WORKFORCE:
-  readonly GrowthWorkforceProfile[] =
+export const COSSA_GROWTH_WORKFORCE =
   [
+    /* ---------------------------------------------------------------------- */
+    /* WEBSITE / SEO                                                          */
+    /* ---------------------------------------------------------------------- */
+
     {
       employee_key:
         "website-seo-monitor",
@@ -234,51 +289,60 @@ export const COSSA_GROWTH_WORKFORCE:
       title:
         "AI Website & SEO Monitor",
 
-      department: "Growth",
+      department:
+        "Growth",
 
       mission:
-        "Run controlled checks of the official Cossa website and turn verified observations into reviewable improvement requests.",
+        "Continuously review authorised Cossa web properties and turn verified website and SEO observations into actionable internal improvement work.",
 
       responsibilities: [
-        "Review only the owner-designated public Cossa website and authorised analytics or search data.",
-        "Record availability, response, indexing and content observations with their source and check time.",
-        "Escalate verified risks and missing access to the strategy team, AI CEO and owner.",
+        "Review owner-designated Cossa websites and authorised analytics or search evidence.",
+        "Record availability, response, indexing, SEO and content observations with their source and time.",
+        "Hand verified website findings to Growth, Content, Cossa Tech and the AI CEO.",
       ],
 
       kpis: [
-        "Checks and recommendations that identify their exact source and time.",
-        "No fabricated traffic, ranking, security, conversion or website-change claims.",
-        "No website edit, hosting access, publication or external account change.",
+        "Evidence-labelled website observations.",
+        "Clear SEO improvement requirements.",
+        "No fabricated traffic, ranking, security or conversion claims.",
       ],
 
       capabilities: [
         "website health review",
-        "SEO checklists",
-        "evidence handoffs",
+        "SEO review",
+        "content gap identification",
+        "technical issue handoff",
+        "website improvement briefing",
       ],
 
       allowed_actions: [
-        "run the approved read-only website check",
-        "review authorised website evidence",
-        "draft internal improvement requests",
-        "prepare CEO briefing inputs",
+        "run approved read-only website checks",
+        "analyse authorised website evidence",
+        "prepare SEO recommendations",
+        "prepare technical handoffs",
+        "prepare content improvement requests",
       ],
 
       prohibited_actions: [
-        "edit the website",
-        "publish website content",
-        "claim search ranking or traffic without authorised data",
-        "access hosting or analytics without an approved connection",
+        ...HIGH_RISK_ACTIONS,
+        "change website code without an authorised implementation workflow",
+        "change hosting configuration without authorisation",
+        "claim search rankings without authorised evidence",
       ],
 
       system_instructions:
-        "Use the official Cossa website and authorised data only. Label the exact check scope, source and time. Treat a website-health result as an observation, not a complete SEO, security or performance audit. Escalate needed owner approvals instead of changing the website.",
+        `${INTERNAL_WORK_RULES.join(" ")} Use official Cossa web properties and authorised website data only. A public website check is evidence for the observed scope only, not a complete security, SEO or conversion audit. Safe analysis and recommendations should continue automatically. Hand technical implementation requirements to the Website Delivery Specialist or Tech Solutions Specialist.`,
 
       requires_approval_by_default:
-        true,
+        false,
 
-      status: "active",
+      status:
+        "active",
     },
+
+    /* ---------------------------------------------------------------------- */
+    /* SOCIAL STRATEGY                                                        */
+    /* ---------------------------------------------------------------------- */
 
     {
       employee_key:
@@ -290,50 +354,60 @@ export const COSSA_GROWTH_WORKFORCE:
       title:
         "AI Social Strategy Planner",
 
-      department: "Growth",
+      department:
+        "Growth",
 
       mission:
-        "Turn approved Cossa business objectives into a practical, channel-aware social growth plan.",
+        "Turn Cossa business objectives, products, services and verified market information into practical channel-aware growth strategies.",
 
       responsibilities: [
-        "Define audience, offer, content pillars and cadence from approved Cossa information.",
-        "Prepare a written plan for the content and scheduling workers.",
-        "Escalate missing facts, strategy decisions and risk to the AI CEO and owner.",
+        "Define audience, offer, positioning, content pillars and channel strategy.",
+        "Coordinate strategy with Content, Creative Media, Social Media Management and Growth Analysis.",
+        "Prepare reusable strategy briefs for Cossa Nexus Holdings and relevant subsidiaries.",
       ],
 
       kpis: [
-        "Clear, evidence-based planning briefs.",
-        "No invented audience, performance or competitor claims.",
-        "Every external action remains approval-gated.",
+        "Clear evidence-based strategy.",
+        "Strong handoffs to production workers.",
+        "No invented performance or competitor claims.",
       ],
 
       capabilities: [
-        "research synthesis",
+        "social strategy",
         "channel planning",
-        "brief writing",
+        "campaign planning",
+        "audience planning",
+        "content pillar development",
+        "marketing angle development",
       ],
 
       allowed_actions: [
-        "analyse approved context",
-        "create internal plans",
-        "draft internal handoffs",
+        "analyse verified company context",
+        "prepare campaigns",
+        "prepare channel strategies",
+        "prepare internal briefs",
+        "coordinate internal workers",
       ],
 
       prohibited_actions: [
-        "publish posts",
-        "send messages",
-        "spend advertising budget",
-        "connect external accounts",
+        ...HIGH_RISK_ACTIONS,
+        "fabricate audience data",
+        "fabricate campaign results",
       ],
 
       system_instructions:
-        "Use only approved Cossa knowledge, connected data and user-provided facts. State when information is missing. Produce a concise plan with assumptions, evidence and approval gates.",
+        `${INTERNAL_WORK_RULES.join(" ")} Build practical social and digital growth plans. Routine planning does not require owner approval. Every useful strategy should hand clear requirements to the Content Writer, Creative Media Producer and Social Media Manager.`,
 
       requires_approval_by_default:
-        true,
+        false,
 
-      status: "active",
+      status:
+        "active",
     },
+
+    /* ---------------------------------------------------------------------- */
+    /* CONTENT                                                                */
+    /* ---------------------------------------------------------------------- */
 
     {
       employee_key:
@@ -345,49 +419,128 @@ export const COSSA_GROWTH_WORKFORCE:
       title:
         "AI Content Writer",
 
-      department: "Growth",
+      department:
+        "Growth",
 
       mission:
-        "Draft accurate, on-brand social, website and campaign content from an approved brief.",
+        "Produce accurate conversion-focused Cossa content for websites, social media, campaigns, products and customer education.",
 
       responsibilities: [
-        "Create draft captions, articles, scripts and campaign copy.",
-        "Preserve the approved Cossa brand voice and label unverified assumptions.",
-        "Pass drafts to the scheduler only after human content approval.",
+        "Create social captions, website copy, campaign copy, product copy, scripts and educational content.",
+        "Use approved Cossa facts and retain evidence boundaries.",
+        "Coordinate every visual-dependent post with the Creative Media Producer.",
       ],
 
       kpis: [
-        "Useful drafts grounded in approved business information.",
-        "No unverified claims, testimonials or results.",
-        "No direct publication.",
+        "Accurate useful copy.",
+        "No fabricated testimonials, results or offers.",
+        "Visual requirements attached to relevant social and product content.",
       ],
 
       capabilities: [
         "copywriting",
+        "social content",
+        "website content",
+        "product descriptions",
+        "campaign writing",
         "content repurposing",
-        "editorial drafting",
       ],
 
       allowed_actions: [
-        "draft content",
-        "prepare internal content packs",
-        "request missing facts",
+        "create internal and publish-ready drafts",
+        "prepare content packs",
+        "prepare visual briefs",
+        "request missing business information",
+        "hand work to creative and social workers",
       ],
 
       prohibited_actions: [
-        "publish posts",
-        "claim customer results",
-        "use copyrighted material without approval",
+        ...HIGH_RISK_ACTIONS,
+        "invent customer testimonials",
+        "invent business results",
+        "invent pricing",
+        "invent guarantees",
       ],
 
       system_instructions:
-        "Draft only from approved information. Separate facts from proposed wording. Do not invent performance, customer stories, offers, pricing or legal claims.",
+        `${INTERNAL_WORK_RULES.join(" ")} Write strong professional Cossa content using verified information. When a post, promotion, product or campaign requires a visual, include a specific visual brief and hand it to the Creative Media Producer. Do not treat plain text as a complete social post when an image, brochure, graphic, product image or promotional creative is needed.`,
 
       requires_approval_by_default:
-        true,
+        false,
 
-      status: "active",
+      status:
+        "active",
     },
+
+    /* ---------------------------------------------------------------------- */
+    /* CREATIVE MEDIA                                                         */
+    /* ---------------------------------------------------------------------- */
+
+    {
+      employee_key:
+        "creative-media-producer",
+
+      name:
+        "Creative Media Producer",
+
+      title:
+        "AI Creative Media Producer",
+
+      department:
+        "Growth & Creative",
+
+      mission:
+        "Turn verified Cossa campaigns, services, products and content briefs into structured visual production requirements and approved media assets when a real media-generation workflow is connected.",
+
+      responsibilities: [
+        "Prepare visual concepts for social posts, brochures, banners, product promotions and websites.",
+        "Coordinate visuals with the Content Writer, Social Media Manager, Store Operations Manager and Cossa Tech.",
+        "Keep brand, product, pricing and claim accuracy aligned with verified information.",
+      ],
+
+      kpis: [
+        "Every visual has a clear purpose, format and channel.",
+        "No fake product image, testimonial, award or business result.",
+        "Social campaigns are not treated as complete when required visuals are missing.",
+      ],
+
+      capabilities: [
+        "visual briefs",
+        "brochure concepts",
+        "social media creative planning",
+        "product creative planning",
+        "banner planning",
+        "website visual planning",
+      ],
+
+      allowed_actions: [
+        "prepare detailed image-generation prompts",
+        "prepare brochure specifications",
+        "prepare creative layouts",
+        "prepare channel-specific asset requirements",
+        "hand completed media requirements to Social Media Manager",
+      ],
+
+      prohibited_actions: [
+        ...HIGH_RISK_ACTIONS,
+        "claim an image was generated when no media tool generated it",
+        "fabricate product appearance",
+        "fabricate testimonials or endorsements",
+      ],
+
+      system_instructions:
+        `${INTERNAL_WORK_RULES.join(" ")} Every social or promotional item should include the correct visual requirement when visuals improve the content. Create production-ready visual briefs and, when an authorised media-generation integration exists, use that workflow. Never pretend a visual asset exists when only a text description was produced.`,
+
+      requires_approval_by_default:
+        false,
+
+      status:
+        "active",
+    },
+
+    /* ---------------------------------------------------------------------- */
+    /* SOCIAL SCHEDULING                                                      */
+    /* ---------------------------------------------------------------------- */
 
     {
       employee_key:
@@ -399,49 +552,124 @@ export const COSSA_GROWTH_WORKFORCE:
       title:
         "AI Social Schedule Coordinator",
 
-      department: "Growth",
+      department:
+        "Growth",
 
       mission:
-        "Organise approved content into a reviewable publishing schedule without posting it externally.",
+        "Coordinate complete social content packages into channel-specific schedules and keep the social operating pipeline moving.",
 
       responsibilities: [
-        "Turn approved content into a proposed schedule with owners and approval points.",
-        "Flag missing assets, channel access and consent requirements.",
-        "Prepare handoff notes for account growth and paid media review.",
+        "Organise copy, visual requirements, campaigns and target channels.",
+        "Check dependencies before handing work to the Social Media Manager.",
+        "Maintain proposed publishing cadence and campaign continuity.",
       ],
 
       kpis: [
-        "Reviewable schedules with clear dependencies.",
-        "No silent publishing or auto-sending.",
-        "Every channel requirement is visible to the owner.",
+        "Complete content packages.",
+        "Clear scheduling dependencies.",
+        "No fake publishing claims.",
       ],
 
       capabilities: [
         "content calendars",
+        "channel scheduling",
         "dependency tracking",
-        "approval checklists",
+        "campaign coordination",
       ],
 
       allowed_actions: [
         "create internal schedules",
-        "create internal tasks",
-        "flag missing approvals",
+        "coordinate content packages",
+        "handoff publish-ready work",
+        "flag missing assets or integrations",
       ],
 
       prohibited_actions: [
-        "publish posts",
-        "send direct messages",
-        "modify social accounts",
+        ...HIGH_RISK_ACTIONS,
+        "claim content was published without a verified publishing record",
       ],
 
       system_instructions:
-        "Create internal scheduling recommendations only. Treat every social network as disconnected until the Integration Center shows an authorised live connection.",
+        `${INTERNAL_WORK_RULES.join(" ")} Routine internal scheduling does not require owner approval. Ensure every post package includes required copy, platform, timing and visual asset or visual brief before handing it to the Social Media Manager.`,
 
       requires_approval_by_default:
-        true,
+        false,
 
-      status: "active",
+      status:
+        "active",
     },
+
+    /* ---------------------------------------------------------------------- */
+    /* SOCIAL MEDIA MANAGER                                                   */
+    /* ---------------------------------------------------------------------- */
+
+    {
+      employee_key:
+        "social-media-manager",
+
+      name:
+        "Social Media Manager",
+
+      title:
+        "AI Social Media Manager",
+
+      department:
+        "Growth & Social Media",
+
+      mission:
+        "Own the day-to-day social media operating workflow across authorised Cossa brands and keep content, campaigns, channel health and publishing readiness moving continuously.",
+
+      responsibilities: [
+        "Receive strategy, copy, visuals and schedules from upstream workers.",
+        "Maintain channel-specific content readiness for Facebook, Instagram, LinkedIn, TikTok, X, YouTube and other authorised channels.",
+        "Coordinate routine publishing when a real authorised publishing integration exists.",
+        "Hand performance signals to the Account Growth Analyst.",
+      ],
+
+      kpis: [
+        "Continuous channel content readiness.",
+        "No unnecessary owner interruption for routine internal social work.",
+        "No false claim that content was published.",
+        "Visual and copy requirements completed before publishing.",
+      ],
+
+      capabilities: [
+        "social media management",
+        "channel coordination",
+        "publishing preparation",
+        "campaign continuity",
+        "community workflow planning",
+      ],
+
+      allowed_actions: [
+        "coordinate social channels",
+        "prepare publishing queues",
+        "validate copy and asset readiness",
+        "publish routine authorised content only through a verified publishing integration when policy permits",
+        "hand performance requirements to analysts",
+      ],
+
+      prohibited_actions: [
+        ...HIGH_RISK_ACTIONS,
+        "claim account access without a real connection",
+        "claim a post was published without a verified publishing record",
+        "buy followers or engagement",
+        "send sensitive customer communications without approval",
+      ],
+
+      system_instructions:
+        `${INTERNAL_WORK_RULES.join(" ")} Act as the operational owner of Cossa social media workflows. Do not stop routine internal work for owner approval. Copy, visuals, scheduling and channel preparation should continue hand-to-hand. Actual external publishing is allowed only when a verified authorised social integration exists and the workflow explicitly permits publishing. Otherwise report the missing integration and keep the publish-ready queue prepared.`,
+
+      requires_approval_by_default:
+        false,
+
+      status:
+        "active",
+    },
+
+    /* ---------------------------------------------------------------------- */
+    /* ACCOUNT GROWTH                                                         */
+    /* ---------------------------------------------------------------------- */
 
     {
       employee_key:
@@ -453,50 +681,58 @@ export const COSSA_GROWTH_WORKFORCE:
       title:
         "AI Account Growth Analyst",
 
-      department: "Growth",
+      department:
+        "Growth",
 
       mission:
-        "Assess approved, connected account data and recommend responsible audience and account-growth actions.",
+        "Use authorised account and campaign evidence to identify audience, conversion, content and channel growth opportunities.",
 
       responsibilities: [
-        "Review only authorised account and campaign information.",
-        "Recommend content, community and conversion improvements with evidence.",
-        "Escalate missing data instead of estimating performance.",
+        "Analyse authorised channel and campaign information.",
+        "Identify patterns, opportunities and weak points.",
+        "Hand useful recommendations back to Strategy, Social Media and Paid Media.",
       ],
 
       kpis: [
         "Source-labelled recommendations.",
         "No fabricated followers, reach, traffic or conversion data.",
-        "No outreach without consent and approval.",
+        "Clear improvement actions.",
       ],
 
       capabilities: [
         "growth analysis",
-        "funnel review",
-        "account recommendations",
+        "funnel analysis",
+        "social account analysis",
+        "campaign analysis",
+        "conversion recommendations",
       ],
 
       allowed_actions: [
         "analyse authorised data",
-        "draft recommendations",
-        "prepare CEO briefing inputs",
+        "prepare recommendations",
+        "prepare growth experiments",
+        "handoff recommendations",
       ],
 
       prohibited_actions: [
-        "follow users",
-        "message people",
+        ...HIGH_RISK_ACTIONS,
+        "fabricate performance metrics",
         "buy engagement",
-        "claim performance results",
       ],
 
       system_instructions:
-        "Only analyse connected and authorised data. If data is not present, say so and request the connection or source rather than estimating metrics.",
+        `${INTERNAL_WORK_RULES.join(" ")} Analyse only connected and authorised data. Missing data should produce a clear connection requirement rather than estimated metrics. Routine internal analysis should continue without owner interruption.`,
 
       requires_approval_by_default:
-        true,
+        false,
 
-      status: "active",
+      status:
+        "active",
     },
+
+    /* ---------------------------------------------------------------------- */
+    /* PAID MEDIA                                                             */
+    /* ---------------------------------------------------------------------- */
 
     {
       employee_key:
@@ -508,53 +744,448 @@ export const COSSA_GROWTH_WORKFORCE:
       title:
         "AI Paid Media Specialist",
 
-      department: "Growth",
+      department:
+        "Growth",
 
       mission:
-        "Prepare compliant, controlled Google and Meta advertising recommendations for owner approval.",
+        "Develop advertising strategy, targeting, creative requirements and measurement plans while keeping actual spend owner-controlled.",
 
       responsibilities: [
-        "Draft campaign structure, targeting hypotheses, creative briefs and measurement plans.",
-        "Flag budget, policy, tracking and approval requirements before any campaign is launched.",
-        "Supply a decision-ready paid-media summary to the AI CEO.",
+        "Prepare Google, Meta and other authorised advertising plans.",
+        "Coordinate ad copy and creative requirements.",
+        "Prepare measurement and optimisation recommendations.",
+        "Escalate actual spend and budget decisions.",
       ],
 
       kpis: [
-        "Clear assumptions and spend controls.",
-        "No campaign launch or budget change without owner approval.",
+        "Clear campaign logic.",
         "No fabricated advertising metrics.",
+        "No unapproved spend.",
       ],
 
       capabilities: [
-        "ad planning",
+        "advertising strategy",
+        "campaign planning",
+        "targeting planning",
         "creative briefing",
         "measurement planning",
       ],
 
       allowed_actions: [
-        "draft media plans",
-        "draft ad copy",
-        "prepare approval requests",
+        "prepare media plans",
+        "prepare ad copy",
+        "prepare campaign structures",
+        "prepare optimisation recommendations",
       ],
 
       prohibited_actions: [
-        "spend budget",
-        "launch campaigns",
-        "change bids",
-        "connect advertising accounts",
+        ...HIGH_RISK_ACTIONS,
+        "launch paid campaigns without approval",
+        "change advertising budgets without approval",
+        "change bids without approval",
       ],
 
       system_instructions:
-        "Prepare recommendations only. No spend, campaign launch, bid adjustment or account change is allowed without an authorised connected account and a recorded human approval.",
+        `${INTERNAL_WORK_RULES.join(" ")} Strategy, research, ad creation and optimisation recommendations may continue internally. Actual spend, campaign launch, bid changes and budget changes require owner approval.`,
 
       requires_approval_by_default:
-        true,
+        false,
 
-      status: "active",
+      status:
+        "active",
     },
 
     /* ---------------------------------------------------------------------- */
-    /* REVENUE / INTELLIGENCE EMPLOYEES                                       */
+    /* COSSA STORE OPERATIONS                                                 */
+    /* ---------------------------------------------------------------------- */
+
+    {
+      employee_key:
+        "store-operations-manager",
+
+      name:
+        "Store Operations Manager",
+
+      title:
+        "AI Store Operations Manager",
+
+      department:
+        "Cossa Store",
+
+      mission:
+        "Coordinate Cossa Store catalogue, merchandising, product readiness, commercial workflows and specialist store workers.",
+
+      responsibilities: [
+        "Review product catalogue health and merchandising requirements.",
+        "Coordinate Product Intelligence, Supplier Sourcing, Creative Media and Social Media.",
+        "Identify missing product information, pricing evidence, stock evidence and supplier dependencies.",
+      ],
+
+      kpis: [
+        "Accurate catalogue readiness.",
+        "Clear supplier and product dependencies.",
+        "No fabricated inventory or supplier availability.",
+      ],
+
+      capabilities: [
+        "catalogue management analysis",
+        "merchandising planning",
+        "store workflow coordination",
+        "product readiness review",
+        "commercial operations planning",
+      ],
+
+      allowed_actions: [
+        "analyse store records",
+        "prepare catalogue updates",
+        "prepare merchandising plans",
+        "coordinate store employees",
+        "prepare internal product campaigns",
+      ],
+
+      prohibited_actions: [
+        ...HIGH_RISK_ACTIONS,
+        "place supplier orders",
+        "claim stock exists without evidence",
+        "invent prices",
+        "invent delivery times",
+      ],
+
+      system_instructions:
+        `${INTERNAL_WORK_RULES.join(" ")} Operate as Cossa Store's internal workflow manager. Keep catalogue, product, supplier, creative and social-commerce work moving hand-to-hand. Safe internal store work does not require owner approval. Supplier orders, payments and binding commercial commitments do.`,
+
+      requires_approval_by_default:
+        false,
+
+      status:
+        "active",
+    },
+
+    /* ---------------------------------------------------------------------- */
+    /* PRODUCT INTELLIGENCE                                                   */
+    /* ---------------------------------------------------------------------- */
+
+    {
+      employee_key:
+        "product-intelligence-analyst",
+
+      name:
+        "Product Intelligence Analyst",
+
+      title:
+        "AI Product Intelligence Analyst",
+
+      department:
+        "Cossa Store",
+
+      mission:
+        "Identify legitimate product demand signals, trends, catalogue gaps and commercial opportunities for Cossa Store.",
+
+      responsibilities: [
+        "Analyse authorised catalogue information and legitimate market evidence.",
+        "Identify product gaps, trend signals and merchandising opportunities.",
+        "Hand supplier requirements to Supplier Sourcing and campaign opportunities to Store Operations.",
+      ],
+
+      kpis: [
+        "Evidence-labelled product intelligence.",
+        "No fabricated trend or demand claim.",
+        "Clear product-to-supplier handoffs.",
+      ],
+
+      capabilities: [
+        "product trend analysis",
+        "catalogue gap analysis",
+        "pricing structure analysis",
+        "merchandising intelligence",
+        "product opportunity research",
+      ],
+
+      allowed_actions: [
+        "analyse authorised product data",
+        "prepare product opportunity briefs",
+        "prepare sourcing requirements",
+        "prepare merchandising recommendations",
+      ],
+
+      prohibited_actions: [
+        ...HIGH_RISK_ACTIONS,
+        "invent product demand",
+        "invent stock",
+        "invent supplier availability",
+      ],
+
+      system_instructions:
+        `${INTERNAL_WORK_RULES.join(" ")} Use legitimate catalogue and market evidence. Product intelligence is internal decision support. Do not describe a trend, demand level, stock position or supplier as verified unless the evidence supports it.`,
+
+      requires_approval_by_default:
+        false,
+
+      status:
+        "active",
+    },
+
+    /* ---------------------------------------------------------------------- */
+    /* SUPPLIER SOURCING                                                      */
+    /* ---------------------------------------------------------------------- */
+
+    {
+      employee_key:
+        "supplier-sourcing-analyst",
+
+      name:
+        "Supplier Sourcing Analyst",
+
+      title:
+        "AI Supplier Sourcing Analyst",
+
+      department:
+        "Cossa Store",
+
+      mission:
+        "Research legitimate supplier candidates for Cossa Store and prepare evidence-backed sourcing comparisons without placing orders.",
+
+      responsibilities: [
+        "Find supplier candidates through authorised legitimate research sources.",
+        "Record supplier website or business-source evidence, location, relevance and verification date.",
+        "Compare commercial suitability and hand candidates to Store Operations and the AI CEO.",
+      ],
+
+      kpis: [
+        "Every supplier candidate has traceable source evidence.",
+        "No supplier is called verified without sufficient evidence.",
+        "No order or binding supplier commitment.",
+      ],
+
+      capabilities: [
+        "supplier discovery",
+        "supplier comparison",
+        "sourcing research",
+        "supplier evidence collection",
+        "commercial suitability analysis",
+      ],
+
+      allowed_actions: [
+        "research supplier candidates using authorised sources",
+        "prepare supplier comparison briefs",
+        "prepare sourcing shortlists",
+        "flag missing commercial information",
+      ],
+
+      prohibited_actions: [
+        ...HIGH_RISK_ACTIONS,
+        "place supplier orders",
+        "accept supplier terms",
+        "fabricate supplier details",
+        "call a supplier verified from news evidence alone",
+      ],
+
+      system_instructions:
+        `${INTERNAL_WORK_RULES.join(" ")} Real supplier discovery requires authorised research sources. News is supplementary intelligence and is not supplier verification. Record source evidence, operating location, product relevance, contact source and verification date. Do not order, pay, negotiate binding terms or claim a supplier is verified without evidence.`,
+
+      requires_approval_by_default:
+        false,
+
+      status:
+        "active",
+    },
+
+    /* ---------------------------------------------------------------------- */
+    /* COSSA TECH                                                             */
+    /* ---------------------------------------------------------------------- */
+
+    {
+      employee_key:
+        "tech-solutions-specialist",
+
+      name:
+        "Tech Solutions Specialist",
+
+      title:
+        "AI Tech Solutions Specialist",
+
+      department:
+        "Cossa Tech",
+
+      mission:
+        "Own technical solution planning for Cossa Tech and coordinate internal implementation requirements across websites, systems and digital services.",
+
+      responsibilities: [
+        "Translate business or client needs into technical requirements.",
+        "Coordinate Website Delivery, Content, Creative Media and Website Monitoring.",
+        "Prepare implementation plans and identify missing technical dependencies.",
+      ],
+
+      kpis: [
+        "Clear technical requirements.",
+        "No fabricated implementation claim.",
+        "No client request left without a technical owner.",
+      ],
+
+      capabilities: [
+        "technical solution planning",
+        "system design",
+        "implementation planning",
+        "technical requirements",
+        "technology service coordination",
+      ],
+
+      allowed_actions: [
+        "prepare technical solutions",
+        "prepare implementation plans",
+        "coordinate technical workers",
+        "review technical requirements",
+        "prepare client-facing technical scope drafts",
+      ],
+
+      prohibited_actions: [
+        ...HIGH_RISK_ACTIONS,
+        "claim deployment occurred without evidence",
+        "change production credentials without approval",
+      ],
+
+      system_instructions:
+        `${INTERNAL_WORK_RULES.join(" ")} Operate as the Cossa Tech technical coordination specialist. Safe technical analysis, planning, drafting and implementation preparation should continue internally. Route website implementation to the Website Delivery Specialist and content or creative needs to the relevant workers.`,
+
+      requires_approval_by_default:
+        false,
+
+      status:
+        "active",
+    },
+
+    /* ---------------------------------------------------------------------- */
+    /* WEBSITE DELIVERY                                                       */
+    /* ---------------------------------------------------------------------- */
+
+    {
+      employee_key:
+        "website-delivery-specialist",
+
+      name:
+        "Website Delivery Specialist",
+
+      title:
+        "AI Website Delivery Specialist",
+
+      department:
+        "Cossa Tech",
+
+      mission:
+        "Coordinate website planning, build requirements, content, visual assets, QA and delivery preparation for Cossa and authorised Cossa Tech clients.",
+
+      responsibilities: [
+        "Turn approved website requirements into implementation plans.",
+        "Coordinate website copy, creative assets, technical requirements and SEO checks.",
+        "Identify missing access, hosting, domain and client information.",
+      ],
+
+      kpis: [
+        "Complete website delivery requirements.",
+        "Clear dependencies and QA requirements.",
+        "No false claim that a website was deployed.",
+      ],
+
+      capabilities: [
+        "website planning",
+        "website implementation planning",
+        "landing page planning",
+        "website QA",
+        "client requirement analysis",
+        "delivery coordination",
+      ],
+
+      allowed_actions: [
+        "prepare website architecture",
+        "prepare implementation requirements",
+        "coordinate content and visual assets",
+        "prepare code-change requirements",
+        "prepare QA checklists",
+      ],
+
+      prohibited_actions: [
+        ...HIGH_RISK_ACTIONS,
+        "change DNS without approval",
+        "claim deployment without evidence",
+        "use client credentials without authorisation",
+      ],
+
+      system_instructions:
+        `${INTERNAL_WORK_RULES.join(" ")} If Cossa or a client needs a website, you own the internal website-delivery workflow. Coordinate technical implementation, content, visuals and SEO. Do not leave a website request waiting simply because multiple workers are needed; create clear handoffs. Production domain, DNS, credential or irreversible changes remain approval-controlled.`,
+
+      requires_approval_by_default:
+        false,
+
+      status:
+        "active",
+    },
+
+    /* ---------------------------------------------------------------------- */
+    /* LEAD INTAKE                                                            */
+    /* ---------------------------------------------------------------------- */
+
+    {
+      employee_key:
+        "lead-intake-coordinator",
+
+      name:
+        "Lead Intake Coordinator",
+
+      title:
+        "AI Lead Intake Coordinator",
+
+      department:
+        "Revenue Operations",
+
+      mission:
+        "Turn legitimate incoming enquiries and authorised opportunities into clean, deduplicated and actionable Cossa CRM work.",
+
+      responsibilities: [
+        "Review authorised website enquiries, contact messages and CRM records.",
+        "Identify duplicates and retain original record identifiers.",
+        "Prepare lead classification, routing, service ownership and follow-up requirements.",
+      ],
+
+      kpis: [
+        "No duplicate lead inflation.",
+        "Correct service and worker routing.",
+        "Clear source retention.",
+      ],
+
+      capabilities: [
+        "lead intake",
+        "lead deduplication analysis",
+        "lead routing",
+        "lead qualification preparation",
+        "CRM workflow preparation",
+      ],
+
+      allowed_actions: [
+        "analyse authorised lead records",
+        "prepare lead-routing recommendations",
+        "prepare internal follow-up work",
+        "coordinate lead handoffs",
+      ],
+
+      prohibited_actions: [
+        ...HIGH_RISK_ACTIONS,
+        "fabricate lead details",
+        "create duplicate leads merely to increase pipeline counts",
+        "claim customer contact occurred without evidence",
+      ],
+
+      system_instructions:
+        `${INTERNAL_WORK_RULES.join(" ")} Preserve original lead and source record identifiers. Do not create duplicate records to inflate activity. Route legitimate work to the correct business unit and worker. Ordinary internal qualification and routing should continue without unnecessary approval.`,
+
+      requires_approval_by_default:
+        false,
+
+      status:
+        "active",
+    },
+
+    /* ---------------------------------------------------------------------- */
+    /* CUSTOMER REACTIVATION                                                  */
     /* ---------------------------------------------------------------------- */
 
     {
@@ -571,49 +1202,54 @@ export const COSSA_GROWTH_WORKFORCE:
         "Revenue Operations",
 
       mission:
-        "Identify consented, legitimate reactivation and retention opportunities from authorised Cossa records, then prepare an owner-reviewable internal brief.",
+        "Identify legitimate retention, repeat-business and customer-reactivation opportunities from authorised Cossa records.",
 
       responsibilities: [
-        "Review only authorised CRM records, customer history, quotation status and recorded consent or opt-out information.",
-        "Identify dormant, lapsed or repeat-business opportunities without creating a second lead record.",
-        "Prepare a source-labelled reactivation brief for the Lead Intake Coordinator and AI CEO, retaining the original lead_id where one exists.",
+        "Review CRM history, quotations and authorised consent information.",
+        "Identify dormant or repeat-business opportunities.",
+        "Prepare reactivation recommendations for Lead Intake and the AI CEO.",
       ],
 
       kpis: [
-        "Every recommendation identifies its authorised source record and consent or opt-out status.",
-        "No duplicate leads, fabricated customer history or unsupported revenue claim.",
-        "No customer contact until the owner connects an approved channel and records approval.",
+        "Source-labelled reactivation opportunities.",
+        "No duplicate leads.",
+        "No fabricated customer history.",
       ],
 
       capabilities: [
-        "reactivation opportunity analysis",
-        "quotation-expiry review",
-        "retention brief preparation",
+        "reactivation analysis",
+        "retention analysis",
+        "quotation follow-up analysis",
+        "customer opportunity preparation",
       ],
 
       allowed_actions: [
-        "analyse authorised internal records",
-        "prepare an internal reactivation brief",
-        "prepare a reviewable handoff with retained record identifiers",
-        "flag missing consent, ownership or connection information",
+        "analyse authorised CRM records",
+        "prepare reactivation briefs",
+        "prepare follow-up recommendations",
+        "handoff opportunities",
       ],
 
       prohibited_actions: [
-        "send a message, email or WhatsApp",
-        "contact a customer or prospect",
-        "create a duplicate lead",
-        "alter CRM records",
-        "claim consent, ownership or a customer outcome without evidence",
+        ...HIGH_RISK_ACTIONS,
+        "contact customers without an authorised communication workflow",
+        "ignore opt-outs",
+        "invent customer history",
       ],
 
       system_instructions:
-        "You are an active, approval-controlled Cossa AI employee. Analyse only owner-authorised Cossa records with recorded consent and opt-out information. If the required CRM source or customer data is not connected, report that you are waiting for the required data instead of inventing information. Prepare concise internal recommendations and retain the original lead_id where present. Do not contact anyone, create duplicate leads, alter records or claim that a reactivation occurred. Escalate external actions for owner approval.",
+        `${INTERNAL_WORK_RULES.join(" ")} Analyse authorised customer records and respect consent and opt-outs. Internal reactivation analysis should proceed automatically. Actual communication must use an authorised communication workflow and comply with applicable rules.`,
 
       requires_approval_by_default:
-        true,
+        false,
 
-      status: "active",
+      status:
+        "active",
     },
+
+    /* ---------------------------------------------------------------------- */
+    /* DEAL INTELLIGENCE                                                      */
+    /* ---------------------------------------------------------------------- */
 
     {
       employee_key:
@@ -629,49 +1265,54 @@ export const COSSA_GROWTH_WORKFORCE:
         "Revenue Intelligence",
 
       mission:
-        "Research legitimate, owner-authorised B2B opportunity and partner signals, then prepare a reviewable commercial matching brief without making introductions or commitments.",
+        "Identify legitimate commercial, partner, buyer, supplier and deal opportunities and prepare evidence-backed internal matching briefs.",
 
       responsibilities: [
-        "Review owner-authorised opportunity records and lawful, source-labelled business information only.",
-        "Assess fit, timing, known constraints and evidence for potential buyer, supplier, partner or deal opportunities.",
-        "Hand off concise internal findings to the Lead Intake Coordinator and AI CEO without changing the CRM or contacting any party.",
+        "Analyse authorised commercial and market information.",
+        "Assess fit, timing, constraints and opportunity evidence.",
+        "Hand legitimate opportunities to Lead Intake and the AI CEO.",
       ],
 
       kpis: [
-        "Every opportunity carries a clear source, date and evidence boundary.",
-        "No fabricated commercial relationship, deal probability, pricing or competitor claim.",
-        "No introduction, outreach, brokerage representation or financial commitment.",
+        "Evidence-labelled opportunities.",
+        "No fabricated relationships or deals.",
+        "No unsupported commercial probability.",
       ],
 
       capabilities: [
         "B2B opportunity research",
-        "partner and supplier mapping",
-        "deal-brief preparation",
+        "partner mapping",
+        "deal matching",
+        "commercial intelligence",
       ],
 
       allowed_actions: [
-        "analyse authorised internal records",
-        "research lawful, source-labelled market information",
-        "prepare an internal opportunity-matching brief",
-        "request missing owner-approved evidence",
+        "analyse authorised records",
+        "research authorised market sources",
+        "prepare commercial opportunity briefs",
+        "handoff legitimate opportunities",
       ],
 
       prohibited_actions: [
-        "contact a buyer, supplier, partner or prospect",
-        "make an introduction or representation",
-        "create or alter CRM records",
-        "negotiate terms, pricing or commitments",
-        "claim a deal, partnership or outcome is confirmed",
+        ...HIGH_RISK_ACTIONS,
+        "fabricate relationships",
+        "negotiate binding terms",
+        "claim a deal is confirmed without evidence",
       ],
 
       system_instructions:
-        "You are an active, approval-controlled Cossa AI employee. Produce internal, evidence-labelled deal intelligence only. If required commercial data or integrations are unavailable, report that you are waiting for the required source or connection. Treat every external party and commercial action as unavailable unless an owner-approved connection and approval exists. Do not contact, introduce, negotiate, promise, commit, alter CRM records or claim a commercial result.",
+        `${INTERNAL_WORK_RULES.join(" ")} Produce evidence-backed commercial intelligence. Safe internal opportunity research and matching should proceed without unnecessary owner approval. External introductions, negotiations and commitments require an authorised workflow and appropriate approval.`,
 
       requires_approval_by_default:
-        true,
+        false,
 
-      status: "active",
+      status:
+        "active",
     },
+
+    /* ---------------------------------------------------------------------- */
+    /* PROCUREMENT                                                            */
+    /* ---------------------------------------------------------------------- */
 
     {
       employee_key:
@@ -687,52 +1328,55 @@ export const COSSA_GROWTH_WORKFORCE:
         "Operations Intelligence",
 
       mission:
-        "Identify owner-authorised tender, RFQ and supplier intelligence, then prepare a factual bid-or-no-bid briefing with deadlines, eligibility and evidence.",
+        "Identify legitimate tender, RFQ, procurement and supplier opportunities and prepare decision-ready internal screening briefs.",
 
       responsibilities: [
-        "Review only owner-authorised procurement sources, public opportunities and supplied documents.",
-        "Extract deadlines, eligibility criteria, required documents, scope, risks and source links for review.",
-        "Prepare a concise internal bid-or-no-bid briefing for the AI CEO and owner; never submit or commit on behalf of Cossa.",
+        "Review authorised procurement sources and documents.",
+        "Extract deadlines, requirements, eligibility criteria and risks.",
+        "Prepare bid-or-no-bid recommendations.",
       ],
 
       kpis: [
-        "Every opportunity identifies a source, retrieval date and stated deadline.",
-        "No fabricated tender, requirement, eligibility result, pricing or supplier claim.",
-        "No bid, procurement submission, vendor contact or commercial commitment.",
+        "Source-labelled opportunities.",
+        "Deadline and requirement accuracy.",
+        "No fabricated tender or eligibility claim.",
       ],
 
       capabilities: [
-        "tender and RFQ intake",
-        "deadline and eligibility review",
-        "bid-or-no-bid briefing",
+        "tender analysis",
+        "RFQ analysis",
+        "procurement screening",
+        "eligibility review",
+        "bid-or-no-bid preparation",
       ],
 
       allowed_actions: [
-        "analyse owner-authorised procurement material",
-        "prepare internal eligibility and deadline checklists",
-        "prepare a reviewable bid-or-no-bid brief",
-        "flag missing documentation or owner decisions",
+        "analyse procurement information",
+        "prepare eligibility checklists",
+        "prepare internal tender briefs",
+        "prepare missing-document requirements",
       ],
 
       prohibited_actions: [
-        "submit a tender, RFQ response or supplier application",
-        "contact a procuring entity or supplier",
-        "promise pricing, capacity, compliance or delivery",
-        "sign documents or make commitments",
-        "claim eligibility or award status without evidence",
+        ...HIGH_RISK_ACTIONS,
+        "submit tenders without approval",
+        "sign declarations",
+        "commit pricing",
+        "claim eligibility without evidence",
       ],
 
       system_instructions:
-        "You are an active, approval-controlled Cossa AI employee. Work from owner-authorised procurement sources and documents only. If the procurement feed, source or documents needed for the task are unavailable, report that you are waiting for the required source rather than inventing an opportunity. Label the source, date, deadline and missing facts. Prepare internal decision support only; never submit, contact, promise, sign, pay, bid or claim that Cossa is eligible, compliant or awarded without verified evidence and owner approval.",
+        `${INTERNAL_WORK_RULES.join(" ")} Internal tender and procurement screening should continue automatically when evidence exists. Tender submission, signed commitments, declarations and binding pricing require owner approval.`,
 
       requires_approval_by_default:
-        true,
+        false,
 
-      status: "active",
+      status:
+        "active",
     },
 
     /* ---------------------------------------------------------------------- */
-    /* EXECUTIVE                                                              */
+    /* AI CEO                                                                 */
     /* ---------------------------------------------------------------------- */
 
     {
@@ -749,48 +1393,54 @@ export const COSSA_GROWTH_WORKFORCE:
         "Executive",
 
       mission:
-        "Synthesize verified worker outputs into an owner-ready decision briefing for Cossa Nexus Holdings.",
+        "Coordinate the Cossa AI workforce, synthesise verified worker outputs, resolve ordinary internal decisions and escalate only genuine owner decisions.",
 
       responsibilities: [
-        "Check that handoff outputs are evidence-labelled and internally consistent.",
-        "Summarise decisions, trade-offs, blockers and approval requests for the owner.",
-        "Never approve or execute external actions on the owner's behalf.",
+        "Review worker outputs for evidence, quality and consistency.",
+        "Route safe work to the next capable employee.",
+        "Resolve routine internal reasoning questions.",
+        "Prepare concise owner briefings for high-risk or strategic decisions.",
       ],
 
       kpis: [
-        "Decision-ready briefings grounded in recorded information.",
-        "Clear disclosure of missing evidence and connection gaps.",
-        "Owner approval preserved for all external or high-risk action.",
+        "Workers collaborate instead of remaining isolated.",
+        "Low-risk internal work continues without unnecessary owner interruption.",
+        "Missing evidence is never converted into a fake fact.",
+        "High-risk decisions remain with the owner.",
       ],
 
       capabilities: [
         "executive synthesis",
+        "cross-department coordination",
+        "workforce routing",
         "risk review",
         "decision briefing",
       ],
 
       allowed_actions: [
         "review internal handoffs",
-        "prepare executive briefings",
-        "recommend next actions",
+        "route internal work",
+        "prepare executive recommendations",
+        "resolve ordinary internal questions",
+        "prepare owner briefings",
       ],
 
       prohibited_actions: [
+        ...HIGH_RISK_ACTIONS,
         "approve itself",
-        "publish content",
-        "spend money",
-        "make legal or financial commitments",
+        "claim external work occurred without evidence",
       ],
 
       system_instructions:
-        "Prepare a concise CEO briefing from verified Cossa records and workforce handoffs. Clearly label facts, recommendations, missing information and owner decisions required.",
+        `${INTERNAL_WORK_RULES.join(" ")} You are the coordination layer for the Cossa AI workforce. Do not allow capable employees to remain idle merely because work needs another internal employee. Route safe work hand-to-hand. Escalate only genuine owner decisions. You may recommend a high-risk action but may not approve yourself.`,
 
       requires_approval_by_default:
-        true,
+        false,
 
-      status: "active",
+      status:
+        "active",
     },
-  ] as const;
+  ] satisfies readonly GrowthWorkforceProfile[];
 
 /* -------------------------------------------------------------------------- */
 /* INPUT TYPES                                                                */
@@ -801,28 +1451,41 @@ export interface CreateMissionInput {
   instruction: string;
   objective: string;
   business_unit_id?: string | null;
+
   assigned_employee_id?:
     | string
     | null;
+
   parent_mission_id?:
     | string
     | null;
+
   target_market?: string | null;
+
   target_location?:
     | string
     | null;
+
   target_service?: string | null;
+
   required_result_count?:
     | number
     | null;
+
   constraints?: unknown[];
   prohibited_actions?: unknown[];
-  output_schema?: Record<
-    string,
-    unknown
-  >;
-  priority?: Mission["priority"];
-  risk_level?: Mission["risk_level"];
+
+  output_schema?:
+    Record<
+      string,
+      unknown
+    >;
+
+  priority?:
+    Mission["priority"];
+
+  risk_level?:
+    Mission["risk_level"];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -842,7 +1505,8 @@ function createDatabaseError(
   }
 
   if (
-    typeof error === "object" &&
+    typeof error ===
+      "object" &&
     error !== null &&
     "message" in error &&
     typeof error.message ===
@@ -860,15 +1524,18 @@ function createDatabaseError(
 
 async function rows<T>(
   operation: string,
-  query: PromiseLike<{
-    data: T[] | null;
-    error: unknown;
-  }>,
+
+  query:
+    PromiseLike<{
+      data: T[] | null;
+      error: unknown;
+    }>,
 ): Promise<T[]> {
   const {
     data,
     error,
-  } = await query;
+  } =
+    await query;
 
   if (error) {
     throw createDatabaseError(
@@ -962,84 +1629,123 @@ export function listActiveEmployees(
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* SOURCE PROFILE SYNCHRONISATION                                             */
+/* -------------------------------------------------------------------------- */
+
 /**
- * Promote only known default Cossa profiles from draft -> active.
+ * Keeps known source-defined employees aligned with this file.
  *
- * We deliberately DO NOT change:
- * - paused employees,
- * - retired employees,
- * - unknown/custom workforce profiles.
- *
- * This allows GitHub defaults to stay aligned with the intended active
- * workforce without overriding an intentional owner pause or retirement.
+ * Important:
+ * - custom employees are untouched;
+ * - business_unit_id is untouched;
+ * - created_by is untouched;
+ * - paused and retired status is preserved;
+ * - draft known employees become active when the source profile is active;
+ * - source-defined responsibilities and instructions are upgraded.
  */
-async function activateKnownDraftProfiles(
+async function synchroniseKnownProfiles(
   existing:
     AiEmployee[],
 ): Promise<void> {
-  const activeDefaultKeys =
-    new Set(
-      COSSA_GROWTH_WORKFORCE.filter(
-        (profile) =>
-          profile.status ===
-          "active",
-      ).map(
-        (profile) =>
-          profile.employee_key,
+  const existingByKey =
+    new Map(
+      existing.map(
+        (
+          employee,
+        ) => [
+          employee.employee_key,
+          employee,
+        ],
       ),
     );
 
-  const draftKeysToActivate =
-    existing
-      .filter(
-        (employee) =>
-          employee.status ===
-            "draft" &&
-          activeDefaultKeys.has(
-            employee.employee_key,
-          ),
-      )
-      .map(
-        (employee) =>
-          employee.employee_key,
-      );
-
-  if (
-    draftKeysToActivate.length ===
-    0
+  for (
+    const profile of
+      COSSA_GROWTH_WORKFORCE
   ) {
-    return;
-  }
-
-  const {
-    error,
-  } =
-    await db
-      .from("ai_employees")
-      .update({
-        status:
-          "active",
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        "organisation_id",
-        COSSA_ORGANISATION_ID,
-      )
-      .eq(
-        "status",
-        "draft",
-      )
-      .in(
-        "employee_key",
-        draftKeysToActivate,
+    const existingEmployee =
+      existingByKey.get(
+        profile.employee_key,
       );
 
-  if (error) {
-    throw createDatabaseError(
-      "Unable to activate known Cossa workforce drafts",
+    if (
+      !existingEmployee
+    ) {
+      continue;
+    }
+
+    const nextStatus:
+      EmployeeStatus =
+      existingEmployee.status ===
+        "paused" ||
+      existingEmployee.status ===
+        "retired"
+        ? existingEmployee.status
+        : profile.status;
+
+    const {
       error,
-    );
+    } =
+      await db
+        .from(
+          "ai_employees",
+        )
+        .update({
+          name:
+            profile.name,
+
+          title:
+            profile.title,
+
+          department:
+            profile.department,
+
+          mission:
+            profile.mission,
+
+          responsibilities:
+            profile.responsibilities,
+
+          kpis:
+            profile.kpis,
+
+          capabilities:
+            profile.capabilities,
+
+          allowed_actions:
+            profile.allowed_actions,
+
+          prohibited_actions:
+            profile.prohibited_actions,
+
+          system_instructions:
+            profile.system_instructions,
+
+          requires_approval_by_default:
+            profile.requires_approval_by_default,
+
+          status:
+            nextStatus,
+
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "organisation_id",
+          COSSA_ORGANISATION_ID,
+        )
+        .eq(
+          "employee_key",
+          profile.employee_key,
+        );
+
+    if (error) {
+      throw createDatabaseError(
+        `Unable to synchronise ${profile.name}`,
+        error,
+      );
+    }
   }
 }
 
@@ -1072,6 +1778,7 @@ export function listMissions(
 
 export function listMissionRuns(
   missionId: string,
+
   organisationId =
     COSSA_ORGANISATION_ID,
 ): Promise<MissionRun[]> {
@@ -1185,11 +1892,13 @@ export async function createMission(
       undefined &&
     input.required_result_count !==
       null &&
-    (!Number.isInteger(
-      input.required_result_count,
-    ) ||
+    (
+      !Number.isInteger(
+        input.required_result_count,
+      ) ||
       input.required_result_count <=
-        0)
+        0
+    )
   ) {
     throw new Error(
       "Required result count must be a positive whole number",
@@ -1201,9 +1910,7 @@ export async function createMission(
       COSSA_ORGANISATION_ID,
 
     title,
-
     instruction,
-
     objective,
 
     business_unit_id:
@@ -1235,14 +1942,16 @@ export async function createMission(
       null,
 
     constraints:
-      input.constraints ?? [],
+      input.constraints ??
+      [],
 
     prohibited_actions:
       input.prohibited_actions ??
       [],
 
     output_schema:
-      input.output_schema ?? {},
+      input.output_schema ??
+      {},
 
     priority:
       input.priority ??
@@ -1290,6 +1999,7 @@ export async function createMission(
 
 export async function queueMission(
   missionId: string,
+
   organisationId =
     COSSA_ORGANISATION_ID,
 ): Promise<Mission> {
@@ -1383,9 +2093,11 @@ export interface ControlledWorkforceRunInput {
     | "groq"
     | "openai";
 
-  modelName: string;
+  modelName:
+    string;
 
-  priorOutputs: string[];
+  priorOutputs:
+    string[];
 
   authorisedEvidence?:
     string[];
@@ -1415,17 +2127,22 @@ export interface ControlledReviewableOutput {
 }
 
 function compactPriorOutputs(
-  outputs: string[],
+  outputs:
+    string[],
 ): string[] {
   return outputs
     .map(
-      (output) =>
+      (
+        output,
+      ) =>
         output.trim(),
     )
     .filter(Boolean)
-    .slice(-3)
+    .slice(-4)
     .map(
-      (output) =>
+      (
+        output,
+      ) =>
         output.slice(
           0,
           4_000,
@@ -1437,11 +2154,6 @@ function compactPriorOutputs(
 /* START CONTROLLED RUN                                                       */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Starts exactly one internal workforce stage.
- *
- * This does not authorise external actions.
- */
 export async function startControlledWorkforceRun(
   input:
     ControlledWorkforceRunInput,
@@ -1521,7 +2233,9 @@ export async function startControlledWorkforceRun(
         []
       )
         .map(
-          (evidence) =>
+          (
+            evidence,
+          ) =>
             evidence.trim(),
         )
         .filter(Boolean)
@@ -1530,7 +2244,9 @@ export async function startControlledWorkforceRun(
           5,
         )
         .map(
-          (evidence) =>
+          (
+            evidence,
+          ) =>
             evidence.slice(
               0,
               4_000,
@@ -1542,11 +2258,16 @@ export async function startControlledWorkforceRun(
   };
 
   const {
-    data: run,
-    error: runError,
+    data:
+      run,
+
+    error:
+      runError,
   } =
     await db
-      .from("mission_runs")
+      .from(
+        "mission_runs",
+      )
       .insert({
         organisation_id:
           organisationId,
@@ -1578,13 +2299,16 @@ export async function startControlledWorkforceRun(
       .select("*")
       .single();
 
-  if (
-    runError ||
-    !run
-  ) {
+  if (runError) {
     throw createDatabaseError(
       "Unable to start the controlled workforce run",
       runError,
+    );
+  }
+
+  if (!run) {
+    throw new Error(
+      "Unable to start the controlled workforce run: Supabase returned no run record",
     );
   }
 
@@ -1640,7 +2364,7 @@ export async function startControlledWorkforceRun(
           "handoff_acceptance_failed",
 
         error_message:
-          "The run could not claim its pending handoff.",
+          "The workforce run could not claim its pending handoff.",
 
         completed_at:
           new Date().toISOString(),
@@ -1654,9 +2378,15 @@ export async function startControlledWorkforceRun(
         organisationId,
       );
 
-    throw createDatabaseError(
+    if (handoffError) {
+      throw createDatabaseError(
+        "Unable to claim the controlled workforce handoff",
+        handoffError,
+      );
+    }
+
+    throw new Error(
       "Unable to claim the controlled workforce handoff",
-      handoffError,
     );
   }
 
@@ -1682,9 +2412,7 @@ export async function startControlledWorkforceRun(
         organisationId,
       );
 
-  if (
-    missionError
-  ) {
+  if (missionError) {
     throw createDatabaseError(
       "Unable to mark the mission as running",
       missionError,
@@ -1766,21 +2494,27 @@ export async function completeControlledWorkforceRun(
         false,
 
       source_scope: [
-        "verified Cossa Knowledge Base selected by the Cossa AI route when relevant",
-        "authorised operational records selected by the Cossa AI route when relevant",
-        "additional authorised read-only evidence recorded in the mission run input when used",
-        "recorded mission objective and earlier reviewable workforce outputs",
+        "verified Cossa knowledge supplied by the Cossa AI route",
+        "authorised operational records supplied by the Cossa AI route",
+        "authorised read-only evidence recorded in the mission run",
+        "recorded mission objective",
+        "earlier workforce outputs",
       ],
 
       content,
     };
 
   const {
-    data: run,
-    error: runError,
+    data:
+      run,
+
+    error:
+      runError,
   } =
     await db
-      .from("mission_runs")
+      .from(
+        "mission_runs",
+      )
       .update({
         status:
           "completed",
@@ -1815,13 +2549,16 @@ export async function completeControlledWorkforceRun(
       .select("*")
       .single();
 
-  if (
-    runError ||
-    !run
-  ) {
+  if (runError) {
     throw createDatabaseError(
-      "Unable to save the reviewable workforce output",
+      "Unable to save the workforce output",
       runError,
+    );
+  }
+
+  if (!run) {
+    throw new Error(
+      "Unable to save the workforce output: No running mission record was updated",
     );
   }
 
@@ -1864,9 +2601,7 @@ export async function completeControlledWorkforceRun(
         "accepted",
       );
 
-  if (
-    handoffError
-  ) {
+  if (handoffError) {
     throw createDatabaseError(
       "Unable to mark the workforce handoff complete",
       handoffError,
@@ -1886,9 +2621,7 @@ export async function completeControlledWorkforceRun(
         .from(
           "employee_handoffs",
         )
-        .select(
-          "id",
-        )
+        .select("id")
         .eq(
           "organisation_id",
           organisationId,
@@ -1912,7 +2645,9 @@ export async function completeControlledWorkforceRun(
       missionError,
   } =
     await db
-      .from("missions")
+      .from(
+        "missions",
+      )
       .update({
         status:
           finalStage
@@ -1931,18 +2666,14 @@ export async function completeControlledWorkforceRun(
         organisationId,
       );
 
-  if (
-    missionError
-  ) {
+  if (missionError) {
     throw createDatabaseError(
-      "Unable to update the controlled mission status",
+      "Unable to update the mission status",
       missionError,
     );
   }
 
-  if (
-    !finalStage
-  ) {
+  if (!finalStage) {
     return {
       run:
         run as MissionRun,
@@ -1963,7 +2694,9 @@ export async function completeControlledWorkforceRun(
       existingApprovalError,
   } =
     await db
-      .from("approvals")
+      .from(
+        "approvals",
+      )
       .select("*")
       .eq(
         "organisation_id",
@@ -1983,18 +2716,14 @@ export async function completeControlledWorkforceRun(
       )
       .maybeSingle();
 
-  if (
-    existingApprovalError
-  ) {
+  if (existingApprovalError) {
     throw createDatabaseError(
       "Unable to check the final workforce review request",
       existingApprovalError,
     );
   }
 
-  if (
-    existingApproval
-  ) {
+  if (existingApproval) {
     return {
       run:
         run as MissionRun,
@@ -2015,7 +2744,9 @@ export async function completeControlledWorkforceRun(
       approvalError,
   } =
     await db
-      .from("approvals")
+      .from(
+        "approvals",
+      )
       .insert({
         organisation_id:
           organisationId,
@@ -2032,20 +2763,19 @@ export async function completeControlledWorkforceRun(
         action_type:
           "review_growth_coordination_output",
 
-        action_payload:
-          {
-            external_actions_enabled:
-              false,
+        action_payload: {
+          external_actions_enabled:
+            false,
 
-            requested_decision:
-              "Review the final internal workforce briefing only.",
-          },
+          requested_decision:
+            "Review the final internal workforce briefing.",
+        },
 
         risk_level:
           "medium",
 
         justification:
-          "All controlled workforce stages have saved reviewable drafts. Owner review is required before this internal coordination mission can be closed. This approval does not authorise publication, messaging, spend or account changes.",
+          "The internal coordination chain has completed. This checkpoint closes the mission record only and does not authorise social publishing, spending, supplier orders, contracts, credentials or external account changes.",
 
         status:
           "pending",
@@ -2053,13 +2783,16 @@ export async function completeControlledWorkforceRun(
       .select("*")
       .single();
 
-  if (
-    approvalError ||
-    !approval
-  ) {
+  if (approvalError) {
     throw createDatabaseError(
       "Unable to create the final workforce review request",
       approvalError,
+    );
+  }
+
+  if (!approval) {
+    throw new Error(
+      "Unable to create the final workforce review request",
     );
   }
 
@@ -2111,14 +2844,16 @@ export async function failControlledWorkforceRun(
         0,
         1_000,
       ) ||
-    "The provider did not return a reviewable output.";
+    "The provider did not return a usable workforce output.";
 
   const {
     error:
       runError,
   } =
     await db
-      .from("mission_runs")
+      .from(
+        "mission_runs",
+      )
       .update({
         status:
           "failed",
@@ -2149,9 +2884,7 @@ export async function failControlledWorkforceRun(
         "running",
       );
 
-  if (
-    runError
-  ) {
+  if (runError) {
     throw createDatabaseError(
       "Unable to record the workforce run failure",
       runError,
@@ -2196,9 +2929,7 @@ export async function failControlledWorkforceRun(
         "accepted",
       );
 
-  if (
-    handoffError
-  ) {
+  if (handoffError) {
     throw createDatabaseError(
       "Unable to return the handoff to pending state",
       handoffError,
@@ -2211,7 +2942,8 @@ export async function failControlledWorkforceRun(
 /* -------------------------------------------------------------------------- */
 
 export async function decideApproval(
-  approvalId: string,
+  approvalId:
+    string,
 
   decision:
     | "approved"
@@ -2244,18 +2976,14 @@ export async function decideApproval(
   } =
     await supabase.auth.getUser();
 
-  if (
-    userError
-  ) {
+  if (userError) {
     throw createDatabaseError(
       "Unable to verify the authenticated user",
       userError,
     );
   }
 
-  if (
-    !userData.user
-  ) {
+  if (!userData.user) {
     throw new Error(
       "Authentication is required",
     );
@@ -2266,7 +2994,9 @@ export async function decideApproval(
     error,
   } =
     await db
-      .from("approvals")
+      .from(
+        "approvals",
+      )
       .update({
         status:
           decision,
@@ -2299,27 +3029,19 @@ export async function decideApproval(
       .select("*")
       .single();
 
-  if (
-    error
-  ) {
+  if (error) {
     throw createDatabaseError(
       "Unable to update approval",
       error,
     );
   }
 
-  if (
-    !data
-  ) {
+  if (!data) {
     throw new Error(
       "Unable to update approval: It may already have been decided or may not belong to this organisation",
     );
   }
 
-  /*
-   * This approval closes only the internal workforce review.
-   * It does not unlock an external action.
-   */
   if (
     decision ===
       "approved" &&
@@ -2332,7 +3054,9 @@ export async function decideApproval(
         missionError,
     } =
       await db
-        .from("missions")
+        .from(
+          "missions",
+        )
         .update({
           status:
             "completed",
@@ -2353,9 +3077,7 @@ export async function decideApproval(
           "awaiting_approval",
         );
 
-    if (
-      missionError
-    ) {
+    if (missionError) {
       throw createDatabaseError(
         "The review was recorded but the mission could not be closed",
         missionError,
@@ -2401,18 +3123,19 @@ export async function decideApproval(
               false,
           },
         )
-        .limit(
-          1,
-        )
+        .limit(1)
         .maybeSingle();
 
-    if (
-      finalHandoffError ||
-      !finalHandoff
-    ) {
+    if (finalHandoffError) {
       throw createDatabaseError(
-        "The review was recorded but no final handoff could be reopened",
+        "The review was recorded but the final handoff could not be found",
         finalHandoffError,
+      );
+    }
+
+    if (!finalHandoff) {
+      throw new Error(
+        "The review was recorded but no completed handoff was available to reopen",
       );
     }
 
@@ -2450,9 +3173,7 @@ export async function decideApproval(
           "completed",
         );
 
-    if (
-      reopenHandoffError
-    ) {
+    if (reopenHandoffError) {
       throw createDatabaseError(
         "The review was recorded but the final handoff could not be reopened",
         reopenHandoffError,
@@ -2464,7 +3185,9 @@ export async function decideApproval(
         missionError,
     } =
       await db
-        .from("missions")
+        .from(
+          "missions",
+        )
         .update({
           status:
             "running",
@@ -2485,9 +3208,7 @@ export async function decideApproval(
           "awaiting_approval",
         );
 
-    if (
-      missionError
-    ) {
+    if (missionError) {
       throw createDatabaseError(
         "The review was recorded but the mission could not be reopened",
         missionError,
@@ -2521,7 +3242,8 @@ export function listEmployeeHandoffs(
       .order(
         "created_at",
         {
-          ascending: false,
+          ascending:
+            false,
         },
       ),
   );
@@ -2532,15 +3254,10 @@ export function listEmployeeHandoffs(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Safely ensures the Cossa default workforce exists.
+ * Ensures all source-defined Cossa workers exist and are aligned.
  *
- * Rules:
- * - Existing employee records are never deleted.
- * - Existing employee content is not blindly overwritten.
- * - Missing profiles are inserted.
- * - Known default profiles may move draft -> active.
- * - Paused and retired profiles remain untouched.
- * - Custom employees remain untouched.
+ * Existing custom employees are preserved.
+ * Paused and retired known employees remain paused/retired.
  */
 export async function installCossaGrowthWorkforce(): Promise<
   AiEmployee[]
@@ -2548,11 +3265,7 @@ export async function installCossaGrowthWorkforce(): Promise<
   const existing =
     await listEmployees();
 
-  /*
-   * Align known default profiles that are still only drafts.
-   * This will not reactivate paused or retired employees.
-   */
-  await activateKnownDraftProfiles(
+  await synchroniseKnownProfiles(
     existing,
   );
 
@@ -2606,11 +3319,9 @@ export async function installCossaGrowthWorkforce(): Promise<
           ),
         );
 
-    if (
-      error
-    ) {
+    if (error) {
       throw createDatabaseError(
-        "Unable to install the Cossa growth workforce",
+        "Unable to install the Cossa AI workforce",
         error,
       );
     }
@@ -2624,10 +3335,13 @@ export async function installCossaGrowthWorkforce(): Promise<
 /* -------------------------------------------------------------------------- */
 
 export interface CreateGrowthCoordinationMissionInput {
-  objective: string;
+  objective:
+    string;
+
   target_market?:
     | string
     | null;
+
   target_location?:
     | string
     | null;
@@ -2642,14 +3356,20 @@ export interface GrowthCoordinationMissionResult {
 }
 
 /**
- * Records a controlled internal work sequence.
+ * Growth collaboration chain:
  *
- * It does not:
- * - publish content,
- * - contact a person,
- * - spend budget,
- * - modify an external account,
- * - or authorise a high-risk action.
+ * Website Intelligence
+ * -> Strategy
+ * -> Content
+ * -> Creative Media
+ * -> Scheduling
+ * -> Social Media Management
+ * -> Growth Analysis
+ * -> Paid Media
+ * -> AI CEO
+ *
+ * Internal safe stages may run sequentially.
+ * High-risk external actions remain separately controlled.
  */
 export async function createGrowthCoordinationMission(
   input:
@@ -2680,7 +3400,9 @@ export async function createGrowthCoordinationMission(
     "website-seo-monitor",
     "social-strategy-planner",
     "content-writer",
+    "creative-media-producer",
     "social-schedule-coordinator",
+    "social-media-manager",
     "account-growth-analyst",
     "paid-media-specialist",
     "ai-ceo",
@@ -2704,8 +3426,18 @@ export async function createGrowthCoordinationMission(
         !employee,
     )
   ) {
+    const missingKeys =
+      handoffKeys.filter(
+        (
+          key,
+        ) =>
+          !employeeByKey.has(
+            key,
+          ),
+      );
+
     throw new Error(
-      "Install the Cossa growth workforce before creating a coordination mission.",
+      `Install the complete Cossa workforce before creating this mission. Missing: ${missingKeys.join(", ")}.`,
     );
   }
 
@@ -2724,7 +3456,7 @@ export async function createGrowthCoordinationMission(
     0
   ) {
     throw new Error(
-      `The controlled workflow contains inactive employees: ${inactiveEmployees
+      `The workflow contains inactive employees: ${inactiveEmployees
         .map(
           (
             employee,
@@ -2732,9 +3464,7 @@ export async function createGrowthCoordinationMission(
             employee?.name,
         )
         .filter(Boolean)
-        .join(
-          ", ",
-        )}. Activate or replace them before creating the mission.`,
+        .join(", ")}.`,
     );
   }
 
@@ -2753,7 +3483,7 @@ export async function createGrowthCoordinationMission(
         )}`,
 
       instruction:
-        "Coordinate an internal website, social, content and paid-media planning brief. Use approved Cossa information only. Preserve the handoff order, label missing evidence and do not perform an external action beyond the approved read-only Cossa website health check.",
+        "Coordinate an evidence-based Cossa growth workflow. Safe internal work must move employee-to-employee without unnecessary owner interruption. Every social content package should include appropriate visual requirements. High-risk external actions remain separately approval-controlled.",
 
       objective,
 
@@ -2769,29 +3499,34 @@ export async function createGrowthCoordinationMission(
         null,
 
       constraints: [
-        "Planning and draft work only until a provider connection and owner approval exist.",
-        "No social publishing, direct messaging, advertising spend or account changes. The only permitted external check is a read-only check of the official public Cossa website.",
-        "Each worker must label verified facts, recommendations and missing information.",
-        "The AI CEO prepares an owner briefing; the Cossa owner makes the final decision.",
+        "Use verified Cossa knowledge and authorised operational evidence.",
+        "Do not invent social performance, customers, suppliers, products, prices or business results.",
+        "Social and promotional posts requiring visuals must include a real visual asset or production-ready visual brief.",
+        "Routine internal planning, drafting, creative preparation, scheduling, analysis and handoffs should continue without unnecessary owner approval.",
+        "External publishing requires a verified authorised social integration.",
+        "Advertising spend, contracts, supplier orders, legal commitments, credentials and irreversible account changes remain owner-controlled.",
       ],
 
       prohibited_actions: [
-        "publish_social_content",
-        "send_external_messages",
-        "spend_ad_budget",
-        "connect_or_modify_external_accounts",
-        "make_legal_or_financial_commitments",
+        "fabricate_business_facts",
+        "fabricate_performance",
+        "fabricate_supplier_information",
+        "spend_without_owner_authority",
+        "make_binding_commitments_without_owner_authority",
+        "claim_external_action_without_verified_record",
       ],
 
       output_schema: {
         required_sections: [
-          "strategy brief",
-          "website health observations",
-          "content drafts",
-          "proposed schedule",
-          "account-growth recommendations",
-          "paid-media recommendation",
-          "AI CEO owner briefing",
+          "website intelligence",
+          "social strategy",
+          "content production",
+          "visual creative requirements",
+          "channel schedule",
+          "social media management readiness",
+          "growth analysis",
+          "paid media recommendation",
+          "AI CEO briefing",
         ],
 
         final_decision_owner:
@@ -2806,19 +3541,23 @@ export async function createGrowthCoordinationMission(
     });
 
   const handoffReasons = [
-    "Check the official public Cossa website only and label the exact scope, source, time and any verified issue.",
+    "Review authorised Cossa website evidence and identify verified website, SEO and content opportunities.",
 
-    "Start with an evidence-based social growth strategy brief.",
+    "Turn the verified website and business context into a practical channel-aware growth strategy.",
 
-    "Turn the approved strategy brief into draft content.",
+    "Create accurate campaign, educational, conversion and social content from the strategy.",
 
-    "Prepare a reviewable schedule; do not publish externally.",
+    "Create the visual production requirements for each relevant post, campaign, product or promotional asset.",
 
-    "Assess authorised account data or record the missing data connection.",
+    "Organise the complete copy-and-creative packages into an operational channel schedule.",
 
-    "Prepare a controlled paid-media recommendation; do not spend or launch.",
+    "Prepare the social media publishing queue and channel-management requirements. Publish only through a real authorised integration when permitted.",
 
-    "Synthesize the workforce outputs into a Cossa owner decision briefing.",
+    "Analyse authorised account evidence and identify audience, content and conversion improvements.",
+
+    "Prepare paid-media strategy and campaign recommendations. Do not spend or change budgets.",
+
+    "Synthesize all employee outputs, resolve ordinary internal issues and prepare only genuine owner decisions for escalation.",
   ];
 
   const handoffRows =
@@ -2863,6 +3602,15 @@ export async function createGrowthCoordinationMission(
           total_stages:
             activeHandoffEmployees.length,
 
+          collaboration_mode:
+            "hand_to_hand",
+
+          safe_internal_work:
+            "continue",
+
+          high_risk_actions:
+            "owner_controlled",
+
           external_actions_enabled:
             false,
         },
@@ -2888,9 +3636,7 @@ export async function createGrowthCoordinationMission(
       )
       .select("*");
 
-  if (
-    error
-  ) {
+  if (error) {
     throw createDatabaseError(
       "Unable to create the workforce handoff plan",
       error,
