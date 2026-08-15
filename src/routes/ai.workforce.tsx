@@ -1,11 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+
 import {
   AlertTriangle,
   ArrowRight,
   BrainCircuit,
   CheckCircle2,
+  Code2,
   FileCheck2,
   FilePenLine,
   Globe2,
@@ -14,10 +24,15 @@ import {
   PanelTop,
   Play,
   RefreshCw,
+  Search,
   Send,
   ShieldCheck,
+  ShoppingCart,
+  Store,
   UsersRound,
+  Workflow,
 } from "lucide-react";
+
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -67,7 +82,7 @@ export const Route = createFileRoute("/ai/workforce")({
       {
         name: "description",
         content:
-          "Cossa Nexus Holdings AI workforce command centre for controlled planning, monitoring, handoffs and owner-approved AI operations.",
+          "Cossa Nexus Holdings AI workforce command centre for automated internal coordination, employee handoffs, business-unit readiness and owner-controlled high-risk actions.",
       },
     ],
   }),
@@ -77,104 +92,301 @@ export const Route = createFileRoute("/ai/workforce")({
 /* CONSTANTS                                                                  */
 /* -------------------------------------------------------------------------- */
 
-const GROWTH_MISSION_PREFIX = "Growth coordination:";
+const GROWTH_MISSION_PREFIX =
+  "Growth coordination:";
+
+const DEFAULT_WORKFORCE_PROVIDER =
+  "groq" as const;
+
+const DEFAULT_WORKFORCE_MODEL =
+  "llama-3.3-70b-versatile";
 
 /**
- * This is only the controlled Growth coordination workflow.
+ * Existing executable Growth workflow.
  *
- * It is intentionally separate from the complete Cossa workforce directory.
- * Employees such as Procurement Intelligence, Customer Reactivation,
- * Product Intelligence and Lead Intake may exist and operate through their
- * own future workflows without being forced through this social-growth chain.
+ * These employee keys already exist in the current workforce source.
+ *
+ * The workforce-data.ts source should install the wider specialist workforce
+ * required by Social Media, Cossa Store, Cossa Tech, Procurement and Revenue.
  */
 const GROWTH_WORKFLOW = [
   {
     key: "website-seo-monitor",
-    label: "Check website",
+    label: "Website intelligence",
     description:
-      "Runs the approved read-only Cossa website check and flags verified issues.",
+      "Checks authorised Cossa web properties and hands verified observations to the growth team.",
     icon: Globe2,
   },
   {
     key: "social-strategy-planner",
-    label: "Plan",
+    label: "Social strategy",
     description:
-      "Creates the strategy brief from approved Cossa context.",
+      "Turns business objectives and verified company information into channel-aware marketing plans.",
     icon: Megaphone,
   },
   {
     key: "content-writer",
-    label: "Write",
+    label: "Content production",
     description:
-      "Prepares reviewable content drafts without publishing them.",
+      "Creates accurate marketing, awareness, educational, pain-point and conversion-focused copy.",
     icon: FilePenLine,
   },
   {
     key: "social-schedule-coordinator",
-    label: "Schedule",
+    label: "Content coordination",
     description:
-      "Organises approved work into a proposed publishing calendar.",
+      "Organises approved content into channel schedules and hands execution requirements forward.",
     icon: PanelTop,
   },
   {
     key: "account-growth-analyst",
-    label: "Analyse growth",
+    label: "Growth analysis",
     description:
-      "Uses authorised account data only and reports missing data.",
+      "Uses authorised account evidence to identify growth, audience and conversion opportunities.",
     icon: UsersRound,
   },
   {
     key: "paid-media-specialist",
-    label: "Review ads",
+    label: "Paid media",
     description:
-      "Prepares controlled paid-media recommendations without spending.",
+      "Prepares advertising strategy and campaigns while leaving spending and budget changes approval-controlled.",
     icon: KeyRound,
   },
   {
     key: "ai-ceo",
-    label: "AI CEO briefing",
+    label: "AI CEO",
     description:
-      "Synthesises verified worker outputs for the owner's decision.",
+      "Synthesises employee outputs, resolves normal internal questions and escalates genuine owner decisions.",
     icon: BrainCircuit,
   },
 ] as const;
 
-const GROWTH_WORKFLOW_KEYS = new Set<string>(
-  GROWTH_WORKFLOW.map((step) => step.key),
-);
+const GROWTH_WORKFLOW_KEYS =
+  new Set<string>(
+    GROWTH_WORKFLOW.map(
+      (step) => step.key,
+    ),
+  );
+
+/**
+ * Required operating roles across the wider Cossa operating system.
+ *
+ * These roles remain visible even if the corresponding live employee profile
+ * has not yet been installed. Missing capability must be shown truthfully.
+ */
+const BUSINESS_OPERATING_ROLES = [
+  {
+    business: "Growth & Social",
+    icon: Megaphone,
+
+    roles: [
+      {
+        key: "social-strategy-planner",
+        name: "Social Strategy Planner",
+        responsibility:
+          "Channel strategy, audience planning, marketing angles and campaign direction.",
+      },
+      {
+        key: "content-writer",
+        name: "Content Writer",
+        responsibility:
+          "Marketing copy, educational content, conversion copy and campaign content.",
+      },
+      {
+        key: "social-schedule-coordinator",
+        name: "Social Schedule Coordinator",
+        responsibility:
+          "Content calendar, timing, channel coordination and publishing preparation.",
+      },
+      {
+        key: "social-media-manager",
+        name: "Social Media Manager",
+        responsibility:
+          "Daily social page management, publishing coordination, channel health and routine content continuity.",
+      },
+      {
+        key: "creative-media-producer",
+        name: "Creative Media Producer",
+        responsibility:
+          "Images, promotional graphics, brochures, product creatives and social media visual assets.",
+      },
+      {
+        key: "account-growth-analyst",
+        name: "Account Growth Analyst",
+        responsibility:
+          "Performance analysis, audience growth, conversion opportunities and account improvement.",
+      },
+    ],
+  },
+
+  {
+    business: "Cossa Store",
+    icon: Store,
+
+    roles: [
+      {
+        key: "store-operations-manager",
+        name: "Store Operations Manager",
+        responsibility:
+          "Catalogue health, product status, merchandising, store quality and commercial workflow coordination.",
+      },
+      {
+        key: "product-intelligence-analyst",
+        name: "Product Intelligence Analyst",
+        responsibility:
+          "Product trends, demand signals, pricing research, product gaps and merchandising intelligence.",
+      },
+      {
+        key: "supplier-sourcing-analyst",
+        name: "Supplier Sourcing Analyst",
+        responsibility:
+          "Legitimate supplier discovery, evidence collection, supplier comparison and sourcing preparation.",
+      },
+      {
+        key: "broker-deal-intelligence-analyst",
+        name: "Broker & Deal Intelligence Analyst",
+        responsibility:
+          "Commercial opportunities, partners, distributors, supplier relationships and deal intelligence.",
+      },
+      {
+        key: "creative-media-producer",
+        name: "Creative Media Producer",
+        responsibility:
+          "Product visuals, catalogue creatives, promotional graphics and social commerce assets.",
+      },
+      {
+        key: "social-media-manager",
+        name: "Social Media Manager",
+        responsibility:
+          "Store social publishing coordination, product campaigns and channel activity.",
+      },
+    ],
+  },
+
+  {
+    business: "Cossa Tech",
+    icon: Code2,
+
+    roles: [
+      {
+        key: "tech-solutions-specialist",
+        name: "Tech Solutions Specialist",
+        responsibility:
+          "Technology solution planning, implementation support and technical service delivery.",
+      },
+      {
+        key: "website-delivery-specialist",
+        name: "Website Delivery Specialist",
+        responsibility:
+          "Website planning, implementation, client requirements and delivery workflow support.",
+      },
+      {
+        key: "website-seo-monitor",
+        name: "Website & SEO Monitor",
+        responsibility:
+          "Website quality, SEO observations, website health evidence and improvement requirements.",
+      },
+      {
+        key: "content-writer",
+        name: "Content Writer",
+        responsibility:
+          "Website copy, service explanations, landing-page content and customer-facing written material.",
+      },
+      {
+        key: "creative-media-producer",
+        name: "Creative Media Producer",
+        responsibility:
+          "Website graphics, digital brochures, banners, mock-ups and client-facing visual assets.",
+      },
+      {
+        key: "ai-ceo",
+        name: "Cossa AI CEO",
+        responsibility:
+          "Cross-department reasoning, worker coordination, knowledge escalation and executive decisions.",
+      },
+    ],
+  },
+
+  {
+    business: "Revenue & Procurement",
+    icon: Search,
+
+    roles: [
+      {
+        key: "customer-reactivation-analyst",
+        name: "Customer Reactivation Analyst",
+        responsibility:
+          "Retention opportunities, dormant customer analysis and consent-aware reactivation preparation.",
+      },
+      {
+        key: "broker-deal-intelligence-analyst",
+        name: "Broker & Deal Intelligence Analyst",
+        responsibility:
+          "Commercial matching, buyers, partners, suppliers, brokers and legitimate opportunity intelligence.",
+      },
+      {
+        key: "procurement-intelligence-analyst",
+        name: "Procurement Intelligence Analyst",
+        responsibility:
+          "Tender, RFQ, supplier and procurement opportunity analysis.",
+      },
+    ],
+  },
+] as const;
 
 /* -------------------------------------------------------------------------- */
 /* GENERIC HELPERS                                                            */
 /* -------------------------------------------------------------------------- */
 
-function formatStatus(value: string | null | undefined): string {
+function formatStatus(
+  value: string | null | undefined,
+): string {
   if (!value) {
     return "Unknown";
   }
 
   return value
     .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .replace(
+      /\b\w/g,
+      (letter) =>
+        letter.toUpperCase(),
+    );
 }
 
-function formatDateTime(value: string | null | undefined): string {
+function formatDateTime(
+  value: string | null | undefined,
+): string {
   if (!value) {
     return "No activity recorded";
   }
 
-  const date = new Date(value);
+  const date =
+    new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return value;
   }
 
-  return date.toLocaleString("en-ZA", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  return date.toLocaleString(
+    "en-ZA",
+    {
+      dateStyle:
+        "medium",
+
+      timeStyle:
+        "short",
+    },
+  );
 }
 
-function latestRunTime(run: MissionRun): string {
+function latestRunTime(
+  run: MissionRun,
+): string {
   return (
     run.completed_at ??
     run.started_at ??
@@ -183,11 +395,18 @@ function latestRunTime(run: MissionRun): string {
   );
 }
 
-function employeeDepartment(employee: AiEmployee): string {
-  return employee.department?.trim() || "Department not recorded";
+function employeeDepartment(
+  employee: AiEmployee,
+): string {
+  return (
+    employee.department?.trim() ||
+    "Department not recorded"
+  );
 }
 
-function employeeBusinessUnit(employee: AiEmployee): string {
+function employeeBusinessUnit(
+  employee: AiEmployee,
+): string {
   return employee.business_unit_id
     ? "Assigned business unit"
     : "Group-wide";
@@ -206,22 +425,44 @@ type OperationalState =
   | "inactive";
 
 interface EmployeeOperationalView {
-  state: OperationalState;
-  label: string;
-  detail: string;
+  state:
+    OperationalState;
 
-  currentTask: string;
-  lastActivity: string | null;
+  label:
+    string;
 
-  assignedCount: number;
-  pendingCount: number;
-  runningCount: number;
-  failedCount: number;
-  approvalCount: number;
+  detail:
+    string;
 
-  latestProvider: string | null;
-  latestModel: string | null;
-  latestFailure: string | null;
+  currentTask:
+    string;
+
+  lastActivity:
+    string | null;
+
+  assignedCount:
+    number;
+
+  pendingCount:
+    number;
+
+  runningCount:
+    number;
+
+  failedCount:
+    number;
+
+  approvalCount:
+    number;
+
+  latestProvider:
+    string | null;
+
+  latestModel:
+    string | null;
+
+  latestFailure:
+    string | null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -234,96 +475,148 @@ function employeeOperationalView({
   runs,
   approvals,
 }: {
-  employee: AiEmployee;
-  handoffs: EmployeeHandoff[];
-  runs: MissionRun[];
-  approvals: Approval[];
+  employee:
+    AiEmployee;
+
+  handoffs:
+    EmployeeHandoff[];
+
+  runs:
+    MissionRun[];
+
+  approvals:
+    Approval[];
 }): EmployeeOperationalView {
-  /*
-   * Only handoffs actually assigned TO this employee belong to this
-   * employee's work queue.
-   */
-  const employeeHandoffs = handoffs.filter(
-    (handoff) => handoff.to_employee_id === employee.id,
-  );
+  const employeeHandoffs =
+    handoffs.filter(
+      (handoff) =>
+        handoff.to_employee_id ===
+        employee.id,
+    );
 
-  /*
-   * IMPORTANT:
-   * A mission may contain many workers.
-   *
-   * We must therefore use employee_id instead of assigning every run in the
-   * mission to every worker who touched the mission.
-   */
-  const employeeRuns = runs.filter(
-    (run) => run.employee_id === employee.id,
-  );
+  const employeeRuns =
+    runs.filter(
+      (run) =>
+        run.employee_id ===
+        employee.id,
+    );
 
-  /*
-   * Prefer approvals actually requested by this worker.
-   *
-   * Some final AI CEO approvals may also be attached to the mission/run.
-   */
-  const employeeRunIds = new Set(
-    employeeRuns.map((run) => run.id),
-  );
+  const employeeRunIds =
+    new Set(
+      employeeRuns.map(
+        (run) => run.id,
+      ),
+    );
 
-  const employeeApprovals = approvals.filter(
-    (approval) =>
-      approval.requested_by_employee_id === employee.id ||
-      (approval.run_id !== null &&
-        employeeRunIds.has(approval.run_id)),
-  );
+  const employeeApprovals =
+    approvals.filter(
+      (approval) =>
+        approval.requested_by_employee_id ===
+          employee.id ||
+        (
+          approval.run_id !==
+            null &&
+          employeeRunIds.has(
+            approval.run_id,
+          )
+        ),
+    );
 
-  const pendingHandoffs = employeeHandoffs.filter(
-    (handoff) => handoff.status === "pending",
-  );
+  const pendingHandoffs =
+    employeeHandoffs.filter(
+      (handoff) =>
+        handoff.status ===
+        "pending",
+    );
 
-  /*
-   * employee_handoffs uses:
-   * pending -> accepted -> completed
-   *
-   * "accepted" is therefore the real active handoff state.
-   */
-  const acceptedHandoffs = employeeHandoffs.filter(
-    (handoff) => handoff.status === "accepted",
-  );
+  const acceptedHandoffs =
+    employeeHandoffs.filter(
+      (handoff) =>
+        handoff.status ===
+        "accepted",
+    );
 
-  const activeRuns = employeeRuns.filter(
-    (run) => run.status === "running",
-  );
+  const activeRuns =
+    employeeRuns.filter(
+      (run) =>
+        run.status ===
+        "running",
+    );
 
-  const failedRuns = employeeRuns.filter(
-    (run) => run.status === "failed",
-  );
+  const failedRuns =
+    employeeRuns.filter(
+      (run) =>
+        run.status ===
+        "failed",
+    );
 
-  const latestHandoff = [...employeeHandoffs].sort(
-    (left, right) =>
-      right.created_at.localeCompare(left.created_at),
-  )[0];
+  const latestHandoff =
+    [
+      ...employeeHandoffs,
+    ].sort(
+      (
+        left,
+        right,
+      ) =>
+        right.created_at.localeCompare(
+          left.created_at,
+        ),
+    )[0];
 
-  const latestRun = [...employeeRuns].sort(
-    (left, right) =>
-      latestRunTime(right).localeCompare(latestRunTime(left)),
-  )[0];
+  const latestRun =
+    [
+      ...employeeRuns,
+    ].sort(
+      (
+        left,
+        right,
+      ) =>
+        latestRunTime(
+          right,
+        ).localeCompare(
+          latestRunTime(
+            left,
+          ),
+        ),
+    )[0];
 
   const latestFailure =
-    latestRun?.status === "failed"
+    latestRun?.status ===
+    "failed"
       ? latestRun.error_message ||
         latestRun.error_code ||
         "The latest recorded run failed."
       : null;
 
-  const latestActivityCandidates = [
-    latestRun ? latestRunTime(latestRun) : "",
-    latestHandoff?.completed_at ?? "",
-    latestHandoff?.accepted_at ?? "",
-    latestHandoff?.created_at ?? "",
-  ].filter(Boolean);
+  const latestActivityCandidates =
+    [
+      latestRun
+        ? latestRunTime(
+            latestRun,
+          )
+        : "",
+
+      latestHandoff?.completed_at ??
+        "",
+
+      latestHandoff?.accepted_at ??
+        "",
+
+      latestHandoff?.created_at ??
+        "",
+    ].filter(Boolean);
 
   const latestActivity =
-    latestActivityCandidates.sort((left, right) =>
-      right.localeCompare(left),
-    )[0] ?? null;
+    latestActivityCandidates.sort(
+      (
+        left,
+        right,
+      ) =>
+        right.localeCompare(
+          left,
+        ),
+    )[0] ??
+    null;
 
   const currentTask =
     acceptedHandoffs[0]?.reason ??
@@ -334,58 +627,74 @@ function employeeOperationalView({
   const common = {
     currentTask,
 
-    lastActivity: latestActivity,
+    lastActivity:
+      latestActivity,
 
-    assignedCount: employeeHandoffs.length,
+    assignedCount:
+      employeeHandoffs.length,
 
-    pendingCount: pendingHandoffs.length,
+    pendingCount:
+      pendingHandoffs.length,
 
     runningCount:
-      activeRuns.length + acceptedHandoffs.length,
+      activeRuns.length +
+      acceptedHandoffs.length,
 
-    failedCount: failedRuns.length,
+    failedCount:
+      failedRuns.length,
 
-    approvalCount: employeeApprovals.length,
+    approvalCount:
+      employeeApprovals.length,
 
     latestProvider:
-      latestRun?.model_provider ?? null,
+      latestRun?.model_provider ??
+      null,
 
     latestModel:
-      latestRun?.model_name ?? null,
+      latestRun?.model_name ??
+      null,
 
     latestFailure,
   };
 
-  if (employee.status !== "active") {
+  if (
+    employee.status !==
+    "active"
+  ) {
     return {
       ...common,
 
-      state: "inactive",
+      state:
+        "inactive",
 
-      label: `${formatStatus(
-        employee.status,
-      )} — Not operational`,
+      label:
+        `${formatStatus(
+          employee.status,
+        )} — Not operational`,
 
       detail:
-        employee.status === "paused"
+        employee.status ===
+        "paused"
           ? "This employee has been intentionally paused and cannot start new controlled work."
-          : employee.status === "retired"
+          : employee.status ===
+              "retired"
             ? "This employee is retired and cannot start new controlled work."
             : "The employee profile exists but is not currently active.",
     };
   }
 
-  /*
-   * A historic failure should not permanently mark the employee as broken.
-   * Only the latest run failing creates an active attention state.
-   */
-  if (latestRun?.status === "failed") {
+  if (
+    latestRun?.status ===
+    "failed"
+  ) {
     return {
       ...common,
 
-      state: "attention",
+      state:
+        "attention",
 
-      label: "Active — Needs attention",
+      label:
+        "Active — Needs attention",
 
       detail:
         latestFailure ??
@@ -393,61 +702,79 @@ function employeeOperationalView({
     };
   }
 
-  if (employeeApprovals.length > 0) {
-    return {
-      ...common,
-
-      state: "approval",
-
-      label: "Active — Approval required",
-
-      detail:
-        "Recorded work is waiting for owner review or approval.",
-    };
-  }
-
   if (
-    activeRuns.length > 0 ||
-    acceptedHandoffs.length > 0
+    employeeApprovals.length >
+    0
   ) {
     return {
       ...common,
 
-      state: "working",
+      state:
+        "approval",
 
-      label: "Active — Working",
+      label:
+        "Active — Approval required",
+
+      detail:
+        "Recorded work is waiting at an approval-controlled checkpoint.",
+    };
+  }
+
+  if (
+    activeRuns.length >
+      0 ||
+    acceptedHandoffs.length >
+      0
+  ) {
+    return {
+      ...common,
+
+      state:
+        "working",
+
+      label:
+        "Active — Working",
 
       detail:
         "A real workforce run or accepted handoff is currently recorded for this employee.",
     };
   }
 
-  if (pendingHandoffs.length > 0) {
+  if (
+    pendingHandoffs.length >
+    0
+  ) {
     return {
       ...common,
 
-      state: "waiting",
+      state:
+        "waiting",
 
-      label: "Active — Waiting",
+      label:
+        "Active — Assigned",
 
       detail:
-        "A real task has been assigned but execution has not started yet.",
+        "A real task has been assigned and is waiting for the workforce executor to claim it.",
     };
   }
 
   return {
     ...common,
 
-    state: "idle",
+    state:
+      "idle",
 
-    label: "Active — Idle",
+    label:
+      "Active — Available",
 
-    currentTask: "No task currently assigned",
+    currentTask:
+      "No task currently assigned",
 
     detail:
-      employeeHandoffs.length > 0
-        ? "This employee has recorded work history but no task is currently pending or running."
-        : "The profile is active and available, but no real task has been assigned yet.",
+      employeeHandoffs.length >
+      0
+        ? "This employee has recorded work history and is currently available for the next appropriate task."
+        : "The employee is active and available, but no real task has yet been assigned.",
   };
 }
 
@@ -460,25 +787,29 @@ function reviewableOutputContent(
 ): string | null {
   if (
     !run.output ||
-    typeof run.output !== "object"
+    typeof run.output !==
+      "object"
   ) {
     return null;
   }
 
-  const content = (
-    run.output as {
-      content?: unknown;
-    }
-  ).content;
+  const content =
+    (
+      run.output as {
+        content?: unknown;
+      }
+    ).content;
 
-  return typeof content === "string" &&
+  return typeof content ===
+      "string" &&
     content.trim()
     ? content
     : null;
 }
 
 function websiteReportEvidence(
-  report: OfficialWebsiteHealthReport,
+  report:
+    OfficialWebsiteHealthReport,
 ): string {
   return [
     "Authorised read-only official Cossa website health result",
@@ -511,8 +842,11 @@ function websiteReportEvidence(
     }`,
 
     `Reported issues: ${
-      report.issues.length > 0
-        ? report.issues.join("; ")
+      report.issues.length >
+      0
+        ? report.issues.join(
+            "; ",
+          )
         : "none"
     }`,
 
@@ -527,34 +861,67 @@ function controlledStagePrompt({
   priorOutputs,
   authorisedEvidence,
 }: {
-  mission: Mission;
-  handoff: EmployeeHandoff;
-  employee: AiEmployee;
-  priorOutputs: string[];
-  authorisedEvidence: string[];
+  mission:
+    Mission;
+
+  handoff:
+    EmployeeHandoff;
+
+  employee:
+    AiEmployee;
+
+  priorOutputs:
+    string[];
+
+  authorisedEvidence:
+    string[];
 }): string {
   const previous =
-    priorOutputs.length > 0
+    priorOutputs.length >
+    0
       ? priorOutputs
           .map(
-            (output, index) =>
-              `Earlier worker draft ${index + 1}:\n${output}`,
+            (
+              output,
+              index,
+            ) =>
+              `Earlier worker output ${index + 1}:\n${output}`,
           )
-          .join("\n\n")
+          .join(
+            "\n\n",
+          )
       : "No earlier workforce output has been recorded.";
 
   return [
-    `You are ${employee.title} in the controlled Cossa AI Workforce.`,
+    `You are ${employee.title}, an active Cossa AI employee.`,
 
-    "Create one internal, reviewable draft for the assigned handoff. External actions are disabled.",
+    `Your employee key is ${employee.employee_key}.`,
 
-    "Use only verified Cossa Knowledge Base information and authorised Cossa operational records supplied by the Cossa AI route.",
+    `Department: ${employee.department}.`,
 
-    "If information is unavailable, explicitly label it as missing. Do not guess, fabricate customer results, claim account access, invent performance data, or name unverified competitors.",
+    `Employee mission: ${employee.mission}`,
 
-    "Do not publish content, send messages, contact prospects, spend money, change budgets, alter accounts, connect providers, make legal or financial commitments, or claim that any of those actions occurred.",
+    "Complete the assigned internal stage professionally and hand useful work forward.",
 
-    "Use these headings exactly: Verified inputs; Missing information or connections; Reviewable draft; Owner decisions required; External actions disabled.",
+    "Do not behave like a placeholder. If the work can be completed safely with the supplied knowledge and evidence, complete it.",
+
+    "Do not ask for owner approval merely for analysis, planning, drafting, research synthesis, internal scheduling, SEO recommendations, content creation, catalogue review, supplier-candidate analysis or employee-to-employee handoffs.",
+
+    "Escalate only when a genuinely high-risk action requires owner authority, including spending money, legal commitments, contracts, supplier orders, credential changes, irreversible account changes, sensitive customer communication or another clearly high-risk external action.",
+
+    "Use only verified Cossa knowledge, authorised operational records, authorised evidence and earlier workforce outputs.",
+
+    "If information is unavailable, identify the exact missing information or integration rather than inventing it.",
+
+    "Never invent customers, suppliers, products, inventory, sales, campaign performance, website performance, testimonials, revenue, delivery times, pricing, partnerships or completed external actions.",
+
+    "Social content must not disclose internal Cossa revenue or confidential business information.",
+
+    "Marketing content may use education, awareness, pain-point marketing, solution marketing, trust-building, offers and calls to action when supported by verified company information.",
+
+    "Where a social or product post requires a visual, explicitly include a visual brief describing the image, graphic, brochure or product creative required. Do not pretend that an image was generated unless a real media-generation workflow produced it.",
+
+    "Use these headings exactly: Verified inputs; Work completed; Missing information or integrations; Handoff to next employee; High-risk owner decisions required; External actions status.",
 
     `Mission objective: ${mission.objective}`,
 
@@ -576,7 +943,8 @@ function controlledStagePrompt({
       handoff.context,
     )}`,
 
-    authorisedEvidence.length > 0
+    authorisedEvidence.length >
+    0
       ? `Authorised evidence for this stage:\n${authorisedEvidence.join(
           "\n\n",
         )}`
@@ -597,30 +965,34 @@ function AiWorkforce() {
   const [
     objective,
     setObjective,
-  ] = useState(
-    "Build a controlled social media and paid-media growth plan for Cossa Nexus Holdings.",
-  );
+  ] =
+    useState(
+      "Build and continuously improve Cossa Nexus Holdings' professional social, digital growth and customer-acquisition system using verified company information.",
+    );
 
   const [
     targetMarket,
     setTargetMarket,
-  ] = useState(
-    "South Africa",
-  );
+  ] =
+    useState(
+      "South Africa",
+    );
 
   const [
     targetLocation,
     setTargetLocation,
-  ] = useState(
-    "Gauteng",
-  );
+  ] =
+    useState(
+      "Gauteng",
+    );
 
   const [
     selectedMissionId,
     setSelectedMissionId,
-  ] = useState<
-    string | null
-  >(null);
+  ] =
+    useState<
+      string | null
+    >(null);
 
   /* ------------------------------------------------------------------------ */
   /* QUERIES                                                                  */
@@ -632,8 +1004,9 @@ function AiWorkforce() {
         "ai-workforce-employees",
       ],
 
-      queryFn: () =>
-        listEmployees(),
+      queryFn:
+        () =>
+          listEmployees(),
     });
 
   const missionsQuery =
@@ -642,8 +1015,9 @@ function AiWorkforce() {
         "ai-workforce-missions",
       ],
 
-      queryFn: () =>
-        listMissions(),
+      queryFn:
+        () =>
+          listMissions(),
     });
 
   const handoffsQuery =
@@ -652,8 +1026,9 @@ function AiWorkforce() {
         "ai-workforce-handoffs",
       ],
 
-      queryFn: () =>
-        listEmployeeHandoffs(),
+      queryFn:
+        () =>
+          listEmployeeHandoffs(),
     });
 
   const runsQuery =
@@ -662,8 +1037,9 @@ function AiWorkforce() {
         "ai-workforce-runs",
       ],
 
-      queryFn: () =>
-        listWorkforceRuns(),
+      queryFn:
+        () =>
+          listWorkforceRuns(),
     });
 
   const approvalsQuery =
@@ -672,8 +1048,9 @@ function AiWorkforce() {
         "ai-workforce-approvals",
       ],
 
-      queryFn: () =>
-        listPendingApprovals(),
+      queryFn:
+        () =>
+          listPendingApprovals(),
     });
 
   /* ------------------------------------------------------------------------ */
@@ -725,7 +1102,9 @@ function AiWorkforce() {
         installCossaGrowthWorkforce,
 
       onSuccess:
-        async (result) => {
+        async (
+          result,
+        ) => {
           await refreshWorkforce();
 
           const activeCount =
@@ -739,22 +1118,26 @@ function AiWorkforce() {
             "Cossa workforce checked",
             {
               description:
-                `${result.length} employee profiles are recorded. ${activeCount} are currently active. Existing records were preserved.`,
+                `${result.length} employee profiles are recorded. ${activeCount} are active. Existing employee records were preserved.`,
             },
           );
         },
 
-      onError: (error) => {
-        toast.error(
-          "Workforce setup could not be completed",
-          {
-            description:
-              error instanceof Error
-                ? error.message
-                : "Unknown workforce setup error.",
-          },
-        );
-      },
+      onError:
+        (
+          error,
+        ) => {
+          toast.error(
+            "Workforce setup could not be completed",
+            {
+              description:
+                error instanceof
+                Error
+                  ? error.message
+                  : "Unknown workforce setup error.",
+            },
+          );
+        },
     });
 
   /* ------------------------------------------------------------------------ */
@@ -778,25 +1161,29 @@ function AiWorkforce() {
           await refreshWorkforce();
 
           toast.success(
-            "Coordination plan recorded",
+            "Coordination mission created",
             {
               description:
-                `${mission.title} has ${handoffs.length} controlled handoff stages. No external action was started.`,
+                `${mission.title} has ${handoffs.length} linked employee stages ready for execution.`,
             },
           );
         },
 
-      onError: (error) => {
-        toast.error(
-          "Coordination plan could not be created",
-          {
-            description:
-              error instanceof Error
-                ? error.message
-                : "Unknown mission error.",
-          },
-        );
-      },
+      onError:
+        (
+          error,
+        ) => {
+          toast.error(
+            "Coordination mission could not be created",
+            {
+              description:
+                error instanceof
+                Error
+                  ? error.message
+                  : "Unknown mission error.",
+            },
+          );
+        },
     });
 
   /* ------------------------------------------------------------------------ */
@@ -828,24 +1215,31 @@ function AiWorkforce() {
       () =>
         new Map(
           employees.map(
-            (employee) => [
+            (
+              employee,
+            ) => [
               employee.employee_key,
               employee,
             ],
           ),
         ),
-      [employees],
+
+      [
+        employees,
+      ],
     );
 
   /* ------------------------------------------------------------------------ */
-  /* ALL EMPLOYEE OPERATIONAL STATE                                           */
+  /* OPERATIONAL STATE                                                        */
   /* ------------------------------------------------------------------------ */
 
   const employeeOperationalViews =
     useMemo(
       () =>
         employees.map(
-          (employee) => ({
+          (
+            employee,
+          ) => ({
             employee,
 
             operational:
@@ -857,6 +1251,7 @@ function AiWorkforce() {
               }),
           }),
         ),
+
       [
         employees,
         handoffs,
@@ -866,58 +1261,82 @@ function AiWorkforce() {
     );
 
   const workforceCounts =
-    useMemo(() => {
-      let working = 0;
-      let idle = 0;
-      let waiting = 0;
-      let approval = 0;
-      let attention = 0;
-      let inactive = 0;
+    useMemo(
+      () => {
+        let working =
+          0;
 
-      for (
-        const item of
-          employeeOperationalViews
-      ) {
-        switch (
-          item.operational.state
+        let idle =
+          0;
+
+        let waiting =
+          0;
+
+        let approval =
+          0;
+
+        let attention =
+          0;
+
+        let inactive =
+          0;
+
+        for (
+          const item of
+            employeeOperationalViews
         ) {
-          case "working":
-            working += 1;
-            break;
+          switch (
+            item.operational.state
+          ) {
+            case "working":
+              working +=
+                1;
+              break;
 
-          case "idle":
-            idle += 1;
-            break;
+            case "idle":
+              idle +=
+                1;
+              break;
 
-          case "waiting":
-            waiting += 1;
-            break;
+            case "waiting":
+              waiting +=
+                1;
+              break;
 
-          case "approval":
-            approval += 1;
-            break;
+            case "approval":
+              approval +=
+                1;
+              break;
 
-          case "attention":
-            attention += 1;
-            break;
+            case "attention":
+              attention +=
+                1;
+              break;
 
-          case "inactive":
-            inactive += 1;
-            break;
+            case "inactive":
+              inactive +=
+                1;
+              break;
+
+            default:
+              break;
+          }
         }
-      }
 
-      return {
-        working,
-        idle,
-        waiting,
-        approval,
-        attention,
-        inactive,
-      };
-    }, [
-      employeeOperationalViews,
-    ]);
+        return {
+          working,
+          idle,
+          waiting,
+          approval,
+          attention,
+          inactive,
+        };
+      },
+
+      [
+        employeeOperationalViews,
+      ],
+    );
 
   const departments =
     useMemo(
@@ -925,23 +1344,77 @@ function AiWorkforce() {
         Array.from(
           new Set(
             employees.map(
-              (employee) =>
+              (
+                employee,
+              ) =>
                 employeeDepartment(
                   employee,
                 ),
             ),
           ),
         ).sort(),
-      [employees],
+
+      [
+        employees,
+      ],
     );
 
   /* ------------------------------------------------------------------------ */
-  /* DEFAULT WORKFORCE INSTALLATION STATE                                     */
+  /* REQUIRED BUSINESS ROLE READINESS                                         */
+  /* ------------------------------------------------------------------------ */
+
+  const requiredRoleKeys =
+    useMemo(
+      () =>
+        Array.from(
+          new Set(
+            BUSINESS_OPERATING_ROLES.flatMap(
+              (
+                business,
+              ) =>
+                business.roles.map(
+                  (
+                    role,
+                  ) =>
+                    role.key,
+                ),
+            ),
+          ),
+        ),
+
+      [],
+    );
+
+  const requiredRolesInstalled =
+    requiredRoleKeys.filter(
+      (
+        key,
+      ) =>
+        employeesByKey.has(
+          key,
+        ),
+    ).length;
+
+  const requiredRolesActive =
+    requiredRoleKeys.filter(
+      (
+        key,
+      ) =>
+        employeesByKey.get(
+          key,
+        )?.status ===
+        "active",
+    ).length;
+
+  /* ------------------------------------------------------------------------ */
+  /* SOURCE WORKFORCE STATUS                                                  */
   /* ------------------------------------------------------------------------ */
 
   const installedDefaultEmployees =
     COSSA_GROWTH_WORKFORCE.filter(
-      (profile) =>
+      (
+        profile,
+      ) =>
         employeesByKey.has(
           profile.employee_key,
         ),
@@ -949,7 +1422,9 @@ function AiWorkforce() {
 
   const activeDefaultEmployees =
     COSSA_GROWTH_WORKFORCE.filter(
-      (profile) =>
+      (
+        profile,
+      ) =>
         employeesByKey.get(
           profile.employee_key,
         )?.status ===
@@ -958,7 +1433,9 @@ function AiWorkforce() {
 
   const activeControlledWorkflowEmployees =
     GROWTH_WORKFLOW.filter(
-      (step) =>
+      (
+        step,
+      ) =>
         employeesByKey.get(
           step.key,
         )?.status ===
@@ -966,12 +1443,14 @@ function AiWorkforce() {
     );
 
   /* ------------------------------------------------------------------------ */
-  /* CONTROLLED GROWTH WORKFLOW                                               */
+  /* GROWTH WORKFLOW                                                          */
   /* ------------------------------------------------------------------------ */
 
   const coordinationMissions =
     missions.filter(
-      (mission) =>
+      (
+        mission,
+      ) =>
         mission.title.startsWith(
           GROWTH_MISSION_PREFIX,
         ),
@@ -980,14 +1459,18 @@ function AiWorkforce() {
   const coordinationMissionIds =
     new Set(
       coordinationMissions.map(
-        (mission) =>
+        (
+          mission,
+        ) =>
           mission.id,
       ),
     );
 
   const pendingHandoffs =
     handoffs.filter(
-      (handoff) =>
+      (
+        handoff,
+      ) =>
         handoff.status ===
           "pending" &&
         coordinationMissionIds.has(
@@ -997,7 +1480,9 @@ function AiWorkforce() {
 
   const selectedMission =
     coordinationMissions.find(
-      (mission) =>
+      (
+        mission,
+      ) =>
         mission.id ===
         selectedMissionId,
     ) ??
@@ -1008,12 +1493,17 @@ function AiWorkforce() {
     selectedMission
       ? handoffs
           .filter(
-            (handoff) =>
+            (
+              handoff,
+            ) =>
               handoff.mission_id ===
               selectedMission.id,
           )
           .sort(
-            (left, right) =>
+            (
+              left,
+              right,
+            ) =>
               left.created_at.localeCompare(
                 right.created_at,
               ),
@@ -1022,24 +1512,32 @@ function AiWorkforce() {
 
   const nextHandoff =
     selectedMissionHandoffs.find(
-      (handoff) =>
+      (
+        handoff,
+      ) =>
         handoff.status ===
         "pending",
-    ) ?? null;
+    ) ??
+    null;
 
   const nextEmployee =
     nextHandoff
       ? employees.find(
-          (employee) =>
+          (
+            employee,
+          ) =>
             employee.id ===
             nextHandoff.to_employee_id,
-        ) ?? null
+        ) ??
+        null
       : null;
 
   const selectedMissionRuns =
     selectedMission
       ? runs.filter(
-          (run) =>
+          (
+            run,
+          ) =>
             run.mission_id ===
             selectedMission.id,
         )
@@ -1047,19 +1545,27 @@ function AiWorkforce() {
 
   const reviewableOutputs =
     selectedMissionRuns
-      .map((run) => ({
-        run,
-        content:
-          reviewableOutputContent(
-            run,
-          ),
-      }))
+      .map(
+        (
+          run,
+        ) => ({
+          run,
+
+          content:
+            reviewableOutputContent(
+              run,
+            ),
+        }),
+      )
       .filter(
         (
           item,
         ): item is {
-          run: MissionRun;
-          content: string;
+          run:
+            MissionRun;
+
+          content:
+            string;
         } =>
           Boolean(
             item.content,
@@ -1068,7 +1574,9 @@ function AiWorkforce() {
 
   const workforceReviewApprovals =
     approvals.filter(
-      (approval) =>
+      (
+        approval,
+      ) =>
         approval.action_type ===
           "review_growth_coordination_output" &&
         coordinationMissionIds.has(
@@ -1084,13 +1592,6 @@ function AiWorkforce() {
     runsQuery.isLoading ||
     approvalsQuery.isLoading;
 
-  /*
-   * Creating this specific coordination mission requires the seven employees
-   * that actually participate in this workflow.
-   *
-   * Other employees can exist and remain available without being forced into
-   * this social/paid-media pipeline.
-   */
   const canCreateCoordination =
     activeControlledWorkflowEmployees.length ===
       GROWTH_WORKFLOW.length &&
@@ -1098,7 +1599,162 @@ function AiWorkforce() {
       0;
 
   /* ------------------------------------------------------------------------ */
-  /* RUN NEXT CONTROLLED STAGE                                                */
+  /* EXECUTE ONE HANDOFF                                                      */
+  /* ------------------------------------------------------------------------ */
+
+  async function executeControlledHandoff({
+    mission,
+    handoff,
+    employee,
+    priorOutputs,
+  }: {
+    mission:
+      Mission;
+
+    handoff:
+      EmployeeHandoff;
+
+    employee:
+      AiEmployee;
+
+    priorOutputs:
+      string[];
+  }): Promise<{
+    content:
+      string;
+
+    finalStage:
+      boolean;
+  }> {
+    if (
+      employee.status !==
+      "active"
+    ) {
+      throw new Error(
+        `${employee.name} is ${employee.status} and cannot execute this stage.`,
+      );
+    }
+
+    const authorisedEvidence =
+      employee.employee_key ===
+      "website-seo-monitor"
+        ? [
+            websiteReportEvidence(
+              await checkOfficialWebsite(),
+            ),
+          ]
+        : [];
+
+    const run =
+      await startControlledWorkforceRun({
+        mission,
+
+        handoff,
+
+        employee,
+
+        provider:
+          DEFAULT_WORKFORCE_PROVIDER,
+
+        modelName:
+          DEFAULT_WORKFORCE_MODEL,
+
+        priorOutputs,
+
+        authorisedEvidence,
+      });
+
+    try {
+      const content =
+        await streamChat(
+          [
+            {
+              role:
+                "user",
+
+              content:
+                controlledStagePrompt({
+                  mission,
+
+                  handoff,
+
+                  employee,
+
+                  priorOutputs,
+
+                  authorisedEvidence,
+                }),
+            },
+          ],
+
+          () =>
+            undefined,
+
+          undefined,
+
+          employee.system_instructions,
+
+          DEFAULT_WORKFORCE_PROVIDER,
+        );
+
+      if (
+        !content.trim()
+      ) {
+        throw new Error(
+          `${employee.name} did not return a usable workforce output.`,
+        );
+      }
+
+      const result =
+        await completeControlledWorkforceRun({
+          run,
+
+          handoff,
+
+          employee,
+
+          content,
+        });
+
+      return {
+        content,
+
+        finalStage:
+          result.finalStage,
+      };
+    } catch (
+      error
+    ) {
+      const message =
+        error instanceof
+        Error
+          ? error.message
+          : "The workforce provider failed to return an output.";
+
+      try {
+        await failControlledWorkforceRun({
+          run,
+
+          handoff,
+
+          errorMessage:
+            message,
+        });
+      } catch (
+        cleanupError
+      ) {
+        console.error(
+          "Unable to record controlled workforce failure",
+          cleanupError,
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* RUN NEXT STAGE                                                           */
   /* ------------------------------------------------------------------------ */
 
   const runNextStageMutation =
@@ -1115,135 +1771,26 @@ function AiWorkforce() {
             );
           }
 
-          if (
-            nextEmployee.status !==
-            "active"
-          ) {
-            throw new Error(
-              `${nextEmployee.name} is ${nextEmployee.status} and cannot run this stage.`,
-            );
-          }
-
           const priorOutputs =
             reviewableOutputs.map(
-              (item) =>
+              (
+                item,
+              ) =>
                 item.content,
             );
 
-          const authorisedEvidence =
-            nextEmployee.employee_key ===
-            "website-seo-monitor"
-              ? [
-                  websiteReportEvidence(
-                    await checkOfficialWebsite(),
-                  ),
-                ]
-              : [];
+          return executeControlledHandoff({
+            mission:
+              selectedMission,
 
-          const run =
-            await startControlledWorkforceRun({
-              mission:
-                selectedMission,
+            handoff:
+              nextHandoff,
 
-              handoff:
-                nextHandoff,
+            employee:
+              nextEmployee,
 
-              employee:
-                nextEmployee,
-
-              provider:
-                "groq",
-
-              modelName:
-                "llama-3.3-70b-versatile",
-
-              priorOutputs,
-
-              authorisedEvidence,
-            });
-
-          try {
-            const content =
-              await streamChat(
-                [
-                  {
-                    role:
-                      "user",
-
-                    content:
-                      controlledStagePrompt({
-                        mission:
-                          selectedMission,
-
-                        handoff:
-                          nextHandoff,
-
-                        employee:
-                          nextEmployee,
-
-                        priorOutputs,
-
-                        authorisedEvidence,
-                      }),
-                  },
-                ],
-
-                () =>
-                  undefined,
-
-                undefined,
-
-                nextEmployee.system_instructions,
-
-                "groq",
-              );
-
-            if (
-              !content.trim()
-            ) {
-              throw new Error(
-                "Cossa AI did not return a reviewable workforce draft.",
-              );
-            }
-
-            return completeControlledWorkforceRun({
-              run,
-
-              handoff:
-                nextHandoff,
-
-              employee:
-                nextEmployee,
-
-              content,
-            });
-          } catch (error) {
-            const message =
-              error instanceof Error
-                ? error.message
-                : "The workforce provider failed to return an output.";
-
-            try {
-              await failControlledWorkforceRun({
-                run,
-
-                handoff:
-                  nextHandoff,
-
-                errorMessage:
-                  message,
-              });
-            } catch (
-              cleanupError
-            ) {
-              console.error(
-                "Unable to record controlled workforce failure",
-                cleanupError,
-              );
-            }
-
-            throw error;
-          }
+            priorOutputs,
+          });
         },
 
       onSuccess:
@@ -1254,28 +1801,191 @@ function AiWorkforce() {
 
           toast.success(
             finalStage
-              ? "Final owner review requested"
-              : "Reviewable workforce draft saved",
+              ? "Workforce chain reached its current review checkpoint"
+              : "Employee stage completed",
             {
               description:
                 finalStage
-                  ? "The AI CEO briefing is saved for internal owner review. No external action was enabled."
-                  : "The next controlled handoff is ready. No external action was enabled.",
+                  ? "All recorded Growth stages completed. The current workforce-data layer may still create an internal review checkpoint before closing the mission."
+                  : "The completed employee handed work forward to the next pending stage.",
             },
           );
         },
 
-      onError: (error) => {
-        toast.error(
-          "Controlled workforce stage could not run",
-          {
-            description:
-              error instanceof Error
-                ? error.message
-                : "Unknown workforce run error.",
-          },
-        );
-      },
+      onError:
+        (
+          error,
+        ) => {
+          toast.error(
+            "Workforce stage could not run",
+            {
+              description:
+                error instanceof
+                Error
+                  ? error.message
+                  : "Unknown workforce run error.",
+            },
+          );
+        },
+    });
+
+  /* ------------------------------------------------------------------------ */
+  /* AUTOMATIC SAFE CHAIN                                                     */
+  /* ------------------------------------------------------------------------ */
+
+  const runSafeWorkflowMutation =
+    useMutation({
+      mutationFn:
+        async () => {
+          if (
+            !selectedMission
+          ) {
+            throw new Error(
+              "Select a Growth coordination mission first.",
+            );
+          }
+
+          if (
+            selectedMission.status ===
+              "completed" ||
+            selectedMission.status ===
+              "awaiting_approval"
+          ) {
+            throw new Error(
+              "This mission has no safe pending workflow stages available to run.",
+            );
+          }
+
+          const pending =
+            selectedMissionHandoffs.filter(
+              (
+                handoff,
+              ) =>
+                handoff.status ===
+                "pending",
+            );
+
+          if (
+            pending.length ===
+            0
+          ) {
+            throw new Error(
+              "This mission has no pending workforce handoffs.",
+            );
+          }
+
+          const accumulatedOutputs =
+            reviewableOutputs.map(
+              (
+                item,
+              ) =>
+                item.content,
+            );
+
+          let completedStages =
+            0;
+
+          let reachedFinalStage =
+            false;
+
+          for (
+            const handoff of
+              pending
+          ) {
+            const employee =
+              employees.find(
+                (
+                  candidate,
+                ) =>
+                  candidate.id ===
+                  handoff.to_employee_id,
+              );
+
+            if (!employee) {
+              throw new Error(
+                `A pending handoff references employee ${handoff.to_employee_id}, but that employee record was not found.`,
+              );
+            }
+
+            if (
+              employee.status !==
+              "active"
+            ) {
+              throw new Error(
+                `${employee.name} is ${employee.status}. Automatic execution stopped rather than pretending the employee worked.`,
+              );
+            }
+
+            const result =
+              await executeControlledHandoff({
+                mission:
+                  selectedMission,
+
+                handoff,
+
+                employee,
+
+                priorOutputs:
+                  accumulatedOutputs,
+              });
+
+            accumulatedOutputs.push(
+              result.content,
+            );
+
+            completedStages +=
+              1;
+
+            reachedFinalStage =
+              result.finalStage;
+
+            if (
+              reachedFinalStage
+            ) {
+              break;
+            }
+          }
+
+          return {
+            completedStages,
+
+            reachedFinalStage,
+          };
+        },
+
+      onSuccess:
+        async ({
+          completedStages,
+          reachedFinalStage,
+        }) => {
+          await refreshWorkforce();
+
+          toast.success(
+            reachedFinalStage
+              ? "Safe workforce chain completed"
+              : "Safe workforce chain progressed",
+            {
+              description:
+                `${completedStages} employee stage${completedStages === 1 ? "" : "s"} completed automatically and handed work forward. External high-risk actions were not authorised.`,
+            },
+          );
+        },
+
+      onError:
+        (
+          error,
+        ) => {
+          toast.error(
+            "Automatic workforce chain stopped",
+            {
+              description:
+                error instanceof
+                Error
+                  ? error.message
+                  : "The automatic workforce chain stopped because a stage could not be completed.",
+            },
+          );
+        },
     });
 
   /* ------------------------------------------------------------------------ */
@@ -1284,26 +1994,28 @@ function AiWorkforce() {
 
   const reviewMutation =
     useMutation({
-      mutationFn: ({
-        approvalId,
-        decision,
-      }: {
-        approvalId: string;
-
-        decision:
-          | "approved"
-          | "rejected";
-      }) =>
-        decideApproval(
+      mutationFn:
+        ({
           approvalId,
-
           decision,
+        }: {
+          approvalId:
+            string;
 
-          decision ===
-            "approved"
-            ? "Owner approved the internal workforce briefing. External actions remain disabled."
-            : "Owner requested changes to the internal workforce briefing. External actions remain disabled.",
-        ),
+          decision:
+            | "approved"
+            | "rejected";
+        }) =>
+          decideApproval(
+            approvalId,
+
+            decision,
+
+            decision ===
+              "approved"
+              ? "Owner approved the recorded internal workforce briefing. This does not authorise unrelated external high-risk actions."
+              : "Owner requested changes to the recorded internal workforce briefing.",
+          ),
 
       onSuccess:
         async (
@@ -1317,24 +2029,24 @@ function AiWorkforce() {
             "approved"
               ? "Internal briefing approved"
               : "Changes requested",
-            {
-              description:
-                "This affects only the internal workforce mission. It does not authorise publication, messaging, account changes or advertising spend.",
-            },
           );
         },
 
-      onError: (error) => {
-        toast.error(
-          "Owner review could not be recorded",
-          {
-            description:
-              error instanceof Error
-                ? error.message
-                : "Unknown approval error.",
-          },
-        );
-      },
+      onError:
+        (
+          error,
+        ) => {
+          toast.error(
+            "Owner decision could not be recorded",
+            {
+              description:
+                error instanceof
+                Error
+                  ? error.message
+                  : "Unknown approval error.",
+            },
+          );
+        },
     });
 
   /* ------------------------------------------------------------------------ */
@@ -1344,6 +2056,7 @@ function AiWorkforce() {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
       {/* HERO */}
+
       <section className="glass-card relative overflow-hidden p-6 md:p-8">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
 
@@ -1351,7 +2064,7 @@ function AiWorkforce() {
           <div>
             <div className="flex items-center gap-2">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
-                <UsersRound className="h-5 w-5" />
+                <Workflow className="h-5 w-5" />
               </div>
 
               <StatusBadge
@@ -1369,18 +2082,14 @@ function AiWorkforce() {
             </h1>
 
             <p className="mt-2 max-w-3xl text-muted-foreground">
-              Central workforce command
-              centre for Cossa Nexus
-              Holdings. Employee status
-              is derived from real
-              employee records,
-              handoffs, runs and pending
-              approvals. An active
-              profile means the employee
-              is available for internal
-              work; it does not falsely
-              imply that the employee is
-              currently working.
+              Cossa employees are designed
+              to work as one operating
+              system rather than isolated
+              placeholders. Safe internal
+              work can move employee to
+              employee automatically.
+              Genuine high-risk actions
+              remain owner-controlled.
             </p>
           </div>
 
@@ -1422,6 +2131,7 @@ function AiWorkforce() {
       </section>
 
       {/* TOP METRICS */}
+
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <Metric
           label="Total employees"
@@ -1434,7 +2144,9 @@ function AiWorkforce() {
           label="Active profiles"
           value={String(
             employees.filter(
-              (employee) =>
+              (
+                employee,
+              ) =>
                 employee.status ===
                 "active",
             ).length,
@@ -1449,21 +2161,21 @@ function AiWorkforce() {
         />
 
         <Metric
-          label="Waiting"
+          label="Assigned"
           value={String(
             workforceCounts.waiting,
           )}
         />
 
         <Metric
-          label="Idle"
+          label="Available"
           value={String(
             workforceCounts.idle,
           )}
         />
 
         <Metric
-          label="Needs attention"
+          label="Attention"
           value={String(
             workforceCounts.attention +
               workforceCounts.approval,
@@ -1476,7 +2188,173 @@ function AiWorkforce() {
         />
       </section>
 
-      {/* WORKFORCE INSTALLATION STATUS */}
+      {/* BUSINESS WORKFORCE READINESS */}
+
+      <section className="glass-card p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+              Operating workforce
+            </p>
+
+            <h2 className="mt-1 font-display text-xl font-semibold">
+              Growth, Store, Tech and
+              Revenue readiness
+            </h2>
+
+            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+              Missing specialist roles are
+              shown openly. We do not call
+              a capability operational
+              unless a real employee
+              profile exists.
+            </p>
+          </div>
+
+          <div className="grid min-w-64 grid-cols-2 gap-2">
+            <MiniMetric
+              label="Required"
+              value={
+                requiredRoleKeys.length
+              }
+            />
+
+            <MiniMetric
+              label="Active"
+              value={
+                requiredRolesActive
+              }
+              warning={
+                requiredRolesActive <
+                requiredRoleKeys.length
+              }
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          {BUSINESS_OPERATING_ROLES.map(
+            (
+              business,
+            ) => {
+              const Icon =
+                business.icon;
+
+              return (
+                <article
+                  key={
+                    business.business
+                  }
+                  className="rounded-xl border border-border/60 bg-card/40 p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                      <Icon className="h-5 w-5" />
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold">
+                        {
+                          business.business
+                        }
+                      </h3>
+
+                      <p className="text-xs text-muted-foreground">
+                        Specialist
+                        workforce
+                        coverage
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {business.roles.map(
+                      (
+                        role,
+                      ) => {
+                        const employee =
+                          employeesByKey.get(
+                            role.key,
+                          );
+
+                        const active =
+                          employee?.status ===
+                          "active";
+
+                        return (
+                          <div
+                            key={
+                              `${business.business}-${role.key}`
+                            }
+                            className="rounded-lg border border-border/50 bg-background/30 p-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-medium">
+                                  {
+                                    role.name
+                                  }
+                                </p>
+
+                                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                                  {
+                                    role.responsibility
+                                  }
+                                </p>
+                              </div>
+
+                              <span
+                                className={
+                                  active
+                                    ? "shrink-0 rounded-full border border-success/35 bg-success/10 px-2 py-1 text-[9px] uppercase tracking-wider text-success"
+                                    : employee
+                                      ? "shrink-0 rounded-full border border-warning/35 bg-warning/10 px-2 py-1 text-[9px] uppercase tracking-wider text-warning"
+                                      : "shrink-0 rounded-full border border-border bg-secondary/40 px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground"
+                                }
+                              >
+                                {active
+                                  ? "Active"
+                                  : employee
+                                    ? formatStatus(
+                                        employee.status,
+                                      )
+                                    : "Missing"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      },
+                    )}
+                  </div>
+                </article>
+              );
+            },
+          )}
+        </div>
+
+        {requiredRolesInstalled <
+        requiredRoleKeys.length ? (
+          <div className="mt-4 rounded-xl border border-warning/30 bg-warning/10 p-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+
+              <p className="text-xs leading-relaxed text-warning">
+                Some specialist operating
+                roles are not yet present
+                in the live employee
+                table. The workforce-data
+                source must install them
+                before this screen can
+                truthfully report them as
+                working employees.
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      {/* DEFAULT WORKFORCE STATUS */}
+
       <section className="glass-card p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -1485,18 +2363,16 @@ function AiWorkforce() {
             </p>
 
             <h2 className="mt-1 font-display text-xl font-semibold">
-              Default Cossa workforce
+              Current source-defined
+              workforce
             </h2>
 
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              This compares the
-              workforce definitions in
-              source code with live
-              employee records. Custom
-              and existing employees are
-              preserved and continue to
-              appear in the full
-              directory below.
+              Existing employees are
+              preserved. Missing source
+              profiles can be installed
+              without deleting custom
+              workforce records.
             </p>
           </div>
 
@@ -1518,28 +2394,34 @@ function AiWorkforce() {
         </div>
 
         <div className="mt-4 text-xs text-muted-foreground">
-          Expected default profiles:{" "}
+          Current source profiles:{" "}
           <strong className="text-foreground">
             {
               COSSA_GROWTH_WORKFORCE.length
             }
           </strong>
+
           {" · "}
+
           Recorded:{" "}
           <strong className="text-foreground">
             {
               installedDefaultEmployees.length
             }
           </strong>
+
           {" · "}
+
           Active:{" "}
           <strong className="text-foreground">
             {
               activeDefaultEmployees.length
             }
           </strong>
+
           {" · "}
-          Departments represented:{" "}
+
+          Departments:{" "}
           <strong className="text-foreground">
             {
               departments.length
@@ -1549,6 +2431,7 @@ function AiWorkforce() {
       </section>
 
       {/* FULL WORKFORCE DIRECTORY */}
+
       <section className="glass-card p-5">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
@@ -1562,15 +2445,11 @@ function AiWorkforce() {
           </div>
 
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Every employee returned
-            from the live
-            <code className="mx-1 text-primary">
-              ai_employees
-            </code>
-            table appears here,
-            including custom employees
-            and roles outside the Growth
-            coordination workflow.
+            Every live employee is shown.
+            Working, assigned, available,
+            failed and approval states are
+            derived from real database
+            records.
           </p>
         </div>
 
@@ -1581,12 +2460,10 @@ function AiWorkforce() {
         ) : employeesQuery.isError ? (
           <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
             The workforce database could
-            not be loaded. Refresh the
-            page after checking the
-            Supabase connection and
-            access policies.
+            not be loaded.
           </div>
-        ) : employees.length === 0 ? (
+        ) : employees.length ===
+          0 ? (
           <div className="mt-5 rounded-xl border border-warning/30 bg-warning/10 p-5 text-sm text-warning">
             No AI employee records were
             returned from the workforce
@@ -1659,20 +2536,20 @@ function AiWorkforce() {
                       />
 
                       <EmployeeDetail
-                        label="Growth workflow"
+                        label="Growth chain"
                         value={
                           inGrowthWorkflow
                             ? "Included"
-                            : "Separate workflow"
+                            : "Specialist / separate workflow"
                         }
                       />
 
                       <EmployeeDetail
-                        label="Approval control"
+                        label="Approval default"
                         value={
                           employee.requires_approval_by_default
-                            ? "Owner approval required"
-                            : "Not required by default"
+                            ? "Approval-controlled"
+                            : "Safe internal work allowed"
                         }
                       />
                     </div>
@@ -1787,30 +2664,27 @@ function AiWorkforce() {
         )}
       </section>
 
-      {/* CONTROLLED GROWTH WORKFLOW */}
+      {/* EXECUTABLE GROWTH WORKFLOW */}
+
       <section className="glass-card p-5">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Controlled handoff line
+              Employee handoff line
             </p>
 
             <h2 className="mt-1 font-display text-xl font-semibold">
-              Growth coordination
-              workflow
+              Growth employees work
+              hand-to-hand
             </h2>
           </div>
 
           <p className="max-w-xl text-sm text-muted-foreground">
-            This seven-stage chain is
-            specifically for website,
-            social, content and
-            paid-media planning. Other
-            Cossa employees remain
-            visible above and should
-            receive specialist workflows
-            instead of being forced into
-            unrelated work.
+            The current executable chain
+            can now be progressed
+            automatically instead of
+            requiring one manual click per
+            worker.
           </p>
         </div>
 
@@ -1895,26 +2769,29 @@ function AiWorkforce() {
         </div>
       </section>
 
-      {/* CONTROLLED EXECUTION */}
+      {/* AUTOMATIC EXECUTION */}
+
       <section className="glass-card p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Controlled workforce execution
+              Automatic safe execution
             </p>
 
             <h2 className="mt-1 font-display text-xl font-semibold">
-              Run one reviewable stage
-              at a time
+              Run the internal chain
+              automatically
             </h2>
 
             <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              Each stage records the
-              employee, provider,
-              mission input and
-              reviewable output. No
-              external action is enabled
-              by this workflow.
+              Safe internal workers can
+              execute sequentially and
+              hand their output to the
+              next employee. If a real
+              failure occurs, the chain
+              stops and records the
+              failure instead of
+              pretending success.
             </p>
           </div>
 
@@ -1928,7 +2805,9 @@ function AiWorkforce() {
                   selectedMission?.id ??
                   ""
                 }
-                onChange={(event) =>
+                onChange={(
+                  event,
+                ) =>
                   setSelectedMissionId(
                     event.target.value ||
                       null,
@@ -1937,7 +2816,9 @@ function AiWorkforce() {
                 className="min-w-64 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
               >
                 {coordinationMissions.map(
-                  (mission) => (
+                  (
+                    mission,
+                  ) => (
                     <option
                       key={
                         mission.id
@@ -1960,94 +2841,105 @@ function AiWorkforce() {
 
         {!selectedMission ? (
           <p className="mt-4 rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-            Create a controlled
-            coordination plan first.
-            Nothing runs until you
-            explicitly start a stage.
+            Create a Growth
+            coordination mission first.
           </p>
         ) : (
-          <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="mt-5 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
             <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Next stage
-                  </p>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Next employee
+              </p>
 
-                  <h3 className="mt-1 text-sm font-semibold">
-                    {nextEmployee
-                      ? `${nextEmployee.name} — ${nextEmployee.title}`
-                      : "No pending stage"}
-                  </h3>
-                </div>
+              <h3 className="mt-1 text-sm font-semibold">
+                {nextEmployee
+                  ? `${nextEmployee.name} — ${nextEmployee.title}`
+                  : "No pending employee stage"}
+              </h3>
 
-                <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase text-primary">
-                  {
-                    selectedMission.status
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                {nextHandoff?.reason ??
+                  "No pending handoff remains for this mission."}
+              </p>
+
+              <div className="mt-4 grid gap-2">
+                <Button
+                  type="button"
+                  onClick={() =>
+                    runSafeWorkflowMutation.mutate()
                   }
-                </span>
+                  disabled={
+                    !nextHandoff ||
+                    runSafeWorkflowMutation.isPending ||
+                    runNextStageMutation.isPending ||
+                    selectedMission.status ===
+                      "awaiting_approval" ||
+                    selectedMission.status ===
+                      "completed"
+                  }
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+                >
+                  {runSafeWorkflowMutation.isPending ? (
+                    <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Workflow className="mr-1.5 h-4 w-4" />
+                  )}
+
+                  {runSafeWorkflowMutation.isPending
+                    ? "Employees are working hand-to-hand…"
+                    : "Run all safe pending stages"}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    runNextStageMutation.mutate()
+                  }
+                  disabled={
+                    !nextHandoff ||
+                    !nextEmployee ||
+                    nextEmployee.status !==
+                      "active" ||
+                    runNextStageMutation.isPending ||
+                    runSafeWorkflowMutation.isPending ||
+                    selectedMission.status ===
+                      "awaiting_approval" ||
+                    selectedMission.status ===
+                      "completed"
+                  }
+                  className="w-full border-primary/40 text-primary hover:bg-primary/10"
+                >
+                  {runNextStageMutation.isPending ? (
+                    <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="mr-1.5 h-4 w-4" />
+                  )}
+
+                  Run only next stage
+                </Button>
               </div>
 
-              <p className="mt-3 text-xs text-muted-foreground">
-                {nextHandoff?.reason ??
-                  "All recorded stages are complete. Review the saved final briefing and any owner review request below."}
-              </p>
-
-              {nextEmployee &&
-              nextEmployee.status !==
-                "active" ? (
-                <p className="mt-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-                  {
-                    nextEmployee.name
-                  }{" "}
-                  is currently{" "}
-                  {formatStatus(
-                    nextEmployee.status,
-                  )}
-                  . The stage cannot run
-                  until the employee is
-                  active.
+              <div className="mt-4 rounded-lg border border-border/60 bg-background/30 p-3">
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Automation boundary
                 </p>
-              ) : null}
 
-              <Button
-                type="button"
-                onClick={() =>
-                  runNextStageMutation.mutate()
-                }
-                disabled={
-                  !nextHandoff ||
-                  !nextEmployee ||
-                  nextEmployee.status !==
-                    "active" ||
-                  runNextStageMutation.isPending ||
-                  selectedMission.status ===
-                    "awaiting_approval" ||
-                  selectedMission.status ===
-                    "completed"
-                }
-                className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-              >
-                {runNextStageMutation.isPending ? (
-                  <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
-                ) : (
-                  <Play className="mr-1.5 h-4 w-4" />
-                )}
-
-                {runNextStageMutation.isPending
-                  ? "Running controlled stage…"
-                  : "Run next controlled stage"}
-              </Button>
-
-              <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-                If the configured AI
-                provider is unavailable,
-                out of credit or returns
-                no usable output, the
-                failure is recorded and
-                the handoff returns to
-                pending.
-              </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  This browser workflow can
+                  auto-chain internal
+                  stages while the
+                  execution request is
+                  running. Permanent
+                  background schedules,
+                  daily posting and
+                  unattended external
+                  publishing require a
+                  server worker or cron
+                  workflow plus authorised
+                  social integrations.
+                </p>
+              </div>
             </div>
 
             <div className="rounded-xl border border-border/60 bg-card/40 p-4">
@@ -2056,14 +2948,14 @@ function AiWorkforce() {
 
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Saved reviewable outputs
+                    Recorded outputs
                   </p>
 
                   <h3 className="text-sm font-semibold">
                     {
                       reviewableOutputs.length
                     }{" "}
-                    saved for this mission
+                    employee outputs saved
                   </h3>
                 </div>
               </div>
@@ -2071,11 +2963,12 @@ function AiWorkforce() {
               {reviewableOutputs.length ===
               0 ? (
                 <p className="mt-3 text-xs text-muted-foreground">
-                  No worker draft has
-                  been saved yet.
+                  No employee output has
+                  been saved for this
+                  mission yet.
                 </p>
               ) : (
-                <div className="mt-3 max-h-72 space-y-3 overflow-y-auto pr-1">
+                <div className="mt-3 max-h-80 space-y-3 overflow-y-auto pr-1">
                   {reviewableOutputs.map(
                     ({
                       run,
@@ -2083,7 +2976,9 @@ function AiWorkforce() {
                     }) => {
                       const worker =
                         employees.find(
-                          (employee) =>
+                          (
+                            employee,
+                          ) =>
                             employee.id ===
                             run.employee_id,
                         );
@@ -2105,6 +3000,7 @@ function AiWorkforce() {
                               <p className="mt-0.5 text-[10px] text-muted-foreground">
                                 {run.model_provider ??
                                   "Provider not recorded"}
+
                                 {run.model_name
                                   ? ` · ${run.model_name}`
                                   : ""}
@@ -2112,7 +3008,7 @@ function AiWorkforce() {
                             </div>
 
                             <span className="text-[10px] uppercase tracking-widest text-success">
-                              reviewable draft
+                              completed
                             </span>
                           </div>
 
@@ -2129,7 +3025,9 @@ function AiWorkforce() {
               )}
 
               {selectedMissionRuns.some(
-                (run) =>
+                (
+                  run,
+                ) =>
                   run.status ===
                   "failed",
               ) ? (
@@ -2139,10 +3037,8 @@ function AiWorkforce() {
 
                     This mission contains
                     one or more recorded
-                    failed runs. A later
-                    successful run does
-                    not erase the audit
-                    history.
+                    failed runs. Audit
+                    history is retained.
                   </p>
                 </div>
               ) : null}
@@ -2151,7 +3047,36 @@ function AiWorkforce() {
         )}
       </section>
 
+      {/* SOCIAL / STORE / TECH */}
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <OperatingArea
+          icon={
+            Megaphone
+          }
+          title="Social media"
+          description="Strategy, copy, visual briefs, scheduling and account-growth work should coordinate continuously. Actual unattended publishing requires authenticated social publishing integrations and a background executor."
+        />
+
+        <OperatingArea
+          icon={
+            ShoppingCart
+          }
+          title="Cossa Store"
+          description="Store operations should coordinate catalogue health, product intelligence, legitimate supplier research, merchandising, product creatives and social-commerce campaigns."
+        />
+
+        <OperatingArea
+          icon={
+            Code2
+          }
+          title="Cossa Tech"
+          description="Cossa Tech should coordinate website delivery, technical solutions, content, visual assets, SEO quality and client requirements instead of leaving technical service requests without an owner."
+        />
+      </section>
+
       {/* CREATE MISSION + OWNER CONTROL */}
+
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="glass-card p-5">
           <div className="flex items-center gap-2">
@@ -2159,18 +3084,14 @@ function AiWorkforce() {
 
             <div>
               <h2 className="font-display text-xl font-semibold">
-                Create a controlled
-                Growth coordination
-                plan
+                Create Growth
+                coordination mission
               </h2>
 
               <p className="text-sm text-muted-foreground">
-                This creates an
-                internal mission and
-                seven pending handoffs.
-                It does not publish,
-                contact anyone or spend
-                money.
+                Creates linked internal
+                employee stages ready for
+                automatic safe execution.
               </p>
             </div>
           </div>
@@ -2183,12 +3104,16 @@ function AiWorkforce() {
                 value={
                   objective
                 }
-                onChange={(event) =>
+                onChange={(
+                  event,
+                ) =>
                   setObjective(
                     event.target.value,
                   )
                 }
-                rows={4}
+                rows={
+                  4
+                }
                 className="resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
               />
             </label>
@@ -2201,7 +3126,9 @@ function AiWorkforce() {
                   value={
                     targetMarket
                   }
-                  onChange={(event) =>
+                  onChange={(
+                    event,
+                  ) =>
                     setTargetMarket(
                       event.target.value,
                     )
@@ -2217,7 +3144,9 @@ function AiWorkforce() {
                   value={
                     targetLocation
                   }
-                  onChange={(event) =>
+                  onChange={(
+                    event,
+                  ) =>
                     setTargetLocation(
                       event.target.value,
                     )
@@ -2229,14 +3158,14 @@ function AiWorkforce() {
 
             {!canCreateCoordination ? (
               <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-                The Growth coordination
-                chain needs all{" "}
+                The executable Growth
+                chain requires all{" "}
                 {
                   GROWTH_WORKFLOW.length
                 }{" "}
-                workflow employees to
-                exist and be active.
-                Currently{" "}
+                current workflow
+                employees to exist and
+                be active.{" "}
                 {
                   activeControlledWorkflowEmployees.length
                 }{" "}
@@ -2244,9 +3173,7 @@ function AiWorkforce() {
                 {
                   GROWTH_WORKFLOW.length
                 }{" "}
-                are active. This does
-                not mean other Cossa AI
-                employees are missing.
+                are currently active.
               </p>
             ) : null}
 
@@ -2269,64 +3196,63 @@ function AiWorkforce() {
               }
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
             >
-              <ShieldCheck className="mr-1.5 h-4 w-4" />
+              <Workflow className="mr-1.5 h-4 w-4" />
 
               {coordinationMutation.isPending
-                ? "Creating controlled plan…"
-                : "Create controlled coordination plan"}
+                ? "Creating employee workflow…"
+                : "Create employee workflow"}
             </Button>
           </div>
         </section>
 
         <section className="glass-card flex flex-col p-5">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-            Owner control
+            Owner authority
           </p>
 
           <h2 className="mt-1 font-display text-xl font-semibold">
-            External authority stays
-            with you
+            Interrupt only for real
+            high-risk decisions
           </h2>
 
           <p className="mt-2 text-sm text-muted-foreground">
-            Cossa AI employees may
-            analyse authorised
-            information, prepare
-            internal work and coordinate
-            controlled missions.
-            Customer communication,
-            publishing, spending,
-            account changes and external
-            commitments remain governed
-            separately.
+            Internal research,
+            analysis, drafting,
+            scheduling, content
+            preparation, SEO,
+            catalogue review and
+            employee handoffs should
+            continue without unnecessary
+            owner interruption.
           </p>
 
           <div className="mt-5 space-y-3 text-sm text-muted-foreground">
-            <div className="flex items-start gap-2">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <OwnerRule>
+              Spending money, supplier
+              orders and advertising
+              budgets remain
+              owner-controlled.
+            </OwnerRule>
 
-              No automatic social
-              publishing or customer
-              messaging from this
-              screen.
-            </div>
+            <OwnerRule>
+              Contracts, legal
+              commitments, signatures and
+              binding commercial terms
+              remain owner-controlled.
+            </OwnerRule>
 
-            <div className="flex items-start gap-2">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <OwnerRule>
+              Credentials, destructive
+              changes and irreversible
+              account actions remain
+              owner-controlled.
+            </OwnerRule>
 
-              No automatic advertising
-              spend, bid change or
-              account modification.
-            </div>
-
-            <div className="flex items-start gap-2">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-
-              Missing data, integrations
-              and evidence must be
-              reported instead of
-              invented.
-            </div>
+            <OwnerRule>
+              Missing integrations must
+              be reported honestly rather
+              than simulated.
+            </OwnerRule>
           </div>
 
           <div className="mt-auto grid gap-2 pt-6 sm:grid-cols-2">
@@ -2338,7 +3264,7 @@ function AiWorkforce() {
               <Link to="/integrations">
                 <Send className="mr-1.5 h-4 w-4" />
 
-                Review connections
+                Connections
               </Link>
             </Button>
 
@@ -2349,7 +3275,7 @@ function AiWorkforce() {
               <Link to="/ai/ceo">
                 <BrainCircuit className="mr-1.5 h-4 w-4" />
 
-                Open AI CEO briefing
+                AI CEO
               </Link>
             </Button>
           </div>
@@ -2357,16 +3283,16 @@ function AiWorkforce() {
       </div>
 
       {/* SAVED MISSIONS */}
+
       <section className="glass-card p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Recorded coordination
-              plans
+              Recorded workflows
             </p>
 
             <h2 className="mt-1 font-display text-xl font-semibold">
-              Real mission records
+              Growth mission history
             </h2>
           </div>
 
@@ -2381,190 +3307,254 @@ function AiWorkforce() {
         {coordinationMissions.length ===
         0 ? (
           <p className="mt-4 rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-            No Growth coordination plan
-            has been saved yet.
+            No Growth coordination
+            mission has been created.
           </p>
         ) : (
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {coordinationMissions
-              .slice(0, 6)
-              .map((mission) => {
-                const missionHandoffs =
-                  handoffs.filter(
-                    (handoff) =>
-                      handoff.mission_id ===
-                      mission.id,
-                  );
+              .slice(
+                0,
+                6,
+              )
+              .map(
+                (
+                  mission,
+                ) => {
+                  const missionHandoffs =
+                    handoffs.filter(
+                      (
+                        handoff,
+                      ) =>
+                        handoff.mission_id ===
+                        mission.id,
+                    );
 
-                const missionRuns =
-                  runs.filter(
-                    (run) =>
-                      run.mission_id ===
-                      mission.id,
-                  );
+                  const missionRuns =
+                    runs.filter(
+                      (
+                        run,
+                      ) =>
+                        run.mission_id ===
+                        mission.id,
+                    );
 
-                const reviewApproval =
-                  workforceReviewApprovals.find(
-                    (approval) =>
-                      approval.mission_id ===
-                      mission.id,
-                  );
+                  const reviewApproval =
+                    workforceReviewApprovals.find(
+                      (
+                        approval,
+                      ) =>
+                        approval.mission_id ===
+                        mission.id,
+                    );
 
-                const completedHandoffs =
-                  missionHandoffs.filter(
-                    (handoff) =>
-                      handoff.status ===
-                      "completed",
-                  ).length;
+                  const completedHandoffs =
+                    missionHandoffs.filter(
+                      (
+                        handoff,
+                      ) =>
+                        handoff.status ===
+                        "completed",
+                    ).length;
 
-                return (
-                  <article
-                    key={
-                      mission.id
-                    }
-                    className="rounded-xl border border-border/60 bg-card/40 p-4"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] uppercase tracking-widest text-primary">
-                        {formatStatus(
-                          mission.status,
-                        )}
-                      </span>
-
-                      <span className="text-xs text-muted-foreground">
-                        {
-                          completedHandoffs
-                        }
-                        /
-                        {
-                          missionHandoffs.length
-                        }{" "}
-                        stages complete
-                      </span>
-                    </div>
-
-                    <h3 className="mt-2 text-sm font-semibold">
-                      {
-                        mission.objective
+                  return (
+                    <article
+                      key={
+                        mission.id
                       }
-                    </h3>
+                      className="rounded-xl border border-border/60 bg-card/40 p-4"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] uppercase tracking-widest text-primary">
+                          {formatStatus(
+                            mission.status,
+                          )}
+                        </span>
 
-                    <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-                      {
-                        mission.instruction
-                      }
-                    </p>
+                        <span className="text-xs text-muted-foreground">
+                          {
+                            completedHandoffs
+                          }
+                          /
+                          {
+                            missionHandoffs.length
+                          }{" "}
+                          stages
+                        </span>
+                      </div>
 
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                      <MiniMetric
-                        label="Handoffs"
-                        value={
-                          missionHandoffs.length
+                      <h3 className="mt-2 text-sm font-semibold">
+                        {
+                          mission.objective
                         }
-                      />
+                      </h3>
 
-                      <MiniMetric
-                        label="Runs"
-                        value={
-                          missionRuns.length
+                      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                        {
+                          mission.instruction
                         }
-                      />
+                      </p>
 
-                      <MiniMetric
-                        label="Failed"
-                        value={
-                          missionRuns.filter(
-                            (run) =>
-                              run.status ===
-                              "failed",
-                          ).length
-                        }
-                        warning={
-                          missionRuns.some(
-                            (run) =>
-                              run.status ===
-                              "failed",
-                          )
-                        }
-                      />
-                    </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <MiniMetric
+                          label="Handoffs"
+                          value={
+                            missionHandoffs.length
+                          }
+                        />
 
-                    {reviewApproval ? (
-                      <div className="mt-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
-                        <p className="text-xs font-medium text-foreground">
-                          Owner review
-                          required
-                        </p>
+                        <MiniMetric
+                          label="Runs"
+                          value={
+                            missionRuns.length
+                          }
+                        />
 
-                        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                          Approval closes
-                          only this internal
-                          briefing. It does
-                          not approve
-                          publishing,
-                          customer contact,
-                          account changes or
-                          spending.
-                        </p>
+                        <MiniMetric
+                          label="Failed"
+                          value={
+                            missionRuns.filter(
+                              (
+                                run,
+                              ) =>
+                                run.status ===
+                                "failed",
+                            ).length
+                          }
+                          warning={
+                            missionRuns.some(
+                              (
+                                run,
+                              ) =>
+                                run.status ===
+                                "failed",
+                            )
+                          }
+                        />
+                      </div>
 
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={
-                              reviewMutation.isPending
-                            }
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  "Approve this internal workforce briefing? External actions will remain disabled.",
-                                )
-                              ) {
+                      {reviewApproval ? (
+                        <div className="mt-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
+                          <p className="text-xs font-medium text-foreground">
+                            Current internal
+                            review checkpoint
+                          </p>
+
+                          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                            The present
+                            workforce-data
+                            backend still
+                            records this
+                            final internal
+                            review checkpoint.
+                            It does not
+                            authorise external
+                            spending,
+                            publishing,
+                            contracting or
+                            account changes.
+                          </p>
+
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={
+                                reviewMutation.isPending
+                              }
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    "Approve this recorded internal briefing?",
+                                  )
+                                ) {
+                                  reviewMutation.mutate({
+                                    approvalId:
+                                      reviewApproval.id,
+
+                                    decision:
+                                      "approved",
+                                  });
+                                }
+                              }}
+                              className="bg-primary text-primary-foreground hover:bg-primary/90"
+                            >
+                              Approve
+                            </Button>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={
+                                reviewMutation.isPending
+                              }
+                              onClick={() =>
                                 reviewMutation.mutate({
                                   approvalId:
                                     reviewApproval.id,
 
                                   decision:
-                                    "approved",
-                                });
+                                    "rejected",
+                                })
                               }
-                            }}
-                            className="bg-primary text-primary-foreground hover:bg-primary/90"
-                          >
-                            Approve briefing
-                          </Button>
-
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={
-                              reviewMutation.isPending
-                            }
-                            onClick={() =>
-                              reviewMutation.mutate({
-                                approvalId:
-                                  reviewApproval.id,
-
-                                decision:
-                                  "rejected",
-                              })
-                            }
-                            className="border-warning/40 text-warning hover:bg-warning/10"
-                          >
-                            Request changes
-                          </Button>
+                              className="border-warning/40 text-warning hover:bg-warning/10"
+                            >
+                              Request changes
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    ) : null}
-                  </article>
-                );
-              })}
+                      ) : null}
+                    </article>
+                  );
+                },
+              )}
           </div>
         )}
       </section>
 
+      {/* EXECUTION REALITY */}
+
+      <section className="glass-card p-5">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+              Operational truth
+            </p>
+
+            <h2 className="mt-1 font-display text-xl font-semibold">
+              We do not call placeholders
+              employees
+            </h2>
+
+            <p className="mt-2 max-w-4xl text-sm leading-relaxed text-muted-foreground">
+              An active profile is an
+              employee that is allowed to
+              receive work. A real run
+              proves execution. A
+              completed run proves an
+              internal result. External
+              social publishing requires a
+              real authorised publishing
+              integration. Daily
+              unattended operation
+              requires a server-side
+              scheduler or worker.
+              Supplier discovery requires
+              a real research source. None
+              of those capabilities should
+              be represented as working
+              until their real connection
+              exists.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* QUEUE SUMMARY */}
+
       <section className="glass-card p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -2573,7 +3563,7 @@ function AiWorkforce() {
             </p>
 
             <h2 className="mt-1 font-display text-xl font-semibold">
-              Current coordination
+              Current Growth execution
               position
             </h2>
           </div>
@@ -2582,7 +3572,11 @@ function AiWorkforce() {
             {
               pendingHandoffs.length
             }{" "}
-            controlled Growth handoffs
+            Growth handoff
+            {pendingHandoffs.length ===
+            1
+              ? ""
+              : "s"}{" "}
             pending
           </div>
         </div>
@@ -2600,9 +3594,14 @@ function Metric({
   value,
   warning = false,
 }: {
-  label: string;
-  value: string;
-  warning?: boolean;
+  label:
+    string;
+
+  value:
+    string;
+
+  warning?:
+    boolean;
 }) {
   return (
     <div className="glass-card p-4">
@@ -2628,9 +3627,14 @@ function MiniMetric({
   value,
   warning = false,
 }: {
-  label: string;
-  value: number;
-  warning?: boolean;
+  label:
+    string;
+
+  value:
+    number;
+
+  warning?:
+    boolean;
 }) {
   return (
     <div className="rounded-lg border border-border/50 bg-background/30 p-2 text-center">
@@ -2655,8 +3659,11 @@ function EmployeeDetail({
   label,
   value,
 }: {
-  label: string;
-  value: string;
+  label:
+    string;
+
+  value:
+    string;
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
@@ -2671,23 +3678,79 @@ function EmployeeDetail({
   );
 }
 
+function OwnerRule({
+  children,
+}: {
+  children:
+    ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-2">
+      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+
+      <span>
+        {children}
+      </span>
+    </div>
+  );
+}
+
+function OperatingArea({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon:
+    typeof Store;
+
+  title:
+    string;
+
+  description:
+    string;
+}) {
+  return (
+    <article className="glass-card p-5">
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
+        <Icon className="h-5 w-5" />
+      </div>
+
+      <h3 className="mt-3 font-display text-lg font-semibold">
+        {title}
+      </h3>
+
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        {description}
+      </p>
+    </article>
+  );
+}
+
 function OperationalBadge({
   state,
   label,
 }: {
-  state: OperationalState;
-  label: string;
+  state:
+    OperationalState;
+
+  label:
+    string;
 }) {
   const className =
-    state === "working"
+    state ===
+    "working"
       ? "border-success/35 bg-success/10 text-success"
-      : state === "attention"
+      : state ===
+          "attention"
         ? "border-destructive/35 bg-destructive/10 text-destructive"
-        : state === "approval"
+        : state ===
+            "approval"
           ? "border-warning/35 bg-warning/10 text-warning"
-          : state === "waiting"
+          : state ===
+              "waiting"
             ? "border-primary/35 bg-primary/10 text-primary"
-            : state === "inactive"
+            : state ===
+                "inactive"
               ? "border-border bg-secondary/50 text-muted-foreground"
               : "border-border bg-secondary/40 text-muted-foreground";
 
