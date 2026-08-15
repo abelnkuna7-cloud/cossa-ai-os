@@ -1,1146 +1,1041 @@
-// Production CRM + Operations data access.
-//
-// The UI models below are translated into the existing Growth Supabase schema.
-// Existing production tables remain the source of truth. This file does not
-// create duplicate sales or operations tables.
+import { useState, type FormEvent } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import {
+  ArrowRight,
+  Mail,
+  MessageCircle,
+  Phone,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+import {
+  GrowthEagleArtwork,
+  GrowthProductBrand,
+  ParentBrandEndorsement,
+} from "@/components/brand/growth-brand";
+
+import { PublicSiteShell } from "@/components/public-site-shell";
 
 import { supabase } from "@/integrations/supabase/client";
+import { GROWTH_BRAND } from "@/lib/brand";
+import { trackGrowthMeasurementEvent } from "@/lib/growth-measurement";
 import { COSSA_ORGANISATION_ID } from "@/lib/workforce-data";
 
-const db = supabase as unknown as {
-  from: (table: string) => any;
+/* -------------------------------------------------------------------------- */
+/* CONTACT DETAILS                                                            */
+/* -------------------------------------------------------------------------- */
+
+const phoneNumber = "067 801 1907";
+const phoneHref = "tel:+27678011907";
+const whatsappHref = "https://wa.me/27678011907";
+const emailHref = "mailto:cossa@cossanexusholdings.co.za";
+
+const growthWebsiteUrl =
+  "https://growth.cossanexusholdings.co.za/";
+
+/* -------------------------------------------------------------------------- */
+/* FORM STATE                                                                 */
+/* -------------------------------------------------------------------------- */
+
+const initialFormState = {
+  name: "",
+  phone: "",
+  email: "",
+  message: "",
 };
 
-export interface SalesCompany {
-  id: string;
-  name: string;
-  industry: string | null;
-  website: string | null;
-  phone: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
+type SubmitState =
+  | "idle"
+  | "sending"
+  | "sent"
+  | "error";
 
-export interface SalesCustomer {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  company_id: string | null;
-  status: string;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
+/* -------------------------------------------------------------------------- */
+/* DATABASE TYPES                                                             */
+/* -------------------------------------------------------------------------- */
 
-export interface SalesLead {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  company: string | null;
-  source: string | null;
-  status: string;
-  score: number;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SalesOpportunity {
-  id: string;
-  title: string;
-  customer_id: string | null;
-  value: number;
-  stage: string;
-  probability: number;
-  expected_close: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SalesQuotation {
-  id: string;
-  number: string;
-  customer_id: string | null;
-  opportunity_id: string | null;
-  amount: number;
-  status: string;
-  valid_until: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SalesAppointment {
-  id: string;
-  title: string;
-  customer_id: string | null;
-  starts_at: string;
-  ends_at: string | null;
-  location: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SalesFollowUp {
-  id: string;
-  subject: string;
-  customer_id: string | null;
-  due_at: string;
-  status: string;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface OpsProject {
-  id: string;
-  name: string;
-  customer_id: string | null;
-  status: string;
-  priority: string;
-  progress: number;
-  start_date: string | null;
-  due_date: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface OpsTask {
-  id: string;
-  title: string;
-  project_id: string | null;
-  status: string;
-  priority: string;
-  assignee: string | null;
-  due_at: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface OpsDocument {
-  id: string;
-  title: string;
-  category: string | null;
-  url: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-type DatabaseErrorLike = {
-  message?: string;
+interface DatabaseError {
+  message: string;
+  code?: string;
   details?: string;
   hint?: string;
-  code?: string;
-};
-
-type Adapter<T> = {
-  table: string;
-  organisationScoped?: boolean;
-  orderBy?: string;
-  ascending?: boolean;
-  select?: string;
-  fromRow: (row: any) => T;
-  toRow: (value: Partial<T>) => Record<string, unknown>;
-};
-
-const UI_OPPORTUNITY_STAGES = [
-  "prospect",
-  "qualified",
-  "proposal",
-  "negotiation",
-  "won",
-  "lost",
-] as const;
-
-type UiOpportunityStage = (typeof UI_OPPORTUNITY_STAGES)[number];
-
-const DATABASE_OPPORTUNITY_STATUSES = ["prospect", "qualified", "engaged", "won", "lost"] as const;
-
-type DatabaseOpportunityStatus = (typeof DATABASE_OPPORTUNITY_STATUSES)[number];
-
-const DATABASE_OPPORTUNITY_TYPES = [
-  "property_manager",
-  "school",
-  "church",
-  "office_park",
-  "shopping_centre",
-  "estate_agent",
-] as const;
-
-type DatabaseOpportunityType = (typeof DATABASE_OPPORTUNITY_TYPES)[number];
-
-const UI_STAGE_MARKER_PATTERN =
-  /\[cossa_ui_stage:(prospect|qualified|proposal|negotiation|won|lost)\]/i;
-
-const OPPORTUNITY_SELECT = [
-  "id",
-  "organization_name",
-  "opportunity_type",
-  "contact_name",
-  "contact_phone",
-  "contact_email",
-  "location",
-  "estimated_value",
-  "status",
-  "last_contact_date",
-  "notes",
-  "probability",
-  "expected_close",
-  "created_at",
-  "updated_at",
-].join(",");
-
-function lower(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.trim() ? value.trim().toLowerCase() : fallback;
 }
 
-function optionalText(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const cleaned = value.trim();
-
-  return cleaned || null;
-}
-
-function requiredText(value: unknown, fieldName: string): string {
-  const cleaned = optionalText(value);
-
-  if (!cleaned) {
-    throw new Error(`${fieldName} is required.`);
-  }
-
-  return cleaned;
-}
-
-function safeNumber(value: unknown, fallback = 0): number {
-  const parsed = Number(value);
-
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function clampProbability(value: unknown): number {
-  return Math.min(100, Math.max(0, Math.round(safeNumber(value, 20))));
-}
-
-function databaseError(operation: string, error: unknown): Error {
-  if (error instanceof Error) {
-    return new Error(`${operation}: ${error.message}`);
-  }
-
-  const typedError = error as DatabaseErrorLike | null;
-
-  if (typedError?.message) {
-    const details = [
-      typedError.details,
-      typedError.hint,
-      typedError.code ? `Code: ${typedError.code}` : null,
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    return new Error(`${operation}: ${typedError.message}${details ? ` ${details}` : ""}`);
-  }
-
-  return new Error(`${operation}: Unknown Supabase error.`);
-}
-
-function normaliseUiOpportunityStage(value: unknown): UiOpportunityStage {
-  const stage = lower(value, "prospect");
-
-  if (UI_OPPORTUNITY_STAGES.includes(stage as UiOpportunityStage)) {
-    return stage as UiOpportunityStage;
-  }
-
-  if (stage === "engaged") {
-    return "proposal";
-  }
-
-  return "prospect";
-}
-
-function toDatabaseOpportunityStatus(stage: UiOpportunityStage): DatabaseOpportunityStatus {
-  switch (stage) {
-    case "proposal":
-    case "negotiation":
-      return "engaged";
-
-    case "prospect":
-    case "qualified":
-    case "won":
-    case "lost":
-      return stage;
-  }
-}
-
-function readUiStageFromNotes(notes: unknown, databaseStatus: unknown): UiOpportunityStage {
-  const text = typeof notes === "string" ? notes : "";
-
-  const match = text.match(UI_STAGE_MARKER_PATTERN);
-
-  if (match?.[1]) {
-    return normaliseUiOpportunityStage(match[1]);
-  }
-
-  return normaliseUiOpportunityStage(databaseStatus);
-}
-
-function removeUiStageMarker(notes: unknown): string | null {
-  if (typeof notes !== "string") {
-    return null;
-  }
-
-  const cleaned = notes
-    .replace(UI_STAGE_MARKER_PATTERN, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-
-  return cleaned || null;
-}
-
-function addUiStageMarker(notes: unknown, stage: UiOpportunityStage): string {
-  const cleanNotes = removeUiStageMarker(notes);
-
-  return [`[cossa_ui_stage:${stage}]`, cleanNotes].filter(Boolean).join("\n\n");
-}
-
-function inferOpportunityType(title: unknown, notes: unknown): DatabaseOpportunityType {
-  const searchable = `${String(title ?? "")} ${String(notes ?? "")}`.toLowerCase();
-
-  if (
-    searchable.includes("school") ||
-    searchable.includes("college") ||
-    searchable.includes("academy")
-  ) {
-    return "school";
-  }
-
-  if (
-    searchable.includes("church") ||
-    searchable.includes("ministry") ||
-    searchable.includes("congregation")
-  ) {
-    return "church";
-  }
-
-  if (
-    searchable.includes("shopping centre") ||
-    searchable.includes("shopping center") ||
-    searchable.includes("mall") ||
-    searchable.includes("retail centre") ||
-    searchable.includes("retail center")
-  ) {
-    return "shopping_centre";
-  }
-
-  if (
-    searchable.includes("estate agent") ||
-    searchable.includes("real estate") ||
-    searchable.includes("property agency")
-  ) {
-    return "estate_agent";
-  }
-
-  if (
-    searchable.includes("office") ||
-    searchable.includes("business park") ||
-    searchable.includes("corporate")
-  ) {
-    return "office_park";
-  }
-
-  return "property_manager";
-}
-
-function mapOpportunityRow(row: any): SalesOpportunity {
-  return {
-    id: row.id,
-    title: row.organization_name ?? "Untitled opportunity",
-    customer_id: null,
-    value: safeNumber(row.estimated_value, 0),
-    stage: readUiStageFromNotes(row.notes, row.status),
-    probability: clampProbability(row.probability),
-    expected_close: row.expected_close ?? null,
-    notes: removeUiStageMarker(row.notes),
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+interface PublicGrowthDatabaseClient {
+  from: (
+    table:
+      | "contact_messages"
+      | "leads",
+  ) => {
+    insert: (
+      row: Record<string, unknown>,
+    ) => Promise<{
+      error: DatabaseError | null;
+    }>;
   };
 }
 
-function adaptedCrud<T>(adapter: Adapter<T>) {
-  return {
-    list: async (): Promise<T[]> => {
-      let query = db.from(adapter.table).select(adapter.select ?? "*");
+/* -------------------------------------------------------------------------- */
+/* ROUTE                                                                      */
+/* -------------------------------------------------------------------------- */
 
-      if (adapter.organisationScoped) {
-        query = query.eq("organisation_id", COSSA_ORGANISATION_ID);
-      }
+export const Route =
+  createFileRoute("/")({
+    component: GrowthHome,
 
-      const { data, error } = await query.order(adapter.orderBy ?? "created_at", {
-        ascending: adapter.ascending ?? false,
-      });
+    head: () => ({
+      meta: [
+        {
+          title:
+            "GROWTH | Business Growth Intelligence",
+        },
+        {
+          name: "description",
+          content:
+            "GROWTH gives businesses a clearer way to capture leads, follow up, organise operations and make better decisions.",
+        },
+        {
+          property: "og:title",
+          content:
+            "GROWTH | Business Growth Intelligence",
+        },
+        {
+          property:
+            "og:description",
+          content:
+            "Business growth intelligence for clearer leads, follow-up, operations and measurable growth.",
+        },
+        {
+          property: "og:type",
+          content: "website",
+        },
+        {
+          property: "og:url",
+          content:
+            growthWebsiteUrl,
+        },
+        {
+          property:
+            "og:site_name",
+          content: "GROWTH",
+        },
+        {
+          property:
+            "og:locale",
+          content: "en_ZA",
+        },
+        {
+          name:
+            "twitter:card",
+          content: "summary",
+        },
+        {
+          name:
+            "twitter:title",
+          content:
+            "GROWTH | Business Growth Intelligence",
+        },
+        {
+          name:
+            "twitter:description",
+          content:
+            "Business growth intelligence for clearer leads, follow-up, operations and measurable growth.",
+        },
+        {
+          name: "robots",
+          content:
+            "index, follow",
+        },
+        {
+          property:
+            "og:image",
+          content:
+            GROWTH_BRAND.assets
+              .growthFull,
+        },
+      ],
 
-      if (error) {
-        throw databaseError(`Unable to load ${adapter.table}`, error);
-      }
-
-      return (data ?? []).map(adapter.fromRow);
-    },
-
-    create: async (payload: Partial<T>): Promise<T> => {
-      const row = adapter.toRow(payload);
-
-      if (adapter.organisationScoped) {
-        row.organisation_id = COSSA_ORGANISATION_ID;
-      }
-
-      const { data, error } = await db
-        .from(adapter.table)
-        .insert(row)
-        .select(adapter.select ?? "*")
-        .single();
-
-      if (error) {
-        throw databaseError(`Unable to create ${adapter.table} record`, error);
-      }
-
-      if (!data) {
-        throw new Error(
-          `Unable to create ${adapter.table} record: Supabase returned no saved row.`,
-        );
-      }
-
-      return adapter.fromRow(data);
-    },
-
-    update: async (id: string, patch: Partial<T>): Promise<void> => {
-      const cleanId = requiredText(id, "Record ID");
-
-      const row = adapter.toRow(patch);
-
-      let query = db.from(adapter.table).update(row).eq("id", cleanId);
-
-      if (adapter.organisationScoped) {
-        query = query.eq("organisation_id", COSSA_ORGANISATION_ID);
-      }
-
-      const { data, error } = await query.select("id").maybeSingle();
-
-      if (error) {
-        throw databaseError(`Unable to update ${adapter.table} record`, error);
-      }
-
-      if (!data) {
-        throw new Error(
-          `Unable to update ${adapter.table} record: the row was not found or access was denied.`,
-        );
-      }
-    },
-
-    remove: async (id: string): Promise<void> => {
-      const cleanId = requiredText(id, "Record ID");
-
-      let query = db.from(adapter.table).delete().eq("id", cleanId);
-
-      if (adapter.organisationScoped) {
-        query = query.eq("organisation_id", COSSA_ORGANISATION_ID);
-      }
-
-      const { data, error } = await query.select("id").maybeSingle();
-
-      if (error) {
-        throw databaseError(`Unable to delete ${adapter.table} record`, error);
-      }
-
-      if (!data) {
-        throw new Error(
-          `Unable to delete ${adapter.table} record: the row was not found or access was denied.`,
-        );
-      }
-    },
-  };
-}
-
-function plainCrud<T>(
-  table: string,
-  orderBy = "created_at",
-  ascending = false,
-  organisationScoped = false,
-) {
-  return adaptedCrud<T>({
-    table,
-    orderBy,
-    ascending,
-    organisationScoped,
-
-    fromRow: (row) => row as T,
-
-    toRow: (value) => ({
-      ...value,
-      updated_at: new Date().toISOString(),
+      links: [
+        {
+          rel: "canonical",
+          href:
+            growthWebsiteUrl,
+        },
+      ],
     }),
   });
+
+/* -------------------------------------------------------------------------- */
+/* NORMALISATION HELPERS                                                      */
+/* -------------------------------------------------------------------------- */
+
+function normalisePhone(
+  value: string,
+): string {
+  return value
+    .replace(/[^\d+]/g, "")
+    .trim();
 }
 
-export const salesCompanies = plainCrud<SalesCompany>("sales_companies", "created_at", false, true);
-
-export const salesCustomers = adaptedCrud<SalesCustomer>({
-  table: "customers",
-  organisationScoped: true,
-
-  fromRow: (row) => ({
-    ...row,
-    name: row.name ?? row.full_name ?? "Unnamed customer",
-    status: lower(row.status, "active"),
-    company_id: null,
-  }),
-
-  toRow: (value) => ({
-    ...(value.name !== undefined && {
-      name: requiredText(value.name, "Customer name"),
-    }),
-
-    ...(value.email !== undefined && {
-      email: optionalText(value.email),
-    }),
-
-    ...(value.phone !== undefined && {
-      phone: optionalText(value.phone),
-    }),
-
-    ...(value.status !== undefined && {
-      status: lower(value.status, "active"),
-    }),
-
-    ...(value.notes !== undefined && {
-      notes: optionalText(value.notes),
-    }),
-
-    updated_at: new Date().toISOString(),
-  }),
-});
-
-export const salesLeads = adaptedCrud<SalesLead>({
-  table: "leads",
-  organisationScoped: true,
-
-  fromRow: (row) => ({
-    ...row,
-    name: row.name ?? row.full_name ?? "Unnamed lead",
-    status: lower(row.stage ?? row.status, "new"),
-    score: safeNumber(row.score, 0),
-  }),
-
-  toRow: (value) => ({
-    ...(value.name !== undefined && {
-      name: requiredText(value.name, "Lead name"),
-      full_name: requiredText(value.name, "Lead name"),
-    }),
-
-    ...(value.email !== undefined && {
-      email: optionalText(value.email),
-    }),
-
-    ...(value.phone !== undefined && {
-      phone: optionalText(value.phone),
-    }),
-
-    ...(value.company !== undefined && {
-      company: optionalText(value.company),
-    }),
-
-    ...(value.source !== undefined && {
-      source: optionalText(value.source),
-    }),
-
-    ...(value.status !== undefined && {
-      status: lower(value.status, "new"),
-      stage: lower(value.status, "new"),
-    }),
-
-    ...(value.score !== undefined && {
-      score: safeNumber(value.score, 0),
-    }),
-
-    ...(value.notes !== undefined && {
-      notes: optionalText(value.notes),
-    }),
-
-    updated_at: new Date().toISOString(),
-  }),
-});
-
-/**
- * The existing opportunities table only supports:
- *
- * Database status:
- * prospect, qualified, engaged, won, lost
- *
- * The UI needs:
- * prospect, qualified, proposal, negotiation, won, lost
- *
- * Proposal and Negotiation are therefore stored as database status "engaged".
- * Their detailed UI stage is preserved in a controlled marker inside notes.
- */
-export const salesOpportunities = {
-  list: async (): Promise<SalesOpportunity[]> => {
-    const { data, error } = await db
-      .from("opportunities")
-      .select(OPPORTUNITY_SELECT)
-      .eq("organisation_id", COSSA_ORGANISATION_ID)
-      .order("created_at", {
-        ascending: false,
-      });
-
-    if (error) {
-      throw databaseError("Unable to load opportunities", error);
-    }
-
-    return (data ?? []).map(mapOpportunityRow);
-  },
-
-  create: async (payload: Partial<SalesOpportunity>): Promise<SalesOpportunity> => {
-    const title = requiredText(payload.title, "Opportunity title");
-
-    const value = safeNumber(payload.value, 0);
-
-    if (value < 0) {
-      throw new Error("Opportunity value cannot be negative.");
-    }
-
-    const stage = normaliseUiOpportunityStage(payload.stage);
-
-    const cleanNotes = optionalText(payload.notes);
-
-    const row = {
-      organisation_id: COSSA_ORGANISATION_ID,
-      organization_name: title,
-
-      opportunity_type: inferOpportunityType(title, cleanNotes),
-
-      estimated_value: value,
-
-      status: toDatabaseOpportunityStatus(stage),
-
-      probability: clampProbability(payload.probability),
-
-      expected_close: payload.expected_close || null,
-
-      notes: addUiStageMarker(cleanNotes, stage),
-
-      updated_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await db
-      .from("opportunities")
-      .insert(row)
-      .select(OPPORTUNITY_SELECT)
-      .single();
-
-    if (error) {
-      throw databaseError("Unable to create opportunity", error);
-    }
-
-    if (!data) {
-      throw new Error("Unable to create opportunity: Supabase returned no saved record.");
-    }
-
-    return mapOpportunityRow(data);
-  },
-
-  update: async (id: string, patch: Partial<SalesOpportunity>): Promise<void> => {
-    const cleanId = requiredText(id, "Opportunity ID");
-
-    const { data: existing, error: existingError } = await db
-      .from("opportunities")
-      .select(OPPORTUNITY_SELECT)
-      .eq("id", cleanId)
-      .eq("organisation_id", COSSA_ORGANISATION_ID)
-      .maybeSingle();
-
-    if (existingError) {
-      throw databaseError("Unable to load the opportunity before updating", existingError);
-    }
-
-    if (!existing) {
-      throw new Error("The opportunity was not found or access was denied.");
-    }
-
-    const current = mapOpportunityRow(existing);
-
-    const nextTitle =
-      patch.title !== undefined ? requiredText(patch.title, "Opportunity title") : current.title;
-
-    const nextStage =
-      patch.stage !== undefined
-        ? normaliseUiOpportunityStage(patch.stage)
-        : normaliseUiOpportunityStage(current.stage);
-
-    const nextNotes = patch.notes !== undefined ? optionalText(patch.notes) : current.notes;
-
-    const updateRow: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (patch.title !== undefined) {
-      updateRow.organization_name = nextTitle;
-
-      updateRow.opportunity_type = inferOpportunityType(nextTitle, nextNotes);
-    }
-
-    if (patch.value !== undefined) {
-      const amount = safeNumber(patch.value, 0);
-
-      if (amount < 0) {
-        throw new Error("Opportunity value cannot be negative.");
-      }
-
-      updateRow.estimated_value = amount;
-    }
-
-    if (patch.stage !== undefined) {
-      updateRow.status = toDatabaseOpportunityStatus(nextStage);
-    }
-
-    if (patch.probability !== undefined) {
-      updateRow.probability = clampProbability(patch.probability);
-    }
-
-    if (patch.expected_close !== undefined) {
-      updateRow.expected_close = patch.expected_close || null;
-    }
-
-    if (patch.notes !== undefined || patch.stage !== undefined) {
-      updateRow.notes = addUiStageMarker(nextNotes, nextStage);
-    }
-
-    const { data, error } = await db
-      .from("opportunities")
-      .update(updateRow)
-      .eq("id", cleanId)
-      .eq("organisation_id", COSSA_ORGANISATION_ID)
-      .select("id")
-      .maybeSingle();
-
-    if (error) {
-      throw databaseError("Unable to update opportunity", error);
-    }
-
-    if (!data) {
-      throw new Error("Unable to update opportunity: the row was not found or access was denied.");
-    }
-  },
-
-  remove: async (id: string): Promise<void> => {
-    const cleanId = requiredText(id, "Opportunity ID");
-
-    const { data, error } = await db
-      .from("opportunities")
-      .delete()
-      .eq("id", cleanId)
-      .eq("organisation_id", COSSA_ORGANISATION_ID)
-      .select("id")
-      .maybeSingle();
-
-    if (error) {
-      throw databaseError("Unable to delete opportunity", error);
-    }
-
-    if (!data) {
-      throw new Error("Unable to delete opportunity: the row was not found or access was denied.");
-    }
-  },
-};
-
-export const salesQuotations = adaptedCrud<SalesQuotation>({
-  table: "quotations",
-  organisationScoped: true,
-
-  fromRow: (row) => ({
-    ...row,
-    number: row.quote_number ?? "Unnumbered",
-    status: lower(row.status, "draft"),
-    opportunity_id: null,
-  }),
-
-  toRow: (value) => ({
-    ...(value.number !== undefined && {
-      quote_number: requiredText(value.number, "Quotation number"),
-    }),
-
-    ...(value.customer_id !== undefined && {
-      customer_id: value.customer_id,
-    }),
-
-    ...(value.amount !== undefined && {
-      amount: safeNumber(value.amount, 0),
-    }),
-
-    ...(value.status !== undefined && {
-      status: lower(value.status, "draft"),
-    }),
-
-    ...(value.valid_until !== undefined && {
-      valid_until: value.valid_until || null,
-    }),
-
-    ...(value.notes !== undefined && {
-      notes: optionalText(value.notes),
-    }),
-
-    updated_at: new Date().toISOString(),
-  }),
-});
-
-export const salesAppointments = adaptedCrud<SalesAppointment>({
-  table: "appointments",
-  organisationScoped: true,
-  orderBy: "scheduled_at",
-  ascending: true,
-
-  fromRow: (row) => ({
-    ...row,
-    title: row.title ?? row.service ?? "Appointment",
-    starts_at: row.scheduled_at ?? row.appointment_date,
-    ends_at: row.ends_at ?? null,
-  }),
-
-  toRow: (value) => ({
-    ...(value.title !== undefined && {
-      title: requiredText(value.title, "Appointment title"),
-    }),
-
-    ...(value.customer_id !== undefined && {
-      customer_id: value.customer_id,
-    }),
-
-    ...(value.starts_at !== undefined && {
-      scheduled_at: value.starts_at,
-      appointment_date: value.starts_at,
-    }),
-
-    ...(value.ends_at !== undefined && {
-      ends_at: value.ends_at,
-    }),
-
-    ...(value.location !== undefined && {
-      location: optionalText(value.location),
-    }),
-
-    ...(value.notes !== undefined && {
-      notes: optionalText(value.notes),
-    }),
-
-    updated_at: new Date().toISOString(),
-  }),
-});
-
-export const salesFollowUps = plainCrud<SalesFollowUp>("sales_follow_ups", "due_at", true, true);
-
-export const opsProjects = adaptedCrud<OpsProject>({
-  table: "projects",
-  organisationScoped: true,
-
-  select: [
-    "id",
-    "customer_id",
-    "project_name",
-    "name",
-    "service",
-    "location",
-    "budget",
-    "status",
-    "priority",
-    "progress",
-    "start_date",
-    "end_date",
-    "notes",
-    "created_at",
-    "updated_at",
-  ].join(","),
-
-  fromRow: (row) => ({
-    id: row.id,
-
-    name: row.project_name ?? row.name ?? "Unnamed project",
-
-    customer_id: row.customer_id ?? null,
-
-    status: lower(row.status, "planning"),
-
-    priority: lower(row.priority, "medium"),
-
-    progress: safeNumber(row.progress, 0),
-
-    start_date: row.start_date ?? null,
-
-    due_date: row.end_date ?? null,
-
-    notes: row.notes ?? null,
-
-    created_at: row.created_at,
-
-    updated_at: row.updated_at,
-  }),
-
-  toRow: (value) => {
-    const row: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (value.name !== undefined) {
-      const projectName = requiredText(value.name, "Project name");
-
-      row.name = projectName;
-      row.project_name = projectName;
-    }
-
-    if (value.customer_id !== undefined) {
-      row.customer_id = value.customer_id;
-    }
-
-    if (value.status !== undefined) {
-      row.status = lower(value.status, "planning");
-    }
-
-    if (value.priority !== undefined) {
-      row.priority = lower(value.priority, "medium");
-    }
-
-    if (value.progress !== undefined) {
-      row.progress = Math.min(100, Math.max(0, Math.round(safeNumber(value.progress, 0))));
-    }
-
-    if (value.start_date !== undefined) {
-      row.start_date = value.start_date || null;
-    }
-
-    if (value.due_date !== undefined) {
-      row.end_date = value.due_date || null;
-    }
-
-    if (value.notes !== undefined) {
-      row.notes = optionalText(value.notes);
-    }
-
-    return row;
-  },
-});
-
-export const opsTasks = plainCrud<OpsTask>("ops_tasks", "due_at", true, true);
-
-export const opsDocuments = adaptedCrud<OpsDocument>({
-  table: "ops_documents",
-  organisationScoped: true,
-
-  fromRow: (row) => ({
-    ...row,
-    url: row.source_url ?? null,
-  }),
-
-  toRow: (value) => ({
-    ...(value.title !== undefined && {
-      title: requiredText(value.title, "Document title"),
-    }),
-
-    ...(value.category !== undefined && {
-      category: optionalText(value.category),
-    }),
-
-    ...(value.url !== undefined && {
-      source_url: optionalText(value.url),
-    }),
-
-    ...(value.notes !== undefined && {
-      notes: optionalText(value.notes),
-    }),
-
-    updated_at: new Date().toISOString(),
-  }),
-});
-
-/**
- * Creates a project from a won opportunity.
- *
- * The Pipeline page must explicitly call this after the user confirms
- * that the opportunity was won.
- */
-export async function createProjectFromOpportunity(
-  opportunity: SalesOpportunity,
-): Promise<OpsProject> {
-  if (normaliseUiOpportunityStage(opportunity.stage) !== "won") {
-    throw new Error("Only a won opportunity can be converted into a project.");
-  }
-
-  const opportunityId = requiredText(opportunity.id, "Opportunity ID");
-
-  const projectName = requiredText(opportunity.title, "Opportunity title");
-
-  const sourceMarker = `[source_opportunity_id:${opportunityId}]`;
-
-  const { data: existingProjects, error: existingProjectError } = await db
-    .from("projects")
-    .select(
-      "id,customer_id,project_name,name,status,priority,progress,start_date,end_date,notes,created_at,updated_at",
-    )
-    .eq("organisation_id", COSSA_ORGANISATION_ID)
-    .ilike("notes", `%${sourceMarker}%`)
-    .limit(1);
-
-  if (existingProjectError) {
-    throw databaseError("Unable to check for an existing project", existingProjectError);
-  }
-
-  if (Array.isArray(existingProjects) && existingProjects.length > 0) {
-    const projects = await opsProjects.list();
-
-    const existing = projects.find((project) => project.id === existingProjects[0].id);
-
-    if (!existing) {
-      throw new Error("The project already exists but could not be reloaded.");
-    }
-
-    return existing;
-  }
-
-  const projectNotes = [
-    sourceMarker,
-    "Created from a won sales opportunity.",
-    `Opportunity value: R${safeNumber(opportunity.value, 0).toFixed(2)}`,
-    opportunity.expected_close ? `Original expected close: ${opportunity.expected_close}` : null,
-    opportunity.notes ? `Opportunity notes:\n${opportunity.notes}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  const { data, error } = await db
-    .from("projects")
-    .insert({
-      organisation_id: COSSA_ORGANISATION_ID,
-      name: projectName,
-      project_name: projectName,
-      budget: safeNumber(opportunity.value, 0),
-      status: "planning",
-      priority: "high",
-      progress: 0,
-      start_date: null,
-      end_date: null,
-      notes: projectNotes,
-      updated_at: new Date().toISOString(),
-    })
-    .select(
-      "id,customer_id,project_name,name,status,priority,progress,start_date,end_date,notes,created_at,updated_at",
-    )
-    .single();
-
-  if (error) {
-    throw databaseError("Unable to create a project from the won opportunity", error);
-  }
-
-  if (!data) {
-    throw new Error("The project could not be created because Supabase returned no saved record.");
-  }
-
-  const projects = await opsProjects.list();
-
-  const created = projects.find((project) => project.id === data.id);
-
-  if (!created) {
-    throw new Error("The project was created but could not be reloaded.");
-  }
-
-  return created;
+function normaliseEmail(
+  value: string,
+): string | null {
+  const email =
+    value
+      .trim()
+      .toLowerCase();
+
+  return email || null;
 }
 
-export async function dashboardStats() {
-  const [leads, opportunities, quotations, projects, tasks, customers] = await Promise.all([
-    salesLeads.list(),
-    salesOpportunities.list(),
-    salesQuotations.list(),
-    opsProjects.list(),
-    opsTasks.list(),
-    salesCustomers.list(),
-  ]);
-
-  const pipelineValue = opportunities
-    .filter(
-      (opportunity) => !["won", "lost"].includes(normaliseUiOpportunityStage(opportunity.stage)),
-    )
-    .reduce((total, opportunity) => total + safeNumber(opportunity.value, 0), 0);
-
-  const wonValue = opportunities
-    .filter((opportunity) => normaliseUiOpportunityStage(opportunity.stage) === "won")
-    .reduce((total, opportunity) => total + safeNumber(opportunity.value, 0), 0);
-
-  const acceptedRevenue = quotations
-    .filter((quotation) => lower(quotation.status, "draft") === "accepted")
-    .reduce((total, quotation) => total + safeNumber(quotation.amount, 0), 0);
-
-  const stages = ["prospect", "qualified", "proposal", "negotiation", "won"] as const;
-
-  const pipelineByStage = stages.map((stage) => {
-    const stageRows = opportunities.filter(
-      (opportunity) => normaliseUiOpportunityStage(opportunity.stage) === stage,
+function isReasonablePhone(
+  value: string,
+): boolean {
+  const digits =
+    value.replace(
+      /\D/g,
+      "",
     );
 
-    return {
-      stage,
-      count: stageRows.length,
-      value: stageRows.reduce((total, opportunity) => total + safeNumber(opportunity.value, 0), 0),
-    };
-  });
+  return (
+    digits.length >= 9 &&
+    digits.length <= 15
+  );
+}
 
-  const now = Date.now();
+function createLeadNotes(
+  message: string,
+): string {
+  return [
+    "[source_platform:growth]",
+    "[source_form:growth_quote_request]",
+    `[source_url:${growthWebsiteUrl}]`,
+    "",
+    "Submitted through growth.cossanexusholdings.co.za.",
+    "",
+    "Customer request:",
+    message,
+  ].join("\n");
+}
 
-  return {
-    // The existing source records do not retain a reliable win/acceptance
-    // timestamp. This is therefore recorded revenue, not a month-to-date
-    // figure. Keep the label honest until lifecycle dates are available.
-    recordedRevenue: wonValue + acceptedRevenue,
+/* -------------------------------------------------------------------------- */
+/* PAGE                                                                       */
+/* -------------------------------------------------------------------------- */
 
-    newLeads: leads.filter((lead) => {
-      const createdAt = new Date(lead.created_at).getTime();
+function GrowthHome() {
+  const [
+    form,
+    setForm,
+  ] =
+    useState(
+      initialFormState,
+    );
 
-      return Number.isFinite(createdAt) && now - createdAt < 7 * 86_400_000;
-    }).length,
+  const [
+    submitState,
+    setSubmitState,
+  ] =
+    useState<SubmitState>(
+      "idle",
+    );
 
-    totalLeads: leads.length,
+  const [
+    submitError,
+    setSubmitError,
+  ] =
+    useState<
+      string | null
+    >(null);
 
-    pipelineValue,
+  /* ------------------------------------------------------------------------ */
+  /* STRUCTURED DATA                                                          */
+  /* ------------------------------------------------------------------------ */
 
-    pipelineByStage,
+  const organisationSchema = {
+    "@context":
+      "https://schema.org",
 
-    customers: customers.length,
+    "@type":
+      "Organization",
 
-    activeProjects: projects.filter(
-      (project) => !["done", "archived"].includes(lower(project.status, "planning")),
-    ).length,
+    name:
+      "Cossa Nexus Holdings (Pty) Ltd",
 
-    projectCount: projects.length,
+    url:
+      growthWebsiteUrl,
 
-    openTasks: tasks.filter((task) => lower(task.status, "open") !== "done").length,
+    email:
+      "cossa@cossanexusholdings.co.za",
 
-    overdueTasks: tasks.filter((task) => {
-      if (lower(task.status, "open") === "done" || !task.due_at) {
-        return false;
+    telephone:
+      "+27678011907",
+
+    slogan:
+      GROWTH_BRAND.brandPromise,
+
+    sameAs: [
+      "https://cossanexusholdings.co.za",
+      "https://nexdocs.cossanexusholdings.co.za",
+    ],
+  };
+
+  /* ------------------------------------------------------------------------ */
+  /* SUBMISSION                                                               */
+  /* ------------------------------------------------------------------------ */
+
+  async function submitQuoteRequest(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (
+      submitState ===
+      "sending"
+    ) {
+      return;
+    }
+
+    const name =
+      form.name.trim();
+
+    const phone =
+      normalisePhone(
+        form.phone,
+      );
+
+    const email =
+      normaliseEmail(
+        form.email,
+      );
+
+    const message =
+      form.message.trim();
+
+    /* ---------------------------------------------------------------------- */
+    /* VALIDATION                                                             */
+    /* ---------------------------------------------------------------------- */
+
+    if (
+      !name ||
+      !phone ||
+      !message
+    ) {
+      setSubmitState(
+        "error",
+      );
+
+      setSubmitError(
+        "Please enter your name, phone number and a short description of what you need.",
+      );
+
+      return;
+    }
+
+    if (
+      name.length <
+      2
+    ) {
+      setSubmitState(
+        "error",
+      );
+
+      setSubmitError(
+        "Please enter your full name.",
+      );
+
+      return;
+    }
+
+    if (
+      !isReasonablePhone(
+        phone,
+      )
+    ) {
+      setSubmitState(
+        "error",
+      );
+
+      setSubmitError(
+        "Please enter a valid phone number.",
+      );
+
+      return;
+    }
+
+    if (
+      message.length <
+      10
+    ) {
+      setSubmitState(
+        "error",
+      );
+
+      setSubmitError(
+        "Please provide a little more detail about what you need.",
+      );
+
+      return;
+    }
+
+    setSubmitState(
+      "sending",
+    );
+
+    setSubmitError(
+      null,
+    );
+
+    const database =
+      supabase as unknown as PublicGrowthDatabaseClient;
+
+    try {
+      /* -------------------------------------------------------------------- */
+      /* RECORD 1 — ORIGINAL ENQUIRY                                          */
+      /* -------------------------------------------------------------------- */
+
+      /*
+       * Keep the customer's original public message in contact_messages.
+       *
+       * IMPORTANT:
+       * We deliberately use only columns already proven by the existing
+       * application. Do not add unverified contact_messages columns here.
+       */
+      const {
+        error:
+          contactMessageError,
+      } =
+        await database
+          .from(
+            "contact_messages",
+          )
+          .insert({
+            name,
+            phone,
+            email,
+
+            subject:
+              "Growth website quote request",
+
+            message,
+
+            status:
+              "unread",
+          });
+
+      if (
+        contactMessageError
+      ) {
+        console.error(
+          "Unable to save Growth contact message:",
+          contactMessageError,
+        );
+
+        throw new Error(
+          "contact_message_failed",
+        );
       }
 
-      const dueAt = new Date(task.due_at).getTime();
+      /* -------------------------------------------------------------------- */
+      /* RECORD 2 — CENTRAL COSSA CRM LEAD                                    */
+      /* -------------------------------------------------------------------- */
 
-      return Number.isFinite(dueAt) && dueAt < now;
-    }).length,
+      /*
+       * This record MUST belong to the same Cossa organisation used by the
+       * GROWTH dashboard and Sales → Leads.
+       *
+       * Without organisation_id the lead can be invisible to the organisation
+       * scoped CRM queries even when Supabase accepted the row.
+       */
+      const {
+        error:
+          leadError,
+      } =
+        await database
+          .from("leads")
+          .insert({
+            organisation_id:
+              COSSA_ORGANISATION_ID,
 
-    quotesOpen: quotations.filter((quotation) =>
-      ["draft", "sent"].includes(lower(quotation.status, "draft")),
-    ).length,
-  };
+            full_name:
+              name,
+
+            name,
+
+            phone,
+
+            email,
+
+            service:
+              "Business enquiry",
+
+            location:
+              null,
+
+            /*
+             * Keep the public source simple and stable.
+             * More precise intake information is retained safely in notes.
+             */
+            source:
+              "growth",
+
+            status:
+              "new",
+
+            stage:
+              "new",
+
+            notes:
+              createLeadNotes(
+                message,
+              ),
+
+            /*
+             * Temporary neutral starting score.
+             *
+             * This is not presented as AI qualification.
+             * A later Lead Intake / Scoring workflow should calculate the
+             * genuine score from verified information.
+             */
+            score:
+              40,
+
+            value:
+              0,
+
+            estimated_value:
+              0,
+          });
+
+      if (
+        leadError
+      ) {
+        console.error(
+          "Growth enquiry was recorded but CRM lead creation failed:",
+          leadError,
+        );
+
+        setSubmitState(
+          "error",
+        );
+
+        setSubmitError(
+          "Your request was received, but our customer follow-up record could not be completed. Please call or WhatsApp Cossa so we can assist immediately.",
+        );
+
+        /*
+         * The original enquiry already exists in contact_messages.
+         * We intentionally do not tell the customer that the entire request
+         * was lost.
+         */
+        return;
+      }
+
+      /* -------------------------------------------------------------------- */
+      /* SUCCESS                                                              */
+      /* -------------------------------------------------------------------- */
+
+      setForm(
+        initialFormState,
+      );
+
+      setSubmitState(
+        "sent",
+      );
+
+      trackGrowthMeasurementEvent(
+        "growth_quote_request_submitted",
+        {
+          source:
+            "growth",
+          form:
+            "growth_quote_request",
+        },
+      );
+    } catch (
+      error
+    ) {
+      console.error(
+        "Growth quote request submission failed:",
+        error,
+      );
+
+      setSubmitState(
+        "error",
+      );
+
+      setSubmitError(
+        "We could not save your request. Please call, WhatsApp or email Cossa directly.",
+      );
+    }
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* RENDER                                                                   */
+  /* ------------------------------------------------------------------------ */
+
+  return (
+    <PublicSiteShell
+      showCallToAction={
+        false
+      }
+    >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html:
+            JSON.stringify(
+              organisationSchema,
+            ),
+        }}
+      />
+
+      <section
+        id="contact"
+        className="relative flex min-h-[calc(100dvh-4rem)] items-center overflow-hidden px-4 py-8 md:py-10"
+      >
+        <div className="pointer-events-none absolute -left-32 top-8 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
+
+        <div className="pointer-events-none absolute right-0 top-0 hidden h-full w-[42%] bg-[radial-gradient(ellipse_at_top_right,rgba(217,177,36,0.12),transparent_70%)] lg:block" />
+
+        <div className="relative mx-auto grid w-full max-w-6xl items-start gap-8 lg:grid-cols-[1.08fr_0.92fr]">
+          {/* ---------------------------------------------------------------- */}
+          {/* HERO                                                             */}
+          {/* ---------------------------------------------------------------- */}
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
+              Business Growth
+              Intelligence for
+              ambitious teams
+            </p>
+
+            <h1 className="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.08] md:text-5xl lg:text-[3.75rem]">
+              Build a clearer
+              growth system for{" "}
+              <span className="text-gradient-gold">
+                your business.
+              </span>
+            </h1>
+
+            <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
+              GROWTH helps
+              business owners,
+              teams and
+              white-label
+              partners capture
+              enquiries,
+              organise
+              follow-up and make
+              better customer
+              decisions from one
+              place.
+            </p>
+
+            <div className="mt-7 flex max-w-xl flex-col gap-3 sm:flex-row">
+              {/* PHONE */}
+
+              <a
+                href={
+                  phoneHref
+                }
+                onClick={() =>
+                  trackGrowthMeasurementEvent(
+                    "growth_contact_click",
+                    {
+                      method:
+                        "phone",
+
+                      placement:
+                        "hero",
+                    },
+                  )
+                }
+              >
+                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 sm:min-w-52">
+                  <Phone className="mr-2 h-4 w-4" />
+
+                  Talk to
+                  Cossa
+                </Button>
+              </a>
+
+              {/* WHATSAPP */}
+
+              <a
+                href={
+                  whatsappHref
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() =>
+                  trackGrowthMeasurementEvent(
+                    "growth_contact_click",
+                    {
+                      method:
+                        "whatsapp",
+
+                      placement:
+                        "hero",
+                    },
+                  )
+                }
+              >
+                <Button
+                  variant="outline"
+                  className="w-full border-primary/40 text-primary hover:bg-primary/10 sm:min-w-52"
+                >
+                  <MessageCircle className="mr-2 h-4 w-4" />
+
+                  WhatsApp
+                  Cossa
+                </Button>
+              </a>
+            </div>
+
+            {/* EMAIL */}
+
+            <a
+              href={
+                emailHref
+              }
+              onClick={() =>
+                trackGrowthMeasurementEvent(
+                  "growth_contact_click",
+                  {
+                    method:
+                      "email",
+
+                    placement:
+                      "hero",
+                  },
+                )
+              }
+              className="mt-4 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
+            >
+              <Mail className="h-4 w-4" />
+
+              Prefer email?
+              cossa@cossanexusholdings.co.za
+            </a>
+          </div>
+
+          {/* ---------------------------------------------------------------- */}
+          {/* CONTACT FORM                                                     */}
+          {/* ---------------------------------------------------------------- */}
+
+          <form
+            id="quote-request"
+            onSubmit={
+              submitQuoteRequest
+            }
+            className="relative isolate overflow-hidden rounded-2xl border border-primary/35 bg-card/95 shadow-[0_20px_70px_rgba(0,0,0,0.5)]"
+          >
+            {/* -------------------------------------------------------------- */}
+            {/* FORM BRAND HEADER                                              */}
+            {/* -------------------------------------------------------------- */}
+
+            <section className="relative min-h-[190px] overflow-hidden border-b border-primary/25 bg-black p-5 md:min-h-[210px] md:p-6">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(217,177,36,0.16),transparent_52%)]" />
+
+              <GrowthEagleArtwork
+                eager
+                className="absolute -bottom-10 -right-10 h-[118%] w-[70%] object-contain object-[center_58%] opacity-100 md:-right-2 md:w-[62%]"
+              />
+
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.98)_0%,rgba(0,0,0,0.92)_43%,rgba(0,0,0,0.34)_76%,rgba(0,0,0,0.1)_100%)]" />
+
+              <div className="relative flex min-h-[150px] flex-col justify-between md:min-h-[162px]">
+                <div className="max-w-[59%] sm:max-w-[54%]">
+                  <GrowthProductBrand className="max-w-full" />
+
+                  <h2 className="mt-5 font-display text-xl font-semibold leading-tight text-foreground md:text-2xl">
+                    A clearer
+                    route from
+                    enquiry to
+                    response.
+                  </h2>
+                </div>
+
+                <ParentBrandEndorsement className="max-w-[60%]" />
+              </div>
+            </section>
+
+            {/* -------------------------------------------------------------- */}
+            {/* FORM FIELDS                                                    */}
+            {/* -------------------------------------------------------------- */}
+
+            <div className="relative p-5 md:p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+                Start the
+                conversation
+              </p>
+
+              <h2 className="mt-1 font-display text-xl font-semibold md:text-2xl">
+                Tell us what
+                growth needs
+                next.
+              </h2>
+
+              <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                Share the
+                essentials and
+                Cossa will
+                review your
+                request.
+              </p>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {/* NAME */}
+
+                <div className="space-y-2">
+                  <Label htmlFor="name">
+                    Your name
+                  </Label>
+
+                  <Input
+                    id="name"
+                    name="name"
+                    autoComplete="name"
+                    required
+                    minLength={
+                      2
+                    }
+                    maxLength={
+                      120
+                    }
+                    value={
+                      form.name
+                    }
+                    disabled={
+                      submitState ===
+                      "sending"
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      setForm(
+                        (
+                          current,
+                        ) => ({
+                          ...current,
+
+                          name:
+                            event
+                              .target
+                              .value,
+                        }),
+                      )
+                    }
+                  />
+                </div>
+
+                {/* PHONE */}
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">
+                    Phone
+                    number
+                  </Label>
+
+                  <Input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    required
+                    maxLength={
+                      30
+                    }
+                    value={
+                      form.phone
+                    }
+                    disabled={
+                      submitState ===
+                      "sending"
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      setForm(
+                        (
+                          current,
+                        ) => ({
+                          ...current,
+
+                          phone:
+                            event
+                              .target
+                              .value,
+                        }),
+                      )
+                    }
+                  />
+                </div>
+
+                {/* EMAIL */}
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="email">
+                    Email
+                    address{" "}
+                    <span className="text-muted-foreground">
+                      (optional)
+                    </span>
+                  </Label>
+
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    maxLength={
+                      254
+                    }
+                    value={
+                      form.email
+                    }
+                    disabled={
+                      submitState ===
+                      "sending"
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      setForm(
+                        (
+                          current,
+                        ) => ({
+                          ...current,
+
+                          email:
+                            event
+                              .target
+                              .value,
+                        }),
+                      )
+                    }
+                  />
+                </div>
+
+                {/* MESSAGE */}
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="message">
+                    What can we
+                    help with?
+                  </Label>
+
+                  <Textarea
+                    id="message"
+                    name="message"
+                    required
+                    rows={3}
+                    minLength={
+                      10
+                    }
+                    maxLength={
+                      3000
+                    }
+                    placeholder="Tell us what you want to improve and when you need support."
+                    value={
+                      form.message
+                    }
+                    disabled={
+                      submitState ===
+                      "sending"
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      setForm(
+                        (
+                          current,
+                        ) => ({
+                          ...current,
+
+                          message:
+                            event
+                              .target
+                              .value,
+                        }),
+                      )
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* ------------------------------------------------------------ */}
+              {/* SUBMIT BUTTON                                                */}
+              {/* ------------------------------------------------------------ */}
+
+              <Button
+                type="submit"
+                disabled={
+                  submitState ===
+                  "sending"
+                }
+                className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {submitState ===
+                "sending"
+                  ? "Recording your request…"
+                  : "Send quote request"}
+
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+
+              {/* ------------------------------------------------------------ */}
+              {/* SUCCESS                                                      */}
+              {/* ------------------------------------------------------------ */}
+
+              {submitState ===
+                "sent" && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="mt-3 text-sm text-emerald-500"
+                >
+                  Thank you. Your
+                  request has been
+                  recorded and
+                  added to our
+                  customer
+                  follow-up
+                  system. Call{" "}
+                  {
+                    phoneNumber
+                  }{" "}
+                  for urgent
+                  assistance.
+                </p>
+              )}
+
+              {/* ------------------------------------------------------------ */}
+              {/* ERROR                                                        */}
+              {/* ------------------------------------------------------------ */}
+
+              {submitState ===
+                "error" && (
+                <p
+                  role="alert"
+                  aria-live="assertive"
+                  className="mt-3 text-sm text-destructive"
+                >
+                  {submitError ??
+                    `We could not complete your request. Please call ${phoneNumber}, WhatsApp us, or email cossa@cossanexusholdings.co.za.`}
+                </p>
+              )}
+            </div>
+          </form>
+        </div>
+      </section>
+    </PublicSiteShell>
+  );
 }
