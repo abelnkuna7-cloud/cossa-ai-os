@@ -23,7 +23,7 @@ export const COSSA_ORGANISATION_ID =
 /**
  * Temporary compatibility wrapper.
  *
- * Remove this when generated Supabase Database types contain the complete
+ * Remove this once the generated Supabase Database types include the complete
  * Cossa AI Workforce schema.
  */
 const db =
@@ -52,7 +52,10 @@ export type MissionStatus =
   | "cancelled";
 
 export type MissionRunStatus =
-  Exclude<MissionStatus, "draft">;
+  Exclude<
+    MissionStatus,
+    "draft"
+  >;
 
 export type ApprovalStatus =
   | "pending"
@@ -67,6 +70,12 @@ export type RiskLevel =
   | "medium"
   | "high"
   | "critical";
+
+export type HandoffStatus =
+  | "pending"
+  | "accepted"
+  | "rejected"
+  | "completed";
 
 export interface AiEmployee {
   id: string;
@@ -129,7 +138,10 @@ export interface MissionRun {
   mission_id: string;
   organisation_id: string;
   employee_id: string | null;
-  status: MissionRunStatus;
+
+  status:
+    MissionRunStatus;
+
   model_provider: string | null;
   model_name: string | null;
   model_request_id: string | null;
@@ -176,10 +188,7 @@ export interface EmployeeHandoff {
   retained_record_ids: Record<string, unknown>;
 
   status:
-    | "pending"
-    | "accepted"
-    | "rejected"
-    | "completed";
+    HandoffStatus;
 
   created_at: string;
   accepted_at: string | null;
@@ -1338,16 +1347,28 @@ export const COSSA_GROWTH_WORKFORCE =
 /* -------------------------------------------------------------------------- */
 
 interface WorkforceStageDefinition {
-  employeeKey: string;
-  reason: string;
+  employeeKey:
+    string;
+
+  reason:
+    string;
 }
 
 interface WorkforceMissionDefinition {
-  prefix: string;
-  instruction: string;
-  stages: readonly WorkforceStageDefinition[];
-  requiredSections: readonly string[];
-  constraints: readonly string[];
+  prefix:
+    string;
+
+  instruction:
+    string;
+
+  stages:
+    readonly WorkforceStageDefinition[];
+
+  requiredSections:
+    readonly string[];
+
+  constraints:
+    readonly string[];
 }
 
 const GROWTH_WORKFLOW_DEFINITION:
@@ -1363,54 +1384,71 @@ const GROWTH_WORKFLOW_DEFINITION:
       {
         employeeKey:
           "website-seo-monitor",
+
         reason:
           "Review authorised Cossa website evidence and identify verified website, SEO and content opportunities.",
       },
+
       {
         employeeKey:
           "social-strategy-planner",
+
         reason:
           "Turn verified website and business context into a practical channel-aware growth strategy.",
       },
+
       {
         employeeKey:
           "content-writer",
+
         reason:
           "Create accurate campaign, educational, conversion and social content from the approved strategy.",
       },
+
       {
         employeeKey:
           "creative-media-producer",
+
         reason:
           "Create production-ready visual requirements for each relevant social post, promotion, campaign and product asset.",
       },
+
       {
         employeeKey:
           "social-schedule-coordinator",
+
         reason:
           "Organise complete copy-and-creative packages into a practical channel schedule.",
       },
+
       {
         employeeKey:
           "social-media-manager",
+
         reason:
           "Prepare and manage the publishing queue and channel workflow. Publish only through a verified authorised integration when permitted.",
       },
+
       {
         employeeKey:
           "account-growth-analyst",
+
         reason:
           "Analyse authorised account evidence and identify audience, content and conversion improvements.",
       },
+
       {
         employeeKey:
           "paid-media-specialist",
+
         reason:
           "Prepare paid-media strategy and campaign recommendations. Do not spend or change budgets without owner authority.",
       },
+
       {
         employeeKey:
           "ai-ceo",
+
         reason:
           "Synthesize workforce outputs, resolve ordinary internal issues and escalate only genuine owner decisions.",
       },
@@ -1451,48 +1489,63 @@ const STORE_WORKFLOW_DEFINITION:
       {
         employeeKey:
           "product-intelligence-analyst",
+
         reason:
           "Analyse authorised Cossa Store catalogue and legitimate market evidence for trends, product gaps and commercial opportunities.",
       },
+
       {
         employeeKey:
           "supplier-sourcing-analyst",
+
         reason:
           "Research legitimate supplier candidates for identified product requirements and record traceable evidence.",
       },
+
       {
         employeeKey:
           "store-operations-manager",
+
         reason:
           "Assess catalogue readiness, supplier dependencies, merchandising requirements and commercial priorities.",
       },
+
       {
         employeeKey:
           "content-writer",
+
         reason:
           "Prepare accurate product, campaign and social-commerce copy using verified store information.",
       },
+
       {
         employeeKey:
           "creative-media-producer",
+
         reason:
           "Prepare product creatives, promotional assets, brochures and social-commerce visual requirements.",
       },
+
       {
         employeeKey:
           "social-media-manager",
+
         reason:
           "Prepare store social-commerce publishing queues and campaign readiness for authorised channels.",
       },
+
       {
         employeeKey:
           "account-growth-analyst",
+
         reason:
           "Analyse authorised store and campaign evidence and recommend growth improvements.",
       },
+
       {
         employeeKey:
           "ai-ceo",
+
         reason:
           "Synthesize store findings, resolve routine internal questions and escalate only genuine commercial owner decisions.",
       },
@@ -1530,36 +1583,47 @@ const TECH_WORKFLOW_DEFINITION:
       {
         employeeKey:
           "tech-solutions-specialist",
+
         reason:
           "Translate the business or client requirement into a clear technical solution and implementation scope.",
       },
+
       {
         employeeKey:
           "website-delivery-specialist",
+
         reason:
           "Prepare website architecture, build requirements, implementation tasks and QA dependencies where relevant.",
       },
+
       {
         employeeKey:
           "content-writer",
+
         reason:
           "Prepare accurate website, landing-page, service or customer-facing content required by the technical delivery.",
       },
+
       {
         employeeKey:
           "creative-media-producer",
+
         reason:
           "Prepare required website graphics, banners, mock-ups, brochures and visual production requirements.",
       },
+
       {
         employeeKey:
           "website-seo-monitor",
+
         reason:
           "Review authorised website and SEO evidence and prepare quality and optimisation requirements.",
       },
+
       {
         employeeKey:
           "ai-ceo",
+
         reason:
           "Synthesize technical outputs, resolve ordinary internal dependencies and escalate only genuine owner decisions.",
       },
@@ -1594,30 +1658,39 @@ const REVENUE_WORKFLOW_DEFINITION:
       {
         employeeKey:
           "lead-intake-coordinator",
+
         reason:
           "Review authorised lead and opportunity records, retain original identifiers and determine correct routing.",
       },
+
       {
         employeeKey:
           "customer-reactivation-analyst",
+
         reason:
           "Identify legitimate repeat-business, dormant-customer and retention opportunities from authorised records.",
       },
+
       {
         employeeKey:
           "broker-deal-intelligence-analyst",
+
         reason:
           "Research and assess legitimate commercial, partner, buyer, supplier and deal opportunities.",
       },
+
       {
         employeeKey:
           "procurement-intelligence-analyst",
+
         reason:
           "Review relevant tender, RFQ and procurement opportunities and prepare evidence-backed bid-or-no-bid intelligence.",
       },
+
       {
         employeeKey:
           "ai-ceo",
+
         reason:
           "Synthesize revenue and procurement intelligence, resolve routine routing decisions and escalate genuine owner decisions.",
       },
@@ -1645,33 +1718,85 @@ const REVENUE_WORKFLOW_DEFINITION:
 /* -------------------------------------------------------------------------- */
 
 export interface CreateMissionInput {
-  title: string;
-  instruction: string;
-  objective: string;
-  business_unit_id?: string | null;
-  assigned_employee_id?: string | null;
-  parent_mission_id?: string | null;
-  target_market?: string | null;
-  target_location?: string | null;
-  target_service?: string | null;
-  required_result_count?: number | null;
-  constraints?: unknown[];
-  prohibited_actions?: unknown[];
-  output_schema?: Record<string, unknown>;
-  priority?: Mission["priority"];
-  risk_level?: Mission["risk_level"];
+  title:
+    string;
+
+  instruction:
+    string;
+
+  objective:
+    string;
+
+  business_unit_id?:
+    string |
+    null;
+
+  assigned_employee_id?:
+    string |
+    null;
+
+  parent_mission_id?:
+    string |
+    null;
+
+  target_market?:
+    string |
+    null;
+
+  target_location?:
+    string |
+    null;
+
+  target_service?:
+    string |
+    null;
+
+  required_result_count?:
+    number |
+    null;
+
+  constraints?:
+    unknown[];
+
+  prohibited_actions?:
+    unknown[];
+
+  output_schema?:
+    Record<
+      string,
+      unknown
+    >;
+
+  priority?:
+    Mission["priority"];
+
+  risk_level?:
+    Mission["risk_level"];
 }
 
 export interface CreateCoordinationMissionInput {
-  objective: string;
-  target_market?: string | null;
-  target_location?: string | null;
-  target_service?: string | null;
+  objective:
+    string;
+
+  target_market?:
+    string |
+    null;
+
+  target_location?:
+    string |
+    null;
+
+  target_service?:
+    string |
+    null;
 }
 
 export interface CoordinationMissionResult {
-  mission: Mission;
-  handoffs: EmployeeHandoff[];
+  mission:
+    Mission;
+
+  handoffs:
+    EmployeeHandoff[];
 }
 
 export interface CreateGrowthCoordinationMissionInput
@@ -1681,12 +1806,30 @@ export interface GrowthCoordinationMissionResult
   extends CoordinationMissionResult {}
 
 export interface HighRiskApprovalInput {
-  actionType: string;
-  justification: string;
-  actionPayload?: Record<string, unknown>;
-  missionId?: string | null;
-  runId?: string | null;
-  requestedByEmployeeId?: string | null;
+  actionType:
+    string;
+
+  justification:
+    string;
+
+  actionPayload?:
+    Record<
+      string,
+      unknown
+    >;
+
+  missionId?:
+    string |
+    null;
+
+  runId?:
+    string |
+    null;
+
+  requestedByEmployeeId?:
+    string |
+    null;
+
   riskLevel:
     | "high"
     | "critical";
@@ -1697,10 +1840,16 @@ export interface HighRiskApprovalInput {
 /* -------------------------------------------------------------------------- */
 
 function createDatabaseError(
-  operation: string,
-  error: unknown,
+  operation:
+    string,
+
+  error:
+    unknown,
 ): Error {
-  if (error instanceof Error) {
+  if (
+    error instanceof
+    Error
+  ) {
     return new Error(
       `${operation}: ${error.message}`,
     );
@@ -1709,8 +1858,10 @@ function createDatabaseError(
   if (
     typeof error ===
       "object" &&
-    error !== null &&
-    "message" in error &&
+    error !==
+      null &&
+    "message" in
+      error &&
     typeof error.message ===
       "string"
   ) {
@@ -1725,11 +1876,18 @@ function createDatabaseError(
 }
 
 async function rows<T>(
-  operation: string,
-  query: PromiseLike<{
-    data: T[] | null;
-    error: unknown;
-  }>,
+  operation:
+    string,
+
+  query:
+    PromiseLike<{
+      data:
+        T[] |
+        null;
+
+      error:
+        unknown;
+    }>,
 ): Promise<T[]> {
   const {
     data,
@@ -1744,23 +1902,134 @@ async function rows<T>(
     );
   }
 
-  return data ?? [];
+  return (
+    data ??
+    []
+  );
 }
 
 function requireNonEmptyValue(
-  value: string,
-  fieldName: string,
+  value:
+    string,
+
+  fieldName:
+    string,
 ): string {
   const cleanedValue =
     value.trim();
 
-  if (!cleanedValue) {
+  if (
+    !cleanedValue
+  ) {
     throw new Error(
       `${fieldName} is required`,
     );
   }
 
   return cleanedValue;
+}
+
+/**
+ * Returns every handoff that has not reached the only terminal successful
+ * state: completed.
+ *
+ * This is deliberately stricter than checking only "pending".
+ *
+ * accepted = work is still in progress
+ * rejected = work did not complete
+ * pending  = work still needs execution
+ */
+async function listIncompleteMissionHandoffs(
+  missionId:
+    string,
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  Pick<
+    EmployeeHandoff,
+    | "id"
+    | "status"
+    | "created_at"
+  >[]
+> {
+  return rows<
+    Pick<
+      EmployeeHandoff,
+      | "id"
+      | "status"
+      | "created_at"
+    >
+  >(
+    "Unable to check incomplete workforce handoffs",
+
+    db
+      .from(
+        "employee_handoffs",
+      )
+      .select(
+        "id,status,created_at",
+      )
+      .eq(
+        "organisation_id",
+        organisationId,
+      )
+      .eq(
+        "mission_id",
+        missionId,
+      )
+      .neq(
+        "status",
+        "completed",
+      )
+      .order(
+        "created_at",
+        {
+          ascending:
+            true,
+        },
+      ),
+  );
+}
+
+async function countPendingMissionApprovals(
+  missionId:
+    string,
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<number> {
+  const pending =
+    await rows<
+      Pick<
+        Approval,
+        "id"
+      >
+    >(
+      "Unable to check pending mission approvals",
+
+      db
+        .from(
+          "approvals",
+        )
+        .select(
+          "id",
+        )
+        .eq(
+          "organisation_id",
+          organisationId,
+        )
+        .eq(
+          "mission_id",
+          missionId,
+        )
+        .eq(
+          "status",
+          "pending",
+        ),
+    );
+
+  return pending.length;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1770,13 +2039,21 @@ function requireNonEmptyValue(
 export function listEmployees(
   organisationId =
     COSSA_ORGANISATION_ID,
-): Promise<AiEmployee[]> {
-  return rows<AiEmployee>(
+): Promise<
+  AiEmployee[]
+> {
+  return rows<
+    AiEmployee
+  >(
     "Unable to load AI employees",
 
     db
-      .from("ai_employees")
-      .select("*")
+      .from(
+        "ai_employees",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "organisation_id",
         organisationId,
@@ -1784,13 +2061,15 @@ export function listEmployees(
       .order(
         "department",
         {
-          ascending: true,
+          ascending:
+            true,
         },
       )
       .order(
         "name",
         {
-          ascending: true,
+          ascending:
+            true,
         },
       ),
   );
@@ -1799,13 +2078,21 @@ export function listEmployees(
 export function listActiveEmployees(
   organisationId =
     COSSA_ORGANISATION_ID,
-): Promise<AiEmployee[]> {
-  return rows<AiEmployee>(
+): Promise<
+  AiEmployee[]
+> {
+  return rows<
+    AiEmployee
+  >(
     "Unable to load active AI employees",
 
     db
-      .from("ai_employees")
-      .select("*")
+      .from(
+        "ai_employees",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "organisation_id",
         organisationId,
@@ -1817,13 +2104,15 @@ export function listActiveEmployees(
       .order(
         "department",
         {
-          ascending: true,
+          ascending:
+            true,
         },
       )
       .order(
         "name",
         {
-          ascending: true,
+          ascending:
+            true,
         },
       ),
   );
@@ -1836,6 +2125,9 @@ export function listActiveEmployees(
 async function synchroniseKnownProfiles(
   existing:
     AiEmployee[],
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
 ): Promise<void> {
   const existingByKey =
     new Map(
@@ -1858,10 +2150,16 @@ async function synchroniseKnownProfiles(
         profile.employee_key,
       );
 
-    if (!existingEmployee) {
+    if (
+      !existingEmployee
+    ) {
       continue;
     }
 
+    /**
+     * Source synchronisation updates profile definition but deliberately
+     * preserves an explicit owner pause or retirement.
+     */
     const nextStatus:
       EmployeeStatus =
       existingEmployee.status ===
@@ -1920,14 +2218,16 @@ async function synchroniseKnownProfiles(
         })
         .eq(
           "organisation_id",
-          COSSA_ORGANISATION_ID,
+          organisationId,
         )
         .eq(
           "employee_key",
           profile.employee_key,
         );
 
-    if (error) {
+    if (
+      error
+    ) {
       throw createDatabaseError(
         `Unable to synchronise ${profile.name}`,
         error,
@@ -1943,13 +2243,21 @@ async function synchroniseKnownProfiles(
 export function listMissions(
   organisationId =
     COSSA_ORGANISATION_ID,
-): Promise<Mission[]> {
-  return rows<Mission>(
+): Promise<
+  Mission[]
+> {
+  return rows<
+    Mission
+  >(
     "Unable to load missions",
 
     db
-      .from("missions")
-      .select("*")
+      .from(
+        "missions",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "organisation_id",
         organisationId,
@@ -1957,29 +2265,40 @@ export function listMissions(
       .order(
         "created_at",
         {
-          ascending: false,
+          ascending:
+            false,
         },
       ),
   );
 }
 
 export function listMissionRuns(
-  missionId: string,
+  missionId:
+    string,
+
   organisationId =
     COSSA_ORGANISATION_ID,
-): Promise<MissionRun[]> {
+): Promise<
+  MissionRun[]
+> {
   const validMissionId =
     requireNonEmptyValue(
       missionId,
       "Mission ID",
     );
 
-  return rows<MissionRun>(
+  return rows<
+    MissionRun
+  >(
     "Unable to load mission runs",
 
     db
-      .from("mission_runs")
-      .select("*")
+      .from(
+        "mission_runs",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "organisation_id",
         organisationId,
@@ -1991,7 +2310,8 @@ export function listMissionRuns(
       .order(
         "created_at",
         {
-          ascending: false,
+          ascending:
+            false,
         },
       ),
   );
@@ -2000,13 +2320,21 @@ export function listMissionRuns(
 export function listWorkforceRuns(
   organisationId =
     COSSA_ORGANISATION_ID,
-): Promise<MissionRun[]> {
-  return rows<MissionRun>(
+): Promise<
+  MissionRun[]
+> {
+  return rows<
+    MissionRun
+  >(
     "Unable to load workforce runs",
 
     db
-      .from("mission_runs")
-      .select("*")
+      .from(
+        "mission_runs",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "organisation_id",
         organisationId,
@@ -2014,7 +2342,8 @@ export function listWorkforceRuns(
       .order(
         "created_at",
         {
-          ascending: false,
+          ascending:
+            false,
         },
       ),
   );
@@ -2023,13 +2352,21 @@ export function listWorkforceRuns(
 export function listPendingApprovals(
   organisationId =
     COSSA_ORGANISATION_ID,
-): Promise<Approval[]> {
-  return rows<Approval>(
+): Promise<
+  Approval[]
+> {
+  return rows<
+    Approval
+  >(
     "Unable to load pending approvals",
 
     db
-      .from("approvals")
-      .select("*")
+      .from(
+        "approvals",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "organisation_id",
         organisationId,
@@ -2041,7 +2378,8 @@ export function listPendingApprovals(
       .order(
         "requested_at",
         {
-          ascending: false,
+          ascending:
+            false,
         },
       ),
   );
@@ -2054,7 +2392,12 @@ export function listPendingApprovals(
 export async function createMission(
   input:
     CreateMissionInput,
-): Promise<Mission> {
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  Mission
+> {
   const title =
     requireNonEmptyValue(
       input.title,
@@ -2091,92 +2434,104 @@ export async function createMission(
     );
   }
 
-  const missionPayload = {
-    organisation_id:
-      COSSA_ORGANISATION_ID,
+  const missionPayload =
+    {
+      organisation_id:
+        organisationId,
 
-    title,
-    instruction,
-    objective,
+      title,
+      instruction,
+      objective,
 
-    business_unit_id:
-      input.business_unit_id ??
-      null,
+      business_unit_id:
+        input.business_unit_id ??
+        null,
 
-    assigned_employee_id:
-      input.assigned_employee_id ??
-      null,
+      assigned_employee_id:
+        input.assigned_employee_id ??
+        null,
 
-    parent_mission_id:
-      input.parent_mission_id ??
-      null,
+      parent_mission_id:
+        input.parent_mission_id ??
+        null,
 
-    target_market:
-      input.target_market?.trim() ||
-      null,
+      target_market:
+        input.target_market?.trim() ||
+        null,
 
-    target_location:
-      input.target_location?.trim() ||
-      null,
+      target_location:
+        input.target_location?.trim() ||
+        null,
 
-    target_service:
-      input.target_service?.trim() ||
-      null,
+      target_service:
+        input.target_service?.trim() ||
+        null,
 
-    required_result_count:
-      input.required_result_count ??
-      null,
+      required_result_count:
+        input.required_result_count ??
+        null,
 
-    constraints:
-      input.constraints ??
-      [],
+      constraints:
+        input.constraints ??
+        [],
 
-    prohibited_actions:
-      input.prohibited_actions ??
-      [],
+      prohibited_actions:
+        input.prohibited_actions ??
+        [],
 
-    output_schema:
-      input.output_schema ??
-      {},
+      output_schema:
+        input.output_schema ??
+        {},
 
-    priority:
-      input.priority ??
-      "normal",
+      priority:
+        input.priority ??
+        "normal",
 
-    risk_level:
-      input.risk_level ??
-      "low",
+      risk_level:
+        input.risk_level ??
+        "low",
 
-    status:
-      "draft" as const,
-  };
+      status:
+        "draft" as const,
+    };
 
   const {
     data,
     error,
   } =
     await db
-      .from("missions")
+      .from(
+        "missions",
+      )
       .insert(
         missionPayload,
       )
-      .select("*")
+      .select(
+        "*",
+      )
       .single();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw createDatabaseError(
       "Unable to create mission",
       error,
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     throw new Error(
       "Unable to create mission: Supabase returned no mission record",
     );
   }
 
-  return data as Mission;
+  return (
+    data as
+      Mission
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2184,10 +2539,14 @@ export async function createMission(
 /* -------------------------------------------------------------------------- */
 
 export async function queueMission(
-  missionId: string,
+  missionId:
+    string,
+
   organisationId =
     COSSA_ORGANISATION_ID,
-): Promise<Mission> {
+): Promise<
+  Mission
+> {
   const validMissionId =
     requireNonEmptyValue(
       missionId,
@@ -2199,7 +2558,9 @@ export async function queueMission(
     error,
   } =
     await db
-      .from("missions")
+      .from(
+        "missions",
+      )
       .update({
         status:
           "queued",
@@ -2219,23 +2580,32 @@ export async function queueMission(
         "status",
         "draft",
       )
-      .select("*")
-      .single();
+      .select(
+        "*",
+      )
+      .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw createDatabaseError(
       "Unable to queue mission",
       error,
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     throw new Error(
       "Unable to queue mission: Mission was not found or is not in draft status",
     );
   }
 
-  return data as Mission;
+  return (
+    data as
+      Mission
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2322,8 +2692,12 @@ function compactPriorOutputs(
       ) =>
         output.trim(),
     )
-    .filter(Boolean)
-    .slice(-4)
+    .filter(
+      Boolean,
+    )
+    .slice(
+      -4,
+    )
     .map(
       (
         output,
@@ -2336,16 +2710,236 @@ function compactPriorOutputs(
 }
 
 /* -------------------------------------------------------------------------- */
+/* CLAIM / RELEASE HELPERS                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Claims exactly one pending handoff.
+ *
+ * The conditional status check is the concurrency guard:
+ *
+ * pending → accepted
+ *
+ * If another request already claimed the same handoff, this returns null
+ * rather than creating a second real workforce run.
+ */
+async function claimPendingHandoff({
+  handoffId,
+  missionId,
+  employeeId,
+  acceptedAt,
+  organisationId,
+}: {
+  handoffId:
+    string;
+
+  missionId:
+    string;
+
+  employeeId:
+    string;
+
+  acceptedAt:
+    string;
+
+  organisationId:
+    string;
+}): Promise<
+  Pick<
+    EmployeeHandoff,
+    | "id"
+    | "mission_id"
+    | "to_employee_id"
+    | "status"
+  > |
+  null
+> {
+  const {
+    data,
+    error,
+  } =
+    await db
+      .from(
+        "employee_handoffs",
+      )
+      .update({
+        status:
+          "accepted",
+
+        accepted_at:
+          acceptedAt,
+
+        /**
+         * run_id is attached after the run record exists.
+         */
+        run_id:
+          null,
+
+        completed_at:
+          null,
+      })
+      .eq(
+        "id",
+        handoffId,
+      )
+      .eq(
+        "mission_id",
+        missionId,
+      )
+      .eq(
+        "organisation_id",
+        organisationId,
+      )
+      .eq(
+        "to_employee_id",
+        employeeId,
+      )
+      .eq(
+        "status",
+        "pending",
+      )
+      .select(
+        "id,mission_id,to_employee_id,status",
+      )
+      .maybeSingle();
+
+  if (
+    error
+  ) {
+    throw createDatabaseError(
+      "Unable to claim the workforce handoff",
+      error,
+    );
+  }
+
+  return (
+    data ??
+    null
+  );
+}
+
+/**
+ * Releases a handoff only when it is still accepted and belongs to the
+ * expected worker/run state.
+ *
+ * This is used to recover cleanly from failures before model execution begins.
+ */
+async function releaseAcceptedHandoff({
+  handoffId,
+  missionId,
+  employeeId,
+  organisationId,
+  expectedRunId,
+}: {
+  handoffId:
+    string;
+
+  missionId:
+    string;
+
+  employeeId:
+    string;
+
+  organisationId:
+    string;
+
+  expectedRunId?:
+    string |
+    null;
+}): Promise<void> {
+  let query =
+    db
+      .from(
+        "employee_handoffs",
+      )
+      .update({
+        status:
+          "pending",
+
+        run_id:
+          null,
+
+        accepted_at:
+          null,
+
+        completed_at:
+          null,
+      })
+      .eq(
+        "id",
+        handoffId,
+      )
+      .eq(
+        "mission_id",
+        missionId,
+      )
+      .eq(
+        "organisation_id",
+        organisationId,
+      )
+      .eq(
+        "to_employee_id",
+        employeeId,
+      )
+      .eq(
+        "status",
+        "accepted",
+      );
+
+  query =
+    expectedRunId
+      ? query.eq(
+          "run_id",
+          expectedRunId,
+        )
+      : query.is(
+          "run_id",
+          null,
+        );
+
+  const {
+    error,
+  } =
+    await query;
+
+  if (
+    error
+  ) {
+    throw createDatabaseError(
+      "Unable to release the workforce handoff",
+      error,
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /* START CONTROLLED RUN                                                       */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Production-safe startup sequence:
+ *
+ * 1. Validate caller-supplied identity.
+ * 2. Atomically claim pending handoff.
+ * 3. Create the mission run.
+ * 4. Attach that run to the accepted handoff.
+ * 5. Mark mission running.
+ *
+ * The old implementation created the run before claiming the handoff.
+ * Competing browser calls could therefore create duplicate/failed runs.
+ *
+ * This order prevents a second worker request from creating a legitimate run
+ * after the handoff has already been claimed.
+ */
 export async function startControlledWorkforceRun(
   input:
     ControlledWorkforceRunInput,
 
   organisationId =
     COSSA_ORGANISATION_ID,
-): Promise<MissionRun> {
+): Promise<
+  MissionRun
+> {
   if (
     input.employee.status !==
     "active"
@@ -2385,220 +2979,390 @@ export async function startControlledWorkforceRun(
   const startedAt =
     new Date().toISOString();
 
-  const {
-    data:
-      run,
+  /* ---------------------------------------------------------------------- */
+  /* 1. CLAIM FIRST                                                         */
+  /* ---------------------------------------------------------------------- */
 
-    error:
-      runError,
-  } =
-    await db
-      .from(
-        "mission_runs",
-      )
-      .insert({
-        organisation_id:
-          organisationId,
-
-        mission_id:
-          input.mission.id,
-
-        employee_id:
-          input.employee.id,
-
-        status:
-          "running",
-
-        model_provider:
-          input.provider,
-
-        model_name:
-          input.modelName,
-
-        knowledge_version_ids:
-          [],
-
-        input: {
-          kind:
-            "controlled_workforce_stage",
-
-          objective:
-            input.mission.objective,
-
-          instruction:
-            input.mission.instruction,
-
-          target_market:
-            input.mission.target_market,
-
-          target_location:
-            input.mission.target_location,
-
-          handoff_reason:
-            input.handoff.reason,
-
-          handoff_context:
-            input.handoff.context,
-
-          prior_reviewable_outputs:
-            compactPriorOutputs(
-              input.priorOutputs,
-            ),
-
-          authorised_evidence:
-            (
-              input.authorisedEvidence ??
-              []
-            )
-              .map(
-                (
-                  evidence,
-                ) =>
-                  evidence.trim(),
-              )
-              .filter(Boolean)
-              .slice(0, 5)
-              .map(
-                (
-                  evidence,
-                ) =>
-                  evidence.slice(
-                    0,
-                    4_000,
-                  ),
-              ),
-
-          external_actions_enabled:
-            false,
-        },
-
-        started_at:
-          startedAt,
-      })
-      .select("*")
-      .single();
-
-  if (runError) {
-    throw createDatabaseError(
-      "Unable to start the workforce run",
-      runError,
-    );
-  }
-
-  if (!run) {
-    throw new Error(
-      "Unable to start the workforce run: Supabase returned no run record",
-    );
-  }
-
-  const {
-    data:
-      acceptedHandoff,
-
-    error:
-      handoffError,
-  } =
-    await db
-      .from(
-        "employee_handoffs",
-      )
-      .update({
-        status:
-          "accepted",
-
-        run_id:
-          run.id,
-
-        accepted_at:
-          startedAt,
-      })
-      .eq(
-        "id",
+  const claimedHandoff =
+    await claimPendingHandoff({
+      handoffId:
         input.handoff.id,
-      )
-      .eq(
-        "organisation_id",
-        organisationId,
-      )
-      .eq(
-        "status",
-        "pending",
-      )
-      .select("id")
-      .single();
+
+      missionId:
+        input.mission.id,
+
+      employeeId:
+        input.employee.id,
+
+      acceptedAt:
+        startedAt,
+
+      organisationId,
+    });
 
   if (
-    handoffError ||
-    !acceptedHandoff
+    !claimedHandoff
   ) {
-    await db
-      .from(
-        "mission_runs",
-      )
-      .update({
-        status:
-          "failed",
+    throw new Error(
+      "This workforce stage was already claimed or changed by another execution request. Refresh the workforce before retrying.",
+    );
+  }
 
-        error_code:
-          "handoff_acceptance_failed",
+  let createdRun:
+    MissionRun |
+    null =
+    null;
 
-        error_message:
-          "The workforce run could not claim its pending handoff.",
+  try {
+    /* -------------------------------------------------------------------- */
+    /* 2. CREATE RUN                                                        */
+    /* -------------------------------------------------------------------- */
 
-        completed_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        "id",
-        run.id,
-      )
-      .eq(
-        "organisation_id",
-        organisationId,
-      );
+    const {
+      data:
+        run,
 
-    if (handoffError) {
+      error:
+        runError,
+    } =
+      await db
+        .from(
+          "mission_runs",
+        )
+        .insert({
+          organisation_id:
+            organisationId,
+
+          mission_id:
+            input.mission.id,
+
+          employee_id:
+            input.employee.id,
+
+          status:
+            "running",
+
+          model_provider:
+            input.provider,
+
+          model_name:
+            input.modelName,
+
+          knowledge_version_ids:
+            [],
+
+          input: {
+            kind:
+              "controlled_workforce_stage",
+
+            objective:
+              input.mission.objective,
+
+            instruction:
+              input.mission.instruction,
+
+            target_market:
+              input.mission.target_market,
+
+            target_location:
+              input.mission.target_location,
+
+            handoff_reason:
+              input.handoff.reason,
+
+            handoff_context:
+              input.handoff.context,
+
+            prior_reviewable_outputs:
+              compactPriorOutputs(
+                input.priorOutputs,
+              ),
+
+            authorised_evidence:
+              (
+                input.authorisedEvidence ??
+                []
+              )
+                .map(
+                  (
+                    evidence,
+                  ) =>
+                    evidence.trim(),
+                )
+                .filter(
+                  Boolean,
+                )
+                .slice(
+                  0,
+                  5,
+                )
+                .map(
+                  (
+                    evidence,
+                  ) =>
+                    evidence.slice(
+                      0,
+                      4_000,
+                    ),
+                ),
+
+            external_actions_enabled:
+              false,
+          },
+
+          started_at:
+            startedAt,
+        })
+        .select(
+          "*",
+        )
+        .single();
+
+    if (
+      runError
+    ) {
       throw createDatabaseError(
-        "Unable to claim the workforce handoff",
-        handoffError,
+        "Unable to create the workforce run after claiming the handoff",
+        runError,
       );
     }
 
-    throw new Error(
-      "Unable to claim the workforce handoff",
-    );
-  }
-
-  const {
-    error:
-      missionError,
-  } =
-    await db
-      .from("missions")
-      .update({
-        status:
-          "running",
-
-        updated_at:
-          startedAt,
-      })
-      .eq(
-        "id",
-        input.mission.id,
-      )
-      .eq(
-        "organisation_id",
-        organisationId,
+    if (
+      !run
+    ) {
+      throw new Error(
+        "Unable to create the workforce run: Supabase returned no run record",
       );
+    }
 
-  if (missionError) {
-    throw createDatabaseError(
-      "Unable to mark the mission as running",
-      missionError,
+    createdRun =
+      run as
+        MissionRun;
+
+    /* -------------------------------------------------------------------- */
+    /* 3. ATTACH RUN TO CLAIMED HANDOFF                                     */
+    /* -------------------------------------------------------------------- */
+
+    const {
+      data:
+        attachedHandoff,
+
+      error:
+        attachmentError,
+    } =
+      await db
+        .from(
+          "employee_handoffs",
+        )
+        .update({
+          run_id:
+            createdRun.id,
+        })
+        .eq(
+          "id",
+          input.handoff.id,
+        )
+        .eq(
+          "mission_id",
+          input.mission.id,
+        )
+        .eq(
+          "organisation_id",
+          organisationId,
+        )
+        .eq(
+          "to_employee_id",
+          input.employee.id,
+        )
+        .eq(
+          "status",
+          "accepted",
+        )
+        .is(
+          "run_id",
+          null,
+        )
+        .select(
+          "id,run_id,status",
+        )
+        .maybeSingle();
+
+    if (
+      attachmentError
+    ) {
+      throw createDatabaseError(
+        "Unable to attach the workforce run to its claimed handoff",
+        attachmentError,
+      );
+    }
+
+    if (
+      !attachedHandoff
+    ) {
+      throw new Error(
+        "The workforce handoff changed before the run could be attached.",
+      );
+    }
+
+    /* -------------------------------------------------------------------- */
+    /* 4. MARK MISSION RUNNING                                              */
+    /* -------------------------------------------------------------------- */
+
+    const {
+      data:
+        runningMission,
+
+      error:
+        missionError,
+    } =
+      await db
+        .from(
+          "missions",
+        )
+        .update({
+          status:
+            "running",
+
+          updated_at:
+            startedAt,
+        })
+        .eq(
+          "id",
+          input.mission.id,
+        )
+        .eq(
+          "organisation_id",
+          organisationId,
+        )
+        .in(
+          "status",
+          [
+            "queued",
+            "running",
+          ],
+        )
+        .select(
+          "id,status",
+        )
+        .maybeSingle();
+
+    if (
+      missionError
+    ) {
+      throw createDatabaseError(
+        "Unable to mark the mission as running",
+        missionError,
+      );
+    }
+
+    if (
+      !runningMission
+    ) {
+      throw new Error(
+        "The mission is no longer in an executable queued or running state.",
+      );
+    }
+
+    return (
+      createdRun
     );
-  }
+  } catch (
+    error
+  ) {
+    const failedAt =
+      new Date().toISOString();
 
-  return run as MissionRun;
+    /**
+     * If a run record exists, retain it as failed audit history.
+     */
+    if (
+      createdRun
+    ) {
+      const {
+        error:
+          runFailureError,
+      } =
+        await db
+          .from(
+            "mission_runs",
+          )
+          .update({
+            status:
+              "failed",
+
+            error_code:
+              "workforce_startup_failed",
+
+            error_message:
+              error instanceof
+              Error
+                ? error.message.slice(
+                    0,
+                    1_000,
+                  )
+                : "The workforce run failed during startup.",
+
+            completed_at:
+              failedAt,
+          })
+          .eq(
+            "id",
+            createdRun.id,
+          )
+          .eq(
+            "mission_id",
+            input.mission.id,
+          )
+          .eq(
+            "organisation_id",
+            organisationId,
+          )
+          .eq(
+            "status",
+            "running",
+          );
+
+      if (
+        runFailureError
+      ) {
+        console.error(
+          "Unable to mark startup run as failed",
+          runFailureError,
+        );
+      }
+    }
+
+    /**
+     * Return the stage to pending so the user can retry.
+     */
+    try {
+      await releaseAcceptedHandoff({
+        handoffId:
+          input.handoff.id,
+
+        missionId:
+          input.mission.id,
+
+        employeeId:
+          input.employee.id,
+
+        organisationId,
+
+        expectedRunId:
+          createdRun?.id ??
+          null,
+      });
+    } catch (
+      releaseError
+    ) {
+      console.error(
+        "Unable to release claimed handoff after workforce startup failure",
+        releaseError,
+      );
+    }
+
+    throw error;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2606,12 +3370,9 @@ export async function startControlledWorkforceRun(
 /* -------------------------------------------------------------------------- */
 
 /**
- * IMPORTANT:
+ * Safe internal collaboration does not create automatic approval checkpoints.
  *
- * Safe internal collaboration no longer creates an automatic approval after
- * the final employee.
- *
- * When the final handoff completes, the mission completes automatically.
+ * A mission completes only when EVERY handoff is completed.
  *
  * High-risk actions must call requestHighRiskApproval() separately.
  */
@@ -2653,13 +3414,23 @@ export async function completeControlledWorkforceRun(
     boolean;
 
   approval:
-    Approval | null;
+    Approval |
+    null;
 }> {
   const content =
     requireNonEmptyValue(
       input.content,
       "Workforce output",
     );
+
+  if (
+    input.handoff.mission_id !==
+    input.run.mission_id
+  ) {
+    throw new Error(
+      "The handoff does not belong to the workforce run mission.",
+    );
+  }
 
   const completedAt =
     new Date().toISOString();
@@ -2692,6 +3463,10 @@ export async function completeControlledWorkforceRun(
 
       content,
     };
+
+  /* ---------------------------------------------------------------------- */
+  /* 1. COMPLETE RUN                                                        */
+  /* ---------------------------------------------------------------------- */
 
   const {
     data:
@@ -2732,24 +3507,38 @@ export async function completeControlledWorkforceRun(
         organisationId,
       )
       .eq(
+        "employee_id",
+        input.employee.id,
+      )
+      .eq(
         "status",
         "running",
       )
-      .select("*")
-      .single();
+      .select(
+        "*",
+      )
+      .maybeSingle();
 
-  if (runError) {
+  if (
+    runError
+  ) {
     throw createDatabaseError(
       "Unable to save the workforce output",
       runError,
     );
   }
 
-  if (!run) {
+  if (
+    !run
+  ) {
     throw new Error(
-      "Unable to save workforce output: No running run was updated",
+      "Unable to save workforce output: No matching running run was updated",
     );
   }
+
+  /* ---------------------------------------------------------------------- */
+  /* 2. COMPLETE EXACT HANDOFF                                              */
+  /* ---------------------------------------------------------------------- */
 
   const {
     data:
@@ -2765,9 +3554,6 @@ export async function completeControlledWorkforceRun(
       .update({
         status:
           "completed",
-
-        run_id:
-          run.id,
 
         completed_at:
           completedAt,
@@ -2785,6 +3571,10 @@ export async function completeControlledWorkforceRun(
         organisationId,
       )
       .eq(
+        "to_employee_id",
+        input.employee.id,
+      )
+      .eq(
         "run_id",
         run.id,
       )
@@ -2792,53 +3582,61 @@ export async function completeControlledWorkforceRun(
         "status",
         "accepted",
       )
-      .select("id")
-      .single();
+      .select(
+        "id,status",
+      )
+      .maybeSingle();
 
-  if (handoffError) {
+  if (
+    handoffError
+  ) {
     throw createDatabaseError(
       "Unable to mark the workforce handoff complete",
       handoffError,
     );
   }
 
-  if (!completedHandoff) {
+  if (
+    !completedHandoff
+  ) {
+    /**
+     * The output remains recorded, but mission cannot be falsely advanced.
+     */
     throw new Error(
-      "Unable to mark the workforce handoff complete",
+      "The workforce output was recorded, but the accepted handoff could not be completed. Refresh the workforce before executing another stage.",
     );
   }
 
-  const remaining =
-    await rows<
-      Pick<
-        EmployeeHandoff,
-        "id"
-      >
-    >(
-      "Unable to check remaining workforce handoffs",
+  /* ---------------------------------------------------------------------- */
+  /* 3. DETERMINE REAL MISSION COMPLETION                                   */
+  /* ---------------------------------------------------------------------- */
 
-      db
-        .from(
-          "employee_handoffs",
-        )
-        .select("id")
-        .eq(
-          "organisation_id",
-          organisationId,
-        )
-        .eq(
-          "mission_id",
-          input.run.mission_id,
-        )
-        .eq(
-          "status",
-          "pending",
-        ),
+  const incompleteHandoffs =
+    await listIncompleteMissionHandoffs(
+      input.run.mission_id,
+      organisationId,
+    );
+
+  const pendingApprovalCount =
+    await countPendingMissionApprovals(
+      input.run.mission_id,
+      organisationId,
     );
 
   const finalStage =
-    remaining.length ===
-    0;
+    incompleteHandoffs.length ===
+      0 &&
+    pendingApprovalCount ===
+      0;
+
+  const nextMissionStatus:
+    MissionStatus =
+    pendingApprovalCount >
+    0
+      ? "awaiting_approval"
+      : finalStage
+        ? "completed"
+        : "running";
 
   const {
     error:
@@ -2850,9 +3648,7 @@ export async function completeControlledWorkforceRun(
       )
       .update({
         status:
-          finalStage
-            ? "completed"
-            : "running",
+          nextMissionStatus,
 
         updated_at:
           completedAt,
@@ -2864,9 +3660,15 @@ export async function completeControlledWorkforceRun(
       .eq(
         "organisation_id",
         organisationId,
+      )
+      .neq(
+        "status",
+        "cancelled",
       );
 
-  if (missionError) {
+  if (
+    missionError
+  ) {
     throw createDatabaseError(
       "Unable to update the mission status",
       missionError,
@@ -2875,7 +3677,8 @@ export async function completeControlledWorkforceRun(
 
   return {
     run:
-      run as MissionRun,
+      run as
+        MissionRun,
 
     finalStage,
 
@@ -2922,6 +3725,10 @@ export async function failControlledWorkforceRun(
       ) ||
     "The provider did not return a usable workforce output.";
 
+  /* ---------------------------------------------------------------------- */
+  /* RECORD FAILURE                                                         */
+  /* ---------------------------------------------------------------------- */
+
   const {
     error:
       runError,
@@ -2960,12 +3767,18 @@ export async function failControlledWorkforceRun(
         "running",
       );
 
-  if (runError) {
+  if (
+    runError
+  ) {
     throw createDatabaseError(
       "Unable to record the workforce run failure",
       runError,
     );
   }
+
+  /* ---------------------------------------------------------------------- */
+  /* RELEASE EXACT HANDOFF                                                  */
+  /* ---------------------------------------------------------------------- */
 
   const {
     error:
@@ -2993,6 +3806,10 @@ export async function failControlledWorkforceRun(
         input.handoff.id,
       )
       .eq(
+        "mission_id",
+        input.run.mission_id,
+      )
+      .eq(
         "organisation_id",
         organisationId,
       )
@@ -3005,12 +3822,31 @@ export async function failControlledWorkforceRun(
         "accepted",
       );
 
-  if (handoffError) {
+  if (
+    handoffError
+  ) {
     throw createDatabaseError(
       "Unable to return the handoff to pending state",
       handoffError,
     );
   }
+
+  /* ---------------------------------------------------------------------- */
+  /* KEEP MISSION RETRYABLE                                                 */
+  /* ---------------------------------------------------------------------- */
+
+  const pendingApprovalCount =
+    await countPendingMissionApprovals(
+      input.run.mission_id,
+      organisationId,
+    );
+
+  const nextMissionStatus:
+    MissionStatus =
+    pendingApprovalCount >
+    0
+      ? "awaiting_approval"
+      : "running";
 
   const {
     error:
@@ -3022,7 +3858,7 @@ export async function failControlledWorkforceRun(
       )
       .update({
         status:
-          "running",
+          nextMissionStatus,
 
         updated_at:
           completedAt,
@@ -3038,9 +3874,15 @@ export async function failControlledWorkforceRun(
       .neq(
         "status",
         "cancelled",
+      )
+      .neq(
+        "status",
+        "completed",
       );
 
-  if (missionError) {
+  if (
+    missionError
+  ) {
     throw createDatabaseError(
       "Unable to keep the mission available for retry",
       missionError,
@@ -3055,15 +3897,7 @@ export async function failControlledWorkforceRun(
 /**
  * This is the owner interruption boundary.
  *
- * Safe internal work should NOT call this function.
- *
- * Use it only for genuinely high-risk actions such as:
- * - spending money;
- * - placing an order;
- * - signing or submitting a binding commitment;
- * - changing credentials;
- * - destructive or irreversible account changes;
- * - sensitive external communication.
+ * Safe internal work must NOT call this function.
  */
 export async function requestHighRiskApproval(
   input:
@@ -3071,7 +3905,9 @@ export async function requestHighRiskApproval(
 
   organisationId =
     COSSA_ORGANISATION_ID,
-): Promise<Approval> {
+): Promise<
+  Approval
+> {
   const actionType =
     requireNonEmptyValue(
       input.actionType,
@@ -3084,18 +3920,19 @@ export async function requestHighRiskApproval(
       "Approval justification",
     );
 
-  const {
-    data:
-      existingApproval,
-
-    error:
-      existingApprovalError,
-  } =
-    await db
+  /**
+   * We deliberately avoid `.eq("mission_id", null)`.
+   *
+   * PostgREST null comparisons should use `is`.
+   */
+  let existingQuery =
+    db
       .from(
         "approvals",
       )
-      .select("*")
+      .select(
+        "*",
+      )
       .eq(
         "organisation_id",
         organisationId,
@@ -3107,23 +3944,44 @@ export async function requestHighRiskApproval(
       .eq(
         "status",
         "pending",
-      )
-      .eq(
-        "mission_id",
-        input.missionId ??
-          null,
-      )
-      .maybeSingle();
+      );
 
-  if (existingApprovalError) {
+  existingQuery =
+    input.missionId
+      ? existingQuery.eq(
+          "mission_id",
+          input.missionId,
+        )
+      : existingQuery.is(
+          "mission_id",
+          null,
+        );
+
+  const {
+    data:
+      existingApproval,
+
+    error:
+      existingApprovalError,
+  } =
+    await existingQuery.maybeSingle();
+
+  if (
+    existingApprovalError
+  ) {
     throw createDatabaseError(
       "Unable to check existing high-risk approval",
       existingApprovalError,
     );
   }
 
-  if (existingApproval) {
-    return existingApproval as Approval;
+  if (
+    existingApproval
+  ) {
+    return (
+      existingApproval as
+        Approval
+    );
   }
 
   const {
@@ -3165,23 +4023,31 @@ export async function requestHighRiskApproval(
         status:
           "pending",
       })
-      .select("*")
+      .select(
+        "*",
+      )
       .single();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw createDatabaseError(
       "Unable to create high-risk approval request",
       error,
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     throw new Error(
       "Unable to create high-risk approval request",
     );
   }
 
-  if (input.missionId) {
+  if (
+    input.missionId
+  ) {
     const {
       error:
         missionError,
@@ -3204,9 +4070,19 @@ export async function requestHighRiskApproval(
         .eq(
           "organisation_id",
           organisationId,
+        )
+        .neq(
+          "status",
+          "cancelled",
+        )
+        .neq(
+          "status",
+          "completed",
         );
 
-    if (missionError) {
+    if (
+      missionError
+    ) {
       throw createDatabaseError(
         "Approval was created but the mission could not be paused",
         missionError,
@@ -3214,7 +4090,10 @@ export async function requestHighRiskApproval(
     }
   }
 
-  return data as Approval;
+  return (
+    data as
+      Approval
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -3234,7 +4113,9 @@ export async function decideApproval(
 
   organisationId =
     COSSA_ORGANISATION_ID,
-): Promise<Approval> {
+): Promise<
+  Approval
+> {
   const validApprovalId =
     requireNonEmptyValue(
       approvalId,
@@ -3256,18 +4137,25 @@ export async function decideApproval(
   } =
     await supabase.auth.getUser();
 
-  if (userError) {
+  if (
+    userError
+  ) {
     throw createDatabaseError(
       "Unable to verify the authenticated user",
       userError,
     );
   }
 
-  if (!userData.user) {
+  if (
+    !userData.user
+  ) {
     throw new Error(
       "Authentication is required",
     );
   }
+
+  const decidedAt =
+    new Date().toISOString();
 
   const {
     data,
@@ -3288,7 +4176,7 @@ export async function decideApproval(
           userData.user.id,
 
         decided_at:
-          new Date().toISOString(),
+          decidedAt,
       })
       .eq(
         "id",
@@ -3306,30 +4194,56 @@ export async function decideApproval(
         "decided_at",
         null,
       )
-      .select("*")
-      .single();
+      .select(
+        "*",
+      )
+      .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw createDatabaseError(
       "Unable to update approval",
       error,
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     throw new Error(
       "Unable to update approval: It may already have been decided or may not belong to this organisation",
     );
   }
 
-  /*
-   * Backward compatibility for older workflow-review approvals.
-   */
+  const approval =
+    data as
+      Approval;
+
+  /* ---------------------------------------------------------------------- */
+  /* LEGACY INTERNAL REVIEW COMPATIBILITY                                   */
+  /* ---------------------------------------------------------------------- */
+
   if (
-    data.action_type ===
+    approval.action_type ===
       "review_growth_coordination_output" &&
-    data.mission_id
+    approval.mission_id
   ) {
+    const incompleteHandoffs =
+      await listIncompleteMissionHandoffs(
+        approval.mission_id,
+        organisationId,
+      );
+
+    const nextStatus:
+      MissionStatus =
+      decision ===
+        "approved" &&
+      incompleteHandoffs.length ===
+        0
+        ? "completed"
+        : "running";
+
     const {
       error:
         legacyMissionError,
@@ -3340,116 +4254,67 @@ export async function decideApproval(
         )
         .update({
           status:
-            decision ===
-            "approved"
-              ? "completed"
-              : "running",
+            nextStatus,
 
           updated_at:
-            new Date().toISOString(),
+            decidedAt,
         })
         .eq(
           "id",
-          data.mission_id,
+          approval.mission_id,
         )
         .eq(
           "organisation_id",
           organisationId,
+        )
+        .neq(
+          "status",
+          "cancelled",
         );
 
-    if (legacyMissionError) {
+    if (
+      legacyMissionError
+    ) {
       throw createDatabaseError(
         "The legacy review was recorded but the mission could not be updated",
         legacyMissionError,
       );
     }
 
-    return data as Approval;
+    return approval;
   }
 
-  /*
-   * A high-risk approval only authorises that particular action.
+  /* ---------------------------------------------------------------------- */
+  /* HIGH-RISK APPROVAL                                                      */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * Approval means authority was granted or refused.
    *
-   * It does not automatically claim that the action executed.
+   * It does NOT mean the external action executed.
    */
   if (
-    data.mission_id
+    approval.mission_id
   ) {
-    const {
-      data:
-        remainingPendingApprovals,
-
-      error:
-        remainingApprovalError,
-    } =
-      await db
-        .from(
-          "approvals",
-        )
-        .select("id")
-        .eq(
-          "organisation_id",
-          organisationId,
-        )
-        .eq(
-          "mission_id",
-          data.mission_id,
-        )
-        .eq(
-          "status",
-          "pending");
-
-    if (remainingApprovalError) {
-      throw createDatabaseError(
-        "Approval was recorded but remaining approvals could not be checked",
-        remainingApprovalError,
+    const pendingApprovalCount =
+      await countPendingMissionApprovals(
+        approval.mission_id,
+        organisationId,
       );
-    }
 
     if (
-      (
-        remainingPendingApprovals ??
-        []
-      ).length ===
+      pendingApprovalCount ===
       0
     ) {
-      const {
-        data:
-          pendingHandoffs,
-
-        error:
-          handoffError,
-      } =
-        await db
-          .from(
-            "employee_handoffs",
-          )
-          .select("id")
-          .eq(
-            "organisation_id",
-            organisationId,
-          )
-          .eq(
-            "mission_id",
-            data.mission_id,
-          )
-          .eq(
-            "status",
-            "pending");
-
-      if (handoffError) {
-        throw createDatabaseError(
-          "Approval was recorded but mission handoffs could not be checked",
-          handoffError,
+      const incompleteHandoffs =
+        await listIncompleteMissionHandoffs(
+          approval.mission_id,
+          organisationId,
         );
-      }
 
       const nextStatus:
         MissionStatus =
-        (
-          pendingHandoffs ??
-          []
-        ).length >
+        incompleteHandoffs.length >
         0
           ? "running"
           : "completed";
@@ -3467,18 +4332,24 @@ export async function decideApproval(
               nextStatus,
 
             updated_at:
-              new Date().toISOString(),
+              decidedAt,
           })
           .eq(
             "id",
-            data.mission_id,
+            approval.mission_id,
           )
           .eq(
             "organisation_id",
             organisationId,
+          )
+          .neq(
+            "status",
+            "cancelled",
           );
 
-      if (missionError) {
+      if (
+        missionError
+      ) {
         throw createDatabaseError(
           "Approval was recorded but the mission could not resume",
           missionError,
@@ -3487,7 +4358,7 @@ export async function decideApproval(
     }
   }
 
-  return data as Approval;
+  return approval;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -3497,15 +4368,21 @@ export async function decideApproval(
 export function listEmployeeHandoffs(
   organisationId =
     COSSA_ORGANISATION_ID,
-): Promise<EmployeeHandoff[]> {
-  return rows<EmployeeHandoff>(
+): Promise<
+  EmployeeHandoff[]
+> {
+  return rows<
+    EmployeeHandoff
+  >(
     "Unable to load employee handoffs",
 
     db
       .from(
         "employee_handoffs",
       )
-      .select("*")
+      .select(
+        "*",
+      )
       .eq(
         "organisation_id",
         organisationId,
@@ -3524,18 +4401,26 @@ export function listEmployeeHandoffs(
 /* WORKFORCE INSTALL / ALIGNMENT                                              */
 /* -------------------------------------------------------------------------- */
 
-export async function installCossaGrowthWorkforce(): Promise<
+export async function installCossaGrowthWorkforce(
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
   AiEmployee[]
 > {
   const existing =
-    await listEmployees();
+    await listEmployees(
+      organisationId,
+    );
 
   await synchroniseKnownProfiles(
     existing,
+    organisationId,
   );
 
   const refreshedExisting =
-    await listEmployees();
+    await listEmployees(
+      organisationId,
+    );
 
   const existingKeys =
     new Set(
@@ -3574,7 +4459,7 @@ export async function installCossaGrowthWorkforce(): Promise<
               profile,
             ) => ({
               organisation_id:
-                COSSA_ORGANISATION_ID,
+                organisationId,
 
               business_unit_id:
                 null,
@@ -3584,7 +4469,9 @@ export async function installCossaGrowthWorkforce(): Promise<
           ),
         );
 
-    if (error) {
+    if (
+      error
+    ) {
       throw createDatabaseError(
         "Unable to install the Cossa AI workforce",
         error,
@@ -3592,7 +4479,9 @@ export async function installCossaGrowthWorkforce(): Promise<
     }
   }
 
-  return listEmployees();
+  return listEmployees(
+    organisationId,
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -3605,19 +4494,26 @@ async function createCollaborationMission(
 
   input:
     CreateCoordinationMissionInput,
-): Promise<CoordinationMissionResult> {
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  CoordinationMissionResult
+> {
   const objective =
     requireNonEmptyValue(
       input.objective,
       "Mission objective",
     );
 
-  /*
-   * Install/synchronise before mission creation so source-defined employees
-   * become real database employees automatically.
+  /**
+   * Synchronise source employees before creating a workflow so every stage
+   * references a real current employee record.
    */
   const employees =
-    await installCossaGrowthWorkforce();
+    await installCossaGrowthWorkforce(
+      organisationId,
+    );
 
   const employeeByKey =
     new Map(
@@ -3664,7 +4560,8 @@ async function createCollaborationMission(
       ) =>
         employeeByKey.get(
           stage.employeeKey,
-        ) as AiEmployee,
+        ) as
+          AiEmployee,
     );
 
   const inactiveEmployees =
@@ -3696,72 +4593,89 @@ async function createCollaborationMission(
     stageEmployees[0];
 
   const mission =
-    await createMission({
-      title:
-        `${definition.prefix} ${objective.slice(
-          0,
-          100,
-        )}`,
+    await createMission(
+      {
+        title:
+          `${definition.prefix} ${objective.slice(
+            0,
+            100,
+          )}`,
 
-      instruction:
-        definition.instruction,
+        instruction:
+          definition.instruction,
 
-      objective,
+        objective,
 
-      assigned_employee_id:
-        assignedEmployee.id,
+        assigned_employee_id:
+          assignedEmployee.id,
 
-      target_market:
-        input.target_market?.trim() ||
-        null,
+        target_market:
+          input.target_market?.trim() ||
+          null,
 
-      target_location:
-        input.target_location?.trim() ||
-        null,
+        target_location:
+          input.target_location?.trim() ||
+          null,
 
-      target_service:
-        input.target_service?.trim() ||
-        null,
+        target_service:
+          input.target_service?.trim() ||
+          null,
 
-      constraints:
-        [
+        constraints: [
           ...definition.constraints,
         ],
 
-      prohibited_actions: [
-        "fabricate_business_facts",
-        "fabricate_external_actions",
-        "spend_without_owner_authority",
-        "make_binding_commitments_without_owner_authority",
-        "change_credentials_without_owner_authority",
-        "make_irreversible_account_changes_without_owner_authority",
-      ],
+        prohibited_actions: [
+          "fabricate_business_facts",
+          "fabricate_external_actions",
+          "spend_without_owner_authority",
+          "make_binding_commitments_without_owner_authority",
+          "change_credentials_without_owner_authority",
+          "make_irreversible_account_changes_without_owner_authority",
+        ],
 
-      output_schema: {
-        required_sections:
-          [
+        output_schema: {
+          required_sections: [
             ...definition.requiredSections,
           ],
 
-        collaboration_mode:
-          "hand_to_hand",
+          collaboration_mode:
+            "hand_to_hand",
 
-        safe_internal_work:
-          "continue_automatically",
+          stage_order:
+            definition.stages.map(
+              (
+                stage,
+                index,
+              ) => ({
+                stage:
+                  index +
+                  1,
 
-        owner_interruption:
-          "high_risk_only",
+                employee_key:
+                  stage.employeeKey,
+              }),
+            ),
 
-        final_decision_owner:
-          "Cossa Nexus Holdings owner",
+          safe_internal_work:
+            "continue_automatically",
+
+          owner_interruption:
+            "high_risk_only",
+
+          final_decision_owner:
+            "Cossa Nexus Holdings owner",
+        },
+
+        priority:
+          "normal",
+
+        risk_level:
+          "medium",
       },
 
-      priority:
-        "normal",
-
-      risk_level:
-        "medium",
-    });
+      organisationId,
+    );
 
   const handoffRows =
     definition.stages.map(
@@ -3770,7 +4684,7 @@ async function createCollaborationMission(
         index,
       ) => ({
         organisation_id:
-          COSSA_ORGANISATION_ID,
+          organisationId,
 
         mission_id:
           mission.id,
@@ -3805,11 +4719,36 @@ async function createCollaborationMission(
           total_stages:
             definition.stages.length,
 
+          employee_key:
+            stage.employeeKey,
+
+          previous_employee_key:
+            index ===
+            0
+              ? null
+              : definition.stages[
+                  index -
+                  1
+                ].employeeKey,
+
+          next_employee_key:
+            index <
+            definition.stages.length -
+              1
+              ? definition.stages[
+                  index +
+                  1
+                ].employeeKey
+              : null,
+
           workflow:
             definition.prefix,
 
           collaboration_mode:
             "hand_to_hand",
+
+          execution_order:
+            "strict_sequential",
 
           safe_internal_work:
             "continue",
@@ -3840,19 +4779,113 @@ async function createCollaborationMission(
       .insert(
         handoffRows,
       )
-      .select("*");
+      .select(
+        "*",
+      );
 
-  if (error) {
+  if (
+    error
+  ) {
+    /**
+     * Preserve truth instead of leaving a mission looking ready when its
+     * handoff plan failed to materialise.
+     */
+    const {
+      error:
+        missionFailureError,
+    } =
+      await db
+        .from(
+          "missions",
+        )
+        .update({
+          status:
+            "failed",
+
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "id",
+          mission.id,
+        )
+        .eq(
+          "organisation_id",
+          organisationId,
+        );
+
+    if (
+      missionFailureError
+    ) {
+      console.error(
+        "Unable to mark partially created workflow mission as failed",
+        missionFailureError,
+      );
+    }
+
     throw createDatabaseError(
       "Unable to create the workforce handoff plan",
       error,
     );
   }
 
-  /*
-   * Mission is immediately ready for workers.
-   */
+  const createdHandoffs =
+    (
+      data ??
+      []
+    ) as
+      EmployeeHandoff[];
+
+  if (
+    createdHandoffs.length !==
+    definition.stages.length
+  ) {
+    const {
+      error:
+        missionFailureError,
+    } =
+      await db
+        .from(
+          "missions",
+        )
+        .update({
+          status:
+            "failed",
+
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "id",
+          mission.id,
+        )
+        .eq(
+          "organisation_id",
+          organisationId,
+        );
+
+    if (
+      missionFailureError
+    ) {
+      console.error(
+        "Unable to mark incomplete workflow mission as failed",
+        missionFailureError,
+      );
+    }
+
+    throw new Error(
+      `The workflow expected ${definition.stages.length} handoffs but Supabase returned ${createdHandoffs.length}. The mission was not queued.`,
+    );
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* QUEUE ONLY AFTER ALL HANDOFFS EXIST                                    */
+  /* ---------------------------------------------------------------------- */
+
   const {
+    data:
+      queuedMission,
+
     error:
       missionStatusError,
   } =
@@ -3873,29 +4906,41 @@ async function createCollaborationMission(
       )
       .eq(
         "organisation_id",
-        COSSA_ORGANISATION_ID,
-      );
+        organisationId,
+      )
+      .eq(
+        "status",
+        "draft",
+      )
+      .select(
+        "*",
+      )
+      .maybeSingle();
 
-  if (missionStatusError) {
+  if (
+    missionStatusError
+  ) {
     throw createDatabaseError(
       "The workflow was created but could not be queued",
       missionStatusError,
     );
   }
 
-  return {
-    mission: {
-      ...mission,
+  if (
+    !queuedMission
+  ) {
+    throw new Error(
+      "The workflow handoffs were created, but the mission could not be moved from draft to queued.",
+    );
+  }
 
-      status:
-        "queued",
-    },
+  return {
+    mission:
+      queuedMission as
+        Mission,
 
     handoffs:
-      (
-        data ??
-        []
-      ) as EmployeeHandoff[],
+      createdHandoffs,
   };
 }
 
@@ -3906,10 +4951,16 @@ async function createCollaborationMission(
 export async function createGrowthCoordinationMission(
   input:
     CreateGrowthCoordinationMissionInput,
-): Promise<GrowthCoordinationMissionResult> {
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  GrowthCoordinationMissionResult
+> {
   return createCollaborationMission(
     GROWTH_WORKFLOW_DEFINITION,
     input,
+    organisationId,
   );
 }
 
@@ -3920,10 +4971,16 @@ export async function createGrowthCoordinationMission(
 export async function createStoreOperationsMission(
   input:
     CreateCoordinationMissionInput,
-): Promise<CoordinationMissionResult> {
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  CoordinationMissionResult
+> {
   return createCollaborationMission(
     STORE_WORKFLOW_DEFINITION,
     input,
+    organisationId,
   );
 }
 
@@ -3934,10 +4991,16 @@ export async function createStoreOperationsMission(
 export async function createTechDeliveryMission(
   input:
     CreateCoordinationMissionInput,
-): Promise<CoordinationMissionResult> {
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  CoordinationMissionResult
+> {
   return createCollaborationMission(
     TECH_WORKFLOW_DEFINITION,
     input,
+    organisationId,
   );
 }
 
@@ -3948,9 +5011,15 @@ export async function createTechDeliveryMission(
 export async function createRevenueIntelligenceMission(
   input:
     CreateCoordinationMissionInput,
-): Promise<CoordinationMissionResult> {
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  CoordinationMissionResult
+> {
   return createCollaborationMission(
     REVENUE_WORKFLOW_DEFINITION,
     input,
+    organisationId,
   );
 }
