@@ -3,6 +3,7 @@ import {
   Link,
 } from "@tanstack/react-router";
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -16,14 +17,17 @@ import {
   ChevronUp,
   Download,
   ExternalLink,
+  FileCheck2,
   FileSearch,
   Gauge,
   Globe2,
+  Layers3,
   Loader2,
   Mail,
   MapPin,
   Phone,
   Radar,
+  RefreshCcw,
   Save,
   Search,
   ShieldCheck,
@@ -93,7 +97,7 @@ export const Route = createFileRoute(
       {
         property: "og:description",
         content:
-          "Production prospect research, commercial scoring and verified CRM lead capture.",
+          "Production prospect research, commercial scoring, source verification and CRM lead capture.",
       },
     ],
   }),
@@ -299,8 +303,61 @@ const SERVICE_OPTIONS: Array<{
   },
 ];
 
+const DIGITAL_SERVICES =
+  new Set<LeadHunterServiceCategory>([
+    "website_design",
+    "logo_design",
+    "branding",
+    "seo",
+    "digital_marketing",
+    "social_media_management",
+    "google_business_profile",
+    "lead_generation",
+    "crm",
+    "ai_automation",
+    "ecommerce",
+  ]);
+
+const PROCUREMENT_SERVICES =
+  new Set<LeadHunterServiceCategory>([
+    "construction",
+    "renovation",
+    "property_maintenance",
+    "painting",
+    "tiling",
+    "ceilings",
+    "roofing",
+    "plumbing",
+    "facility_management",
+    "commercial_cleaning",
+    "deep_cleaning",
+    "hygiene",
+    "landscaping",
+    "waste_management",
+    "website_design",
+    "branding",
+    "digital_marketing",
+    "crm",
+    "ai_automation",
+  ]);
+
 const COSSA_COMPANY_AS_ORGANISATION_TYPE_PATTERN =
   /\b(?:cossa nexus(?: holdings| construction)?|cossa facility services|cossa tech|cossa ai growth|cossa store|nexdocs)\b/i;
+
+function parseCommaSeparated(
+  value: string,
+): string[] {
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map((item) =>
+          item.trim(),
+        )
+        .filter(Boolean),
+    ),
+  ];
+}
 
 function LeadHunterPage() {
   const abortRef =
@@ -402,6 +459,16 @@ function LeadHunterPage() {
   );
 
   const [
+    tenderKeywordInput,
+    setTenderKeywordInput,
+  ] = useState(
+    (
+      DEFAULT_LEAD_HUNTER_REQUEST
+        .tender_keywords ?? []
+    ).join(", "),
+  );
+
+  const [
     result,
     setResult,
   ] =
@@ -449,6 +516,19 @@ function LeadHunterPage() {
     new Set(),
   );
 
+  const [
+    noticesExpanded,
+    setNoticesExpanded,
+  ] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current =
+        null;
+    };
+  }, []);
+
   const prospects =
     result?.prospects ?? [];
 
@@ -480,6 +560,18 @@ function LeadHunterPage() {
         "hot",
     ).length;
 
+  const opportunityCount =
+    prospects.filter((prospect) =>
+      [
+        "active_opportunity",
+        "tender",
+        "supplier_opportunity",
+        "partnership",
+      ].includes(
+        prospect.classification,
+      ),
+    ).length;
+
   const averageScore =
     prospects.length > 0
       ? Math.round(
@@ -506,32 +598,101 @@ function LeadHunterPage() {
       [selectedStrategyId],
     );
 
+  const selectedDigitalServiceCount =
+    useMemo(
+      () =>
+        request.services.filter(
+          (service) =>
+            DIGITAL_SERVICES.has(
+              service,
+            ),
+        ).length,
+      [request.services],
+    );
+
+  const selectedProcurementServiceCount =
+    useMemo(
+      () =>
+        request.services.filter(
+          (service) =>
+            PROCUREMENT_SERVICES.has(
+              service,
+            ),
+        ).length,
+      [request.services],
+    );
+
+  const activeDepth =
+    request.search_depth ??
+    "economy";
+
+  const queryCapacity =
+    Math.min(
+      maxQueriesForDepth(
+        activeDepth,
+      ),
+      request.max_search_queries ??
+        maxQueriesForDepth(
+          activeDepth,
+        ),
+    );
+
+  const serviceCapacityExceeded =
+    request.services.length >
+    queryCapacity;
+
   const currentSummary =
     useMemo(
       () =>
         buildHuntSummary({
           ...request,
+
           search_instruction:
             searchInstruction,
+
           locations:
             parseCommaSeparated(
               locationInput,
             ),
+
           countries:
             parseCommaSeparated(
               countryInput,
             ),
+
           provinces:
             parseCommaSeparated(
               provinceInput,
             ),
+
           cities:
             parseCommaSeparated(
               cityInput,
             ),
+
           suburbs:
             parseCommaSeparated(
               suburbInput,
+            ),
+
+          industries:
+            parseCommaSeparated(
+              industryInput,
+            ),
+
+          organisation_types:
+            parseCommaSeparated(
+              organisationTypeInput,
+            ),
+
+          prospect_keywords:
+            parseCommaSeparated(
+              keywordInput,
+            ),
+
+          tender_keywords:
+            parseCommaSeparated(
+              tenderKeywordInput,
             ),
         }),
       [
@@ -542,6 +703,10 @@ function LeadHunterPage() {
         provinceInput,
         cityInput,
         suburbInput,
+        industryInput,
+        organisationTypeInput,
+        keywordInput,
+        tenderKeywordInput,
       ],
     );
 
@@ -629,37 +794,38 @@ function LeadHunterPage() {
       ),
     );
 
+    setTenderKeywordInput(
+      (
+        strategyRequest.tender_keywords ??
+        []
+      ).join(", "),
+    );
+
     resetResults();
   }
 
   function resetResults() {
+    abortRef.current?.abort();
+    abortRef.current =
+      null;
+
     setResult(null);
     setHuntState("idle");
     setHuntError(null);
+
     setSavedProspectIds(
       new Set(),
     );
+
     setDuplicateProspectIds(
       new Set(),
     );
+
     setExpandedProspectIds(
       new Set(),
     );
-  }
 
-  function parseCommaSeparated(
-    value: string,
-  ): string[] {
-    return [
-      ...new Set(
-        value
-          .split(",")
-          .map((item) =>
-            item.trim(),
-          )
-          .filter(Boolean),
-      ),
-    ];
+    setNoticesExpanded(false);
   }
 
   function toggleCompany(
@@ -713,6 +879,32 @@ function LeadHunterPage() {
     });
   }
 
+  function selectAllCompanies() {
+    setRequest((current) => ({
+      ...current,
+
+      companies:
+        COMPANY_OPTIONS.map(
+          (item) =>
+            item.value,
+        ),
+    }));
+  }
+
+  function clearCompanies() {
+    setRequest((current) => ({
+      ...current,
+      companies: [],
+    }));
+  }
+
+  function clearServices() {
+    setRequest((current) => ({
+      ...current,
+      services: [],
+    }));
+  }
+
   function selectProvince(
     province: string,
   ) {
@@ -763,6 +955,30 @@ function LeadHunterPage() {
     );
   }
 
+  function setSector(
+    sector: LeadHunterSector,
+  ) {
+    setRequest(
+      (current) => ({
+        ...current,
+
+        sector,
+
+        include_private_sector:
+          sector === "private" ||
+          sector === "mixed",
+
+        include_government_sector:
+          sector === "government" ||
+          sector === "mixed",
+
+        include_nonprofits:
+          sector === "nonprofit" ||
+          sector === "mixed",
+      }),
+    );
+  }
+
   function showHuntValidationError(
     message: string,
   ) {
@@ -773,6 +989,15 @@ function LeadHunterPage() {
   }
 
   async function runHunt() {
+    if (
+      huntState ===
+      "searching"
+    ) {
+      return;
+    }
+
+    abortRef.current?.abort();
+
     if (
       request.companies.length ===
       0
@@ -831,12 +1056,6 @@ function LeadHunterPage() {
         suburbInput,
       );
 
-    /*
-     * The mission may explicitly narrow services, companies, sector and
-     * opportunity evidence. Normalise it before local validation so the
-     * visible Hunt summary, the pre-flight rules and the server receive the
-     * same request.
-     */
     const finalRequest =
       validateSearchRequest({
         ...request,
@@ -868,6 +1087,11 @@ function LeadHunterPage() {
         prospect_keywords:
           parseCommaSeparated(
             keywordInput,
+          ),
+
+        tender_keywords:
+          parseCommaSeparated(
+            tenderKeywordInput,
           ),
       });
 
@@ -918,6 +1142,18 @@ function LeadHunterPage() {
       return;
     }
 
+    const hasEnabledSector =
+      finalRequest.include_private_sector ||
+      finalRequest.include_government_sector ||
+      finalRequest.include_nonprofits;
+
+    if (!hasEnabledSector) {
+      showHuntValidationError(
+        "Enable at least one buyer sector.",
+      );
+      return;
+    }
+
     const scope =
       finalRequest.search_scope;
 
@@ -940,8 +1176,11 @@ function LeadHunterPage() {
       return;
     }
 
-    abortRef.current =
+    const controller =
       new AbortController();
+
+    abortRef.current =
+      controller;
 
     setHuntState(
       "searching",
@@ -949,16 +1188,30 @@ function LeadHunterPage() {
 
     setHuntError(null);
     setResult(null);
+    setNoticesExpanded(false);
 
     try {
       const response =
         await huntProspects(
           finalRequest,
-          abortRef.current.signal,
+          controller.signal,
         );
+
+      if (
+        controller.signal
+          .aborted
+      ) {
+        return;
+      }
 
       setRequest(
         response.request,
+      );
+
+      setSearchInstruction(
+        response.request
+          .search_instruction ??
+          instruction,
       );
 
       setResult(
@@ -977,28 +1230,24 @@ function LeadHunterPage() {
           "No verified prospects met the current rules.",
           {
             description:
-              "Try a more specific instruction, reduce the score or broaden the search area.",
+              "The Hunter found no result strong enough to pass the active verification rules.",
           },
         );
       } else {
         toast.success(
-          `${response.prospects.length} verified prospects found`,
+          `${response.prospects.length} qualified prospects found`,
           {
             description:
-              `${response.source_count} public sources were checked.`,
+              `${response.source_count} candidate sources were evaluated.`,
           },
         );
       }
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Lead Hunter search failed.";
-
-      if (
+      const isAbort =
         error instanceof DOMException &&
-        error.name === "AbortError"
-      ) {
+        error.name === "AbortError";
+
+      if (isAbort) {
         setHuntState(
           "idle",
         );
@@ -1009,6 +1258,11 @@ function LeadHunterPage() {
 
         return;
       }
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Lead Hunter search failed.";
 
       setHuntError(
         message,
@@ -1026,8 +1280,13 @@ function LeadHunterPage() {
         },
       );
     } finally {
-      abortRef.current =
-        null;
+      if (
+        abortRef.current ===
+        controller
+      ) {
+        abortRef.current =
+          null;
+      }
     }
   }
 
@@ -1043,19 +1302,43 @@ function LeadHunterPage() {
     setHuntError(
       "The hunt was cancelled. No CRM records were changed.",
     );
+
+    toast.info(
+      "Lead Hunter cancelled",
+    );
   }
 
   async function saveProspect(
     prospect:
       LeadHunterProspect,
   ) {
+    if (
+      savingProspectIds.has(
+        prospect.id,
+      ) ||
+      savedProspectIds.has(
+        prospect.id,
+      ) ||
+      duplicateProspectIds.has(
+        prospect.id,
+      )
+    ) {
+      return;
+    }
+
     setSavingProspectIds(
-      (current) =>
-        new Set(
-          current,
-        ).add(
+      (current) => {
+        const next =
+          new Set(
+            current,
+          );
+
+        next.add(
           prospect.id,
-        ),
+        );
+
+        return next;
+      },
     );
 
     try {
@@ -1068,12 +1351,18 @@ function LeadHunterPage() {
         saveResult.duplicate
       ) {
         setDuplicateProspectIds(
-          (current) =>
-            new Set(
-              current,
-            ).add(
+          (current) => {
+            const next =
+              new Set(
+                current,
+              );
+
+            next.add(
               prospect.id,
-            ),
+            );
+
+            return next;
+          },
         );
 
         toast.warning(
@@ -1091,12 +1380,18 @@ function LeadHunterPage() {
       }
 
       setSavedProspectIds(
-        (current) =>
-          new Set(
-            current,
-          ).add(
+        (current) => {
+          const next =
+            new Set(
+              current,
+            );
+
+          next.add(
             prospect.id,
-          ),
+          );
+
+          return next;
+        },
       );
 
       toast.success(
@@ -1213,8 +1508,12 @@ function LeadHunterPage() {
     anchor.click();
     anchor.remove();
 
-    URL.revokeObjectURL(
-      url,
+    window.setTimeout(
+      () =>
+        URL.revokeObjectURL(
+          url,
+        ),
+      0,
     );
 
     toast.success(
@@ -1235,6 +1534,10 @@ function LeadHunterPage() {
               </div>
 
               <StatusBadge status="Production" />
+
+              <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-success">
+                Evidence-first
+              </span>
             </div>
 
             <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
@@ -1245,18 +1548,19 @@ function LeadHunterPage() {
             </h1>
 
             <p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">
-              Tell Lead Hunter exactly what customer,
-              project, service need, company, tender,
-              location or digital weakness you want it
-              to find. It searches live public sources
-              and returns evidence-backed prospects.
+              Hunt verified customers, private projects,
+              public tenders, supplier opportunities,
+              partnerships and objectively observable
+              digital-service gaps.
             </p>
 
             <p className="mt-2 max-w-4xl text-xs leading-5 text-muted-foreground">
-              Results are research signals, not invented
-              buying intent. Outreach, quotations,
-              commitments and tender submissions still
-              require human review.
+              Search engines discover candidates. The
+              Hunter then verifies public sources,
+              rejects competitors and directories,
+              checks procurement validity, deduplicates
+              organisations and routes each accepted
+              opportunity to the correct Cossa company.
             </p>
           </div>
 
@@ -1288,7 +1592,7 @@ function LeadHunterPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         <MetricCard
           label="Verified"
           value={
@@ -1300,6 +1604,19 @@ function LeadHunterPage() {
                 )
           }
           icon={ShieldCheck}
+        />
+
+        <MetricCard
+          label="Opportunities"
+          value={
+            huntState ===
+            "searching"
+              ? "—"
+              : String(
+                  opportunityCount,
+                )
+          }
+          icon={Target}
         />
 
         <MetricCard
@@ -1352,11 +1669,11 @@ function LeadHunterPage() {
                 ? `${averageScore}/100`
                 : "0/100"
           }
-          icon={Target}
+          icon={Gauge}
         />
 
         <MetricCard
-          label="Sources checked"
+          label="Sources"
           value={
             huntState ===
             "searching"
@@ -1370,7 +1687,7 @@ function LeadHunterPage() {
         />
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[480px_1fr]">
+      <div className="grid gap-6 xl:grid-cols-[500px_1fr]">
         <aside className="glass-card h-fit p-5">
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 text-primary" />
@@ -1386,7 +1703,7 @@ function LeadHunterPage() {
                 <Sparkles className="h-4 w-4 text-primary" />
 
                 <Label htmlFor="lead-hunter-instruction">
-                  What must Lead Hunter find?
+                  Hunter mission
                 </Label>
               </div>
 
@@ -1405,15 +1722,15 @@ function LeadHunterPage() {
                 }
                 rows={6}
                 maxLength={2500}
-                placeholder="Example: Find property-management companies in Centurion and Midrand that may need recurring maintenance or commercial cleaning. Prioritise companies with a public phone or email and exclude cleaning or construction competitors."
+                placeholder="Example: Find property-management companies in Centurion and Midrand that are suitable buyers for recurring maintenance or commercial cleaning. Prioritise verified organisations with public contact routes and reject construction or cleaning competitors."
                 className="mt-3 w-full resize-y rounded-lg border border-input bg-background px-3 py-3 text-sm leading-6 outline-none placeholder:text-muted-foreground focus:border-primary/50"
               />
 
               <div className="mt-2 flex items-center justify-between gap-3 text-[10px] text-muted-foreground">
                 <span>
-                  Write the exact customer, service,
-                  problem and area you want searched.
-                  This instruction is the mission; CRM notes never alter search targeting.
+                  Define the buyer, service, location and
+                  opportunity conditions. The server still
+                  verifies every result independently.
                 </span>
 
                 <span>
@@ -1426,37 +1743,37 @@ function LeadHunterPage() {
 
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <InstructionExample
-                  label="Website upgrades"
+                  label="Website audit prospects"
                   onClick={() =>
                     setSearchInstruction(
-                      "Find legitimate small and medium businesses in South Africa with outdated, weak, non-mobile or poorly converting websites. Prioritise businesses with public contact details and clear evidence such as missing WhatsApp, no enquiry form, weak calls to action or outdated design. Exclude website designers and marketing agencies.",
+                      "Find legitimate small and medium businesses in South Africa whose official websites can be objectively inspected for website-design or conversion improvement opportunities. Prioritise businesses with verified public contact routes. Do not assume a weak website from search snippets; verify observable website signals and exclude web designers and marketing agencies.",
                     )
                   }
                 />
 
                 <InstructionExample
-                  label="Logo and branding"
+                  label="Branding prospects"
                   onClick={() =>
                     setSearchInstruction(
-                      "Find real businesses in Gauteng with weak, outdated, inconsistent or missing public branding that may need a logo redesign, brand identity or website branding upgrade. Exclude branding agencies, graphic designers and direct competitors.",
+                      "Find legitimate businesses in Gauteng that are suitable buyers for branding, logo or digital-presence services. Require verifiable public evidence before classifying an active opportunity and exclude branding agencies, designers and direct competitors.",
                     )
                   }
                 />
 
                 <InstructionExample
-                  label="Cleaning contracts"
+                  label="Cleaning opportunities"
                   onClick={() =>
                     setSearchInstruction(
-                      "Find offices, schools, churches, property managers, warehouses and retail premises in Pretoria, Centurion, Midrand and Johannesburg that show a verified need or suitable procurement route for recurring commercial cleaning, deep cleaning or hygiene services.",
+                      "Find offices, schools, churches, property managers, warehouses and retail premises in Pretoria, Centurion, Midrand and Johannesburg with a verified cleaning requirement, supplier route, procurement notice or strong buyer fit for recurring commercial cleaning, deep cleaning or hygiene services.",
                     )
                   }
                 />
 
                 <InstructionExample
-                  label="Small construction jobs"
+                  label="Construction quick wins"
                   onClick={() =>
                     setSearchInstruction(
-                      "Find smaller and faster-to-close construction, painting, tiling, ceiling, roofing, renovation or property-maintenance opportunities in Gauteng. Prioritise RFQs, maintenance requirements, managing agents, schools, churches, offices and businesses with public contact details.",
+                      "Find smaller and faster-to-close construction, painting, tiling, ceiling, roofing, renovation and property-maintenance opportunities in Gauteng. Prioritise current RFQs, maintenance requirements, managing agents, schools, churches, offices and organisations with verified public contact routes.",
                     )
                   }
                 />
@@ -1509,7 +1826,7 @@ function LeadHunterPage() {
 
             <div className="space-y-2">
               <Label>
-                Sector
+                Buyer sector
               </Label>
 
               <div className="grid grid-cols-2 gap-2">
@@ -1528,32 +1845,8 @@ function LeadHunterPage() {
                         sector
                       }
                       onClick={() =>
-                        setRequest(
-                          (
-                            current,
-                          ) => ({
-                            ...current,
-
-                            sector,
-
-                            include_private_sector:
-                              sector ===
-                                "private" ||
-                              sector ===
-                                "mixed",
-
-                            include_government_sector:
-                              sector ===
-                                "government" ||
-                              sector ===
-                                "mixed",
-
-                            include_nonprofits:
-                              sector ===
-                                "nonprofit" ||
-                              sector ===
-                                "mixed",
-                          }),
+                        setSector(
+                          sector,
                         )
                       }
                       className={cn(
@@ -1570,6 +1863,14 @@ function LeadHunterPage() {
                   ),
                 )}
               </div>
+
+              <p className="text-[10px] leading-4 text-muted-foreground">
+                Government results are treated more
+                strictly: normal government pages are
+                not sales leads without a valid
+                procurement, supplier or partnership
+                route.
+              </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -1669,10 +1970,9 @@ function LeadHunterPage() {
 
               <SelectField
                 id="lead-hunter-depth"
-                label="Credit usage"
+                label="Search depth"
                 value={
-                  request.search_depth ??
-                  "economy"
+                  activeDepth
                 }
                 options={
                   SEARCH_DEPTH_OPTIONS.map(
@@ -1694,25 +1994,49 @@ function LeadHunterPage() {
               />
             </div>
 
-            <div className="rounded-lg border border-border/60 bg-card/30 p-3 text-xs leading-5 text-muted-foreground">
+            <div
+              className={cn(
+                "rounded-lg border p-3 text-xs leading-5",
+
+                serviceCapacityExceeded
+                  ? "border-destructive/30 bg-destructive/10 text-destructive"
+                  : "border-border/60 bg-card/30 text-muted-foreground",
+              )}
+            >
               <div className="flex items-center gap-2 font-semibold text-foreground">
                 <Gauge className="h-4 w-4 text-primary" />
-                Credit-conscious search
+                Search budget
               </div>
 
               <p className="mt-1">
-                Current limit:{" "}
+                Current depth supports{" "}
                 <strong className="text-primary">
-                  {
-                    request.max_search_queries ??
-                    3
-                  }{" "}
-                  search queries
-                </strong>
-                . Economy mode should remain the
-                default until Cossa begins generating
-                consistent revenue.
+                  {queryCapacity}
+                </strong>{" "}
+                selected service
+                {queryCapacity === 1
+                  ? ""
+                  : "s"}{" "}
+                in this hunt.
               </p>
+
+              <p className="mt-1">
+                Selected:{" "}
+                <strong>
+                  {
+                    request.services
+                      .length
+                  }
+                </strong>
+                .
+              </p>
+
+              {serviceCapacityExceeded && (
+                <p className="mt-2 font-medium">
+                  Reduce selected services or increase
+                  search depth before running the hunt.
+                </p>
+              )}
             </div>
 
             <LocationControls
@@ -1796,7 +2120,7 @@ function LeadHunterPage() {
 
             <div className="space-y-2">
               <Label htmlFor="lead-hunter-organisations">
-                Organisation types
+                Buyer organisation types
               </Label>
 
               <Input
@@ -1814,11 +2138,16 @@ function LeadHunterPage() {
                 }
                 placeholder="Property manager, School, Warehouse, Church"
               />
+
+              <p className="text-[10px] leading-4 text-muted-foreground">
+                Describe the customer, not the Cossa
+                subsidiary selling to them.
+              </p>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="lead-hunter-keywords">
-                Extra search keywords
+                Prospect keywords
               </Label>
 
               <Input
@@ -1834,13 +2163,50 @@ function LeadHunterPage() {
                       .value,
                   )
                 }
-                placeholder="website upgrade, logo redesign, maintenance RFQ"
+                placeholder="new premises, expansion, refurbishment, maintenance"
               />
 
               <p className="text-[10px] leading-4 text-muted-foreground">
-                Use commas to separate search terms.
+                These guide discovery. They do not
+                override evidence requirements.
               </p>
             </div>
+
+            {(request.include_government_sector ||
+              request.sector ===
+                "government" ||
+              request.sector ===
+                "mixed" ||
+              selectedProcurementServiceCount >
+                0) && (
+              <div className="space-y-2">
+                <Label htmlFor="lead-hunter-tender-keywords">
+                  Tender / procurement keywords
+                </Label>
+
+                <Input
+                  id="lead-hunter-tender-keywords"
+                  value={
+                    tenderKeywordInput
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setTenderKeywordInput(
+                      event.target
+                        .value,
+                    )
+                  }
+                  placeholder="RFQ, tender, bid, supplier panel, CIDB"
+                />
+
+                <p className="text-[10px] leading-4 text-muted-foreground">
+                  Useful for government RFQs, tenders,
+                  supplier panels and formal procurement
+                  searches.
+                </p>
+              </div>
+            )}
 
             <SelectionGroup
               title="Cossa companies"
@@ -1852,6 +2218,23 @@ function LeadHunterPage() {
               }
               onToggle={
                 toggleCompany
+              }
+              actions={
+                <div className="flex gap-2">
+                  <MiniAction
+                    label="All"
+                    onClick={
+                      selectAllCompanies
+                    }
+                  />
+
+                  <MiniAction
+                    label="Clear"
+                    onClick={
+                      clearCompanies
+                    }
+                  />
+                </div>
               }
             />
 
@@ -1867,12 +2250,51 @@ function LeadHunterPage() {
                 toggleService
               }
               maxHeight
+              actions={
+                <div className="flex gap-2">
+                  <span
+                    className={cn(
+                      "rounded-full border px-2 py-0.5 text-[10px]",
+
+                      serviceCapacityExceeded
+                        ? "border-destructive/30 bg-destructive/10 text-destructive"
+                        : "border-border/60 text-muted-foreground",
+                    )}
+                  >
+                    {
+                      request.services
+                        .length
+                    }
+                    /{queryCapacity}
+                  </span>
+
+                  <MiniAction
+                    label="Clear"
+                    onClick={
+                      clearServices
+                    }
+                  />
+                </div>
+              }
             />
+
+            {selectedDigitalServiceCount >
+              0 && (
+              <div className="rounded-lg border border-info/25 bg-info/5 p-3 text-[10px] leading-4 text-muted-foreground">
+                <strong className="text-info">
+                  Digital audit rule:
+                </strong>{" "}
+                the Hunter should verify observable
+                website signals itself rather than
+                trusting search snippets that call a
+                website “bad”, “outdated” or “poor”.
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="lead-hunter-results">
-                  Results
+                  Max results
                 </Label>
 
                 <Input
@@ -1953,10 +2375,105 @@ function LeadHunterPage() {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="lead-hunter-evidence-sources">
+                  Evidence sources
+                </Label>
+
+                <Input
+                  id="lead-hunter-evidence-sources"
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={
+                    request.minimum_evidence_sources ??
+                    1
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setRequest(
+                      (
+                        current,
+                      ) => ({
+                        ...current,
+
+                        minimum_evidence_sources:
+                          Math.max(
+                            1,
+                            Math.min(
+                              5,
+                              Number(
+                                event
+                                  .target
+                                  .value ||
+                                1,
+                              ),
+                            ),
+                          ),
+                      }),
+                    )
+                  }
+                />
+
+                <p className="text-[10px] leading-4 text-muted-foreground">
+                  Independent domains, not repeated
+                  pages from one website.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="lead-hunter-cache-age">
+                  Cache age hours
+                </Label>
+
+                <Input
+                  id="lead-hunter-cache-age"
+                  type="number"
+                  min={1}
+                  max={168}
+                  value={
+                    request.cache_max_age_hours ??
+                    24
+                  }
+                  disabled={
+                    request.use_cached_results ===
+                    false
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setRequest(
+                      (
+                        current,
+                      ) => ({
+                        ...current,
+
+                        cache_max_age_hours:
+                          Math.max(
+                            1,
+                            Math.min(
+                              168,
+                              Number(
+                                event
+                                  .target
+                                  .value ||
+                                24,
+                              ),
+                            ),
+                          ),
+                      }),
+                    )
+                  }
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
               <ToggleOption
                 label="Search everything relevant"
-                description="Use the selected services, location and instruction without limiting the hunt to one opportunity type."
+                description="Use the selected services, mission and location without restricting the hunt to one opportunity type."
                 checked={
                   request.search_everything ??
                   false
@@ -1979,7 +2496,7 @@ function LeadHunterPage() {
 
               <ToggleOption
                 label="Revenue-first ranking"
-                description="Rank opportunities by commercial potential, contactability and ease of closing."
+                description="Prioritise commercial potential, timing, buyer intent and contactability."
                 checked={
                   request.revenue_first ??
                   true
@@ -2002,7 +2519,7 @@ function LeadHunterPage() {
 
               <ToggleOption
                 label="Prioritise easier wins"
-                description="Prefer clear service gaps and reachable organisations over vague strategic results."
+                description="Prefer practical and reachable opportunities over vague strategic prospects."
                 checked={
                   request.easy_wins_only ??
                   true
@@ -2024,8 +2541,54 @@ function LeadHunterPage() {
               />
 
               <ToggleOption
+                label="Include smaller projects"
+                description="Allow RFQs, repairs, minor works and smaller opportunities."
+                checked={
+                  request.include_small_projects !==
+                  false
+                }
+                onChange={(
+                  checked,
+                ) =>
+                  setRequest(
+                    (
+                      current,
+                    ) => ({
+                      ...current,
+
+                      include_small_projects:
+                        checked,
+                    }),
+                  )
+                }
+              />
+
+              <ToggleOption
+                label="Include larger projects"
+                description="Allow larger tenders, frameworks and strategic projects."
+                checked={
+                  request.include_large_projects !==
+                  false
+                }
+                onChange={(
+                  checked,
+                ) =>
+                  setRequest(
+                    (
+                      current,
+                    ) => ({
+                      ...current,
+
+                      include_large_projects:
+                        checked,
+                    }),
+                  )
+                }
+              />
+
+              <ToggleOption
                 label="Require phone or email"
-                description="Reject results without a verified public phone number or email address."
+                description="Reject accepted prospects that do not expose a public phone number or email address."
                 checked={
                   request.require_public_phone_or_email
                 }
@@ -2046,8 +2609,8 @@ function LeadHunterPage() {
               />
 
               <ToggleOption
-                label="Require a website"
-                description="Useful for website, branding and digital-marketing audits."
+                label="Require website"
+                description="Useful for digital audits and official-organisation verification."
                 checked={
                   request.require_website
                 }
@@ -2069,7 +2632,7 @@ function LeadHunterPage() {
 
               <ToggleOption
                 label="Require opportunity evidence"
-                description="When off, Lead Hunter may return low-priority research prospects only when buyer fit, selected-service routing, an official site and a public contact route are verified."
+                description="When enabled, general buyer-fit research prospects are excluded."
                 checked={
                   request.require_opportunity_signal
                 }
@@ -2090,8 +2653,31 @@ function LeadHunterPage() {
               />
 
               <ToggleOption
+                label="Verified sources only"
+                description="Require stronger source evidence before accepted results can appear."
+                checked={
+                  request.verified_sources_only !==
+                  false
+                }
+                onChange={(
+                  checked,
+                ) =>
+                  setRequest(
+                    (
+                      current,
+                    ) => ({
+                      ...current,
+
+                      verified_sources_only:
+                        checked,
+                    }),
+                  )
+                }
+              />
+
+              <ToggleOption
                 label="Exclude existing CRM leads"
-                description="Reduce repeated searches and duplicate outreach."
+                description="Prevent repeated research and duplicate outreach when CRM matching is available."
                 checked={
                   request.exclude_existing_crm_leads
                 }
@@ -2112,16 +2698,18 @@ function LeadHunterPage() {
               />
 
               <ToggleOption
-                label="Buyer-only results"
-                description="Always reject companies that sell the selected service or customer-acquisition services themselves."
-                checked={true}
+                label="Buyer-only protection"
+                description="Companies selling the selected service are rejected unless a separate verified procurement, supplier or partnership route exists."
+                checked
                 disabled
-                onChange={() => undefined}
+                onChange={() =>
+                  undefined
+                }
               />
 
               <ToggleOption
                 label="Exclude directories"
-                description="Reject generic listings and aggregators unless they provide unique procurement evidence."
+                description="Reject generic listing sites and aggregators that do not represent one buyer organisation."
                 checked={
                   request.exclude_directories ??
                   true
@@ -2143,8 +2731,8 @@ function LeadHunterPage() {
               />
 
               <ToggleOption
-                label="Reject expired tenders"
-                description="Prevent historical procurement notices from being treated as current opportunities."
+                label="Reject expired procurement"
+                description="Prevent historical tenders and RFQs from being treated as current opportunities."
                 checked={
                   request.exclude_expired_procurement ??
                   true
@@ -2166,8 +2754,8 @@ function LeadHunterPage() {
               />
 
               <ToggleOption
-                label="Reuse recent search results"
-                description="Allow cached research to reduce Tavily usage when an equivalent hunt was recently completed."
+                label="Reuse recent provider searches"
+                description="Reuse equivalent search-provider results and rerun current verification to reduce provider credits."
                 checked={
                   request.use_cached_results ??
                   true
@@ -2212,6 +2800,22 @@ function LeadHunterPage() {
                   ),
                 )}
               </ul>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <InfoMini
+                  label="Digital services"
+                  value={String(
+                    selectedDigitalServiceCount,
+                  )}
+                />
+
+                <InfoMini
+                  label="Procurement-capable"
+                  value={String(
+                    selectedProcurementServiceCount,
+                  )}
+                />
+              </div>
             </section>
 
             {huntState ===
@@ -2233,6 +2837,9 @@ function LeadHunterPage() {
                 onClick={
                   runHunt
                 }
+                disabled={
+                  serviceCapacityExceeded
+                }
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
               >
                 <Radar className="mr-2 h-4 w-4" />
@@ -2241,10 +2848,11 @@ function LeadHunterPage() {
             )}
 
             <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-xs leading-5 text-muted-foreground">
-              Lead Hunter searches public sources.
-              It does not send messages, submit
-              tenders, claim contracts or contact
-              organisations automatically.
+              Lead Hunter researches and qualifies
+              public evidence. It does not send
+              outreach, submit bids, accept contracts,
+              invent contacts or claim that an
+              organisation requested Cossa's services.
             </div>
           </div>
         </aside>
@@ -2262,12 +2870,18 @@ function LeadHunterPage() {
                 searchInstruction
               }
               searchDepth={
-                request.search_depth ??
-                "economy"
+                activeDepth
               }
               queryLimit={
                 request.max_search_queries ??
-                3
+                queryCapacity
+              }
+              services={
+                request.services.length
+              }
+              minimumEvidenceSources={
+                request.minimum_evidence_sources ??
+                1
               }
             />
           )}
@@ -2294,6 +2908,10 @@ function LeadHunterPage() {
                   result?.warnings ??
                   []
                 }
+                providers={
+                  result?.providers_used ??
+                  []
+                }
               />
             )}
 
@@ -2303,14 +2921,24 @@ function LeadHunterPage() {
               0 && (
               <div className="space-y-4">
                 <section className="glass-card p-5">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
-                      <h2 className="font-display text-lg font-semibold">
-                        Verified prospect results
-                      </h2>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-display text-lg font-semibold">
+                          Qualified prospect results
+                        </h2>
+
+                        <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-success">
+                          {
+                            result?.accepted_count ??
+                            prospects.length
+                          }{" "}
+                          accepted
+                        </span>
+                      </div>
 
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Searched{" "}
+                        Hunt started{" "}
                         {formatDateTime(
                           result?.searched_at,
                         )}
@@ -2318,21 +2946,36 @@ function LeadHunterPage() {
                       </p>
                     </div>
 
-                    <div className="text-xs text-muted-foreground">
-                      {
-                        result?.accepted_count
-                      }{" "}
-                      accepted ·{" "}
-                      {
-                        result?.rejected_count
-                      }{" "}
-                      rejected
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      <ResultStat
+                        label="Accepted"
+                        value={String(
+                          result?.accepted_count ??
+                            prospects.length,
+                        )}
+                      />
+
+                      <ResultStat
+                        label="Rejected"
+                        value={String(
+                          result?.rejected_count ??
+                            0,
+                        )}
+                      />
+
+                      <ResultStat
+                        label="Sources"
+                        value={String(
+                          result?.source_count ??
+                            0,
+                        )}
+                      />
                     </div>
                   </div>
 
                   <div className="mt-4 rounded-lg border border-primary/25 bg-primary/5 p-3">
                     <div className="text-[10px] uppercase tracking-widest text-primary">
-                      Hunt instruction
+                      Executed mission
                     </div>
 
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">
@@ -2344,34 +2987,99 @@ function LeadHunterPage() {
                     </p>
                   </div>
 
+                  {result?.providers_used &&
+                    result.providers_used
+                      .length >
+                      0 && (
+                      <div className="mt-4">
+                        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                          Intelligence pipeline
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {result.providers_used.map(
+                            (
+                              provider,
+                            ) => (
+                              <span
+                                key={
+                                  provider
+                                }
+                                className="rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-[10px] text-muted-foreground"
+                              >
+                                {
+                                  provider
+                                }
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                   {result?.warnings &&
                     result.warnings
                       .length >
                       0 && (
                       <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3">
-                        <div className="flex items-center gap-2 text-xs font-semibold text-warning">
-                          <AlertCircle className="h-4 w-4" />
-                          Search notices
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNoticesExpanded(
+                              (
+                                current,
+                              ) =>
+                                !current,
+                            )
+                          }
+                          className="flex w-full items-center justify-between gap-3 text-left"
+                        >
+                          <div className="flex items-center gap-2 text-xs font-semibold text-warning">
+                            <AlertCircle className="h-4 w-4" />
 
-                        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                          {result.warnings.map(
-                            (
-                              warning,
-                            ) => (
-                              <li
-                                key={
-                                  warning
-                                }
-                              >
-                                •{" "}
-                                {
-                                  warning
-                                }
-                              </li>
-                            ),
+                            Search and verification notices
+
+                            <span className="rounded-full border border-warning/30 px-2 py-0.5 text-[10px]">
+                              {
+                                result.warnings
+                                  .length
+                              }
+                            </span>
+                          </div>
+
+                          {noticesExpanded ? (
+                            <ChevronUp className="h-4 w-4 text-warning" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-warning" />
                           )}
-                        </ul>
+                        </button>
+
+                        {noticesExpanded && (
+                          <ul className="mt-3 space-y-2 border-t border-warning/20 pt-3 text-xs leading-5 text-muted-foreground">
+                            {result.warnings.map(
+                              (
+                                warning,
+                              ) => (
+                                <li
+                                  key={
+                                    warning
+                                  }
+                                  className="flex gap-2"
+                                >
+                                  <span className="text-warning">
+                                    •
+                                  </span>
+
+                                  <span>
+                                    {
+                                      warning
+                                    }
+                                  </span>
+                                </li>
+                              ),
+                            )}
+                          </ul>
+                        )}
                       </div>
                     )}
                 </section>
@@ -2494,9 +3202,10 @@ function LocationControls({
         </div>
 
         <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
-          Physical services should target practical
-          service areas. Digital services may target
-          South Africa, Africa or worldwide markets.
+          Physical services should target realistic
+          service areas. Remote and digital services
+          can expand beyond South Africa where the
+          selected delivery model permits it.
         </p>
       </div>
 
@@ -2569,16 +3278,13 @@ function LocationControls({
             {SOUTH_AFRICAN_PROVINCES.map(
               (province) => {
                 const active =
-                  provinceInput
-                    .toLowerCase()
-                    .split(",")
-                    .map(
-                      (item) =>
-                        item.trim(),
-                    )
-                    .includes(
+                  parseCommaSeparated(
+                    provinceInput,
+                  ).some(
+                    (item) =>
+                      item.toLowerCase() ===
                       province.toLowerCase(),
-                    );
+                  );
 
                 return (
                   <button
@@ -2719,6 +3425,26 @@ function InstructionExample({
   );
 }
 
+function MiniAction({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={
+        onClick
+      }
+      className="rounded-md border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+    >
+      {label}
+    </button>
+  );
+}
+
 function SelectField({
   id,
   label,
@@ -2809,6 +3535,7 @@ function SelectionGroup<
   selected,
   onToggle,
   maxHeight = false,
+  actions,
 }: {
   title: string;
   items: Array<{
@@ -2819,12 +3546,17 @@ function SelectionGroup<
   onToggle:
     (value: T) => void;
   maxHeight?: boolean;
+  actions?: React.ReactNode;
 }) {
   return (
     <div className="space-y-2">
-      <Label>
-        {title}
-      </Label>
+      <div className="flex items-center justify-between gap-3">
+        <Label>
+          {title}
+        </Label>
+
+        {actions}
+      </div>
 
       <div
         className={cn(
@@ -2885,7 +3617,15 @@ function ToggleOption({
   disabled?: boolean;
 }) {
   return (
-    <label className={`flex items-start justify-between gap-4 rounded-lg border border-border/60 px-3 py-3 ${disabled ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}>
+    <label
+      className={cn(
+        "flex items-start justify-between gap-4 rounded-lg border border-border/60 px-3 py-3",
+
+        disabled
+          ? "cursor-not-allowed opacity-70"
+          : "cursor-pointer",
+      )}
+    >
       <span>
         <span className="block text-xs font-medium text-foreground">
           {label}
@@ -2937,6 +3677,31 @@ function ProspectCard({
   onSave:
     () => void;
 }) {
+  const independentPublishers =
+    new Set(
+      prospect.evidence
+        .map(
+          (evidence) =>
+            evidence.publisher?.toLowerCase(),
+        )
+        .filter(
+          (
+            value,
+          ): value is string =>
+            Boolean(value),
+        ),
+    ).size;
+
+  const opportunityLike =
+    [
+      "active_opportunity",
+      "tender",
+      "supplier_opportunity",
+      "partnership",
+    ].includes(
+      prospect.classification,
+    );
+
   return (
     <article className="glass-card overflow-hidden">
       <div className="p-5">
@@ -2955,17 +3720,37 @@ function ProspectCard({
                 }
               />
 
-              <span className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+              <span
+                className={cn(
+                  "rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-widest",
+
+                  opportunityLike
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-border/60 text-muted-foreground",
+                )}
+              >
                 {
-                  prospect.classification
+                  formatClassification(
+                    prospect.classification,
+                  )
                 }
               </span>
 
-              <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">
+              <span className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] uppercase tracking-widest text-muted-foreground">
                 {
                   prospect.sector
                 }
               </span>
+
+              {independentPublishers >
+                1 && (
+                <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-success">
+                  {
+                    independentPublishers
+                  }{" "}
+                  source domains
+                </span>
+              )}
             </div>
 
             <h2 className="mt-3 font-display text-xl font-semibold">
@@ -2987,11 +3772,7 @@ function ProspectCard({
                 <span className="inline-flex items-center gap-1">
                   <MapPin className="h-3.5 w-3.5 text-primary" />
 
-                  {[
-                    prospect.city,
-                    prospect.province,
-                    prospect.country,
-                  ]
+                  {[prospect.city, prospect.province, prospect.country]
                     .filter(
                       Boolean,
                     )
@@ -3005,11 +3786,11 @@ function ProspectCard({
                     prospect.website
                   }
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noreferrer noopener"
                   className="inline-flex items-center gap-1 text-primary hover:underline"
                 >
                   <Globe2 className="h-3.5 w-3.5" />
-                  Website
+                  Official source
                   <ExternalLink className="h-3 w-3" />
                 </a>
               )}
@@ -3099,7 +3880,7 @@ function ProspectCard({
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           <ScoreItem
             label="Fit"
             value={
@@ -3122,6 +3903,13 @@ function ProspectCard({
           />
 
           <ScoreItem
+            label="Timing"
+            value={
+              prospect.timing_score
+            }
+          />
+
+          <ScoreItem
             label="Contact"
             value={
               prospect.contactability_score
@@ -3129,7 +3917,7 @@ function ProspectCard({
           />
 
           <ScoreItem
-            label="Ease to close"
+            label="Ease"
             value={
               prospect.ease_to_close_score
             }
@@ -3158,7 +3946,9 @@ function ProspectCard({
           <InfoBlock
             label="Opportunity size"
             value={
-              prospect.opportunity_size
+              formatSimpleValue(
+                prospect.opportunity_size,
+              )
             }
           />
 
@@ -3173,12 +3963,10 @@ function ProspectCard({
           />
 
           <InfoBlock
-            label="Date verified"
-            value={
-              formatDateTime(
-                prospect.date_verified,
-              )
-            }
+            label="Evidence records"
+            value={String(
+              prospect.evidence.length,
+            )}
           />
         </div>
 
@@ -3187,7 +3975,7 @@ function ProspectCard({
           <div className="mt-4 rounded-lg border border-primary/25 bg-primary/5 p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-primary">
               <Banknote className="h-4 w-4" />
-              Why this prospect may be worth pursuing
+              Commercial case
             </div>
 
             <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
@@ -3283,12 +4071,75 @@ function ProspectCard({
                   </p>
                 </div>
               )}
+
+              <div className="mt-3 rounded-lg border border-border/60 p-4">
+                <div className="text-xs font-semibold">
+                  Verification metadata
+                </div>
+
+                <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                  <Definition
+                    label="Status"
+                    value={formatSimpleValue(
+                      prospect.verification_status,
+                    )}
+                  />
+
+                  <Definition
+                    label="Classification"
+                    value={formatClassification(
+                      prospect.classification,
+                    )}
+                  />
+
+                  <Definition
+                    label="Provider"
+                    value={
+                      prospect.raw_provider_name ??
+                      "Unknown"
+                    }
+                  />
+
+                  <Definition
+                    label="Verified"
+                    value={formatDateTime(
+                      prospect.date_verified,
+                    )}
+                  />
+
+                  <Definition
+                    label="Identity keys"
+                    value={String(
+                      prospect.identity_keys
+                        ?.length ?? 0,
+                    )}
+                  />
+
+                  <Definition
+                    label="Evidence domains"
+                    value={String(
+                      independentPublishers,
+                    )}
+                  />
+                </dl>
+              </div>
             </section>
 
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-primary">
-                Public evidence
-              </h3>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-primary">
+                  Public evidence
+                </h3>
+
+                <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">
+                  <FileCheck2 className="h-3 w-3" />
+                  {
+                    prospect.evidence
+                      .length
+                  }{" "}
+                  records
+                </span>
+              </div>
 
               <div className="mt-3 space-y-3">
                 {prospect.evidence.map(
@@ -3304,18 +4155,28 @@ function ProspectCard({
                         <FileSearch className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 
                         <div className="min-w-0">
-                          <a
-                            href={
-                              evidence.url
-                            }
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-sm font-semibold text-primary hover:underline"
-                          >
-                            {
-                              evidence.title
-                            }
-                          </a>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <a
+                              href={
+                                evidence.url
+                              }
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="break-words text-sm font-semibold text-primary hover:underline"
+                            >
+                              {
+                                evidence.title
+                              }
+                            </a>
+
+                            <span className="rounded-full border border-border/60 px-2 py-0.5 text-[9px] uppercase tracking-widest text-muted-foreground">
+                              {
+                                formatSimpleValue(
+                                  evidence.type,
+                                )
+                              }
+                            </span>
+                          </div>
 
                           {evidence.publisher && (
                             <p className="mt-1 text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -3332,6 +4193,32 @@ function ProspectCard({
                               }
                             </p>
                           )}
+
+                          {evidence.supports &&
+                            evidence.supports
+                              .length >
+                              0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {evidence.supports.map(
+                                  (
+                                    item,
+                                  ) => (
+                                    <span
+                                      key={
+                                        item
+                                      }
+                                      className="rounded-full border border-border/60 bg-card/40 px-2 py-0.5 text-[9px] text-muted-foreground"
+                                    >
+                                      {
+                                        formatSimpleValue(
+                                          item,
+                                        )
+                                      }
+                                    </span>
+                                  ),
+                                )}
+                              </div>
+                            )}
 
                           <p className="mt-2 text-[10px] text-muted-foreground">
                             Checked{" "}
@@ -3464,6 +4351,15 @@ function ScoreItem({
   label: string;
   value: number;
 }) {
+  const safeValue =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        value,
+      ),
+    );
+
   return (
     <div className="rounded-lg border border-border/60 bg-card/30 p-3">
       <div className="flex items-center justify-between text-xs">
@@ -3472,7 +4368,7 @@ function ScoreItem({
         </span>
 
         <span className="font-semibold text-primary">
-          {value}
+          {safeValue}
         </span>
       </div>
 
@@ -3480,13 +4376,7 @@ function ScoreItem({
         <div
           className="h-full rounded-full bg-primary"
           style={{
-            width: `${Math.max(
-              0,
-              Math.min(
-                100,
-                value,
-              ),
-            )}%`,
+            width: `${safeValue}%`,
           }}
         />
       </div>
@@ -3507,9 +4397,69 @@ function InfoBlock({
         {label}
       </div>
 
-      <div className="mt-1 text-sm font-medium capitalize">
+      <div className="mt-1 text-sm font-medium">
         {value}
       </div>
+    </div>
+  );
+}
+
+function InfoMini({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border/60 p-2">
+      <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </div>
+
+      <div className="mt-1 text-xs font-semibold text-primary">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ResultStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-20 rounded-lg border border-border/60 bg-card/30 px-3 py-2 text-center">
+      <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </div>
+
+      <div className="mt-1 text-sm font-semibold text-primary">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Definition({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <dt className="text-[9px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </dt>
+
+      <dd className="mt-1 break-words text-xs font-medium">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -3523,25 +4473,26 @@ function EmptyHuntState() {
         </div>
 
         <h2 className="mt-5 font-display text-2xl font-semibold">
-          Tell Lead Hunter what customer you want
+          Define a commercial mission and hunt
         </h2>
 
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Write the exact type of customer, project,
-          service need, location or digital weakness
-          you want found. Then choose the services and
-          run an evidence-backed search.
+          Tell the Hunter what buyer, service,
+          opportunity, procurement route or location
+          matters. The server will search, inspect,
+          verify, score and reject weak results before
+          anything reaches this screen.
         </p>
 
         <div className="mt-6 grid gap-3 text-left sm:grid-cols-2">
           {[
-            "Website and logo upgrade prospects",
-            "Private construction customers",
-            "Recurring cleaning contracts",
-            "Government tenders and RFQs",
-            "Local or nationwide targeting",
-            "Remote African or global customers",
-            "Revenue-first lead ranking",
+            "Verified private-sector prospects",
+            "Current government tenders and RFQs",
+            "Supplier-registration opportunities",
+            "Subcontracting and partnership routes",
+            "Objective website audit opportunities",
+            "Revenue-first commercial scoring",
+            "Independent evidence verification",
             "CRM duplicate protection",
           ].map(
             (item) => (
@@ -3567,11 +4518,15 @@ function SearchingState({
   instruction,
   searchDepth,
   queryLimit,
+  services,
+  minimumEvidenceSources,
 }: {
   instruction: string;
   searchDepth:
     LeadHunterSearchDepth;
   queryLimit: number;
+  services: number;
+  minimumEvidenceSources: number;
 }) {
   return (
     <section className="glass-card flex min-h-[720px] items-center justify-center p-8">
@@ -3579,13 +4534,15 @@ function SearchingState({
         <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary" />
 
         <h2 className="mt-5 font-display text-xl font-semibold">
-          Hunting live public sources
+          Hunting and verifying live public evidence
         </h2>
 
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Lead Hunter is searching organisations,
-          websites, public contact routes,
-          procurement sources and service signals.
+          Candidate discovery is only the first stage.
+          The Hunter is also inspecting sources,
+          checking buyer fit, rejecting competitors,
+          validating procurement and removing duplicate
+          organisations.
         </p>
 
         <div className="mt-5 rounded-lg border border-primary/25 bg-primary/5 p-4 text-left">
@@ -3599,32 +4556,41 @@ function SearchingState({
           </p>
         </div>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-border/60 p-3">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              Search depth
-            </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <InfoMini
+            label="Depth"
+            value={
+              searchDepth
+            }
+          />
 
-            <div className="mt-1 text-sm font-semibold capitalize text-primary">
-              {searchDepth}
-            </div>
-          </div>
+          <InfoMini
+            label="Queries"
+            value={String(
+              queryLimit,
+            )}
+          />
 
-          <div className="rounded-lg border border-border/60 p-3">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              Query limit
-            </div>
+          <InfoMini
+            label="Services"
+            value={String(
+              services,
+            )}
+          />
 
-            <div className="mt-1 text-sm font-semibold text-primary">
-              {queryLimit}
-            </div>
-          </div>
+          <InfoMini
+            label="Evidence min"
+            value={String(
+              minimumEvidenceSources,
+            )}
+          />
         </div>
 
         <div className="mt-5 rounded-lg border border-primary/25 bg-primary/5 p-4 text-xs leading-5 text-muted-foreground">
           Verification takes longer than ordinary
-          search because unsupported and irrelevant
-          results are rejected before display.
+          search because unsupported results are
+          intentionally discarded instead of being
+          shown as leads.
         </div>
       </div>
     </section>
@@ -3661,6 +4627,7 @@ function ErrorState({
           }
           className="mt-5 bg-primary text-primary-foreground hover:bg-primary/90"
         >
+          <RefreshCcw className="mr-2 h-4 w-4" />
           Retry hunt
         </Button>
       </div>
@@ -3670,37 +4637,73 @@ function ErrorState({
 
 function NoResultsState({
   warnings,
+  providers,
 }: {
   warnings: string[];
+  providers: string[];
 }) {
   return (
     <section className="glass-card flex min-h-[520px] items-center justify-center p-8">
-      <div className="max-w-xl text-center">
+      <div className="max-w-2xl text-center">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-primary/15 text-primary">
           <Search className="h-6 w-6" />
         </div>
 
         <h2 className="mt-4 font-display text-xl font-semibold">
-          No prospects met the verification rules
+          No prospect survived verification
         </h2>
 
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Public pages may have been found, but none
-          met the current evidence, contact,
-          opportunity-signal or score requirements.
+          This does not necessarily mean the search
+          found nothing. It means nothing met the
+          current buyer-fit, service, source,
+          procurement, contact or scoring rules strongly
+          enough to return.
         </p>
+
+        {providers.length >
+          0 && (
+          <div className="mt-5 rounded-lg border border-border/60 p-4 text-left">
+            <div className="flex items-center gap-2 text-xs font-semibold">
+              <Layers3 className="h-4 w-4 text-primary" />
+              Pipeline used
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {providers.map(
+                (provider) => (
+                  <span
+                    key={
+                      provider
+                    }
+                    className="rounded-full border border-border/60 px-2.5 py-1 text-[10px] text-muted-foreground"
+                  >
+                    {provider}
+                  </span>
+                ),
+              )}
+            </div>
+          </div>
+        )}
 
         {warnings.length >
           0 && (
-          <ul className="mt-5 space-y-2 rounded-lg border border-border/60 p-4 text-left text-xs text-muted-foreground">
+          <ul className="mt-5 space-y-2 rounded-lg border border-border/60 p-4 text-left text-xs leading-5 text-muted-foreground">
             {warnings.map(
               (warning) => (
                 <li
                   key={
                     warning
                   }
+                  className="flex gap-2"
                 >
-                  • {warning}
+                  <span className="text-primary">
+                    •
+                  </span>
+
+                  <span>
+                    {warning}
+                  </span>
                 </li>
               ),
             )}
@@ -3708,10 +4711,10 @@ function NoResultsState({
         )}
 
         <p className="mt-5 text-xs text-primary">
-          Try a more specific instruction, reduce the
-          minimum score, disable the contact
-          requirement or broaden the geographic
-          scope.
+          First improve the mission or broaden the
+          geography. Lower evidence and scoring
+          requirements only when there is a commercial
+          reason to accept weaker research prospects.
         </p>
       </div>
     </section>
@@ -3792,6 +4795,36 @@ function formatService(
     LeadHunterServiceCategory,
 ): string {
   return service
+    .replace(
+      /_/g,
+      " ",
+    )
+    .replace(
+      /\b\w/g,
+      (letter) =>
+        letter.toUpperCase(),
+    );
+}
+
+function formatClassification(
+  value: string,
+): string {
+  return value
+    .replace(
+      /_/g,
+      " ",
+    )
+    .replace(
+      /\b\w/g,
+      (letter) =>
+        letter.toUpperCase(),
+    );
+}
+
+function formatSimpleValue(
+  value: string,
+): string {
+  return value
     .replace(
       /_/g,
       " ",
