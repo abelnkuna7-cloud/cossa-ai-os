@@ -1,31 +1,67 @@
-// Production Lead Hunter data and verification layer.
+// Production Cossa Lead Hunter data, intelligence and verification layer.
+//
+// This file is intentionally CLIENT-SIDE.
 //
 // Responsibilities:
-// - Define revenue-focused private and public-sector hunting strategies.
-// - Support guided searches and custom natural-language search instructions.
-// - Separate physical, remote and hybrid service opportunities.
-// - Support local, provincial, national, African and worldwide targeting.
-// - Request verified public prospect research from a secure server endpoint.
-// - Validate returned evidence before displaying or saving prospects.
-// - Reject invented, incomplete or unsupported prospect records.
-// - Preserve server-side scoring and server-normalised hunt instructions.
-// - Reconcile explicit natural-language mission instructions with UI selections.
-// - Detect likely duplicates in the existing Growth CRM.
-// - Save approved prospects into the existing public.leads table.
+// - Define Cossa-wide revenue hunting strategies.
+// - Support Construction, Facility Services, Tech, Growth, NexDocs,
+//   Cossa Store and Cossa Nexus Holdings.
+// - Support private, government, nonprofit and mixed-sector hunting.
+// - Support customers, projects, tenders, RFQs, RFPs, supplier registrations,
+//   subcontracting, recurring contracts, product-supply opportunities,
+//   digital weaknesses and document/compliance opportunities.
+// - Support guided strategies and natural-language missions.
+// - Separate physical, remote and hybrid opportunities.
+// - Support local, provincial, South African, African and worldwide searches.
+// - Send validated missions to the authenticated production search endpoint.
+// - Validate server-returned prospects before displaying or saving them.
+// - Reject missing, malformed, stale, expired or unsupported opportunities.
+// - Preserve server-normalised requests and server scoring where supplied.
+// - Detect possible CRM duplicates.
+// - Save approved prospects into public.leads.
+// - Produce safe CSV exports.
 //
-// Important:
-// This browser file does not scrape or search the internet directly.
-// Real research must be performed by the authenticated server route:
+// IMPORTANT SECURITY RULES:
+//
+// This browser file MUST NEVER contain:
+// - SERPAPI_API_KEY
+// - TAVILY_API_KEY
+// - NEWS_API_KEY
+// - GROQ_API_KEY
+// - service-role Supabase keys
+// - government portal credentials
+// - scraping credentials
+//
+// Real research belongs server-side:
+//
 // POST /api/lead-hunter/search
 //
-// API keys, search providers and government-data integrations must remain
-// server-side and must never be exposed in this client file.
+// Suggested protected provider chain:
+//
+// 1. SerpAPI
+// 2. Tavily
+// 3. NewsAPI
+// 4. Official/public-source direct enrichment
+// 5. GROQ only for interpretation, extraction, ranking and reconciliation
+//
+// GROQ/LLMs must NEVER invent organisations, contacts, tenders,
+// dates, prices, procurement references or opportunity evidence.
+//
+// Every accepted record must trace back to public evidence.
 
 import { supabase } from "@/integrations/supabase/client";
+
+/* -------------------------------------------------------------------------- */
+/* DATABASE                                                                   */
+/* -------------------------------------------------------------------------- */
 
 const db = supabase as unknown as {
   from: (table: string) => any;
 };
+
+/* -------------------------------------------------------------------------- */
+/* ENDPOINTS / LIMITS                                                         */
+/* -------------------------------------------------------------------------- */
 
 export const LEAD_HUNTER_SEARCH_ENDPOINT =
   "/api/lead-hunter/search";
@@ -34,9 +70,23 @@ export const MAX_HUNT_RESULTS = 50;
 export const DEFAULT_HUNT_RESULTS = 15;
 
 export const MAX_CUSTOM_SEARCH_INSTRUCTION_LENGTH = 2_500;
+
 export const DEFAULT_MAX_SEARCH_QUERIES = 5;
 export const MAX_ALLOWED_SEARCH_QUERIES = 10;
+
 export const DEFAULT_SEARCH_CACHE_HOURS = 24;
+
+export const MAX_PROSPECT_EVIDENCE_ITEMS = 15;
+export const MAX_PROSPECT_SIGNALS = 15;
+
+export const DEFAULT_MINIMUM_SCORE = 55;
+export const DEFAULT_MINIMUM_EVIDENCE_SOURCES = 1;
+
+export const MAX_CRM_DUPLICATE_SCAN = 1_000;
+
+/* -------------------------------------------------------------------------- */
+/* CORE TYPES                                                                 */
+/* -------------------------------------------------------------------------- */
 
 export type LeadHunterSector =
   | "private"
@@ -54,6 +104,7 @@ export type LeadHunterCompany =
   | "cossa_nexus_holdings";
 
 export type LeadHunterServiceCategory =
+  // Cossa Nexus Construction
   | "construction"
   | "renovation"
   | "property_maintenance"
@@ -62,27 +113,65 @@ export type LeadHunterServiceCategory =
   | "ceilings"
   | "roofing"
   | "plumbing"
+  | "carpentry"
+  | "waterproofing"
+  | "shopfitting"
+  | "minor_building_works"
+
+  // Cossa Facility Services
   | "facility_management"
   | "commercial_cleaning"
   | "deep_cleaning"
   | "hygiene"
   | "landscaping"
   | "waste_management"
+  | "grounds_maintenance"
+  | "office_cleaning"
+  | "post_construction_cleaning"
+
+  // Cossa Tech
   | "website_design"
+  | "website_development"
+  | "ecommerce"
   | "logo_design"
   | "branding"
   | "seo"
-  | "digital_marketing"
-  | "social_media_management"
   | "google_business_profile"
-  | "lead_generation"
   | "crm"
   | "ai_automation"
+  | "business_automation"
+  | "software_development"
+  | "technology_support"
+
+  // Growth
+  | "digital_marketing"
+  | "social_media_management"
+  | "lead_generation"
+  | "marketing_strategy"
+  | "sales_enablement"
+  | "conversion_optimisation"
+  | "customer_follow_up"
+
+  // NexDocs
   | "business_documents"
   | "quotations"
   | "proposals"
   | "contracts"
-  | "ecommerce"
+  | "company_profiles"
+  | "tender_documents"
+  | "supplier_documents"
+  | "compliance_documents"
+
+  // Cossa Store
+  | "building_material_supply"
+  | "hardware_supply"
+  | "cleaning_supply"
+  | "office_supply"
+  | "technology_supply"
+  | "general_product_supply"
+  | "procurement_supply"
+  | "retail_ecommerce"
+
   | "general";
 
 export type LeadHunterSearchScope =
@@ -119,6 +208,7 @@ export type LeadHunterObjective =
   | "find_projects"
   | "find_active_tenders"
   | "find_rfqs"
+  | "find_rfps"
   | "find_supplier_registrations"
   | "find_subcontracting"
   | "find_partners"
@@ -129,6 +219,9 @@ export type LeadHunterObjective =
   | "find_maintenance_needs"
   | "find_cleaning_contracts"
   | "find_recurring_contracts"
+  | "find_document_opportunities"
+  | "find_product_supply_opportunities"
+  | "find_ecommerce_opportunities"
   | "find_immediate_cashflow"
   | "search_everything_relevant";
 
@@ -143,7 +236,11 @@ export type ProspectClassification =
   | "qualified_prospect"
   | "active_opportunity"
   | "tender"
+  | "rfq"
+  | "rfp"
   | "supplier_opportunity"
+  | "subcontracting_opportunity"
+  | "product_supply_opportunity"
   | "partnership"
   | "referral_source"
   | "historical_signal"
@@ -162,6 +259,9 @@ export type EvidenceType =
   | "government_portal"
   | "tender_notice"
   | "procurement_notice"
+  | "rfq_notice"
+  | "rfp_notice"
+  | "supplier_database"
   | "company_directory"
   | "business_profile"
   | "job_posting"
@@ -169,6 +269,8 @@ export type EvidenceType =
   | "social_profile"
   | "contact_page"
   | "website_audit"
+  | "public_document"
+  | "public_pdf"
   | "other_public_source";
 
 export type ProspectSignalType =
@@ -176,6 +278,8 @@ export type ProspectSignalType =
   | "request_for_quote"
   | "request_for_proposal"
   | "supplier_registration"
+  | "subcontracting"
+  | "product_supply_need"
   | "new_development"
   | "renovation_need"
   | "maintenance_need"
@@ -196,6 +300,8 @@ export type ProspectSignalType =
   | "poor_customer_experience"
   | "document_need"
   | "technology_need"
+  | "ecommerce_need"
+  | "procurement_need"
   | "general_fit";
 
 export type ProspectSalesPriority =
@@ -210,45 +316,122 @@ export type HuntStatus =
   | "completed"
   | "failed";
 
+export type ProcurementStatus =
+  | "not_applicable"
+  | "unknown"
+  | "open"
+  | "closing_soon"
+  | "closed"
+  | "expired"
+  | "awarded";
+
+export type PursuitRisk =
+  | "low"
+  | "medium"
+  | "high"
+  | "unknown";
+
+/* -------------------------------------------------------------------------- */
+/* PROVIDER / SOURCE TYPES                                                    */
+/* -------------------------------------------------------------------------- */
+
+export type LeadHunterProvider =
+  | "serpapi"
+  | "tavily"
+  | "newsapi"
+  | "official_source"
+  | "government_source"
+  | "direct_fetch"
+  | "groq"
+  | "other";
+
+export interface LeadHunterProviderTrace {
+  provider: LeadHunterProvider;
+  query: string | null;
+  result_count: number;
+  used_for:
+    | "discovery"
+    | "verification"
+    | "enrichment"
+    | "interpretation"
+    | "ranking";
+  completed_at: string | null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* EVIDENCE                                                                   */
+/* -------------------------------------------------------------------------- */
+
 export interface ProspectEvidence {
   id?: string;
+
   type: EvidenceType;
+
   title: string;
   url: string;
+
   publisher: string | null;
+
   published_at: string | null;
   checked_at: string;
+
   excerpt: string | null;
+
   supports: string[];
+
+  source_quality_score?: number;
+  freshness_score?: number;
+
+  is_primary_source?: boolean;
+  is_official_source?: boolean;
+
+  provider?: LeadHunterProvider | null;
 }
+
+/* -------------------------------------------------------------------------- */
+/* SIGNALS                                                                    */
+/* -------------------------------------------------------------------------- */
 
 export interface ProspectSignal {
   type: ProspectSignalType;
+
   title: string;
   explanation: string;
+
   evidence_url: string;
+
   detected_at: string;
+
   confidence: number;
 }
 
+/* -------------------------------------------------------------------------- */
+/* PROSPECT                                                                   */
+/* -------------------------------------------------------------------------- */
+
 export interface LeadHunterProspect {
   id: string;
+
   organisation_name: string;
   trading_name: string | null;
 
   sector: LeadHunterSector;
+
   industry: string | null;
   organisation_type: string | null;
 
   website: string | null;
+
   public_phone: string | null;
   public_email: string | null;
-  /** Internal public-identity keys used only to prevent duplicate results. */
+
   identity_keys?: string[];
+
   contact_page_url: string | null;
 
   contact_name: string | null;
   contact_title: string | null;
+
   decision_maker_route: string | null;
 
   address: string | null;
@@ -259,13 +442,24 @@ export interface LeadHunterProspect {
 
   recommended_company: LeadHunterCompany;
   recommended_service: LeadHunterServiceCategory;
+
   service_fit_reason: string;
 
   opportunity_summary: string;
+
   opportunity_size: OpportunitySize;
+
   estimated_value: number | null;
 
+  tender_reference?: string | null;
+
+  procurement_status?: ProcurementStatus;
+
+  opportunity_open_date?: string | null;
+  opportunity_closing_date?: string | null;
+
   classification: ProspectClassification;
+
   verification_status: ProspectVerificationStatus;
 
   fit_score: number;
@@ -273,22 +467,35 @@ export interface LeadHunterProspect {
   evidence_score: number;
   timing_score: number;
   contactability_score: number;
+
   total_score: number;
 
   revenue_potential_score: number;
   ease_to_close_score: number;
   recurring_revenue_score: number;
   geographic_fit_score: number;
+
+  data_quality_score?: number;
+  freshness_score?: number;
+  source_diversity_score?: number;
+  verification_confidence?: number;
+
+  pursuit_risk?: PursuitRisk;
+
   sales_priority: ProspectSalesPriority;
+
   why_contact: string[];
 
   signals: ProspectSignal[];
+
   evidence: ProspectEvidence[];
 
   primary_source_url: string;
+
   date_verified: string;
 
   next_action: string;
+
   outreach_angle: string | null;
 
   duplicate_status:
@@ -298,15 +505,22 @@ export interface LeadHunterProspect {
     | "existing_crm_lead";
 
   duplicate_lead_id: string | null;
+
   rejection_reasons: string[];
 
   raw_provider_name: string | null;
   raw_provider_result_id: string | null;
 }
 
+/* -------------------------------------------------------------------------- */
+/* SEARCH REQUEST                                                             */
+/* -------------------------------------------------------------------------- */
+
 export interface LeadHunterSearchRequest {
   sector: LeadHunterSector;
+
   companies: LeadHunterCompany[];
+
   services: LeadHunterServiceCategory[];
 
   locations: string[];
@@ -320,6 +534,7 @@ export interface LeadHunterSearchRequest {
 
   include_small_projects: boolean;
   include_large_projects: boolean;
+
   include_private_sector: boolean;
   include_government_sector: boolean;
   include_nonprofits: boolean;
@@ -332,14 +547,19 @@ export interface LeadHunterSearchRequest {
   prospect_keywords: string[];
 
   verified_sources_only: boolean;
+
   exclude_existing_crm_leads: boolean;
+
   notes: string | null;
 
   search_instruction?: string | null;
 
   search_scope?: LeadHunterSearchScope;
+
   delivery_model?: LeadHunterDeliveryModel;
+
   search_depth?: LeadHunterSearchDepth;
+
   revenue_mode?: LeadHunterRevenueMode;
 
   objectives?: LeadHunterObjective[];
@@ -352,76 +572,142 @@ export interface LeadHunterSearchRequest {
   radius_km?: number | null;
 
   search_everything?: boolean;
+
   easy_wins_only?: boolean;
+
   revenue_first?: boolean;
 
   max_search_queries?: number;
+
   use_cached_results?: boolean;
+
   cache_max_age_hours?: number;
 
   exclude_competitors?: boolean;
   exclude_directories?: boolean;
   exclude_expired_procurement?: boolean;
+
+  require_primary_source_for_procurement?: boolean;
+
+  reject_stale_opportunities?: boolean;
+
+  minimum_contactability_score?: number;
+
+  diversify_results_by_company?: boolean;
+
+  diversify_results_by_sector?: boolean;
 }
+
+/* -------------------------------------------------------------------------- */
+/* SEARCH RESPONSE                                                            */
+/* -------------------------------------------------------------------------- */
 
 export interface LeadHunterSearchResponse {
   hunt_id: string;
+
   status: HuntStatus;
+
   searched_at: string;
+
   completed_at: string | null;
 
   request: LeadHunterSearchRequest;
+
   prospects: LeadHunterProspect[];
 
   source_count: number;
+
   accepted_count: number;
+
   rejected_count: number;
 
   warnings: string[];
+
   providers_used: string[];
+
+  provider_trace?: LeadHunterProviderTrace[];
 }
+
+/* -------------------------------------------------------------------------- */
+/* CRM TYPES                                                                  */
+/* -------------------------------------------------------------------------- */
 
 export interface CrmDuplicateMatch {
   id: string;
+
   name: string;
+
   company: string | null;
+
   phone: string | null;
   email: string | null;
+
   source: string | null;
+
   status: string;
+
   score: number;
+
   created_at: string;
+
   match_reasons: string[];
 }
 
 export interface SaveProspectResult {
   lead_id: string;
+
   created: boolean;
+
   duplicate: boolean;
+
   duplicate_match: CrmDuplicateMatch | null;
 }
 
+/* -------------------------------------------------------------------------- */
+/* STRATEGIES                                                                 */
+/* -------------------------------------------------------------------------- */
+
 export interface LeadHunterStrategy {
   id: string;
+
   title: string;
+
   description: string;
+
   target_sector: LeadHunterSector;
+
   companies: LeadHunterCompany[];
+
   services: LeadHunterServiceCategory[];
+
   organisation_types: string[];
+
   industries: string[];
+
   keywords: string[];
+
   opportunity_signals: ProspectSignalType[];
+
   recommended_locations: string[];
+
   minimum_score: number;
+
   default_result_count: number;
 
   search_instruction?: string;
+
   search_scope?: LeadHunterSearchScope;
+
   delivery_model?: LeadHunterDeliveryModel;
+
   revenue_mode?: LeadHunterRevenueMode;
+
   objectives?: LeadHunterObjective[];
 }
+
+/* -------------------------------------------------------------------------- */
+/* GEOGRAPHY                                                                  */
+/* -------------------------------------------------------------------------- */
 
 export const SOUTH_AFRICAN_PROVINCES = [
   "Gauteng",
@@ -468,42 +754,148 @@ export const PRIORITY_AFRICAN_MARKETS = [
   "Nigeria",
 ] as const;
 
-export const PHYSICAL_SERVICE_CATEGORIES:
-  LeadHunterServiceCategory[] = [
-    "construction",
-    "renovation",
-    "property_maintenance",
-    "painting",
-    "tiling",
-    "ceilings",
-    "roofing",
-    "plumbing",
-    "facility_management",
-    "commercial_cleaning",
-    "deep_cleaning",
-    "hygiene",
-    "landscaping",
-    "waste_management",
-  ];
+/* -------------------------------------------------------------------------- */
+/* SERVICE GROUPS                                                             */
+/* -------------------------------------------------------------------------- */
 
-export const REMOTE_SERVICE_CATEGORIES:
-  LeadHunterServiceCategory[] = [
-    "website_design",
-    "logo_design",
-    "branding",
-    "seo",
-    "digital_marketing",
-    "social_media_management",
-    "google_business_profile",
-    "lead_generation",
-    "crm",
-    "ai_automation",
-    "business_documents",
-    "quotations",
-    "proposals",
-    "contracts",
-    "ecommerce",
-  ];
+export const CONSTRUCTION_SERVICE_CATEGORIES: LeadHunterServiceCategory[] = [
+  "construction",
+  "renovation",
+  "property_maintenance",
+  "painting",
+  "tiling",
+  "ceilings",
+  "roofing",
+  "plumbing",
+  "carpentry",
+  "waterproofing",
+  "shopfitting",
+  "minor_building_works",
+];
+
+export const FACILITY_SERVICE_CATEGORIES: LeadHunterServiceCategory[] = [
+  "facility_management",
+  "commercial_cleaning",
+  "deep_cleaning",
+  "hygiene",
+  "landscaping",
+  "waste_management",
+  "grounds_maintenance",
+  "office_cleaning",
+  "post_construction_cleaning",
+];
+
+export const TECH_SERVICE_CATEGORIES: LeadHunterServiceCategory[] = [
+  "website_design",
+  "website_development",
+  "ecommerce",
+  "logo_design",
+  "branding",
+  "seo",
+  "google_business_profile",
+  "crm",
+  "ai_automation",
+  "business_automation",
+  "software_development",
+  "technology_support",
+];
+
+export const GROWTH_SERVICE_CATEGORIES: LeadHunterServiceCategory[] = [
+  "digital_marketing",
+  "social_media_management",
+  "lead_generation",
+  "marketing_strategy",
+  "sales_enablement",
+  "conversion_optimisation",
+  "customer_follow_up",
+  "seo",
+  "google_business_profile",
+  "crm",
+];
+
+export const NEXDOCS_SERVICE_CATEGORIES: LeadHunterServiceCategory[] = [
+  "business_documents",
+  "quotations",
+  "proposals",
+  "contracts",
+  "company_profiles",
+  "tender_documents",
+  "supplier_documents",
+  "compliance_documents",
+];
+
+export const STORE_SERVICE_CATEGORIES: LeadHunterServiceCategory[] = [
+  "building_material_supply",
+  "hardware_supply",
+  "cleaning_supply",
+  "office_supply",
+  "technology_supply",
+  "general_product_supply",
+  "procurement_supply",
+  "retail_ecommerce",
+];
+
+export const PHYSICAL_SERVICE_CATEGORIES: LeadHunterServiceCategory[] = [
+  ...CONSTRUCTION_SERVICE_CATEGORIES,
+  ...FACILITY_SERVICE_CATEGORIES,
+
+  "building_material_supply",
+  "hardware_supply",
+  "cleaning_supply",
+  "office_supply",
+  "technology_supply",
+  "general_product_supply",
+  "procurement_supply",
+];
+
+export const REMOTE_SERVICE_CATEGORIES: LeadHunterServiceCategory[] = [
+  ...TECH_SERVICE_CATEGORIES,
+  ...GROWTH_SERVICE_CATEGORIES,
+  ...NEXDOCS_SERVICE_CATEGORIES,
+
+  "retail_ecommerce",
+];
+
+/* -------------------------------------------------------------------------- */
+/* COMPANY / SERVICE MATRIX                                                   */
+/* -------------------------------------------------------------------------- */
+
+export const COMPANY_SERVICE_MAP: Record<
+  LeadHunterCompany,
+  LeadHunterServiceCategory[]
+> = {
+  cossa_nexus_construction:
+    CONSTRUCTION_SERVICE_CATEGORIES,
+
+  cossa_facility_services:
+    FACILITY_SERVICE_CATEGORIES,
+
+  cossa_tech:
+    TECH_SERVICE_CATEGORIES,
+
+  cossa_ai_growth:
+    GROWTH_SERVICE_CATEGORIES,
+
+  nexdocs:
+    NEXDOCS_SERVICE_CATEGORIES,
+
+  cossa_store:
+    STORE_SERVICE_CATEGORIES,
+
+  cossa_nexus_holdings: [
+    ...CONSTRUCTION_SERVICE_CATEGORIES,
+    ...FACILITY_SERVICE_CATEGORIES,
+    ...TECH_SERVICE_CATEGORIES,
+    ...GROWTH_SERVICE_CATEGORIES,
+    ...NEXDOCS_SERVICE_CATEGORIES,
+    ...STORE_SERVICE_CATEGORIES,
+    "general",
+  ],
+};
+
+/* -------------------------------------------------------------------------- */
+/* SEARCH OPTIONS                                                             */
+/* -------------------------------------------------------------------------- */
 
 export const SEARCH_SCOPE_OPTIONS: Array<{
   value: LeadHunterSearchScope;
@@ -514,13 +906,13 @@ export const SEARCH_SCOPE_OPTIONS: Array<{
     value: "local",
     label: "Local area",
     description:
-      "Search nearby cities, suburbs or a defined service radius.",
+      "Search nearby organisations and opportunities inside a defined service radius.",
   },
   {
     value: "city",
     label: "Selected cities",
     description:
-      "Search only the cities and surrounding areas entered.",
+      "Search selected cities and surrounding business areas.",
   },
   {
     value: "province",
@@ -532,31 +924,31 @@ export const SEARCH_SCOPE_OPTIONS: Array<{
     value: "south_africa",
     label: "South Africa",
     description:
-      "Search nationally across all nine provinces.",
+      "Search nationally across South Africa.",
   },
   {
     value: "africa",
     label: "Africa",
     description:
-      "Search selected African countries for remotely deliverable services.",
+      "Search selected African markets, especially for remote and supply opportunities.",
   },
   {
     value: "worldwide",
     label: "Worldwide",
     description:
-      "Search international markets for remote digital services.",
+      "Search international markets for remotely deliverable services.",
   },
   {
     value: "custom",
     label: "Custom locations",
     description:
-      "Use your exact countries, provinces, cities and suburbs.",
+      "Use exact countries, provinces, cities and suburbs.",
   },
   {
     value: "unrestricted",
     label: "No geographic restriction",
     description:
-      "Let service delivery and opportunity quality determine the market.",
+      "Let opportunity quality and delivery feasibility determine the market.",
   },
 ];
 
@@ -592,21 +984,21 @@ export const SEARCH_DEPTH_OPTIONS: Array<{
     value: "economy",
     label: "Economy",
     description:
-      "Lowest credit use. Best for frequent first-customer searches.",
+      "Low provider usage for frequent searches and quick prospect discovery.",
     maximumQueries: 3,
   },
   {
     value: "standard",
     label: "Standard",
     description:
-      "Balanced coverage and verification.",
+      "Balanced discovery, enrichment and verification.",
     maximumQueries: 5,
   },
   {
     value: "deep",
     label: "Deep",
     description:
-      "Broader investigation. Use only for valuable or difficult searches.",
+      "Broad investigation for valuable, strategic or difficult opportunities.",
     maximumQueries: 8,
   },
 ];
@@ -620,47 +1012,57 @@ export const REVENUE_MODE_OPTIONS: Array<{
     value: "quick_revenue",
     label: "Quick revenue",
     description:
-      "Prioritise smaller jobs and reachable customers that can close faster.",
+      "Prioritise reachable customers and smaller opportunities that could close faster.",
   },
   {
     value: "easy_wins",
     label: "Easy wins",
     description:
-      "Prioritise clear service gaps, verified contacts and lower pursuit effort.",
+      "Prioritise obvious problems, strong contact routes and low pursuit effort.",
   },
   {
     value: "recurring_revenue",
     label: "Recurring revenue",
     description:
-      "Prioritise maintenance, cleaning, marketing and support retainers.",
+      "Prioritise maintenance, cleaning, marketing, CRM and support retainers.",
   },
   {
     value: "high_value",
     label: "High-value work",
     description:
-      "Prioritise larger opportunities with stronger commercial value.",
+      "Prioritise commercially larger opportunities.",
   },
   {
     value: "strategic",
     label: "Strategic",
     description:
-      "Prioritise frameworks, supplier routes and long-term accounts.",
+      "Prioritise frameworks, supplier databases, procurement relationships and long-term accounts.",
   },
   {
     value: "balanced",
     label: "Balanced",
     description:
-      "Balance immediate revenue, evidence, contactability and long-term value.",
+      "Balance revenue, evidence, timing, contactability and strategic value.",
   },
 ];
+
+/* -------------------------------------------------------------------------- */
+/* STRATEGY LIBRARY                                                           */
+/* -------------------------------------------------------------------------- */
 
 export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
   {
     id: "first-paying-customers",
-    title: "Find Our First Paying Customers",
+
+    title:
+      "Find Our First Paying Customers",
+
     description:
-      "Prioritise real, reachable organisations with a clear service gap, public contact details and a practical opportunity that Cossa can pursue immediately.",
-    target_sector: "mixed",
+      "Prioritise legitimate, reachable organisations with a practical service gap and enough public evidence for respectful outreach.",
+
+    target_sector:
+      "mixed",
+
     companies: [
       "cossa_nexus_construction",
       "cossa_facility_services",
@@ -670,6 +1072,7 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "cossa_store",
       "cossa_nexus_holdings",
     ],
+
     services: [
       "property_maintenance",
       "painting",
@@ -681,7 +1084,11 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "seo",
       "digital_marketing",
       "business_documents",
+      "building_material_supply",
+      "cleaning_supply",
+      "office_supply",
     ],
+
     organisation_types: [
       "Small business",
       "Property manager",
@@ -690,7 +1097,9 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "Office",
       "Retail store",
       "Professional-services firm",
+      "Hospitality business",
     ],
+
     industries: [
       "Property",
       "Education",
@@ -699,6 +1108,7 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "Hospitality",
       "Local services",
     ],
+
     keywords: [
       "request a quote",
       "maintenance required",
@@ -707,8 +1117,10 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "commercial cleaning",
       "painting contractor",
       "logo redesign",
+      "supplier required",
       "weak online presence",
     ],
+
     opportunity_signals: [
       "request_for_quote",
       "maintenance_need",
@@ -717,7 +1129,9 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "branding_problem",
       "seo_gap",
       "inactive_marketing",
+      "product_supply_need",
     ],
+
     recommended_locations: [
       "Pretoria",
       "Centurion",
@@ -726,13 +1140,25 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "Gauteng",
       "South Africa",
     ],
-    minimum_score: 55,
-    default_result_count: 15,
+
+    minimum_score:
+      55,
+
+    default_result_count:
+      15,
+
     search_instruction:
-      "Find reachable organisations with a publicly evidenced service gap that Cossa can realistically convert into a first paying customer. Prioritise verified contact details, low pursuit effort, immediate need and practical deal size.",
-    search_scope: "south_africa",
-    delivery_model: "auto",
-    revenue_mode: "quick_revenue",
+      "Find legitimate and reachable organisations with publicly evidenced needs that Cossa can realistically convert into paying work. Prioritise verified contactability, immediate commercial need, low pursuit effort, clear service fit and practical next actions. Never invent demand.",
+
+    search_scope:
+      "south_africa",
+
+    delivery_model:
+      "auto",
+
+    revenue_mode:
+      "quick_revenue",
+
     objectives: [
       "find_customers",
       "find_immediate_cashflow",
@@ -740,15 +1166,218 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
   },
 
   {
-    id: "property-managers-gauteng",
-    title: "Property Managers and Managing Agents",
+    id: "construction-projects",
+
+    title:
+      "Construction and Renovation Opportunities",
+
     description:
-      "Find property-management firms, sectional-title managers and estate managers that may procure recurring maintenance, renovations, cleaning, landscaping or facility support.",
-    target_sector: "private",
+      "Find verified construction, renovation, refurbishment, repair and building-maintenance opportunities.",
+
+    target_sector:
+      "mixed",
+
+    companies: [
+      "cossa_nexus_construction",
+    ],
+
+    services: [
+      "construction",
+      "renovation",
+      "property_maintenance",
+      "painting",
+      "tiling",
+      "ceilings",
+      "roofing",
+      "plumbing",
+      "carpentry",
+      "waterproofing",
+      "minor_building_works",
+    ],
+
+    organisation_types: [
+      "Property manager",
+      "Commercial property owner",
+      "School",
+      "Church",
+      "Retailer",
+      "Municipality",
+      "Government department",
+      "Estate manager",
+    ],
+
+    industries: [
+      "Property",
+      "Construction",
+      "Education",
+      "Retail",
+      "Government",
+      "Hospitality",
+    ],
+
+    keywords: [
+      "construction tender",
+      "renovation tender",
+      "refurbishment",
+      "minor building works",
+      "repair contractor",
+      "painting quotation",
+      "roof repair",
+      "tiling quotation",
+      "building maintenance",
+    ],
+
+    opportunity_signals: [
+      "active_tender",
+      "request_for_quote",
+      "request_for_proposal",
+      "renovation_need",
+      "maintenance_need",
+      "new_development",
+    ],
+
+    recommended_locations: [
+      "Gauteng",
+      "South Africa",
+    ],
+
+    minimum_score:
+      60,
+
+    default_result_count:
+      20,
+
+    search_scope:
+      "south_africa",
+
+    delivery_model:
+      "physical",
+
+    revenue_mode:
+      "balanced",
+
+    objectives: [
+      "find_customers",
+      "find_projects",
+      "find_active_tenders",
+      "find_rfqs",
+    ],
+  },
+
+  {
+    id: "facility-contracts",
+
+    title:
+      "Facility Services and Cleaning Contracts",
+
+    description:
+      "Find verified recurring cleaning, facility, hygiene, grounds and property-support contracts.",
+
+    target_sector:
+      "mixed",
+
+    companies: [
+      "cossa_facility_services",
+    ],
+
+    services: [
+      "facility_management",
+      "commercial_cleaning",
+      "deep_cleaning",
+      "office_cleaning",
+      "post_construction_cleaning",
+      "hygiene",
+      "landscaping",
+      "grounds_maintenance",
+      "waste_management",
+    ],
+
+    organisation_types: [
+      "Office",
+      "Shopping centre",
+      "School",
+      "College",
+      "Property manager",
+      "Warehouse",
+      "Factory",
+      "Hospitality business",
+      "Government facility",
+    ],
+
+    industries: [
+      "Property",
+      "Education",
+      "Retail",
+      "Logistics",
+      "Manufacturing",
+      "Government",
+      "Hospitality",
+    ],
+
+    keywords: [
+      "cleaning tender",
+      "cleaning contract",
+      "facility management",
+      "office cleaning",
+      "grounds maintenance",
+      "hygiene services",
+      "landscaping tender",
+      "property maintenance",
+    ],
+
+    opportunity_signals: [
+      "active_tender",
+      "request_for_quote",
+      "maintenance_need",
+      "cleaning_need",
+      "supplier_registration",
+    ],
+
+    recommended_locations: [
+      ...PRIORITY_GAUTENG_LOCATIONS,
+      "South Africa",
+    ],
+
+    minimum_score:
+      60,
+
+    default_result_count:
+      20,
+
+    search_scope:
+      "south_africa",
+
+    delivery_model:
+      "physical",
+
+    revenue_mode:
+      "recurring_revenue",
+
+    objectives: [
+      "find_customers",
+      "find_cleaning_contracts",
+      "find_maintenance_needs",
+      "find_recurring_contracts",
+    ],
+  },
+
+  {
+    id: "property-managers-gauteng",
+
+    title:
+      "Property Managers and Managing Agents",
+
+    description:
+      "Find property-management firms, sectional-title managers and estate managers that may procure maintenance, renovations, cleaning or facility support.",
+
+    target_sector:
+      "private",
+
     companies: [
       "cossa_nexus_construction",
       "cossa_facility_services",
     ],
+
     services: [
       "property_maintenance",
       "renovation",
@@ -756,17 +1385,20 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "facility_management",
       "landscaping",
     ],
+
     organisation_types: [
       "Property management company",
       "Managing agent",
       "Estate management company",
       "Body corporate management company",
     ],
+
     industries: [
       "Property management",
       "Real estate",
       "Sectional-title management",
     ],
+
     keywords: [
       "property manager",
       "managing agent",
@@ -776,20 +1408,33 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "cleaning contractor",
       "supplier registration",
     ],
+
     opportunity_signals: [
       "maintenance_need",
       "renovation_need",
       "cleaning_need",
       "supplier_registration",
     ],
+
     recommended_locations: [
       ...PRIORITY_GAUTENG_LOCATIONS,
     ],
-    minimum_score: 60,
-    default_result_count: 20,
-    search_scope: "province",
-    delivery_model: "physical",
-    revenue_mode: "recurring_revenue",
+
+    minimum_score:
+      60,
+
+    default_result_count:
+      20,
+
+    search_scope:
+      "province",
+
+    delivery_model:
+      "physical",
+
+    revenue_mode:
+      "recurring_revenue",
+
     objectives: [
       "find_customers",
       "find_maintenance_needs",
@@ -799,17 +1444,399 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
   },
 
   {
-    id: "schools-and-training-centres",
-    title: "Schools, Colleges and Training Centres",
+    id: "tech-digital-gaps",
+
+    title:
+      "Cossa Tech Digital Opportunity Hunter",
+
     description:
-      "Find public and private education facilities with maintenance, cleaning, painting, roofing, technology, website or document needs.",
-    target_sector: "mixed",
+      "Find legitimate businesses with publicly verifiable technology, website, automation, CRM or ecommerce weaknesses.",
+
+    target_sector:
+      "private",
+
+    companies: [
+      "cossa_tech",
+    ],
+
+    services: [
+      "website_design",
+      "website_development",
+      "ecommerce",
+      "crm",
+      "ai_automation",
+      "business_automation",
+      "software_development",
+      "technology_support",
+      "google_business_profile",
+    ],
+
+    organisation_types: [
+      "Small business",
+      "Professional-services firm",
+      "Contractor",
+      "Retailer",
+      "Property company",
+      "Restaurant",
+      "Hospitality business",
+    ],
+
+    industries: [
+      "Professional services",
+      "Retail",
+      "Property",
+      "Hospitality",
+      "Construction",
+      "Local services",
+    ],
+
+    keywords: [
+      "outdated website",
+      "website not mobile friendly",
+      "missing contact form",
+      "missing online booking",
+      "manual process",
+      "no ecommerce",
+      "no CRM",
+      "poor customer follow up",
+    ],
+
+    opportunity_signals: [
+      "website_problem",
+      "missing_website",
+      "mobile_website_problem",
+      "missing_contact_form",
+      "technology_need",
+      "ecommerce_need",
+      "poor_customer_experience",
+    ],
+
+    recommended_locations: [
+      "South Africa",
+    ],
+
+    minimum_score:
+      55,
+
+    default_result_count:
+      20,
+
+    search_instruction:
+      "Find real organisations with specific, public and verifiable website, ecommerce, CRM, automation or technology weaknesses. Evidence must identify the actual problem. Exclude technology companies, software agencies, web-design agencies and direct competitors unless the mission explicitly requests partners.",
+
+    search_scope:
+      "south_africa",
+
+    delivery_model:
+      "remote",
+
+    revenue_mode:
+      "easy_wins",
+
+    objectives: [
+      "find_customers",
+      "find_weak_websites",
+      "find_technology_gaps",
+    ],
+  },
+
+  {
+    id: "growth-marketing-gaps",
+
+    title:
+      "Growth Marketing Opportunity Hunter",
+
+    description:
+      "Find organisations with public evidence of weak lead generation, marketing, SEO, Google presence or customer conversion.",
+
+    target_sector:
+      "private",
+
+    companies: [
+      "cossa_ai_growth",
+    ],
+
+    services: [
+      "digital_marketing",
+      "social_media_management",
+      "lead_generation",
+      "marketing_strategy",
+      "sales_enablement",
+      "conversion_optimisation",
+      "customer_follow_up",
+      "seo",
+      "google_business_profile",
+      "crm",
+    ],
+
+    organisation_types: [
+      "Small business",
+      "Contractor",
+      "Professional firm",
+      "Retailer",
+      "Restaurant",
+      "Property business",
+      "Hospitality business",
+    ],
+
+    industries: [
+      "Local services",
+      "Retail",
+      "Hospitality",
+      "Construction",
+      "Professional services",
+      "Property",
+    ],
+
+    keywords: [
+      "weak online presence",
+      "poor local SEO",
+      "few Google reviews",
+      "inactive social media",
+      "missing Google Business Profile",
+      "no enquiry form",
+      "poor follow up",
+    ],
+
+    opportunity_signals: [
+      "seo_gap",
+      "inactive_marketing",
+      "weak_google_profile",
+      "missing_contact_form",
+      "missing_whatsapp",
+      "poor_customer_experience",
+    ],
+
+    recommended_locations: [
+      "South Africa",
+    ],
+
+    minimum_score:
+      55,
+
+    default_result_count:
+      20,
+
+    search_scope:
+      "south_africa",
+
+    delivery_model:
+      "remote",
+
+    revenue_mode:
+      "recurring_revenue",
+
+    objectives: [
+      "find_customers",
+      "find_marketing_gaps",
+      "find_recurring_contracts",
+    ],
+  },
+
+  {
+    id: "nexdocs-opportunities",
+
+    title:
+      "NexDocs Business Document Opportunities",
+
+    description:
+      "Find organisations that publicly show procurement, company-profile, proposal, tender-document, quotation or compliance-document requirements.",
+
+    target_sector:
+      "mixed",
+
+    companies: [
+      "nexdocs",
+    ],
+
+    services: [
+      "business_documents",
+      "quotations",
+      "proposals",
+      "contracts",
+      "company_profiles",
+      "tender_documents",
+      "supplier_documents",
+      "compliance_documents",
+    ],
+
+    organisation_types: [
+      "Small business",
+      "Startup",
+      "Contractor",
+      "Supplier",
+      "Nonprofit organisation",
+      "Professional-services firm",
+    ],
+
+    industries: [
+      "Construction",
+      "Professional services",
+      "Retail",
+      "Suppliers",
+      "Small business",
+      "Nonprofit",
+    ],
+
+    keywords: [
+      "company profile required",
+      "supplier documents",
+      "quotation template",
+      "proposal required",
+      "tender documents",
+      "compliance documents",
+      "business profile",
+    ],
+
+    opportunity_signals: [
+      "document_need",
+      "supplier_registration",
+      "request_for_quote",
+      "request_for_proposal",
+    ],
+
+    recommended_locations: [
+      "South Africa",
+    ],
+
+    minimum_score:
+      50,
+
+    default_result_count:
+      15,
+
+    search_scope:
+      "south_africa",
+
+    delivery_model:
+      "remote",
+
+    revenue_mode:
+      "quick_revenue",
+
+    objectives: [
+      "find_customers",
+      "find_document_opportunities",
+      "find_immediate_cashflow",
+    ],
+  },
+
+  {
+    id: "cossa-store-procurement",
+
+    title:
+      "Cossa Store Product and Procurement Opportunities",
+
+    description:
+      "Find verified requests for products, materials, hardware, cleaning supplies, office supplies and technology products that Cossa Store may be able to source and supply.",
+
+    target_sector:
+      "mixed",
+
+    companies: [
+      "cossa_store",
+    ],
+
+    services: [
+      "building_material_supply",
+      "hardware_supply",
+      "cleaning_supply",
+      "office_supply",
+      "technology_supply",
+      "general_product_supply",
+      "procurement_supply",
+    ],
+
+    organisation_types: [
+      "School",
+      "Municipality",
+      "Government department",
+      "Office",
+      "Property manager",
+      "Construction company",
+      "Retail business",
+      "Nonprofit organisation",
+    ],
+
+    industries: [
+      "Government",
+      "Education",
+      "Property",
+      "Construction",
+      "Retail",
+      "Professional services",
+    ],
+
+    keywords: [
+      "supply and delivery",
+      "request for quotation supply",
+      "supply of materials",
+      "supply of cleaning materials",
+      "supply of stationery",
+      "supply of hardware",
+      "supply of ICT equipment",
+      "supplier required",
+    ],
+
+    opportunity_signals: [
+      "product_supply_need",
+      "procurement_need",
+      "request_for_quote",
+      "active_tender",
+      "supplier_registration",
+    ],
+
+    recommended_locations: [
+      "Gauteng",
+      "South Africa",
+    ],
+
+    minimum_score:
+      60,
+
+    default_result_count:
+      20,
+
+    search_instruction:
+      "Find current, verifiable supply opportunities for products that Cossa Store could realistically source and deliver. Prioritise clear item descriptions, procurement references, delivery locations, valid closing dates and official buyer contact routes. Reject expired or unsupported procurement notices.",
+
+    search_scope:
+      "south_africa",
+
+    delivery_model:
+      "physical",
+
+    revenue_mode:
+      "balanced",
+
+    objectives: [
+      "find_product_supply_opportunities",
+      "find_rfqs",
+      "find_active_tenders",
+      "find_supplier_registrations",
+    ],
+  },
+
+  {
+    id: "schools-and-training-centres",
+
+    title:
+      "Schools, Colleges and Training Centres",
+
+    description:
+      "Find public and private education facilities with maintenance, cleaning, construction, technology, document or supply needs.",
+
+    target_sector:
+      "mixed",
+
     companies: [
       "cossa_nexus_construction",
       "cossa_facility_services",
       "cossa_tech",
       "nexdocs",
+      "cossa_store",
     ],
+
     services: [
       "property_maintenance",
       "painting",
@@ -817,7 +1844,12 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "commercial_cleaning",
       "website_design",
       "business_documents",
+      "building_material_supply",
+      "cleaning_supply",
+      "office_supply",
+      "technology_supply",
     ],
+
     organisation_types: [
       "Public school",
       "Private school",
@@ -825,10 +1857,12 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "Training centre",
       "TVET college",
     ],
+
     industries: [
       "Education",
       "Training",
     ],
+
     keywords: [
       "school maintenance tender",
       "school cleaning tender",
@@ -836,508 +1870,170 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "college supplier database",
       "request for quotation",
       "school website",
+      "school stationery supply",
+      "school equipment supply",
     ],
+
     opportunity_signals: [
       "active_tender",
       "request_for_quote",
       "maintenance_need",
       "cleaning_need",
       "website_problem",
+      "product_supply_need",
     ],
+
     recommended_locations: [
       "Gauteng",
       "Limpopo",
       "Mpumalanga",
       "North West",
     ],
-    minimum_score: 65,
-    default_result_count: 20,
-    search_scope: "province",
-    delivery_model: "hybrid",
-    revenue_mode: "balanced",
+
+    minimum_score:
+      60,
+
+    default_result_count:
+      20,
+
+    search_scope:
+      "province",
+
+    delivery_model:
+      "hybrid",
+
+    revenue_mode:
+      "balanced",
+
     objectives: [
       "find_customers",
       "find_projects",
       "find_active_tenders",
       "find_rfqs",
-    ],
-  },
-
-  {
-    id: "churches-and-nonprofits",
-    title: "Churches and Nonprofit Organisations",
-    description:
-      "Find churches, community centres, charities and nonprofit organisations needing renovations, cleaning, websites, branding, marketing, documents or operational systems.",
-    target_sector: "nonprofit",
-    companies: [
-      "cossa_nexus_construction",
-      "cossa_facility_services",
-      "cossa_tech",
-      "cossa_ai_growth",
-      "nexdocs",
-    ],
-    services: [
-      "renovation",
-      "painting",
-      "ceilings",
-      "commercial_cleaning",
-      "website_design",
-      "logo_design",
-      "branding",
-      "digital_marketing",
-      "business_documents",
-    ],
-    organisation_types: [
-      "Church",
-      "Religious organisation",
-      "Nonprofit organisation",
-      "Community centre",
-      "Charity",
-    ],
-    industries: [
-      "Religious organisations",
-      "Nonprofit",
-      "Community services",
-    ],
-    keywords: [
-      "church renovation",
-      "church building project",
-      "community centre maintenance",
-      "nonprofit website",
-      "church cleaning services",
-      "church logo",
-    ],
-    opportunity_signals: [
-      "renovation_need",
-      "maintenance_need",
-      "website_problem",
-      "branding_problem",
-      "inactive_marketing",
-      "document_need",
-    ],
-    recommended_locations: [
-      ...PRIORITY_GAUTENG_LOCATIONS,
-      "South Africa",
-    ],
-    minimum_score: 55,
-    default_result_count: 20,
-    search_scope: "south_africa",
-    delivery_model: "hybrid",
-    revenue_mode: "easy_wins",
-    objectives: [
-      "find_customers",
-      "find_projects",
-      "find_weak_websites",
-      "find_branding_gaps",
-    ],
-  },
-
-  {
-    id: "retail-and-shopping-centres",
-    title: "Retailers and Shopping Centres",
-    description:
-      "Find shopping centres, retail stores, restaurants and franchise locations needing fit-outs, maintenance, cleaning, websites, branding, marketing or customer-growth support.",
-    target_sector: "private",
-    companies: [
-      "cossa_nexus_construction",
-      "cossa_facility_services",
-      "cossa_tech",
-      "cossa_ai_growth",
-    ],
-    services: [
-      "renovation",
-      "property_maintenance",
-      "commercial_cleaning",
-      "website_design",
-      "logo_design",
-      "branding",
-      "seo",
-      "digital_marketing",
-    ],
-    organisation_types: [
-      "Shopping centre",
-      "Retail store",
-      "Restaurant",
-      "Franchise",
-      "Commercial landlord",
-    ],
-    industries: [
-      "Retail",
-      "Hospitality",
-      "Commercial property",
-    ],
-    keywords: [
-      "new store opening",
-      "shop fitting",
-      "retail maintenance",
-      "shopping centre tender",
-      "commercial cleaning contract",
-      "new branch",
-      "website upgrade",
-      "brand redesign",
-    ],
-    opportunity_signals: [
-      "new_branch",
-      "business_expansion",
-      "renovation_need",
-      "maintenance_need",
-      "cleaning_need",
-      "website_problem",
-      "branding_problem",
-    ],
-    recommended_locations: [
-      ...PRIORITY_GAUTENG_LOCATIONS,
-      "South Africa",
-    ],
-    minimum_score: 60,
-    default_result_count: 20,
-    search_scope: "south_africa",
-    delivery_model: "hybrid",
-    revenue_mode: "balanced",
-    objectives: [
-      "find_customers",
-      "find_projects",
-      "find_recurring_contracts",
-      "find_marketing_gaps",
-    ],
-  },
-
-  {
-    id: "industrial-and-warehousing",
-    title: "Industrial Sites, Warehouses and Logistics Firms",
-    description:
-      "Find warehouses, factories, logistics providers and industrial properties with recurring maintenance, cleaning, repairs, painting, facility or technology requirements.",
-    target_sector: "private",
-    companies: [
-      "cossa_nexus_construction",
-      "cossa_facility_services",
-      "cossa_tech",
-    ],
-    services: [
-      "property_maintenance",
-      "painting",
-      "roofing",
-      "facility_management",
-      "commercial_cleaning",
-      "ai_automation",
-      "crm",
-    ],
-    organisation_types: [
-      "Warehouse",
-      "Logistics company",
-      "Factory",
-      "Distribution centre",
-      "Industrial park",
-    ],
-    industries: [
-      "Logistics",
-      "Warehousing",
-      "Manufacturing",
-      "Distribution",
-    ],
-    keywords: [
-      "warehouse maintenance",
-      "industrial cleaning",
-      "facility management tender",
-      "logistics company expansion",
-      "distribution centre contractor",
-    ],
-    opportunity_signals: [
-      "maintenance_need",
-      "cleaning_need",
-      "business_expansion",
-      "technology_need",
-      "supplier_registration",
-    ],
-    recommended_locations: [
-      "Centurion",
-      "Midrand",
-      "Pretoria",
-      "Rosslyn",
-      "Silverton",
-      "Kempton Park",
-      "Boksburg",
-      "Germiston",
-    ],
-    minimum_score: 65,
-    default_result_count: 20,
-    search_scope: "province",
-    delivery_model: "hybrid",
-    revenue_mode: "recurring_revenue",
-    objectives: [
-      "find_customers",
-      "find_maintenance_needs",
-      "find_cleaning_contracts",
-      "find_recurring_contracts",
-    ],
-  },
-
-  {
-    id: "outdated-websites",
-    title: "Businesses with Weak or Outdated Websites",
-    description:
-      "Find legitimate businesses with broken, outdated, slow, non-mobile or poorly converting websites and prepare evidence-based Cossa Tech outreach.",
-    target_sector: "private",
-    companies: [
-      "cossa_tech",
-      "cossa_ai_growth",
-    ],
-    services: [
-      "website_design",
-      "seo",
-      "digital_marketing",
-      "lead_generation",
-      "crm",
-    ],
-    organisation_types: [
-      "Small business",
-      "Professional-services firm",
-      "Contractor",
-      "Retailer",
-      "Property business",
-    ],
-    industries: [
-      "Construction",
-      "Professional services",
-      "Retail",
-      "Property",
-      "Hospitality",
-      "Local services",
-    ],
-    keywords: [
-      "outdated website",
-      "website not mobile friendly",
-      "no online quote form",
-      "broken website",
-      "poor local SEO",
-      "inactive website",
-      "missing WhatsApp",
-    ],
-    opportunity_signals: [
-      "website_problem",
-      "mobile_website_problem",
-      "missing_contact_form",
-      "missing_whatsapp",
-      "seo_gap",
-      "inactive_marketing",
-      "technology_need",
-    ],
-    recommended_locations: [
-      "South Africa",
-    ],
-    minimum_score: 55,
-    default_result_count: 20,
-    search_instruction:
-      "Find real businesses whose official websites show a specific, verifiable conversion, mobile, design, SEO, contact-form or WhatsApp weakness. Do not treat website-design companies or marketing agencies as prospects.",
-    search_scope: "south_africa",
-    delivery_model: "remote",
-    revenue_mode: "easy_wins",
-    objectives: [
-      "find_customers",
-      "find_weak_websites",
-      "find_marketing_gaps",
-      "find_technology_gaps",
-    ],
-  },
-
-  {
-    id: "logo-and-branding-upgrades",
-    title: "Logo and Branding Upgrade Prospects",
-    description:
-      "Find real organisations with weak, inconsistent, outdated or missing public branding that may benefit from Cossa Tech branding services.",
-    target_sector: "private",
-    companies: [
-      "cossa_tech",
-      "cossa_ai_growth",
-    ],
-    services: [
-      "logo_design",
-      "branding",
-      "website_design",
-      "digital_marketing",
-    ],
-    organisation_types: [
-      "Small business",
-      "Contractor",
-      "Restaurant",
-      "Retailer",
-      "Professional-services firm",
-      "Nonprofit organisation",
-    ],
-    industries: [
-      "Local services",
-      "Retail",
-      "Hospitality",
-      "Construction",
-      "Professional services",
-    ],
-    keywords: [
-      "outdated logo",
-      "inconsistent branding",
-      "low quality logo",
-      "missing brand identity",
-      "website logo mismatch",
-      "branding redesign",
-    ],
-    opportunity_signals: [
-      "branding_problem",
-      "missing_logo",
-      "website_problem",
-      "inactive_marketing",
-    ],
-    recommended_locations: [
-      "South Africa",
-    ],
-    minimum_score: 55,
-    default_result_count: 15,
-    search_instruction:
-      "Find legitimate organisations with public evidence of weak, inconsistent, outdated or missing branding. Exclude design agencies, marketing agencies, logo designers and competitors.",
-    search_scope: "south_africa",
-    delivery_model: "remote",
-    revenue_mode: "easy_wins",
-    objectives: [
-      "find_customers",
-      "find_branding_gaps",
-      "find_marketing_gaps",
-    ],
-  },
-
-  {
-    id: "inactive-social-profiles",
-    title: "Businesses with Inactive Marketing",
-    description:
-      "Find real businesses whose public marketing presence appears inactive and prepare honest growth-service opportunities supported by evidence.",
-    target_sector: "private",
-    companies: [
-      "cossa_ai_growth",
-      "cossa_tech",
-    ],
-    services: [
-      "digital_marketing",
-      "social_media_management",
-      "google_business_profile",
-      "lead_generation",
-      "seo",
-      "crm",
-    ],
-    organisation_types: [
-      "Small business",
-      "Local service provider",
-      "Retailer",
-      "Professional firm",
-    ],
-    industries: [
-      "Construction",
-      "Cleaning",
-      "Property",
-      "Retail",
-      "Hospitality",
-      "Professional services",
-    ],
-    keywords: [
-      "inactive Facebook page",
-      "inactive Google Business Profile",
-      "no recent posts",
-      "poor review response",
-      "weak online presence",
-    ],
-    opportunity_signals: [
-      "inactive_marketing",
-      "weak_google_profile",
-      "seo_gap",
-      "poor_customer_experience",
-    ],
-    recommended_locations: [
-      "Gauteng",
-      "South Africa",
-    ],
-    minimum_score: 55,
-    default_result_count: 20,
-    search_scope: "south_africa",
-    delivery_model: "remote",
-    revenue_mode: "recurring_revenue",
-    objectives: [
-      "find_customers",
-      "find_marketing_gaps",
-      "find_recurring_contracts",
+      "find_product_supply_opportunities",
     ],
   },
 
   {
     id: "municipal-tenders",
-    title: "Municipal Tenders and RFQs",
+
+    title:
+      "Municipal Tenders, RFQs and Supplier Opportunities",
+
     description:
       "Find current official municipal tenders, quotations, supplier invitations and procurement notices matching Cossa services.",
-    target_sector: "government",
+
+    target_sector:
+      "government",
+
     companies: [
       "cossa_nexus_construction",
       "cossa_facility_services",
       "cossa_tech",
       "nexdocs",
+      "cossa_store",
     ],
+
     services: [
       "construction",
+      "renovation",
       "property_maintenance",
       "commercial_cleaning",
       "facility_management",
       "website_design",
+      "technology_support",
       "business_documents",
+      "building_material_supply",
+      "cleaning_supply",
+      "office_supply",
+      "technology_supply",
+      "general_product_supply",
+      "procurement_supply",
     ],
+
     organisation_types: [
       "Metropolitan municipality",
       "Local municipality",
       "District municipality",
       "Municipal entity",
     ],
+
     industries: [
       "Government",
       "Municipal services",
       "Public infrastructure",
     ],
+
     keywords: [
       "tender",
       "RFQ",
       "RFP",
       "request for quotation",
+      "request for proposal",
       "supplier database",
       "maintenance services",
       "cleaning services",
       "renovation",
-      "website services",
+      "ICT services",
+      "supply and delivery",
     ],
+
     opportunity_signals: [
       "active_tender",
       "request_for_quote",
       "request_for_proposal",
       "supplier_registration",
+      "product_supply_need",
     ],
+
     recommended_locations: [
       ...SOUTH_AFRICAN_PROVINCES,
     ],
-    minimum_score: 70,
-    default_result_count: 15,
-    search_scope: "south_africa",
-    delivery_model: "hybrid",
-    revenue_mode: "balanced",
+
+    minimum_score:
+      70,
+
+    default_result_count:
+      20,
+
+    search_scope:
+      "south_africa",
+
+    delivery_model:
+      "hybrid",
+
+    revenue_mode:
+      "balanced",
+
     objectives: [
       "find_active_tenders",
       "find_rfqs",
+      "find_rfps",
       "find_supplier_registrations",
+      "find_product_supply_opportunities",
     ],
   },
 
   {
     id: "provincial-and-national-procurement",
-    title: "Provincial and National Government Procurement",
+
+    title:
+      "Provincial and National Government Procurement",
+
     description:
-      "Find current verified opportunities from departments, public entities, hospitals, schools, agencies and state-owned organisations.",
-    target_sector: "government",
+      "Find current verified procurement opportunities from departments, public entities, hospitals, schools, agencies and state organisations.",
+
+    target_sector:
+      "government",
+
     companies: [
       "cossa_nexus_construction",
       "cossa_facility_services",
       "cossa_tech",
       "nexdocs",
+      "cossa_store",
     ],
+
     services: [
       "construction",
       "renovation",
@@ -1345,9 +2041,16 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "commercial_cleaning",
       "facility_management",
       "website_design",
+      "technology_support",
       "ai_automation",
       "business_documents",
+      "building_material_supply",
+      "cleaning_supply",
+      "office_supply",
+      "technology_supply",
+      "procurement_supply",
     ],
+
     organisation_types: [
       "National department",
       "Provincial department",
@@ -1356,12 +2059,14 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "Public hospital",
       "State-owned organisation",
     ],
+
     industries: [
       "Government",
       "Healthcare",
       "Education",
       "Public infrastructure",
     ],
+
     keywords: [
       "eTender",
       "bid invitation",
@@ -1371,41 +2076,66 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "cleaning tender",
       "construction tender",
       "ICT tender",
+      "supply and delivery",
     ],
+
     opportunity_signals: [
       "active_tender",
       "request_for_quote",
       "request_for_proposal",
       "supplier_registration",
+      "product_supply_need",
     ],
+
     recommended_locations: [
       ...SOUTH_AFRICAN_PROVINCES,
     ],
-    minimum_score: 75,
-    default_result_count: 15,
-    search_scope: "south_africa",
-    delivery_model: "hybrid",
-    revenue_mode: "strategic",
+
+    minimum_score:
+      72,
+
+    default_result_count:
+      20,
+
+    search_scope:
+      "south_africa",
+
+    delivery_model:
+      "hybrid",
+
+    revenue_mode:
+      "strategic",
+
     objectives: [
       "find_active_tenders",
       "find_rfqs",
+      "find_rfps",
       "find_supplier_registrations",
+      "find_product_supply_opportunities",
     ],
   },
 
   {
     id: "small-projects-now",
-    title: "Small Projects Available Now",
+
+    title:
+      "Small Projects and Fast Revenue",
+
     description:
-      "Find smaller, faster-to-close public requests and private-sector needs that can generate early cash flow without ignoring larger strategic work.",
-    target_sector: "mixed",
+      "Find smaller, faster-to-close requests and service needs that could generate early cash flow.",
+
+    target_sector:
+      "mixed",
+
     companies: [
       "cossa_nexus_construction",
       "cossa_facility_services",
       "cossa_tech",
       "cossa_ai_growth",
       "nexdocs",
+      "cossa_store",
     ],
+
     services: [
       "painting",
       "tiling",
@@ -1417,7 +2147,11 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "branding",
       "seo",
       "business_documents",
+      "building_material_supply",
+      "cleaning_supply",
+      "office_supply",
     ],
+
     organisation_types: [
       "Small business",
       "Property manager",
@@ -1427,6 +2161,7 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "Retail store",
       "Municipality",
     ],
+
     industries: [
       "Property",
       "Education",
@@ -1434,6 +2169,7 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "Local government",
       "Professional services",
     ],
+
     keywords: [
       "small works",
       "minor repairs",
@@ -1443,7 +2179,9 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "logo redesign",
       "request for quotation",
       "urgent maintenance",
+      "supply quotation",
     ],
+
     opportunity_signals: [
       "request_for_quote",
       "maintenance_need",
@@ -1451,7 +2189,9 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "website_problem",
       "branding_problem",
       "document_need",
+      "product_supply_need",
     ],
+
     recommended_locations: [
       "Pretoria",
       "Centurion",
@@ -1460,11 +2200,22 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
       "Gauteng",
       "South Africa",
     ],
-    minimum_score: 55,
-    default_result_count: 15,
-    search_scope: "south_africa",
-    delivery_model: "auto",
-    revenue_mode: "quick_revenue",
+
+    minimum_score:
+      55,
+
+    default_result_count:
+      15,
+
+    search_scope:
+      "south_africa",
+
+    delivery_model:
+      "auto",
+
+    revenue_mode:
+      "quick_revenue",
+
     objectives: [
       "find_customers",
       "find_projects",
@@ -1473,8 +2224,13 @@ export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
   },
 ];
 
+/* -------------------------------------------------------------------------- */
+/* DEFAULT REQUEST                                                            */
+/* -------------------------------------------------------------------------- */
+
 export const DEFAULT_LEAD_HUNTER_REQUEST: LeadHunterSearchRequest = {
-  sector: "mixed",
+  sector:
+    "mixed",
 
   companies: [
     "cossa_nexus_construction",
@@ -1499,6 +2255,10 @@ export const DEFAULT_LEAD_HUNTER_REQUEST: LeadHunterSearchRequest = {
     "lead_generation",
     "ai_automation",
     "business_documents",
+    "building_material_supply",
+    "cleaning_supply",
+    "office_supply",
+    "technology_supply",
   ],
 
   locations: [
@@ -1510,23 +2270,44 @@ export const DEFAULT_LEAD_HUNTER_REQUEST: LeadHunterSearchRequest = {
     "South Africa",
   ],
 
-  industries: [],
-  organisation_types: [],
+  industries:
+    [],
 
-  result_count: DEFAULT_HUNT_RESULTS,
+  organisation_types:
+    [],
 
-  minimum_score: 55,
-  minimum_evidence_sources: 1,
+  result_count:
+    DEFAULT_HUNT_RESULTS,
 
-  include_small_projects: true,
-  include_large_projects: true,
-  include_private_sector: true,
-  include_government_sector: true,
-  include_nonprofits: true,
+  minimum_score:
+    DEFAULT_MINIMUM_SCORE,
 
-  require_public_phone_or_email: true,
-  require_website: false,
-  require_opportunity_signal: true,
+  minimum_evidence_sources:
+    DEFAULT_MINIMUM_EVIDENCE_SOURCES,
+
+  include_small_projects:
+    true,
+
+  include_large_projects:
+    true,
+
+  include_private_sector:
+    true,
+
+  include_government_sector:
+    true,
+
+  include_nonprofits:
+    true,
+
+  require_public_phone_or_email:
+    true,
+
+  require_website:
+    false,
+
+  require_opportunity_signal:
+    true,
 
   tender_keywords: [
     "tender",
@@ -1535,6 +2316,7 @@ export const DEFAULT_LEAD_HUNTER_REQUEST: LeadHunterSearchRequest = {
     "request for quotation",
     "request for proposal",
     "supplier registration",
+    "supply and delivery",
   ],
 
   prospect_keywords: [
@@ -1550,20 +2332,34 @@ export const DEFAULT_LEAD_HUNTER_REQUEST: LeadHunterSearchRequest = {
     "marketing",
     "lead generation",
     "business documents",
+    "supplier",
+    "supply and delivery",
+    "procurement",
   ],
 
-  verified_sources_only: true,
-  exclude_existing_crm_leads: true,
+  verified_sources_only:
+    true,
 
-  notes: null,
+  exclude_existing_crm_leads:
+    true,
+
+  notes:
+    null,
 
   search_instruction:
-    "Find verified, contactable organisations with a clear service opportunity that Cossa can realistically pursue. Prioritise evidence quality, immediate revenue potential, ease of contact and practical next actions.",
+    "Find verified, contactable organisations with a genuine publicly supported service, project, procurement or commercial opportunity that Cossa can realistically pursue. Prioritise evidence quality, revenue potential, contactability, timing and practical next actions. Never invent buying intent.",
 
-  search_scope: "south_africa",
-  delivery_model: "auto",
-  search_depth: "economy",
-  revenue_mode: "quick_revenue",
+  search_scope:
+    "south_africa",
+
+  delivery_model:
+    "auto",
+
+  search_depth:
+    "economy",
+
+  revenue_mode:
+    "quick_revenue",
 
   objectives: [
     "find_customers",
@@ -1585,30 +2381,107 @@ export const DEFAULT_LEAD_HUNTER_REQUEST: LeadHunterSearchRequest = {
     "Johannesburg",
   ],
 
-  suburbs: [],
+  suburbs:
+    [],
 
-  radius_km: null,
+  radius_km:
+    null,
 
-  search_everything: false,
-  easy_wins_only: true,
-  revenue_first: true,
+  search_everything:
+    false,
 
-  // Economy must actually remain Economy.
-  max_search_queries: 3,
+  easy_wins_only:
+    true,
 
-  use_cached_results: true,
-  cache_max_age_hours: DEFAULT_SEARCH_CACHE_HOURS,
+  revenue_first:
+    true,
 
-  exclude_competitors: true,
-  exclude_directories: true,
-  exclude_expired_procurement: true,
+  max_search_queries:
+    3,
+
+  use_cached_results:
+    true,
+
+  cache_max_age_hours:
+    DEFAULT_SEARCH_CACHE_HOURS,
+
+  exclude_competitors:
+    true,
+
+  exclude_directories:
+    true,
+
+  exclude_expired_procurement:
+    true,
+
+  require_primary_source_for_procurement:
+    true,
+
+  reject_stale_opportunities:
+    true,
+
+  minimum_contactability_score:
+    0,
+
+  diversify_results_by_company:
+    true,
+
+  diversify_results_by_sector:
+    true,
 };
+
+/* -------------------------------------------------------------------------- */
+/* VALUE SETS                                                                 */
+/* -------------------------------------------------------------------------- */
+
+const VALID_SECTORS =
+  new Set<LeadHunterSector>([
+    "private",
+    "government",
+    "nonprofit",
+    "mixed",
+  ]);
+
+const VALID_COMPANIES =
+  new Set<LeadHunterCompany>([
+    "cossa_nexus_construction",
+    "cossa_facility_services",
+    "cossa_tech",
+    "cossa_ai_growth",
+    "nexdocs",
+    "cossa_store",
+    "cossa_nexus_holdings",
+  ]);
+
+const VALID_VERIFICATION_STATUSES =
+  new Set<ProspectVerificationStatus>([
+    "unverified",
+    "partially_verified",
+    "verified",
+    "rejected",
+  ]);
+
+const VALID_PROCUREMENT_STATUSES =
+  new Set<ProcurementStatus>([
+    "not_applicable",
+    "unknown",
+    "open",
+    "closing_soon",
+    "closed",
+    "expired",
+    "awarded",
+  ]);
+
+/* -------------------------------------------------------------------------- */
+/* TEXT HELPERS                                                               */
+/* -------------------------------------------------------------------------- */
 
 function cleanText(
   value: unknown,
 ): string | null {
   if (
-    typeof value !== "string"
+    typeof value !==
+    "string"
   ) {
     return null;
   }
@@ -1621,7 +2494,8 @@ function cleanText(
       )
       .trim();
 
-  return cleaned || null;
+  return cleaned ||
+    null;
 }
 
 function cleanLongText(
@@ -1687,116 +2561,9 @@ function uniqueTexts(
   );
 }
 
-function normaliseEmail(
-  value: unknown,
-): string | null {
-  const email =
-    lowerText(
-      value,
-    );
-
-  if (!email) {
-    return null;
-  }
-
-  const valid =
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-      email,
-    );
-
-  return valid
-    ? email
-    : null;
-}
-
-function normalisePhone(
-  value: unknown,
-): string | null {
-  const text =
-    cleanText(
-      value,
-    );
-
-  if (!text) {
-    return null;
-  }
-
-  const phone =
-    text.replace(
-      /[^\d+]/g,
-      "",
-    );
-
-  return phone.length >= 9
-    ? phone
-    : null;
-}
-
-function normaliseWebsite(
-  value: unknown,
-): string | null {
-  const text =
-    cleanText(
-      value,
-    );
-
-  if (!text) {
-    return null;
-  }
-
-  try {
-    const url =
-      new URL(
-        text.startsWith(
-          "http",
-        )
-          ? text
-          : `https://${text}`,
-      );
-
-    if (
-      ![
-        "http:",
-        "https:",
-      ].includes(
-        url.protocol,
-      )
-    ) {
-      return null;
-    }
-
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
-function clampScore(
-  value: unknown,
-): number {
-  const score =
-    Number(
-      value,
-    );
-
-  if (
-    !Number.isFinite(
-      score,
-    )
-  ) {
-    return 0;
-  }
-
-  return Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round(
-        score,
-      ),
-    ),
-  );
-}
+/* -------------------------------------------------------------------------- */
+/* NUMBER HELPERS                                                             */
+/* -------------------------------------------------------------------------- */
 
 function safeNumber(
   value: unknown,
@@ -1821,6 +2588,31 @@ function safeNumber(
     : null;
 }
 
+function clampScore(
+  value: unknown,
+): number {
+  const score =
+    safeNumber(
+      value,
+    );
+
+  if (
+    score === null
+  ) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        score,
+      ),
+    ),
+  );
+}
+
 function safeBoolean(
   value: unknown,
   fallback: boolean,
@@ -1829,6 +2621,277 @@ function safeBoolean(
     "boolean"
     ? value
     : fallback;
+}
+
+/* -------------------------------------------------------------------------- */
+/* DATE HELPERS                                                               */
+/* -------------------------------------------------------------------------- */
+
+function normaliseDate(
+  value: unknown,
+): string | null {
+  const text =
+    cleanText(
+      value,
+    );
+
+  if (!text) {
+    return null;
+  }
+
+  const date =
+    new Date(
+      text,
+    );
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return null;
+  }
+
+  return date.toISOString();
+}
+
+function opportunityHasExpired(
+  closingDate: string | null,
+): boolean {
+  if (!closingDate) {
+    return false;
+  }
+
+  const parsed =
+    new Date(
+      closingDate,
+    );
+
+  if (
+    Number.isNaN(
+      parsed.getTime(),
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    parsed.getTime() <
+    Date.now()
+  );
+}
+
+function calculateFreshnessScore(
+  dateValue: string | null,
+): number {
+  if (!dateValue) {
+    return 50;
+  }
+
+  const parsed =
+    new Date(
+      dateValue,
+    );
+
+  if (
+    Number.isNaN(
+      parsed.getTime(),
+    )
+  ) {
+    return 40;
+  }
+
+  const ageMilliseconds =
+    Math.max(
+      0,
+      Date.now() -
+        parsed.getTime(),
+    );
+
+  const ageDays =
+    ageMilliseconds /
+    86_400_000;
+
+  if (
+    ageDays <= 1
+  ) {
+    return 100;
+  }
+
+  if (
+    ageDays <= 7
+  ) {
+    return 95;
+  }
+
+  if (
+    ageDays <= 30
+  ) {
+    return 85;
+  }
+
+  if (
+    ageDays <= 90
+  ) {
+    return 70;
+  }
+
+  if (
+    ageDays <= 180
+  ) {
+    return 55;
+  }
+
+  if (
+    ageDays <= 365
+  ) {
+    return 35;
+  }
+
+  return 15;
+}
+
+/* -------------------------------------------------------------------------- */
+/* CONTACT HELPERS                                                            */
+/* -------------------------------------------------------------------------- */
+
+function normaliseEmail(
+  value: unknown,
+): string | null {
+  const email =
+    lowerText(
+      value,
+    );
+
+  if (!email) {
+    return null;
+  }
+
+  if (
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      email,
+    )
+  ) {
+    return null;
+  }
+
+  const obviousFakePatterns =
+    [
+      "example.com",
+      "test.com",
+      "email.com",
+      "yourdomain.com",
+    ];
+
+  if (
+    obviousFakePatterns.some(
+      (pattern) =>
+        email.endsWith(
+          `@${pattern}`,
+        ),
+    )
+  ) {
+    return null;
+  }
+
+  return email;
+}
+
+function normalisePhone(
+  value: unknown,
+): string | null {
+  const text =
+    cleanText(
+      value,
+    );
+
+  if (!text) {
+    return null;
+  }
+
+  const phone =
+    text.replace(
+      /[^\d+]/g,
+      "",
+    );
+
+  const digits =
+    phone.replace(
+      /\D/g,
+      "",
+    );
+
+  if (
+    digits.length < 9 ||
+    digits.length > 15
+  ) {
+    return null;
+  }
+
+  if (
+    /^0+$/.test(
+      digits,
+    )
+  ) {
+    return null;
+  }
+
+  return phone;
+}
+
+/* -------------------------------------------------------------------------- */
+/* URL HELPERS                                                                */
+/* -------------------------------------------------------------------------- */
+
+function normaliseWebsite(
+  value: unknown,
+): string | null {
+  const text =
+    cleanText(
+      value,
+    );
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    const url =
+      new URL(
+        /^https?:\/\//i.test(
+          text,
+        )
+          ? text
+          : `https://${text}`,
+      );
+
+    if (
+      ![
+        "http:",
+        "https:",
+      ].includes(
+        url.protocol,
+      )
+    ) {
+      return null;
+    }
+
+    if (
+      !url.hostname ||
+      !url.hostname.includes(
+        ".",
+      )
+    ) {
+      return null;
+    }
+
+    url.hash =
+      "";
+
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function isValidPublicUrl(
@@ -1840,6 +2903,150 @@ function isValidPublicUrl(
     ) !== null
   );
 }
+
+function urlHostname(
+  value: unknown,
+): string | null {
+  const url =
+    normaliseWebsite(
+      value,
+    );
+
+  if (!url) {
+    return null;
+  }
+
+  try {
+    return new URL(
+      url,
+    ).hostname
+      .replace(
+        /^www\./i,
+        "",
+      )
+      .toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function sameHostname(
+  first: unknown,
+  second: unknown,
+): boolean {
+  const a =
+    urlHostname(
+      first,
+    );
+
+  const b =
+    urlHostname(
+      second,
+    );
+
+  return Boolean(
+    a &&
+      b &&
+      a === b,
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* PUBLIC SOURCE QUALITY                                                      */
+/* -------------------------------------------------------------------------- */
+
+function sourceQualityScore(
+  evidence: Partial<ProspectEvidence>,
+  organisationWebsite?: string | null,
+): number {
+  const hostname =
+    urlHostname(
+      evidence.url,
+    );
+
+  if (!hostname) {
+    return 0;
+  }
+
+  if (
+    evidence.is_official_source ===
+      true ||
+    evidence.is_primary_source ===
+      true
+  ) {
+    return 95;
+  }
+
+  if (
+    organisationWebsite &&
+    sameHostname(
+      evidence.url,
+      organisationWebsite,
+    )
+  ) {
+    return 95;
+  }
+
+  if (
+    hostname.endsWith(
+      ".gov.za",
+    ) ||
+    hostname ===
+      "gov.za"
+  ) {
+    return 100;
+  }
+
+  if (
+    hostname.includes(
+      "etenders.gov.za",
+    ) ||
+    hostname.includes(
+      "treasury.gov.za",
+    )
+  ) {
+    return 100;
+  }
+
+  switch (
+    evidence.type
+  ) {
+    case "government_portal":
+    case "tender_notice":
+    case "procurement_notice":
+    case "rfq_notice":
+    case "rfp_notice":
+    case "supplier_database":
+      return 90;
+
+    case "official_website":
+    case "contact_page":
+      return 90;
+
+    case "public_document":
+    case "public_pdf":
+      return 80;
+
+    case "business_profile":
+      return 65;
+
+    case "news_report":
+      return 60;
+
+    case "social_profile":
+      return 45;
+
+    case "company_directory":
+      return 35;
+
+    default:
+      return 45;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* IDENTIFIER HELPERS                                                         */
+/* -------------------------------------------------------------------------- */
 
 function samePhone(
   first: string | null,
@@ -1895,11 +3102,13 @@ function similarCompanyName(
   second: string,
 ): boolean {
   const normalise =
-    (value: string) =>
+    (
+      value: string,
+    ) =>
       value
         .toLowerCase()
         .replace(
-          /\b(pty|ltd|limited|inc|cc|company|holdings)\b/g,
+          /\b(pty|ltd|limited|inc|cc|company|holdings|group|services)\b/g,
           "",
         )
         .replace(
@@ -1917,19 +3126,37 @@ function similarCompanyName(
       second,
     );
 
-  return Boolean(
-    a &&
-      b &&
-      (
-        a === b ||
-        a.includes(
-          b,
-        ) ||
-        b.includes(
-          a,
-        )
-      ),
-  );
+  if (
+    !a ||
+    !b
+  ) {
+    return false;
+  }
+
+  if (
+    a === b
+  ) {
+    return true;
+  }
+
+  if (
+    Math.min(
+      a.length,
+      b.length,
+    ) >= 6 &&
+    (
+      a.includes(
+        b,
+      ) ||
+      b.includes(
+        a,
+      )
+    )
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function createClientId():
@@ -1948,27 +3175,32 @@ function createClientId():
     .slice(2)}`;
 }
 
+/* -------------------------------------------------------------------------- */
+/* SERVICE INTELLIGENCE                                                       */
+/* -------------------------------------------------------------------------- */
+
 export function isPhysicalService(
-  service:
-    LeadHunterServiceCategory,
+  service: LeadHunterServiceCategory,
 ): boolean {
-  return PHYSICAL_SERVICE_CATEGORIES.includes(
-    service,
+  return (
+    PHYSICAL_SERVICE_CATEGORIES.includes(
+      service,
+    )
   );
 }
 
 export function isRemoteService(
-  service:
-    LeadHunterServiceCategory,
+  service: LeadHunterServiceCategory,
 ): boolean {
-  return REMOTE_SERVICE_CATEGORIES.includes(
-    service,
+  return (
+    REMOTE_SERVICE_CATEGORIES.includes(
+      service,
+    )
   );
 }
 
 export function inferDeliveryModel(
-  services:
-    LeadHunterServiceCategory[],
+  services: LeadHunterServiceCategory[],
 ): LeadHunterDeliveryModel {
   const containsPhysical =
     services.some(
@@ -2002,9 +3234,29 @@ export function inferDeliveryModel(
   return "auto";
 }
 
+export function companyCanDeliverService(
+  company: LeadHunterCompany,
+  service: LeadHunterServiceCategory,
+): boolean {
+  if (
+    company ===
+    "cossa_nexus_holdings"
+  ) {
+    return true;
+  }
+
+  return (
+    COMPANY_SERVICE_MAP[
+      company
+    ]?.includes(
+      service,
+    ) ??
+    false
+  );
+}
+
 export function maxQueriesForDepth(
-  depth:
-    LeadHunterSearchDepth,
+  depth: LeadHunterSearchDepth,
 ): number {
   return (
     SEARCH_DEPTH_OPTIONS.find(
@@ -2018,19 +3270,10 @@ export function maxQueriesForDepth(
   );
 }
 
-/*
- * Extract structured mission fields.
- *
- * Supports instructions such as:
- *
- * Company: Cossa Nexus Construction
- * Services: Construction Renovation Property Maintenance
- * Location: Pretoria Centurion Gauteng
- * Results: 10
- * Minimum score: 50
- * Private sector: YES
- * Government: NO
- */
+/* -------------------------------------------------------------------------- */
+/* MISSION PARSING                                                            */
+/* -------------------------------------------------------------------------- */
+
 function extractMissionField(
   instruction: string,
   field:
@@ -2059,12 +3302,6 @@ function extractMissionField(
   );
 }
 
-/*
- * Boolean instruction fields often appear immediately before free-form prose.
- * `extractMissionField` intentionally captures longer text fields, so it can
- * include that prose when the boolean field is the final structured line.
- * Read the leading boolean token directly instead.
- */
 function extractMissionBooleanField(
   instruction: string,
   fieldPattern: string,
@@ -2078,7 +3315,8 @@ function extractMissionBooleanField(
     );
 
   const value =
-    match?.[1]?.toLowerCase();
+    match?.[1]
+      ?.toLowerCase();
 
   if (
     [
@@ -2125,49 +3363,61 @@ function inferCompaniesFromInstruction(
     instruction;
 
   const patterns: Array<{
-    company:
-      LeadHunterCompany;
+    company: LeadHunterCompany;
     pattern: RegExp;
   }> = [
     {
       company:
         "cossa_nexus_construction",
+
       pattern:
-        /\bcossa\s+nexus\s+construction(?:s)?\b/i,
+        /\bcossa\s+nexus\s+construction(?:s)?\b|\bcossa\s+construction\b/i,
     },
+
     {
       company:
         "cossa_facility_services",
+
       pattern:
         /\bcossa\s+facility\s+services\b/i,
     },
+
     {
       company:
         "cossa_tech",
+
       pattern:
         /\bcossa\s+tech\b/i,
     },
+
     {
       company:
         "cossa_ai_growth",
+
       pattern:
-        /\bcossa\s+ai\s+growth\b/i,
+        /\bcossa\s+(?:ai\s+)?growth\b|\bgrowth\b/i,
     },
+
     {
       company:
         "nexdocs",
+
       pattern:
         /\bnexdocs\b/i,
     },
+
     {
       company:
         "cossa_store",
+
       pattern:
         /\bcossa\s+store\b/i,
     },
+
     {
       company:
         "cossa_nexus_holdings",
+
       pattern:
         /\bcossa\s+nexus\s+holdings\b/i,
     },
@@ -2204,207 +3454,378 @@ function inferServicesFromInstruction(
       "Services",
     );
 
-  /*
-   * Service selection belongs to the form controls. Natural-language missions
-   * often name a Cossa subsidiary or describe competitors to exclude (for
-   * example "Cossa Nexus Construction" or "reject cleaning companies").
-   * Those mentions must never silently reduce a multi-service hunt to the
-   * one service word they contain.
-   *
-   * Only an explicit `Services:` field can deliberately replace the selected
-   * service list.
-   */
   if (!serviceField) {
     return [];
   }
 
-  const searchable =
-    serviceField;
-
-  const matches:
-    LeadHunterServiceCategory[] =
-    [];
-
   const patterns: Array<{
-    service:
-      LeadHunterServiceCategory;
+    service: LeadHunterServiceCategory;
     pattern: RegExp;
   }> = [
     {
       service:
         "construction",
+
       pattern:
         /\bconstruction\b/i,
     },
+
     {
       service:
         "renovation",
+
       pattern:
         /\brenovation(?:s)?\b|\brefurbishment\b/i,
     },
+
     {
       service:
         "property_maintenance",
+
       pattern:
         /\bproperty\s+maintenance\b|\bmaintenance\s+services?\b/i,
     },
+
     {
       service:
         "painting",
+
       pattern:
         /\bpainting\b|\brepainting\b/i,
     },
+
     {
       service:
         "tiling",
+
       pattern:
-        /\btiling\b/i,
+        /\btiling\b|\btiles?\b/i,
     },
+
     {
       service:
         "ceilings",
+
       pattern:
         /\bceilings?\b/i,
     },
+
     {
       service:
         "roofing",
+
       pattern:
         /\broofing\b|\broof repairs?\b/i,
     },
+
     {
       service:
         "plumbing",
+
       pattern:
         /\bplumbing\b/i,
     },
+
+    {
+      service:
+        "carpentry",
+
+      pattern:
+        /\bcarpentry\b|\bjoinery\b/i,
+    },
+
+    {
+      service:
+        "waterproofing",
+
+      pattern:
+        /\bwaterproofing\b/i,
+    },
+
+    {
+      service:
+        "shopfitting",
+
+      pattern:
+        /\bshop\s*fit(?:ting)?\b|\bfit[-\s]?out\b/i,
+    },
+
+    {
+      service:
+        "minor_building_works",
+
+      pattern:
+        /\bminor building works?\b|\bsmall works?\b/i,
+    },
+
     {
       service:
         "facility_management",
+
       pattern:
         /\bfacilit(?:y|ies)\s+management\b/i,
     },
+
     {
       service:
         "commercial_cleaning",
+
       pattern:
         /\bcommercial\s+cleaning\b/i,
     },
+
     {
       service:
         "deep_cleaning",
+
       pattern:
         /\bdeep\s+cleaning\b/i,
     },
+
+    {
+      service:
+        "office_cleaning",
+
+      pattern:
+        /\boffice\s+cleaning\b/i,
+    },
+
     {
       service:
         "hygiene",
+
       pattern:
         /\bhygiene\b|\bsanitation\b/i,
     },
+
     {
       service:
         "landscaping",
+
       pattern:
         /\blandscaping\b|\bgarden services?\b/i,
     },
+
     {
       service:
         "waste_management",
+
       pattern:
         /\bwaste\s+management\b/i,
     },
+
     {
       service:
         "website_design",
+
       pattern:
-        /\bwebsite\s+(?:design|redesign|development|upgrade)\b|\bweb\s+design\b/i,
+        /\bwebsite\s+(?:design|redesign)\b|\bweb\s+design\b/i,
     },
+
+    {
+      service:
+        "website_development",
+
+      pattern:
+        /\bwebsite\s+development\b|\bweb\s+development\b/i,
+    },
+
     {
       service:
         "logo_design",
+
       pattern:
         /\blogo\s+(?:design|redesign|upgrade)\b/i,
     },
+
     {
       service:
         "branding",
+
       pattern:
         /\bbranding\b|\bbrand\s+identity\b/i,
     },
+
     {
       service:
         "seo",
+
       pattern:
         /\bseo\b|\bsearch engine optimi[sz]ation\b/i,
     },
+
     {
       service:
         "digital_marketing",
+
       pattern:
         /\bdigital\s+marketing\b/i,
     },
+
     {
       service:
         "social_media_management",
+
       pattern:
         /\bsocial\s+media\s+management\b/i,
     },
+
     {
       service:
         "google_business_profile",
+
       pattern:
         /\bgoogle\s+business\s+profile\b|\bgbp\b/i,
     },
+
     {
       service:
         "lead_generation",
+
       pattern:
         /\blead\s+generation\b/i,
     },
+
     {
       service:
         "crm",
+
       pattern:
         /\bcrm\b|\bcustomer relationship management\b/i,
     },
+
     {
       service:
         "ai_automation",
+
       pattern:
-        /\bai\s+automation\b|\bworkflow\s+automation\b/i,
+        /\bai\s+automation\b/i,
     },
+
+    {
+      service:
+        "business_automation",
+
+      pattern:
+        /\bbusiness\s+automation\b|\bworkflow\s+automation\b/i,
+    },
+
     {
       service:
         "business_documents",
+
       pattern:
         /\bbusiness\s+documents?\b/i,
     },
+
     {
       service:
         "quotations",
+
       pattern:
         /\bquotations?\b|\bquote systems?\b/i,
     },
+
     {
       service:
         "proposals",
+
       pattern:
         /\bproposals?\b/i,
     },
+
     {
       service:
         "contracts",
+
       pattern:
         /\bcontracts?\b|\bcontract documents?\b/i,
     },
+
+    {
+      service:
+        "company_profiles",
+
+      pattern:
+        /\bcompany profiles?\b/i,
+    },
+
+    {
+      service:
+        "tender_documents",
+
+      pattern:
+        /\btender documents?\b/i,
+    },
+
     {
       service:
         "ecommerce",
+
       pattern:
         /\be-?commerce\b|\bonline store\b/i,
     },
+
+    {
+      service:
+        "building_material_supply",
+
+      pattern:
+        /\bbuilding materials?\b|\bconstruction materials?\b/i,
+    },
+
+    {
+      service:
+        "hardware_supply",
+
+      pattern:
+        /\bhardware supply\b|\bhardware materials?\b/i,
+    },
+
+    {
+      service:
+        "cleaning_supply",
+
+      pattern:
+        /\bcleaning supplies?\b|\bcleaning materials?\b/i,
+    },
+
+    {
+      service:
+        "office_supply",
+
+      pattern:
+        /\boffice supplies?\b|\bstationery\b/i,
+    },
+
+    {
+      service:
+        "technology_supply",
+
+      pattern:
+        /\bICT equipment\b|\btechnology supply\b|\bcomputer equipment\b/i,
+    },
+
+    {
+      service:
+        "general_product_supply",
+
+      pattern:
+        /\bgeneral supply\b|\bproduct supply\b/i,
+    },
+
+    {
+      service:
+        "procurement_supply",
+
+      pattern:
+        /\bprocurement supply\b|\bsupply and delivery\b/i,
+    },
   ];
+
+  const matches:
+    LeadHunterServiceCategory[] =
+    [];
 
   for (
     const item of
@@ -2412,7 +3833,7 @@ function inferServicesFromInstruction(
   ) {
     if (
       item.pattern.test(
-        searchable,
+        serviceField,
       )
     ) {
       matches.push(
@@ -2447,12 +3868,7 @@ function inferLocationsFromInstruction(
             /[,;|]+|\s+(?:and|&)\s+/i,
           )
           .map(
-            (
-              item,
-            ) =>
-              cleanText(
-                item,
-              ),
+            cleanText,
           )
           .filter(
             (
@@ -2479,24 +3895,23 @@ function inferLocationsFromInstruction(
   return knownLocations.filter(
     (
       location,
-    ) =>
-      new RegExp(
-        `\\b${location.replace(
+    ) => {
+      const escaped =
+        location.replace(
           /[.*+?^${}()|[\]\\]/g,
           "\\$&",
-        )}\\b`,
+        );
+
+      return new RegExp(
+        `\\b${escaped}\\b`,
         "i",
       ).test(
         instruction,
-      ),
+      );
+    },
   );
 }
 
-/*
- * When a mission names the buyer types directly, they take priority over
- * broad values left in the form from a previous hunt. This keeps a small
- * search budget focused on the customers the user asked for.
- */
 function inferBuyerTargetsFromInstruction(
   instruction: string,
 ): string[] {
@@ -2505,9 +3920,7 @@ function inferBuyerTargetsFromInstruction(
       /\b(?:find|target|return)\s+(?:(?:private|public|government|nonprofit)\s+)?([^.\n!]{3,180}?)(?=\s+(?:that|who)\s+(?:could|can|may|need|needs|want|wants|have|has)\b|\s+needing\b)/i,
     )?.[1];
 
-  if (
-    !clause
-  ) {
+  if (!clause) {
     return [];
   }
 
@@ -2521,15 +3934,15 @@ function inferBuyerTargetsFromInstruction(
           /[,;]|\s+(?:and|&)\s+/i,
         )
         .map(
-          (item) =>
-            cleanText(
-              item,
-            ),
+          cleanText,
         )
         .filter(
-          (item): item is string =>
-            typeof item ===
-              "string" &&
+          (
+            item,
+          ): item is string =>
+            Boolean(
+              item,
+            ) &&
             !genericTarget.test(
               item,
             ),
@@ -2537,29 +3950,16 @@ function inferBuyerTargetsFromInstruction(
     ),
   ].slice(
     0,
-    6,
+    8,
   );
 }
 
-/*
- * Natural-language mission reconciliation.
- *
- * This does NOT attempt unrestricted AI guessing.
- * It only applies explicit, high-confidence instructions.
- *
- * Therefore:
- * "Company: Cossa Nexus Construction"
- * really searches Construction.
- *
- * "Government: NO"
- * really disables government.
- *
- * "Services: Construction Renovation Property Maintenance"
- * really removes unrelated cleaning/marketing/technology services.
- */
+/* -------------------------------------------------------------------------- */
+/* NATURAL LANGUAGE RECONCILIATION                                            */
+/* -------------------------------------------------------------------------- */
+
 function applyInstructionIntent(
-  request:
-    Partial<LeadHunterSearchRequest>,
+  request: Partial<LeadHunterSearchRequest>,
 ): Partial<LeadHunterSearchRequest> {
   const instruction =
     cleanLongText(
@@ -2567,9 +3967,7 @@ function applyInstructionIntent(
       MAX_CUSTOM_SEARCH_INSTRUCTION_LENGTH,
     );
 
-  if (
-    !instruction
-  ) {
+  if (!instruction) {
     return request;
   }
 
@@ -2621,32 +4019,32 @@ function applyInstructionIntent(
       inferredLocations;
   }
 
-  const inferredBuyerTargets =
+  const buyerTargets =
     inferBuyerTargetsFromInstruction(
       instruction,
     );
 
   if (
-    inferredBuyerTargets.length >
+    buyerTargets.length >
     0
   ) {
     next.organisation_types =
-      inferredBuyerTargets;
+      buyerTargets;
   }
 
-  const privateFieldValue =
+  const privateField =
     extractMissionBooleanField(
       instruction,
       "Private sector",
     );
 
-  const governmentFieldValue =
+  const governmentField =
     extractMissionBooleanField(
       instruction,
       "Government",
     );
 
-  const explicitPrivateOnly =
+  const privateOnly =
     /\bprivate[\s-]*sector\s+only\b/i.test(
       instruction,
     ) ||
@@ -2656,20 +4054,22 @@ function applyInstructionIntent(
     /\bno government\b/i.test(
       instruction,
     ) ||
-    governmentFieldValue === false;
+    governmentField ===
+      false;
 
-  const explicitGovernmentOnly =
+  const governmentOnly =
     /\bgovernment[\s-]*sector\s+only\b/i.test(
       instruction,
     ) ||
     /\bgovernment opportunities only\b/i.test(
       instruction,
     ) ||
-    privateFieldValue === false;
+    privateField ===
+      false;
 
   if (
-    explicitPrivateOnly &&
-    !explicitGovernmentOnly
+    privateOnly &&
+    !governmentOnly
   ) {
     next.sector =
       "private";
@@ -2682,9 +4082,11 @@ function applyInstructionIntent(
 
     next.include_nonprofits =
       false;
-  } else if (
-    explicitGovernmentOnly &&
-    !explicitPrivateOnly
+  }
+
+  if (
+    governmentOnly &&
+    !privateOnly
   ) {
     next.sector =
       "government";
@@ -2699,13 +4101,6 @@ function applyInstructionIntent(
       false;
   }
 
-  /*
-   * Handle explicit exclusion clauses.
-   *
-   * Example:
-   * "Do not search government, cleaning, technology, marketing,
-   * branding or NexDocs opportunities."
-   */
   const negativeClauses =
     instruction.match(
       /\b(?:do not|don't|exclude|without|no)\b[^.!;\n]*/gi,
@@ -2714,29 +4109,32 @@ function applyInstructionIntent(
 
   const negativeText =
     negativeClauses
-      .join(" ")
+      .join(
+        " ",
+      )
       .toLowerCase();
 
   const excludedServices =
-    new Set<
-      LeadHunterServiceCategory
-    >();
+    new Set<LeadHunterServiceCategory>();
 
   if (
     /\bcleaning\b/.test(
       negativeText,
     )
   ) {
-    excludedServices.add(
+    [
       "commercial_cleaning",
-    );
-
-    excludedServices.add(
       "deep_cleaning",
-    );
-
-    excludedServices.add(
+      "office_cleaning",
+      "post_construction_cleaning",
       "hygiene",
+    ].forEach(
+      (
+        service,
+      ) =>
+        excludedServices.add(
+          service as LeadHunterServiceCategory,
+        ),
     );
   }
 
@@ -2745,49 +4143,29 @@ function applyInstructionIntent(
       negativeText,
     )
   ) {
-    const technologyServices:
-      LeadHunterServiceCategory[] =
-      [
-        "website_design",
-        "crm",
-        "ai_automation",
-        "ecommerce",
-        "google_business_profile",
-      ];
-
-    for (
-      const service of
-      technologyServices
-    ) {
-      excludedServices.add(
+    TECH_SERVICE_CATEGORIES.forEach(
+      (
         service,
-      );
-    }
+      ) =>
+        excludedServices.add(
+          service,
+        ),
+    );
   }
 
   if (
-    /\bmarketing\b/.test(
+    /\bmarketing\b|\bgrowth\b/.test(
       negativeText,
     )
   ) {
-    const marketingServices:
-      LeadHunterServiceCategory[] =
-      [
-        "seo",
-        "digital_marketing",
-        "social_media_management",
-        "lead_generation",
-        "google_business_profile",
-      ];
-
-    for (
-      const service of
-      marketingServices
-    ) {
-      excludedServices.add(
+    GROWTH_SERVICE_CATEGORIES.forEach(
+      (
         service,
-      );
-    }
+      ) =>
+        excludedServices.add(
+          service,
+        ),
+    );
   }
 
   if (
@@ -2809,36 +4187,47 @@ function applyInstructionIntent(
       negativeText,
     )
   ) {
-    const documentServices:
-      LeadHunterServiceCategory[] =
-      [
-        "business_documents",
-        "quotations",
-        "proposals",
-        "contracts",
-      ];
-
-    for (
-      const service of
-      documentServices
-    ) {
-      excludedServices.add(
+    NEXDOCS_SERVICE_CATEGORIES.forEach(
+      (
         service,
-      );
-    }
+      ) =>
+        excludedServices.add(
+          service,
+        ),
+    );
 
-    if (
-      next.companies
-    ) {
-      next.companies =
-        next.companies.filter(
-          (
-            company,
-          ) =>
-            company !==
-            "nexdocs",
-        );
-    }
+    next.companies =
+      next.companies?.filter(
+        (
+          company,
+        ) =>
+          company !==
+          "nexdocs",
+      );
+  }
+
+  if (
+    /\bcossa store\b|\bproduct supply\b|\bsupply opportunities\b/.test(
+      negativeText,
+    )
+  ) {
+    STORE_SERVICE_CATEGORIES.forEach(
+      (
+        service,
+      ) =>
+        excludedServices.add(
+          service,
+        ),
+    );
+
+    next.companies =
+      next.companies?.filter(
+        (
+          company,
+        ) =>
+          company !==
+          "cossa_store",
+      );
   }
 
   if (
@@ -2856,10 +4245,6 @@ function applyInstructionIntent(
           ),
       );
 
-    /*
-     * Never turn the hunt into an empty service list accidentally.
-     * Only apply exclusions if at least one valid requested service remains.
-     */
     if (
       filtered.length >
       0
@@ -2927,20 +4312,14 @@ function applyInstructionIntent(
       "Require opportunity (?:signal|evidence)",
     );
 
-  /*
-   * A customer-only mission may deliberately permit verified Research
-   * prospects when there is no current tender or buying signal. Respect that
-   * explicit instruction instead of leaving the UI's stricter default on.
-   */
   const allowsResearchProspects =
-    /\bif no active opportunit(?:y|ies) (?:is|are) proven,?\s*(?:return|keep)\b[\s\S]{0,180}?\b(?:research prospects?|low[-\s]priority research)\b/i.test(
-      instruction,
-    ) ||
-    /\b(?:return|keep)\b[\s\S]{0,100}?\b(?:research prospects?|low[-\s]priority research)\b[\s\S]{0,100}?\b(?:no active opportunit(?:y|ies)|not a confirmed active buyer)\b/i.test(
+    /\b(?:return|keep|allow)\b[\s\S]{0,120}\bresearch prospects?\b/i.test(
       instruction,
     );
 
-  if (allowsResearchProspects) {
+  if (
+    allowsResearchProspects
+  ) {
     next.require_opportunity_signal =
       false;
   } else if (
@@ -2966,8 +4345,33 @@ function applyInstructionIntent(
       true;
   }
 
+  if (
+    /\brecurring revenue\b|\bmonthly contract\b|\bretainer\b/i.test(
+      instruction,
+    )
+  ) {
+    next.revenue_mode =
+      "recurring_revenue";
+
+    next.revenue_first =
+      true;
+  }
+
+  if (
+    /\bhigh value\b|\blarge contract\b|\bstrategic opportunity\b/i.test(
+      instruction,
+    )
+  ) {
+    next.revenue_mode =
+      "high_value";
+  }
+
   return next;
 }
+
+/* -------------------------------------------------------------------------- */
+/* SCORING                                                                    */
+/* -------------------------------------------------------------------------- */
 
 export function calculateProspectScore(
   prospect: Pick<
@@ -2979,11 +4383,11 @@ export function calculateProspectScore(
     | "contactability_score"
   >,
 ): number {
-  const weightedScore =
+  const weighted =
     clampScore(
       prospect.fit_score,
     ) *
-      0.3 +
+      0.28 +
     clampScore(
       prospect.intent_score,
     ) *
@@ -2991,7 +4395,7 @@ export function calculateProspectScore(
     clampScore(
       prospect.evidence_score,
     ) *
-      0.2 +
+      0.22 +
     clampScore(
       prospect.timing_score,
     ) *
@@ -3002,7 +4406,7 @@ export function calculateProspectScore(
       0.1;
 
   return clampScore(
-    weightedScore,
+    weighted,
   );
 }
 
@@ -3019,8 +4423,7 @@ export function calculateSalesPriority({
 }): ProspectSalesPriority {
   if (
     totalScore >= 80 &&
-    contactabilityScore >=
-      60 &&
+    contactabilityScore >= 60 &&
     (
       intentScore >= 70 ||
       timingScore >= 75
@@ -3031,8 +4434,7 @@ export function calculateSalesPriority({
 
   if (
     totalScore >= 65 &&
-    contactabilityScore >=
-      40
+    contactabilityScore >= 40
   ) {
     return "warm";
   }
@@ -3046,26 +4448,171 @@ export function calculateSalesPriority({
   return "research";
 }
 
+function calculateSourceDiversityScore(
+  evidence: ProspectEvidence[],
+): number {
+  if (
+    evidence.length ===
+    0
+  ) {
+    return 0;
+  }
+
+  const domains =
+    new Set(
+      evidence
+        .map(
+          (
+            item,
+          ) =>
+            urlHostname(
+              item.url,
+            ),
+        )
+        .filter(
+          Boolean,
+        ),
+    );
+
+  if (
+    domains.size >= 4
+  ) {
+    return 100;
+  }
+
+  if (
+    domains.size === 3
+  ) {
+    return 90;
+  }
+
+  if (
+    domains.size === 2
+  ) {
+    return 75;
+  }
+
+  return 50;
+}
+
+function calculateDataQualityScore({
+  organisationName,
+  phone,
+  email,
+  website,
+  evidence,
+  signals,
+  primarySourceUrl,
+}: {
+  organisationName: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  evidence: ProspectEvidence[];
+  signals: ProspectSignal[];
+  primarySourceUrl: string | null;
+}): number {
+  let score =
+    0;
+
+  if (
+    organisationName
+  ) {
+    score += 15;
+  }
+
+  if (
+    primarySourceUrl
+  ) {
+    score += 20;
+  }
+
+  if (
+    website
+  ) {
+    score += 10;
+  }
+
+  if (
+    phone
+  ) {
+    score += 10;
+  }
+
+  if (
+    email
+  ) {
+    score += 10;
+  }
+
+  if (
+    evidence.length >= 1
+  ) {
+    score += 15;
+  }
+
+  if (
+    evidence.length >= 2
+  ) {
+    score += 10;
+  }
+
+  if (
+    signals.length >= 1
+  ) {
+    score += 10;
+  }
+
+  return clampScore(
+    score,
+  );
+}
+
+function calculateVerificationConfidence({
+  evidenceScore,
+  dataQualityScore,
+  sourceDiversityScore,
+  freshnessScore,
+}: {
+  evidenceScore: number;
+  dataQualityScore: number;
+  sourceDiversityScore: number;
+  freshnessScore: number;
+}): number {
+  return clampScore(
+    evidenceScore *
+      0.4 +
+    dataQualityScore *
+      0.3 +
+    sourceDiversityScore *
+      0.15 +
+    freshnessScore *
+      0.15,
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* WHY CONTACT                                                                */
+/* -------------------------------------------------------------------------- */
+
 function buildWhyContact(
-  candidate:
-    Partial<LeadHunterProspect>,
-  signals:
-    ProspectSignal[],
+  candidate: Partial<LeadHunterProspect>,
+  signals: ProspectSignal[],
 ): string[] {
-  const reasons =
+  const existing =
     uniqueTexts(
       candidate.why_contact,
       10,
     );
 
   if (
-    reasons.length >
+    existing.length >
     0
   ) {
-    return reasons;
+    return existing;
   }
 
-  const generated:
+  const reasons:
     string[] =
     [];
 
@@ -3073,8 +4620,8 @@ function buildWhyContact(
     candidate.public_phone ||
     candidate.public_email
   ) {
-    generated.push(
-      "Verified public contact route is available.",
+    reasons.push(
+      "A verified public business contact route is available.",
     );
   }
 
@@ -3083,18 +4630,21 @@ function buildWhyContact(
       (
         signal,
       ) =>
-        signal.type ===
-          "website_problem" ||
-        signal.type ===
-          "mobile_website_problem" ||
-        signal.type ===
-          "missing_contact_form" ||
-        signal.type ===
+        [
+          "website_problem",
+          "missing_website",
+          "mobile_website_problem",
+          "missing_contact_form",
           "missing_whatsapp",
+          "technology_need",
+          "ecommerce_need",
+        ].includes(
+          signal.type,
+        ),
     )
   ) {
-    generated.push(
-      "A public website or conversion weakness was identified.",
+    reasons.push(
+      "A publicly observable technology or website opportunity was identified.",
     );
   }
 
@@ -3103,14 +4653,19 @@ function buildWhyContact(
       (
         signal,
       ) =>
-        signal.type ===
-          "branding_problem" ||
-        signal.type ===
+        [
+          "branding_problem",
           "missing_logo",
+          "seo_gap",
+          "inactive_marketing",
+          "weak_google_profile",
+        ].includes(
+          signal.type,
+        ),
     )
   ) {
-    generated.push(
-      "A public branding weakness was identified.",
+    reasons.push(
+      "A publicly observable marketing or brand-growth gap was identified.",
     );
   }
 
@@ -3119,16 +4674,40 @@ function buildWhyContact(
       (
         signal,
       ) =>
-        signal.type ===
-          "maintenance_need" ||
-        signal.type ===
-          "renovation_need" ||
-        signal.type ===
+        [
+          "maintenance_need",
+          "renovation_need",
           "cleaning_need",
+          "new_development",
+        ].includes(
+          signal.type,
+        ),
     )
   ) {
-    generated.push(
-      "The organisation shows a relevant physical-service signal.",
+    reasons.push(
+      "A relevant construction, maintenance or facility-service signal was identified.",
+    );
+  }
+
+  if (
+    signals.some(
+      (
+        signal,
+      ) =>
+        [
+          "active_tender",
+          "request_for_quote",
+          "request_for_proposal",
+          "supplier_registration",
+          "product_supply_need",
+          "procurement_need",
+        ].includes(
+          signal.type,
+        ),
+    )
+  ) {
+    reasons.push(
+      "A public procurement or supplier opportunity was identified.",
     );
   }
 
@@ -3138,24 +4717,277 @@ function buildWhyContact(
         signal,
       ) =>
         signal.type ===
-          "active_tender" ||
-        signal.type ===
-          "request_for_quote" ||
-        signal.type ===
-          "request_for_proposal",
+        "document_need",
     )
   ) {
-    generated.push(
-      "A public procurement signal was identified.",
+    reasons.push(
+      "A business-document or procurement-document need was identified.",
     );
   }
 
-  return generated;
+  return reasons;
 }
 
+/* -------------------------------------------------------------------------- */
+/* EVIDENCE NORMALISATION                                                     */
+/* -------------------------------------------------------------------------- */
+
+function normaliseEvidence(
+  input: unknown,
+  organisationWebsite: string | null,
+): ProspectEvidence[] {
+  if (
+    !Array.isArray(
+      input,
+    )
+  ) {
+    return [];
+  }
+
+  const seenUrls =
+    new Set<string>();
+
+  const evidence:
+    ProspectEvidence[] =
+    [];
+
+  for (
+    const raw of
+    input
+  ) {
+    const item =
+      raw as Partial<ProspectEvidence>;
+
+    const title =
+      cleanText(
+        item?.title,
+      );
+
+    const url =
+      normaliseWebsite(
+        item?.url,
+      );
+
+    if (
+      !title ||
+      !url
+    ) {
+      continue;
+    }
+
+    const canonical =
+      url.toLowerCase();
+
+    if (
+      seenUrls.has(
+        canonical,
+      )
+    ) {
+      continue;
+    }
+
+    seenUrls.add(
+      canonical,
+    );
+
+    const publishedAt =
+      normaliseDate(
+        item.published_at,
+      );
+
+    const checkedAt =
+      normaliseDate(
+        item.checked_at,
+      ) ??
+      new Date().toISOString();
+
+    const quality =
+      item.source_quality_score !==
+      undefined
+        ? clampScore(
+            item.source_quality_score,
+          )
+        : sourceQualityScore(
+            item,
+            organisationWebsite,
+          );
+
+    const freshness =
+      item.freshness_score !==
+      undefined
+        ? clampScore(
+            item.freshness_score,
+          )
+        : calculateFreshnessScore(
+            publishedAt ??
+            checkedAt,
+          );
+
+    evidence.push({
+      id:
+        cleanText(
+          item.id,
+        ) ??
+        undefined,
+
+      type:
+        item.type ??
+        "other_public_source",
+
+      title,
+
+      url,
+
+      publisher:
+        cleanText(
+          item.publisher,
+        ),
+
+      published_at:
+        publishedAt,
+
+      checked_at:
+        checkedAt,
+
+      excerpt:
+        cleanLongText(
+          item.excerpt,
+          2_000,
+        ),
+
+      supports:
+        uniqueTexts(
+          item.supports,
+          20,
+        ),
+
+      source_quality_score:
+        quality,
+
+      freshness_score:
+        freshness,
+
+      is_primary_source:
+        item.is_primary_source ===
+          true ||
+        sameHostname(
+          url,
+          organisationWebsite,
+        ),
+
+      is_official_source:
+        item.is_official_source ===
+          true ||
+        quality >=
+          90,
+
+      provider:
+        item.provider ??
+        null,
+    });
+
+    if (
+      evidence.length >=
+      MAX_PROSPECT_EVIDENCE_ITEMS
+    ) {
+      break;
+    }
+  }
+
+  return evidence;
+}
+
+/* -------------------------------------------------------------------------- */
+/* SIGNAL NORMALISATION                                                       */
+/* -------------------------------------------------------------------------- */
+
+function normaliseSignals(
+  input: unknown,
+): ProspectSignal[] {
+  if (
+    !Array.isArray(
+      input,
+    )
+  ) {
+    return [];
+  }
+
+  return input
+    .map(
+      (
+        raw,
+      ) => {
+        const signal =
+          raw as Partial<ProspectSignal>;
+
+        const title =
+          cleanText(
+            signal.title,
+          );
+
+        const explanation =
+          cleanText(
+            signal.explanation,
+          );
+
+        const evidenceUrl =
+          normaliseWebsite(
+            signal.evidence_url,
+          );
+
+        if (
+          !title ||
+          !explanation ||
+          !evidenceUrl
+        ) {
+          return null;
+        }
+
+        return {
+          type:
+            signal.type ??
+            "general_fit",
+
+          title,
+
+          explanation,
+
+          evidence_url:
+            evidenceUrl,
+
+          detected_at:
+            normaliseDate(
+              signal.detected_at,
+            ) ??
+            new Date().toISOString(),
+
+          confidence:
+            clampScore(
+              signal.confidence,
+            ),
+        } satisfies ProspectSignal;
+      },
+    )
+    .filter(
+      (
+        signal,
+      ): signal is ProspectSignal =>
+        Boolean(
+          signal,
+        ),
+    )
+    .slice(
+      0,
+      MAX_PROSPECT_SIGNALS,
+    );
+}
+
+/* -------------------------------------------------------------------------- */
+/* PROSPECT VALIDATION                                                        */
+/* -------------------------------------------------------------------------- */
+
 export function validateProspect(
-  candidate:
-    Partial<LeadHunterProspect>,
+  candidate: Partial<LeadHunterProspect>,
 ): LeadHunterProspect {
   const rejectionReasons:
     string[] =
@@ -3174,6 +5006,11 @@ export function validateProspect(
     );
   }
 
+  const website =
+    normaliseWebsite(
+      candidate.website,
+    );
+
   const primarySourceUrl =
     normaliseWebsite(
       candidate.primary_source_url,
@@ -3187,83 +5024,6 @@ export function validateProspect(
     );
   }
 
-  const evidence =
-    Array.isArray(
-      candidate.evidence,
-    )
-      ? candidate.evidence
-          .filter(
-            (
-              item,
-            ): item is ProspectEvidence =>
-              Boolean(
-                item &&
-                  cleanText(
-                    item.title,
-                  ) &&
-                  isValidPublicUrl(
-                    item.url,
-                  ),
-              ),
-          )
-          .map(
-            (
-              item,
-            ) => ({
-              ...item,
-
-              title:
-                cleanText(
-                  item.title,
-                ) ??
-                "Public source",
-
-              url:
-                normaliseWebsite(
-                  item.url,
-                ) as string,
-
-              publisher:
-                cleanText(
-                  item.publisher,
-                ),
-
-              published_at:
-                item.published_at ||
-                null,
-
-              checked_at:
-                item.checked_at ||
-                new Date().toISOString(),
-
-              excerpt:
-                cleanText(
-                  item.excerpt,
-                ),
-
-              supports:
-                uniqueTexts(
-                  item.supports,
-                  20,
-                ),
-            }),
-          )
-      : [];
-
-  if (
-    evidence.length ===
-    0
-  ) {
-    rejectionReasons.push(
-      "No valid public evidence source was supplied.",
-    );
-  }
-
-  const website =
-    normaliseWebsite(
-      candidate.website,
-    );
-
   const phone =
     normalisePhone(
       candidate.public_phone,
@@ -3273,6 +5033,21 @@ export function validateProspect(
     normaliseEmail(
       candidate.public_email,
     );
+
+  const evidence =
+    normaliseEvidence(
+      candidate.evidence,
+      website,
+    );
+
+  if (
+    evidence.length ===
+    0
+  ) {
+    rejectionReasons.push(
+      "No valid public evidence source was supplied.",
+    );
+  }
 
   if (
     !website &&
@@ -3285,61 +5060,40 @@ export function validateProspect(
   }
 
   const signals =
-    Array.isArray(
+    normaliseSignals(
       candidate.signals,
+    );
+
+  const sector =
+    VALID_SECTORS.has(
+      candidate.sector as LeadHunterSector,
     )
-      ? candidate.signals
-          .filter(
-            (
-              signal,
-            ): signal is ProspectSignal =>
-              Boolean(
-                signal &&
-                  cleanText(
-                    signal.title,
-                  ) &&
-                  cleanText(
-                    signal.explanation,
-                  ) &&
-                  isValidPublicUrl(
-                    signal.evidence_url,
-                  ),
-              ),
-          )
-          .map(
-            (
-              signal,
-            ) => ({
-              ...signal,
+      ? candidate.sector as LeadHunterSector
+      : "private";
 
-              title:
-                cleanText(
-                  signal.title,
-                ) ??
-                "Opportunity signal",
+  const recommendedCompany =
+    VALID_COMPANIES.has(
+      candidate.recommended_company as LeadHunterCompany,
+    )
+      ? candidate.recommended_company as LeadHunterCompany
+      : "cossa_nexus_holdings";
 
-              explanation:
-                cleanText(
-                  signal.explanation,
-                ) ??
-                "No signal explanation supplied.",
+  const recommendedService =
+    candidate.recommended_service ??
+    "general";
 
-              evidence_url:
-                normaliseWebsite(
-                  signal.evidence_url,
-                ) as string,
-
-              detected_at:
-                signal.detected_at ||
-                new Date().toISOString(),
-
-              confidence:
-                clampScore(
-                  signal.confidence,
-                ),
-            }),
-          )
-      : [];
+  if (
+    recommendedService !==
+      "general" &&
+    !companyCanDeliverService(
+      recommendedCompany,
+      recommendedService,
+    )
+  ) {
+    rejectionReasons.push(
+      `Recommended service ${recommendedService} does not match ${recommendedCompany}.`,
+    );
+  }
 
   const fitScore =
     clampScore(
@@ -3366,24 +5120,16 @@ export function validateProspect(
       candidate.contactability_score,
     );
 
-  /*
-   * Preserve the secure server's total_score.
-   *
-   * The previous implementation recalculated the score in the browser,
-   * which could change a 96 server score into something different.
-   *
-   * We now calculate only when the server did not provide a score.
-   */
-  const suppliedTotalScore =
+  const suppliedTotal =
     safeNumber(
       candidate.total_score,
     );
 
   const totalScore =
-    suppliedTotalScore !==
+    suppliedTotal !==
     null
       ? clampScore(
-          suppliedTotalScore,
+          suppliedTotal,
         )
       : calculateProspectScore({
           fit_score:
@@ -3410,9 +5156,9 @@ export function validateProspect(
         )
       : clampScore(
           totalScore *
-            0.55 +
+            0.5 +
           intentScore *
-            0.25 +
+            0.3 +
           timingScore *
             0.2,
         );
@@ -3442,19 +5188,21 @@ export function validateProspect(
           [
             "facility_management",
             "commercial_cleaning",
+            "office_cleaning",
             "hygiene",
             "landscaping",
+            "grounds_maintenance",
             "seo",
             "digital_marketing",
             "social_media_management",
             "lead_generation",
             "crm",
             "ai_automation",
+            "customer_follow_up",
           ].includes(
-            candidate.recommended_service ??
-            "general",
+            recommendedService,
           )
-            ? 75
+            ? 80
             : 35,
         );
 
@@ -3466,30 +5214,164 @@ export function validateProspect(
         )
       : 60;
 
-  const requestedStatus =
-    candidate.verification_status ??
-    "unverified";
+  const opportunityOpenDate =
+    normaliseDate(
+      candidate.opportunity_open_date,
+    );
+
+  const opportunityClosingDate =
+    normaliseDate(
+      candidate.opportunity_closing_date,
+    );
+
+  let procurementStatus:
+    ProcurementStatus =
+      VALID_PROCUREMENT_STATUSES.has(
+        candidate.procurement_status as ProcurementStatus,
+      )
+        ? candidate.procurement_status as ProcurementStatus
+        : "unknown";
+
+  const procurementClassification =
+    [
+      "tender",
+      "rfq",
+      "rfp",
+      "supplier_opportunity",
+      "product_supply_opportunity",
+    ].includes(
+      candidate.classification ??
+      "",
+    );
+
+  if (
+    procurementClassification &&
+    opportunityHasExpired(
+      opportunityClosingDate,
+    )
+  ) {
+    procurementStatus =
+      "expired";
+  }
+
+  const evidenceFreshness =
+    evidence.length >
+    0
+      ? Math.round(
+          evidence.reduce(
+            (
+              total,
+              item,
+            ) =>
+              total +
+              (
+                item.freshness_score ??
+                0
+              ),
+            0,
+          ) /
+          evidence.length,
+        )
+      : 0;
+
+  const freshnessScore =
+    candidate.freshness_score !==
+    undefined
+      ? clampScore(
+          candidate.freshness_score,
+        )
+      : procurementClassification
+        ? (
+            opportunityClosingDate
+              ? (
+                  opportunityHasExpired(
+                    opportunityClosingDate,
+                  )
+                    ? 0
+                    : 95
+                )
+              : evidenceFreshness
+          )
+        : evidenceFreshness;
+
+  const sourceDiversityScore =
+    candidate.source_diversity_score !==
+    undefined
+      ? clampScore(
+          candidate.source_diversity_score,
+        )
+      : calculateSourceDiversityScore(
+          evidence,
+        );
+
+  const dataQualityScore =
+    candidate.data_quality_score !==
+    undefined
+      ? clampScore(
+          candidate.data_quality_score,
+        )
+      : calculateDataQualityScore({
+          organisationName,
+          phone,
+          email,
+          website,
+          evidence,
+          signals,
+          primarySourceUrl,
+        });
+
+  const verificationConfidence =
+    candidate.verification_confidence !==
+    undefined
+      ? clampScore(
+          candidate.verification_confidence,
+        )
+      : calculateVerificationConfidence({
+          evidenceScore,
+          dataQualityScore,
+          sourceDiversityScore,
+          freshnessScore,
+        });
+
+  const requestedVerificationStatus =
+    VALID_VERIFICATION_STATUSES.has(
+      candidate.verification_status as ProspectVerificationStatus,
+    )
+      ? candidate.verification_status as ProspectVerificationStatus
+      : "unverified";
+
+  if (
+    procurementStatus ===
+    "expired"
+  ) {
+    rejectionReasons.push(
+      "Procurement opportunity appears to have expired.",
+    );
+  }
 
   let verificationStatus:
     ProspectVerificationStatus =
-      requestedStatus;
+      requestedVerificationStatus;
 
   if (
-    requestedStatus === "rejected" ||
-    candidate.classification === "rejected" ||
-    rejectionReasons.length > 0
+    requestedVerificationStatus ===
+      "rejected" ||
+    candidate.classification ===
+      "rejected" ||
+    rejectionReasons.length >
+      0
   ) {
     verificationStatus =
       "rejected";
   } else if (
-    requestedStatus === "verified" &&
     evidence.length >= 2 &&
+    evidenceScore >= 70 &&
+    verificationConfidence >= 70 &&
     (
       phone ||
-      email
-    ) &&
-    signals.length >= 1 &&
-    evidenceScore >= 70
+      email ||
+      website
+    )
   ) {
     verificationStatus =
       "verified";
@@ -3506,9 +5388,17 @@ export function validateProspect(
         "prospect";
 
   const salesPriority =
-    classification === "prospect" &&
-    signals.every(
-      (signal) => signal.type === "general_fit",
+    classification ===
+      "prospect" &&
+    (
+      signals.length === 0 ||
+      signals.every(
+        (
+          signal,
+        ) =>
+          signal.type ===
+          "general_fit",
+      )
     )
       ? "research"
       : candidate.sales_priority ??
@@ -3518,6 +5408,23 @@ export function validateProspect(
           contactabilityScore,
           timingScore,
         });
+
+  const pursuitRisk:
+    PursuitRisk =
+      candidate.pursuit_risk ??
+      (
+        verificationStatus ===
+          "verified" &&
+        contactabilityScore >=
+          60 &&
+        freshnessScore >=
+          70
+          ? "low"
+          : verificationStatus ===
+              "partially_verified"
+            ? "medium"
+            : "high"
+      );
 
   return {
     id:
@@ -3535,9 +5442,7 @@ export function validateProspect(
         candidate.trading_name,
       ),
 
-    sector:
-      candidate.sector ??
-      "private",
+    sector,
 
     industry:
       cleanText(
@@ -3562,8 +5467,10 @@ export function validateProspect(
         candidate.identity_keys,
         20,
       ).filter(
-        (value) =>
-          /^(phone|email):.+$/i.test(
+        (
+          value,
+        ) =>
+          /^(phone|email|domain):.+$/i.test(
             value,
           ),
       ),
@@ -3615,12 +5522,10 @@ export function validateProspect(
       "South Africa",
 
     recommended_company:
-      candidate.recommended_company ??
-      "cossa_nexus_holdings",
+      recommendedCompany,
 
     recommended_service:
-      candidate.recommended_service ??
-      "general",
+      recommendedService,
 
     service_fit_reason:
       cleanText(
@@ -3642,6 +5547,22 @@ export function validateProspect(
       safeNumber(
         candidate.estimated_value,
       ),
+
+    tender_reference:
+      cleanText(
+        candidate.tender_reference,
+      ),
+
+    procurement_status:
+      procurementClassification
+        ? procurementStatus
+        : "not_applicable",
+
+    opportunity_open_date:
+      opportunityOpenDate,
+
+    opportunity_closing_date:
+      opportunityClosingDate,
 
     classification,
 
@@ -3678,6 +5599,21 @@ export function validateProspect(
     geographic_fit_score:
       geographicFitScore,
 
+    data_quality_score:
+      dataQualityScore,
+
+    freshness_score:
+      freshnessScore,
+
+    source_diversity_score:
+      sourceDiversityScore,
+
+    verification_confidence:
+      verificationConfidence,
+
+    pursuit_risk:
+      pursuitRisk,
+
     sales_priority:
       salesPriority,
 
@@ -3696,14 +5632,16 @@ export function validateProspect(
       "",
 
     date_verified:
-      candidate.date_verified ||
+      normaliseDate(
+        candidate.date_verified,
+      ) ??
       new Date().toISOString(),
 
     next_action:
       cleanText(
         candidate.next_action,
       ) ??
-      "Verify the organisation and identify the correct public procurement or decision-maker route.",
+      "Review the verified public evidence and identify the correct procurement or decision-maker route before outreach.",
 
     outreach_angle:
       cleanText(
@@ -3742,31 +5680,23 @@ export function validateProspect(
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* REQUEST VALIDATION                                                         */
+/* -------------------------------------------------------------------------- */
+
 export function validateSearchRequest(
-  requestInput:
-    Partial<LeadHunterSearchRequest>,
+  requestInput: Partial<LeadHunterSearchRequest>,
 ): LeadHunterSearchRequest {
-  /*
-   * First reconcile explicit mission instructions.
-   *
-   * This prevents a hunt saying:
-   *
-   * Company: Cossa Nexus Construction
-   * Government: NO
-   *
-   * while the underlying request still contains Cossa Tech, NexDocs,
-   * government procurement and cleaning.
-   */
   const request =
     applyInstructionIntent(
       requestInput,
     );
 
   const resultCount =
-    Math.min(
-      MAX_HUNT_RESULTS,
-      Math.max(
-        1,
+    Math.max(
+      1,
+      Math.min(
+        MAX_HUNT_RESULTS,
         Math.round(
           Number(
             request.result_count ??
@@ -3775,6 +5705,29 @@ export function validateSearchRequest(
         ),
       ),
     );
+
+  const validCompanies =
+    (
+      request.companies ??
+      []
+    ).filter(
+      (
+        company,
+      ): company is LeadHunterCompany =>
+        VALID_COMPANIES.has(
+          company,
+        ),
+    );
+
+  const companies =
+    validCompanies.length >
+    0
+      ? [
+          ...new Set(
+            validCompanies,
+          ),
+        ]
+      : DEFAULT_LEAD_HUNTER_REQUEST.companies;
 
   const services =
     request.services?.length
@@ -3822,16 +5775,6 @@ export function validateSearchRequest(
       ),
     );
 
-  /*
-   * Search depth is now a hard ceiling.
-   *
-   * Economy = maximum 3
-   * Standard = maximum 5
-   * Deep = maximum 8
-   *
-   * An old value of 5 can no longer cause Economy to silently use
-   * Standard-level credit consumption.
-   */
   const maximumQueries =
     Math.min(
       depthQueryLimit,
@@ -3902,17 +5845,9 @@ export function validateSearchRequest(
 
   return {
     ...DEFAULT_LEAD_HUNTER_REQUEST,
-
     ...request,
 
-    companies:
-      request.companies?.length
-        ? [
-            ...new Set(
-              request.companies,
-            ),
-          ]
-        : DEFAULT_LEAD_HUNTER_REQUEST.companies,
+    companies,
 
     services,
 
@@ -3928,13 +5863,13 @@ export function validateSearchRequest(
     industries:
       uniqueTexts(
         request.industries,
-        20,
+        25,
       ),
 
     organisation_types:
       uniqueTexts(
         request.organisation_types,
-        20,
+        25,
       ),
 
     result_count:
@@ -3954,7 +5889,7 @@ export function validateSearchRequest(
           Math.round(
             Number(
               request.minimum_evidence_sources ??
-              1,
+              DEFAULT_MINIMUM_EVIDENCE_SOURCES,
             ),
           ),
         ),
@@ -3963,24 +5898,24 @@ export function validateSearchRequest(
     tender_keywords:
       uniqueTexts(
         request.tender_keywords,
-        25,
+        30,
       ).length >
       0
         ? uniqueTexts(
             request.tender_keywords,
-            25,
+            30,
           )
         : DEFAULT_LEAD_HUNTER_REQUEST.tender_keywords,
 
     prospect_keywords:
       uniqueTexts(
         request.prospect_keywords,
-        35,
+        40,
       ).length >
       0
         ? uniqueTexts(
             request.prospect_keywords,
-            35,
+            40,
           )
         : DEFAULT_LEAD_HUNTER_REQUEST.prospect_keywords,
 
@@ -4116,15 +6051,46 @@ export function validateSearchRequest(
         request.exclude_expired_procurement,
         true,
       ),
+
+    require_primary_source_for_procurement:
+      safeBoolean(
+        request.require_primary_source_for_procurement,
+        true,
+      ),
+
+    reject_stale_opportunities:
+      safeBoolean(
+        request.reject_stale_opportunities,
+        true,
+      ),
+
+    minimum_contactability_score:
+      clampScore(
+        request.minimum_contactability_score ??
+        0,
+      ),
+
+    diversify_results_by_company:
+      safeBoolean(
+        request.diversify_results_by_company,
+        true,
+      ),
+
+    diversify_results_by_sector:
+      safeBoolean(
+        request.diversify_results_by_sector,
+        true,
+      ),
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* STRATEGY REQUEST                                                           */
+/* -------------------------------------------------------------------------- */
+
 export function requestFromStrategy(
-  strategy:
-    LeadHunterStrategy,
-  overrides:
-    Partial<LeadHunterSearchRequest> =
-    {},
+  strategy: LeadHunterStrategy,
+  overrides: Partial<LeadHunterSearchRequest> = {},
 ): LeadHunterSearchRequest {
   const defaultProvinces =
     strategy.recommended_locations.filter(
@@ -4206,7 +6172,7 @@ export function requestFromStrategy(
 
     search_instruction:
       strategy.search_instruction ??
-      `Find verified opportunities matching the ${strategy.title} strategy. Use public evidence and exclude unsupported assumptions.`,
+      `Find verified opportunities matching the ${strategy.title} strategy. Every returned prospect must be grounded in public evidence. Never invent demand, contacts or procurement information.`,
 
     search_scope:
       strategy.search_scope ??
@@ -4236,10 +6202,6 @@ export function requestFromStrategy(
     cities:
       defaultCities,
 
-    /*
-     * Strategies start economically unless the user deliberately changes
-     * Search Depth in the UI.
-     */
     search_depth:
       "economy",
 
@@ -4251,6 +6213,10 @@ export function requestFromStrategy(
     ...overrides,
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/* CUSTOM REQUEST                                                             */
+/* -------------------------------------------------------------------------- */
 
 export function createCustomHuntRequest({
   instruction,
@@ -4316,9 +6282,12 @@ export function createCustomHuntRequest({
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/* SUMMARY                                                                    */
+/* -------------------------------------------------------------------------- */
+
 export function buildHuntSummary(
-  requestInput:
-    Partial<LeadHunterSearchRequest>,
+  requestInput: Partial<LeadHunterSearchRequest>,
 ): string[] {
   const request =
     validateSearchRequest(
@@ -4332,15 +6301,11 @@ export function buildHuntSummary(
         "Find verified prospects"
       }`,
 
-      `Sector: ${
-        request.sector
-      }`,
+      `Sector: ${request.sector}`,
 
-      `Companies: ${
-        request.companies.join(
-          ", ",
-        )
-      }`,
+      `Companies: ${request.companies.join(
+        ", ",
+      )}`,
 
       `Scope: ${
         request.search_scope ??
@@ -4394,17 +6359,19 @@ export function buildHuntSummary(
           : "NO"
       }`,
 
-      `Services: ${
-        request.services.join(
-          ", ",
-        )
+      `Reject expired procurement: ${
+        request.exclude_expired_procurement
+          ? "YES"
+          : "NO"
       }`,
 
-      `Locations: ${
-        request.locations.join(
-          ", ",
-        )
-      }`,
+      `Services: ${request.services.join(
+        ", ",
+      )}`,
+
+      `Locations: ${request.locations.join(
+        ", ",
+      )}`,
     ];
 
   if (
@@ -4441,35 +6408,170 @@ export function buildHuntSummary(
   return summary;
 }
 
+/* -------------------------------------------------------------------------- */
+/* REQUEST MATCHING                                                           */
+/* -------------------------------------------------------------------------- */
+
 function sectorAllowedForRequest(
   request: LeadHunterSearchRequest,
   sector: LeadHunterSector,
 ): boolean {
   if (
-    request.sector !== "mixed" &&
-    request.sector !== sector
+    request.sector !==
+      "mixed" &&
+    request.sector !==
+      sector
   ) {
     return false;
   }
 
-  if (sector === "private") {
-    return request.include_private_sector;
+  if (
+    sector ===
+    "private"
+  ) {
+    return (
+      request.include_private_sector
+    );
   }
 
-  if (sector === "government") {
-    return request.include_government_sector;
+  if (
+    sector ===
+    "government"
+  ) {
+    return (
+      request.include_government_sector
+    );
   }
 
-  if (sector === "nonprofit") {
-    return request.include_nonprofits;
+  if (
+    sector ===
+    "nonprofit"
+  ) {
+    return (
+      request.include_nonprofits
+    );
   }
 
   return false;
 }
 
+function isProcurementProspect(
+  prospect: LeadHunterProspect,
+): boolean {
+  return [
+    "tender",
+    "rfq",
+    "rfp",
+    "supplier_opportunity",
+    "product_supply_opportunity",
+  ].includes(
+    prospect.classification,
+  );
+}
+
+function hasPrimaryEvidence(
+  prospect: LeadHunterProspect,
+): boolean {
+  return prospect.evidence.some(
+    (
+      evidence,
+    ) =>
+      evidence.is_primary_source ===
+        true ||
+      evidence.is_official_source ===
+        true ||
+      (
+        evidence.source_quality_score ??
+        0
+      ) >=
+        90,
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* COMMERCIAL SORTING                                                         */
+/* -------------------------------------------------------------------------- */
+
+function commercialScore(
+  prospect: LeadHunterProspect,
+  request: LeadHunterSearchRequest,
+): number {
+  let score =
+    prospect.total_score *
+      0.28 +
+    prospect.revenue_potential_score *
+      0.22 +
+    prospect.ease_to_close_score *
+      0.18 +
+    prospect.contactability_score *
+      0.12 +
+    (
+      prospect.verification_confidence ??
+      prospect.evidence_score
+    ) *
+      0.1 +
+    (
+      prospect.freshness_score ??
+      prospect.timing_score
+    ) *
+      0.1;
+
+  if (
+    request.revenue_mode ===
+    "recurring_revenue"
+  ) {
+    score +=
+      prospect.recurring_revenue_score *
+      0.2;
+  }
+
+  if (
+    request.revenue_mode ===
+    "quick_revenue"
+  ) {
+    score +=
+      prospect.ease_to_close_score *
+      0.15;
+
+    score +=
+      prospect.contactability_score *
+      0.1;
+  }
+
+  if (
+    request.revenue_mode ===
+    "high_value"
+  ) {
+    score +=
+      prospect.revenue_potential_score *
+      0.2;
+  }
+
+  if (
+    prospect.sales_priority ===
+    "hot"
+  ) {
+    score +=
+      10;
+  }
+
+  if (
+    prospect.pursuit_risk ===
+    "high"
+  ) {
+    score -=
+      15;
+  }
+
+  return score;
+}
+
+/* -------------------------------------------------------------------------- */
+/* HUNT                                                                       */
+/* -------------------------------------------------------------------------- */
+
 export async function huntProspects(
-  request:
-    Partial<LeadHunterSearchRequest>,
+  request: Partial<LeadHunterSearchRequest>,
   signal?: AbortSignal,
 ): Promise<LeadHunterSearchResponse> {
   const validatedRequest =
@@ -4481,6 +6583,7 @@ export async function huntProspects(
     data: {
       session,
     },
+
     error:
       sessionError,
   } =
@@ -4548,13 +6651,6 @@ export async function huntProspects(
       await response.json()
     ) as Partial<LeadHunterSearchResponse>;
 
-  /*
-   * Preserve the server-normalised request.
-   *
-   * If the server corrected, restricted or interpreted the mission,
-   * the UI must show what was actually executed rather than stale browser
-   * state.
-   */
   const effectiveRequest =
     payload.request
       ? validateSearchRequest(
@@ -4596,9 +6692,23 @@ export async function huntProspects(
           if (
             !effectiveRequest.services.includes(
               prospect.recommended_service,
-            ) ||
+            )
+          ) {
+            return false;
+          }
+
+          if (
             !effectiveRequest.companies.includes(
               prospect.recommended_company,
+            )
+          ) {
+            return false;
+          }
+
+          if (
+            !companyCanDeliverService(
+              prospect.recommended_company,
+              prospect.recommended_service,
             )
           ) {
             return false;
@@ -4618,10 +6728,16 @@ export async function huntProspects(
             return false;
           }
 
-          /*
-           * Client enforcement mirrors server requirements.
-           * A result cannot sneak through because of a server/client mismatch.
-           */
+          if (
+            prospect.contactability_score <
+            (
+              effectiveRequest.minimum_contactability_score ??
+              0
+            )
+          ) {
+            return false;
+          }
+
           if (
             effectiveRequest.require_public_phone_or_email &&
             !prospect.public_phone &&
@@ -4644,12 +6760,57 @@ export async function huntProspects(
                 0 ||
               prospect.signals.every(
                 (
-                  signal,
+                  signalItem,
                 ) =>
-                  signal.type ===
+                  signalItem.type ===
                   "general_fit",
               )
             )
+          ) {
+            return false;
+          }
+
+          if (
+            effectiveRequest.exclude_expired_procurement &&
+            isProcurementProspect(
+              prospect,
+            ) &&
+            (
+              prospect.procurement_status ===
+                "expired" ||
+              prospect.procurement_status ===
+                "closed" ||
+              opportunityHasExpired(
+                prospect.opportunity_closing_date ??
+                null,
+              )
+            )
+          ) {
+            return false;
+          }
+
+          if (
+            effectiveRequest.require_primary_source_for_procurement &&
+            isProcurementProspect(
+              prospect,
+            ) &&
+            !hasPrimaryEvidence(
+              prospect,
+            )
+          ) {
+            return false;
+          }
+
+          if (
+            effectiveRequest.reject_stale_opportunities &&
+            isProcurementProspect(
+              prospect,
+            ) &&
+            (
+              prospect.freshness_score ??
+              0
+            ) <
+              25
           ) {
             return false;
           }
@@ -4665,29 +6826,15 @@ export async function huntProspects(
           if (
             effectiveRequest.revenue_first
           ) {
-            const firstCommercial =
-              first.total_score *
-                0.35 +
-              first.revenue_potential_score *
-                0.25 +
-              first.ease_to_close_score *
-                0.25 +
-              first.contactability_score *
-                0.15;
-
-            const secondCommercial =
-              second.total_score *
-                0.35 +
-              second.revenue_potential_score *
-                0.25 +
-              second.ease_to_close_score *
-                0.25 +
-              second.contactability_score *
-                0.15;
-
             return (
-              secondCommercial -
-              firstCommercial
+              commercialScore(
+                second,
+                effectiveRequest,
+              ) -
+              commercialScore(
+                first,
+                effectiveRequest,
+              )
             );
           }
 
@@ -4716,6 +6863,13 @@ export async function huntProspects(
       payload.rejected_count,
     );
 
+  const providerTrace =
+    Array.isArray(
+      payload.provider_trace,
+    )
+      ? payload.provider_trace
+      : undefined;
+
   return {
     hunt_id:
       cleanText(
@@ -4727,11 +6881,15 @@ export async function huntProspects(
       "completed",
 
     searched_at:
-      payload.searched_at ??
+      normaliseDate(
+        payload.searched_at,
+      ) ??
       new Date().toISOString(),
 
     completed_at:
-      payload.completed_at ??
+      normaliseDate(
+        payload.completed_at,
+      ) ??
       new Date().toISOString(),
 
     request:
@@ -4740,12 +6898,6 @@ export async function huntProspects(
     prospects:
       acceptedProspects,
 
-    /*
-     * Null-aware fallback.
-     *
-     * A legitimate server count of 0 must stay 0.
-     * The old `Number(value) || fallback` logic could incorrectly replace it.
-     */
     source_count:
       payloadSourceCount ??
       acceptedProspects.reduce(
@@ -4784,15 +6936,19 @@ export async function huntProspects(
             15,
           )
         : [],
+
+    provider_trace:
+      providerTrace,
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* CRM DUPLICATES                                                             */
+/* -------------------------------------------------------------------------- */
+
 export async function findCrmDuplicates(
-  prospect:
-    LeadHunterProspect,
-): Promise<
-  CrmDuplicateMatch[]
-> {
+  prospect: LeadHunterProspect,
+): Promise<CrmDuplicateMatch[]> {
   const {
     data,
     error,
@@ -4812,7 +6968,7 @@ export async function findCrmDuplicates(
         },
       )
       .limit(
-        1000,
+        MAX_CRM_DUPLICATE_SCAN,
       );
 
   if (
@@ -4839,10 +6995,7 @@ export async function findCrmDuplicates(
   )
     .map(
       (
-        row: Record<
-          string,
-          unknown
-        >,
+        row: Record<string, unknown>,
       ) => {
         const rowName =
           cleanText(
@@ -4951,24 +7104,24 @@ export async function findCrmDuplicates(
 
           match_reasons:
             matchReasons,
-        };
+        } satisfies CrmDuplicateMatch;
       },
     )
     .filter(
       (
-        match:
-          CrmDuplicateMatch,
+        match,
       ) =>
-        match
-          .match_reasons
-          .length >
+        match.match_reasons.length >
         0,
     );
 }
 
+/* -------------------------------------------------------------------------- */
+/* CRM NOTES                                                                  */
+/* -------------------------------------------------------------------------- */
+
 function formatProspectEvidence(
-  prospect:
-    LeadHunterProspect,
+  prospect: LeadHunterProspect,
 ): string {
   const evidenceLines =
     prospect.evidence.map(
@@ -4991,6 +7144,11 @@ function formatProspectEvidence(
 
           `Checked: ${evidence.checked_at}`,
 
+          evidence.source_quality_score !==
+          undefined
+            ? `Source quality: ${evidence.source_quality_score}/100`
+            : null,
+
           evidence.excerpt
             ? `Evidence: ${evidence.excerpt}`
             : null,
@@ -5004,7 +7162,7 @@ function formatProspectEvidence(
     );
 
   return [
-    "Lead Hunter verified public prospect.",
+    "Cossa Lead Hunter verified public prospect.",
 
     "",
 
@@ -5074,13 +7232,37 @@ function formatProspectEvidence(
         : "Not verified"
     }`,
 
+    prospect.tender_reference
+      ? `Tender / RFQ reference: ${prospect.tender_reference}`
+      : null,
+
+    prospect.procurement_status &&
+    prospect.procurement_status !==
+      "not_applicable"
+      ? `Procurement status: ${prospect.procurement_status}`
+      : null,
+
+    prospect.opportunity_closing_date
+      ? `Closing date: ${prospect.opportunity_closing_date}`
+      : null,
+
     "",
 
     `Classification: ${prospect.classification}`,
 
     `Verification: ${prospect.verification_status}`,
 
+    `Verification confidence: ${
+      prospect.verification_confidence ??
+      0
+    }/100`,
+
     `Sales priority: ${prospect.sales_priority}`,
+
+    `Pursuit risk: ${
+      prospect.pursuit_risk ??
+      "unknown"
+    }`,
 
     `Total score: ${prospect.total_score}/100`,
 
@@ -5089,6 +7271,16 @@ function formatProspectEvidence(
     `Ease to close: ${prospect.ease_to_close_score}/100`,
 
     `Recurring revenue potential: ${prospect.recurring_revenue_score}/100`,
+
+    `Freshness: ${
+      prospect.freshness_score ??
+      0
+    }/100`,
+
+    `Data quality: ${
+      prospect.data_quality_score ??
+      0
+    }/100`,
 
     `Date verified: ${prospect.date_verified}`,
 
@@ -5137,10 +7329,12 @@ function formatProspectEvidence(
     );
 }
 
-export async function saveProspectToCrm(
-  prospectInput:
-    LeadHunterProspect,
+/* -------------------------------------------------------------------------- */
+/* SAVE TO CRM                                                                */
+/* -------------------------------------------------------------------------- */
 
+export async function saveProspectToCrm(
+  prospectInput: LeadHunterProspect,
   options: {
     allowPossibleDuplicate?: boolean;
   } = {},
@@ -5166,6 +7360,22 @@ export async function saveProspectToCrm(
   ) {
     throw new Error(
       "A verified public source URL is required before saving a prospect.",
+    );
+  }
+
+  if (
+    isProcurementProspect(
+      prospect,
+    ) &&
+    (
+      prospect.procurement_status ===
+        "expired" ||
+      prospect.procurement_status ===
+        "closed"
+    )
+  ) {
+    throw new Error(
+      "This procurement opportunity is closed or expired and cannot be saved as an active opportunity.",
     );
   }
 
@@ -5215,16 +7425,24 @@ export async function saveProspectToCrm(
     prospect.contact_name ??
     prospect.organisation_name;
 
+  const qualifiedClassifications:
+    ProspectClassification[] =
+    [
+      "active_opportunity",
+      "tender",
+      "rfq",
+      "rfp",
+      "supplier_opportunity",
+      "subcontracting_opportunity",
+      "product_supply_opportunity",
+    ];
+
   const crmStatus =
-    prospect.classification ===
-      "active_opportunity" ||
-    prospect.classification ===
-      "tender"
+    qualifiedClassifications.includes(
+      prospect.classification,
+    )
       ? "Qualified"
       : "New";
-
-  const crmStage =
-    crmStatus;
 
   const estimatedValue =
     prospect.estimated_value ??
@@ -5277,7 +7495,7 @@ export async function saveProspectToCrm(
           crmStatus,
 
         stage:
-          crmStage,
+          crmStatus,
 
         notes:
           formatProspectEvidence(
@@ -5342,22 +7560,20 @@ export async function saveProspectToCrm(
   };
 }
 
-export async function saveProspectsToCrm(
-  prospects:
-    LeadHunterProspect[],
-): Promise<{
-  created:
-    SaveProspectResult[];
+/* -------------------------------------------------------------------------- */
+/* BULK CRM SAVE                                                              */
+/* -------------------------------------------------------------------------- */
 
-  duplicates:
-    SaveProspectResult[];
+export async function saveProspectsToCrm(
+  prospects: LeadHunterProspect[],
+): Promise<{
+  created: SaveProspectResult[];
+
+  duplicates: SaveProspectResult[];
 
   failed: Array<{
-    prospect:
-      LeadHunterProspect;
-
-    error:
-      string;
+    prospect: LeadHunterProspect;
+    error: string;
   }>;
 }> {
   const created:
@@ -5369,11 +7585,8 @@ export async function saveProspectsToCrm(
     [];
 
   const failed: Array<{
-    prospect:
-      LeadHunterProspect;
-
-    error:
-      string;
+    prospect: LeadHunterProspect;
+    error: string;
   }> = [];
 
   for (
@@ -5419,40 +7632,71 @@ export async function saveProspectsToCrm(
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* CSV EXPORT                                                                 */
+/* -------------------------------------------------------------------------- */
+
 export function exportProspectsToCsv(
-  prospects:
-    LeadHunterProspect[],
+  prospects: LeadHunterProspect[],
 ): string {
   const headers =
     [
       "Organisation",
       "Sector",
       "Industry",
+      "Organisation Type",
+
       "Website",
       "Public Phone",
       "Public Email",
+
       "City",
       "Province",
       "Country",
+
       "Recommended Company",
       "Recommended Service",
+
       "Opportunity",
+      "Opportunity Size",
+      "Estimated Value",
+
       "Classification",
+      "Procurement Status",
+      "Tender / RFQ Reference",
+      "Closing Date",
+
       "Verification",
+      "Verification Confidence",
       "Sales Priority",
+      "Pursuit Risk",
+
       "Score",
+      "Fit",
+      "Intent",
+      "Evidence",
+      "Timing",
+      "Contactability",
+
       "Revenue Potential",
       "Ease to Close",
       "Recurring Revenue Potential",
+
+      "Freshness",
+      "Data Quality",
+      "Source Diversity",
+
       "Primary Source",
       "Date Verified",
+
+      "Decision Maker Route",
       "Next Action",
+      "Outreach Angle",
     ];
 
   const escapeCsv =
     (
-      value:
-        unknown,
+      value: unknown,
     ) => {
       const string =
         String(
@@ -5474,25 +7718,54 @@ export function exportProspectsToCsv(
         prospect.organisation_name,
         prospect.sector,
         prospect.industry,
+        prospect.organisation_type,
+
         prospect.website,
         prospect.public_phone,
         prospect.public_email,
+
         prospect.city,
         prospect.province,
         prospect.country,
+
         prospect.recommended_company,
         prospect.recommended_service,
+
         prospect.opportunity_summary,
+        prospect.opportunity_size,
+        prospect.estimated_value,
+
         prospect.classification,
+        prospect.procurement_status,
+        prospect.tender_reference,
+        prospect.opportunity_closing_date,
+
         prospect.verification_status,
+        prospect.verification_confidence,
         prospect.sales_priority,
+        prospect.pursuit_risk,
+
         prospect.total_score,
+        prospect.fit_score,
+        prospect.intent_score,
+        prospect.evidence_score,
+        prospect.timing_score,
+        prospect.contactability_score,
+
         prospect.revenue_potential_score,
         prospect.ease_to_close_score,
         prospect.recurring_revenue_score,
+
+        prospect.freshness_score,
+        prospect.data_quality_score,
+        prospect.source_diversity_score,
+
         prospect.primary_source_url,
         prospect.date_verified,
+
+        prospect.decision_maker_route,
         prospect.next_action,
+        prospect.outreach_angle,
       ],
     );
 
