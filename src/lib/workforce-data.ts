@@ -33,6 +33,31 @@ const db =
   };
 
 /* -------------------------------------------------------------------------- */
+/* CONTEXT / PROVIDER SAFETY                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Keep stored workforce context small.
+ *
+ * The page-level executor also compacts prompts, but the backend must not
+ * preserve oversized context that later gets fed back into the workforce.
+ */
+const WORKFORCE_MAX_PRIOR_OUTPUTS =
+  2;
+
+const WORKFORCE_MAX_PRIOR_OUTPUT_CHARS =
+  900;
+
+const WORKFORCE_MAX_EVIDENCE_ITEMS =
+  2;
+
+const WORKFORCE_MAX_EVIDENCE_CHARS =
+  1_200;
+
+const WORKFORCE_MAX_HANDOFF_CONTEXT_TEXT_CHARS =
+  1_200;
+
+/* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -1805,6 +1830,117 @@ export interface CreateGrowthCoordinationMissionInput
 export interface GrowthCoordinationMissionResult
   extends CoordinationMissionResult {}
 
+/* -------------------------------------------------------------------------- */
+/* DIRECT EMPLOYEE ASSIGNMENT TYPES                                           */
+/* -------------------------------------------------------------------------- */
+
+export interface CreateDirectEmployeeMissionInput {
+  /**
+   * Supply either employeeId or employeeKey.
+   * employeeId wins when both are provided.
+   */
+  employeeId?:
+    string |
+    null;
+
+  employeeKey?:
+    string |
+    null;
+
+  objective:
+    string;
+
+  instruction?:
+    string |
+    null;
+
+  title?:
+    string |
+    null;
+
+  target_market?:
+    string |
+    null;
+
+  target_location?:
+    string |
+    null;
+
+  target_service?:
+    string |
+    null;
+
+  priority?:
+    Mission["priority"];
+
+  risk_level?:
+    RiskLevel;
+
+  parent_mission_id?:
+    string |
+    null;
+
+  business_unit_id?:
+    string |
+    null;
+
+  /**
+   * Optional structured context from the page initiating the assignment.
+   *
+   * Keep it small. This is not intended to carry full conversation history.
+   */
+  context?:
+    Record<
+      string,
+      unknown
+    >;
+}
+
+export interface DirectEmployeeMissionResult {
+  mission:
+    Mission;
+
+  handoff:
+    EmployeeHandoff;
+
+  employee:
+    AiEmployee;
+}
+
+/* -------------------------------------------------------------------------- */
+/* AI CEO COMMAND TYPES                                                       */
+/* -------------------------------------------------------------------------- */
+
+export interface CreateAiCeoCommandMissionInput {
+  objective:
+    string;
+
+  instruction?:
+    string |
+    null;
+
+  target_market?:
+    string |
+    null;
+
+  target_location?:
+    string |
+    null;
+
+  target_service?:
+    string |
+    null;
+
+  priority?:
+    Mission["priority"];
+
+  context?:
+    Record<
+      string,
+      unknown
+    >;
+}
+
 export interface HighRiskApprovalInput {
   actionType:
     string;
@@ -1929,15 +2065,83 @@ function requireNonEmptyValue(
   return cleanedValue;
 }
 
+function compactText(
+  value:
+    string,
+
+  maxCharacters:
+    number,
+): string {
+  const clean =
+    value.trim();
+
+  if (
+    clean.length <=
+    maxCharacters
+  ) {
+    return clean;
+  }
+
+  return clean.slice(
+    0,
+    maxCharacters,
+  );
+}
+
+function compactContextRecord(
+  context:
+    Record<
+      string,
+      unknown
+    > |
+    undefined,
+): Record<
+  string,
+  unknown
+> {
+  if (
+    !context
+  ) {
+    return {};
+  }
+
+  try {
+    const serialised =
+      JSON.stringify(
+        context,
+      );
+
+    if (
+      serialised.length <=
+      WORKFORCE_MAX_HANDOFF_CONTEXT_TEXT_CHARS
+    ) {
+      return context;
+    }
+
+    return {
+      compacted:
+        true,
+
+      summary:
+        serialised.slice(
+          0,
+          WORKFORCE_MAX_HANDOFF_CONTEXT_TEXT_CHARS,
+        ),
+    };
+  } catch {
+    return {
+      compacted:
+        true,
+
+      summary:
+        "Caller context could not be serialised.",
+    };
+  }
+}
+
 /**
  * Returns every handoff that has not reached the only terminal successful
  * state: completed.
- *
- * This is deliberately stricter than checking only "pending".
- *
- * accepted = work is still in progress
- * rejected = work did not complete
- * pending  = work still needs execution
  */
 async function listIncompleteMissionHandoffs(
   missionId:
@@ -2119,6 +2323,216 @@ export function listActiveEmployees(
 }
 
 /* -------------------------------------------------------------------------- */
+/* GET ONE EMPLOYEE                                                           */
+/* -------------------------------------------------------------------------- */
+
+export async function getEmployeeById(
+  employeeId:
+    string,
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  AiEmployee
+> {
+  const validEmployeeId =
+    requireNonEmptyValue(
+      employeeId,
+      "Employee ID",
+    );
+
+  const {
+    data,
+    error,
+  } =
+    await db
+      .from(
+        "ai_employees",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "organisation_id",
+        organisationId,
+      )
+      .eq(
+        "id",
+        validEmployeeId,
+      )
+      .maybeSingle();
+
+  if (
+    error
+  ) {
+    throw createDatabaseError(
+      "Unable to load AI employee",
+      error,
+    );
+  }
+
+  if (
+    !data
+  ) {
+    throw new Error(
+      "AI employee was not found.",
+    );
+  }
+
+  return (
+    data as
+      AiEmployee
+  );
+}
+
+export async function getEmployeeByKey(
+  employeeKey:
+    string,
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  AiEmployee
+> {
+  const validEmployeeKey =
+    requireNonEmptyValue(
+      employeeKey,
+      "Employee key",
+    );
+
+  const {
+    data,
+    error,
+  } =
+    await db
+      .from(
+        "ai_employees",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "organisation_id",
+        organisationId,
+      )
+      .eq(
+        "employee_key",
+        validEmployeeKey,
+      )
+      .maybeSingle();
+
+  if (
+    error
+  ) {
+    throw createDatabaseError(
+      "Unable to load AI employee",
+      error,
+    );
+  }
+
+  if (
+    !data
+  ) {
+    throw new Error(
+      `AI employee "${validEmployeeKey}" was not found.`,
+    );
+  }
+
+  return (
+    data as
+      AiEmployee
+  );
+}
+
+async function resolveAssignmentEmployee(
+  input: {
+    employeeId?:
+      string |
+      null;
+
+    employeeKey?:
+      string |
+      null;
+  },
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  AiEmployee
+> {
+  if (
+    input.employeeId?.trim()
+  ) {
+    return getEmployeeById(
+      input.employeeId,
+      organisationId,
+    );
+  }
+
+  if (
+    input.employeeKey?.trim()
+  ) {
+    return getEmployeeByKey(
+      input.employeeKey,
+      organisationId,
+    );
+  }
+
+  throw new Error(
+    "Employee ID or employee key is required.",
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* EMPLOYEE-SPECIFIC WORK                                                     */
+/* -------------------------------------------------------------------------- */
+
+export function listEmployeeAssignedMissions(
+  employeeId:
+    string,
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  Mission[]
+> {
+  const validEmployeeId =
+    requireNonEmptyValue(
+      employeeId,
+      "Employee ID",
+    );
+
+  return rows<
+    Mission
+  >(
+    "Unable to load employee missions",
+
+    db
+      .from(
+        "missions",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "organisation_id",
+        organisationId,
+      )
+      .eq(
+        "assigned_employee_id",
+        validEmployeeId,
+      )
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      ),
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* SOURCE PROFILE SYNCHRONISATION                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -2156,10 +2570,6 @@ async function synchroniseKnownProfiles(
       continue;
     }
 
-    /**
-     * Source synchronisation updates profile definition but deliberately
-     * preserves an explicit owner pause or retirement.
-     */
     const nextStatus:
       EmployeeStatus =
       existingEmployee.status ===
@@ -2609,6 +3019,455 @@ export async function queueMission(
 }
 
 /* -------------------------------------------------------------------------- */
+/* DIRECT EMPLOYEE ASSIGNMENT                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Creates a REAL one-employee mission.
+ *
+ * This is the backend operation required by:
+ *
+ * Employee profile
+ * → type task
+ * → Assign
+ * → real pending handoff
+ * → controlled executor claims it
+ * → employee produces output
+ * → mission completes
+ *
+ * No external action is automatically enabled.
+ */
+export async function createDirectEmployeeMission(
+  input:
+    CreateDirectEmployeeMissionInput,
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  DirectEmployeeMissionResult
+> {
+  const objective =
+    requireNonEmptyValue(
+      input.objective,
+      "Task objective",
+    );
+
+  const employee =
+    await resolveAssignmentEmployee(
+      input,
+      organisationId,
+    );
+
+  if (
+    employee.status !==
+    "active"
+  ) {
+    throw new Error(
+      `${employee.name} is ${employee.status} and cannot receive a new task.`,
+    );
+  }
+
+  const instruction =
+    input.instruction?.trim() ||
+    [
+      `Complete this assigned task as ${employee.title}.`,
+      "Complete all safe internal work that falls within your authorised responsibilities.",
+      "Use verified Cossa information and authorised evidence only.",
+      "Do not fabricate facts, results, account access or completed external actions.",
+      "Identify missing information or integrations precisely.",
+      "Do not spend money, sign commitments, place orders, change credentials or perform irreversible external actions without owner authority.",
+    ].join(
+      " ",
+    );
+
+  const title =
+    input.title?.trim() ||
+    `Employee assignment: ${employee.name} — ${objective.slice(
+      0,
+      90,
+    )}`;
+
+  const mission =
+    await createMission(
+      {
+        title,
+
+        instruction,
+
+        objective,
+
+        assigned_employee_id:
+          employee.id,
+
+        business_unit_id:
+          input.business_unit_id ??
+          employee.business_unit_id ??
+          null,
+
+        parent_mission_id:
+          input.parent_mission_id ??
+          null,
+
+        target_market:
+          input.target_market?.trim() ||
+          null,
+
+        target_location:
+          input.target_location?.trim() ||
+          null,
+
+        target_service:
+          input.target_service?.trim() ||
+          null,
+
+        constraints: [
+          "This is a direct employee assignment.",
+          "Complete safe internal work without unnecessary owner interruption.",
+          "Use verified Cossa knowledge and authorised evidence only.",
+          "Do not invent business facts, performance, account access or completed external actions.",
+          "If another employee is genuinely required, state the required handoff clearly in the output. Do not pretend that a handoff record exists unless the system creates it.",
+          "High-risk external actions remain owner-controlled.",
+        ],
+
+        prohibited_actions: [
+          "fabricate_business_facts",
+          "fabricate_external_actions",
+          "spend_without_owner_authority",
+          "make_binding_commitments_without_owner_authority",
+          "place_supplier_orders_without_owner_authority",
+          "change_credentials_without_owner_authority",
+          "make_irreversible_account_changes_without_owner_authority",
+        ],
+
+        output_schema: {
+          assignment_mode:
+            "direct_employee",
+
+          assigned_employee_key:
+            employee.employee_key,
+
+          assigned_employee_name:
+            employee.name,
+
+          collaboration_mode:
+            "single_employee",
+
+          safe_internal_work:
+            "continue_automatically",
+
+          external_actions_enabled:
+            false,
+
+          owner_interruption:
+            "high_risk_only",
+
+          final_decision_owner:
+            "Cossa Nexus Holdings owner",
+        },
+
+        priority:
+          input.priority ??
+          "normal",
+
+        risk_level:
+          input.risk_level ??
+          "low",
+      },
+
+      organisationId,
+    );
+
+  const now =
+    new Date().toISOString();
+
+  const {
+    data:
+      handoffData,
+
+    error:
+      handoffError,
+  } =
+    await db
+      .from(
+        "employee_handoffs",
+      )
+      .insert({
+        organisation_id:
+          organisationId,
+
+        mission_id:
+          mission.id,
+
+        run_id:
+          null,
+
+        from_employee_id:
+          null,
+
+        to_employee_id:
+          employee.id,
+
+        reason:
+          objective,
+
+        context: {
+          assignment_mode:
+            "direct_employee",
+
+          objective,
+
+          stage:
+            1,
+
+          total_stages:
+            1,
+
+          employee_key:
+            employee.employee_key,
+
+          previous_employee_key:
+            null,
+
+          next_employee_key:
+            null,
+
+          workflow:
+            "Direct employee assignment",
+
+          collaboration_mode:
+            "single_employee",
+
+          execution_order:
+            "single_stage",
+
+          safe_internal_work:
+            "continue",
+
+          owner_interruption:
+            "high_risk_only",
+
+          external_actions_enabled:
+            false,
+
+          caller_context:
+            compactContextRecord(
+              input.context,
+            ),
+        },
+
+        retained_record_ids:
+          {},
+
+        status:
+          "pending",
+      })
+      .select(
+        "*",
+      )
+      .single();
+
+  if (
+    handoffError
+  ) {
+    const {
+      error:
+        missionFailureError,
+    } =
+      await db
+        .from(
+          "missions",
+        )
+        .update({
+          status:
+            "failed",
+
+          updated_at:
+            now,
+        })
+        .eq(
+          "id",
+          mission.id,
+        )
+        .eq(
+          "organisation_id",
+          organisationId,
+        );
+
+    if (
+      missionFailureError
+    ) {
+      console.error(
+        "Unable to mark direct assignment mission as failed",
+        missionFailureError,
+      );
+    }
+
+    throw createDatabaseError(
+      "Unable to create the direct employee handoff",
+      handoffError,
+    );
+  }
+
+  if (
+    !handoffData
+  ) {
+    throw new Error(
+      "The employee mission was created but no handoff record was returned.",
+    );
+  }
+
+  let queuedMission:
+    Mission;
+
+  try {
+    queuedMission =
+      await queueMission(
+        mission.id,
+        organisationId,
+      );
+  } catch (
+    error
+  ) {
+    const {
+      error:
+        missionFailureError,
+    } =
+      await db
+        .from(
+          "missions",
+        )
+        .update({
+          status:
+            "failed",
+
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "id",
+          mission.id,
+        )
+        .eq(
+          "organisation_id",
+          organisationId,
+        );
+
+    if (
+      missionFailureError
+    ) {
+      console.error(
+        "Unable to mark unqueued direct assignment as failed",
+        missionFailureError,
+      );
+    }
+
+    throw error;
+  }
+
+  return {
+    mission:
+      queuedMission,
+
+    handoff:
+      handoffData as
+        EmployeeHandoff,
+
+    employee,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* AI CEO COMMAND                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Sends work directly to the AI CEO.
+ *
+ * This deliberately creates a REAL employee assignment rather than pretending
+ * that the CEO has already delegated work to other employees.
+ *
+ * The next upgrade can let the AI CEO create child missions / handoffs after
+ * analysing the request.
+ */
+export async function createAiCeoCommandMission(
+  input:
+    CreateAiCeoCommandMissionInput,
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  DirectEmployeeMissionResult
+> {
+  const objective =
+    requireNonEmptyValue(
+      input.objective,
+      "CEO command",
+    );
+
+  return createDirectEmployeeMission(
+    {
+      employeeKey:
+        "ai-ceo",
+
+      title:
+        `CEO command: ${objective.slice(
+          0,
+          100,
+        )}`,
+
+      objective,
+
+      instruction:
+        input.instruction?.trim() ||
+        [
+          "Act as the Cossa AI CEO.",
+          "Understand the owner's requested business outcome.",
+          "Determine which Cossa employees or departments are responsible.",
+          "Complete the executive analysis using verified information.",
+          "Identify the correct delegation route.",
+          "Do not claim another employee was assigned unless a real recorded handoff exists.",
+          "Do not interrupt the owner for ordinary internal work.",
+          "Escalate only genuine high-risk financial, legal, credential, destructive or irreversible decisions.",
+        ].join(
+          " ",
+        ),
+
+      target_market:
+        input.target_market ??
+        null,
+
+      target_location:
+        input.target_location ??
+        null,
+
+      target_service:
+        input.target_service ??
+        null,
+
+      priority:
+        input.priority ??
+        "normal",
+
+      risk_level:
+        "low",
+
+      context: {
+        command_source:
+          "owner_ceo_command",
+
+        requested_coordination:
+          true,
+
+        ...(input.context ??
+          {}),
+      },
+    },
+
+    organisationId,
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* CONTROLLED RUN TYPES                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -2681,6 +3540,10 @@ export interface ControlledReviewableOutput {
     string;
 }
 
+/* -------------------------------------------------------------------------- */
+/* COMPACTION                                                                 */
+/* -------------------------------------------------------------------------- */
+
 function compactPriorOutputs(
   outputs:
     string[],
@@ -2696,15 +3559,44 @@ function compactPriorOutputs(
       Boolean,
     )
     .slice(
-      -4,
+      -WORKFORCE_MAX_PRIOR_OUTPUTS,
     )
     .map(
       (
         output,
       ) =>
-        output.slice(
-          0,
-          4_000,
+        compactText(
+          output,
+          WORKFORCE_MAX_PRIOR_OUTPUT_CHARS,
+        ),
+    );
+}
+
+function compactAuthorisedEvidenceForRun(
+  evidence:
+    string[],
+): string[] {
+  return evidence
+    .map(
+      (
+        item,
+      ) =>
+        item.trim(),
+    )
+    .filter(
+      Boolean,
+    )
+    .slice(
+      0,
+      WORKFORCE_MAX_EVIDENCE_ITEMS,
+    )
+    .map(
+      (
+        item,
+      ) =>
+        compactText(
+          item,
+          WORKFORCE_MAX_EVIDENCE_CHARS,
         ),
     );
 }
@@ -2713,16 +3605,6 @@ function compactPriorOutputs(
 /* CLAIM / RELEASE HELPERS                                                    */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Claims exactly one pending handoff.
- *
- * The conditional status check is the concurrency guard:
- *
- * pending → accepted
- *
- * If another request already claimed the same handoff, this returns null
- * rather than creating a second real workforce run.
- */
 async function claimPendingHandoff({
   handoffId,
   missionId,
@@ -2769,9 +3651,6 @@ async function claimPendingHandoff({
         accepted_at:
           acceptedAt,
 
-        /**
-         * run_id is attached after the run record exists.
-         */
         run_id:
           null,
 
@@ -2818,12 +3697,6 @@ async function claimPendingHandoff({
   );
 }
 
-/**
- * Releases a handoff only when it is still accepted and belongs to the
- * expected worker/run state.
- *
- * This is used to recover cleanly from failures before model execution begins.
- */
 async function releaseAcceptedHandoff({
   handoffId,
   missionId,
@@ -2916,21 +3789,6 @@ async function releaseAcceptedHandoff({
 /* START CONTROLLED RUN                                                       */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Production-safe startup sequence:
- *
- * 1. Validate caller-supplied identity.
- * 2. Atomically claim pending handoff.
- * 3. Create the mission run.
- * 4. Attach that run to the accepted handoff.
- * 5. Mark mission running.
- *
- * The old implementation created the run before claiming the handoff.
- * Competing browser calls could therefore create duplicate/failed runs.
- *
- * This order prevents a second worker request from creating a legitimate run
- * after the handoff has already been claimed.
- */
 export async function startControlledWorkforceRun(
   input:
     ControlledWorkforceRunInput,
@@ -2979,10 +3837,6 @@ export async function startControlledWorkforceRun(
   const startedAt =
     new Date().toISOString();
 
-  /* ---------------------------------------------------------------------- */
-  /* 1. CLAIM FIRST                                                         */
-  /* ---------------------------------------------------------------------- */
-
   const claimedHandoff =
     await claimPendingHandoff({
       handoffId:
@@ -3014,10 +3868,6 @@ export async function startControlledWorkforceRun(
     null;
 
   try {
-    /* -------------------------------------------------------------------- */
-    /* 2. CREATE RUN                                                        */
-    /* -------------------------------------------------------------------- */
-
     const {
       data:
         run,
@@ -3071,7 +3921,9 @@ export async function startControlledWorkforceRun(
               input.handoff.reason,
 
             handoff_context:
-              input.handoff.context,
+              compactContextRecord(
+                input.handoff.context,
+              ),
 
             prior_reviewable_outputs:
               compactPriorOutputs(
@@ -3079,32 +3931,24 @@ export async function startControlledWorkforceRun(
               ),
 
             authorised_evidence:
-              (
+              compactAuthorisedEvidenceForRun(
                 input.authorisedEvidence ??
-                []
-              )
-                .map(
-                  (
-                    evidence,
-                  ) =>
-                    evidence.trim(),
-                )
-                .filter(
-                  Boolean,
-                )
-                .slice(
-                  0,
-                  5,
-                )
-                .map(
-                  (
-                    evidence,
-                  ) =>
-                    evidence.slice(
-                      0,
-                      4_000,
-                    ),
-                ),
+                [],
+              ),
+
+            context_limits: {
+              prior_outputs:
+                WORKFORCE_MAX_PRIOR_OUTPUTS,
+
+              prior_output_chars:
+                WORKFORCE_MAX_PRIOR_OUTPUT_CHARS,
+
+              evidence_items:
+                WORKFORCE_MAX_EVIDENCE_ITEMS,
+
+              evidence_chars:
+                WORKFORCE_MAX_EVIDENCE_CHARS,
+            },
 
             external_actions_enabled:
               false,
@@ -3138,10 +3982,6 @@ export async function startControlledWorkforceRun(
     createdRun =
       run as
         MissionRun;
-
-    /* -------------------------------------------------------------------- */
-    /* 3. ATTACH RUN TO CLAIMED HANDOFF                                     */
-    /* -------------------------------------------------------------------- */
 
     const {
       data:
@@ -3203,10 +4043,6 @@ export async function startControlledWorkforceRun(
         "The workforce handoff changed before the run could be attached.",
       );
     }
-
-    /* -------------------------------------------------------------------- */
-    /* 4. MARK MISSION RUNNING                                              */
-    /* -------------------------------------------------------------------- */
 
     const {
       data:
@@ -3272,9 +4108,6 @@ export async function startControlledWorkforceRun(
     const failedAt =
       new Date().toISOString();
 
-    /**
-     * If a run record exists, retain it as failed audit history.
-     */
     if (
       createdRun
     ) {
@@ -3332,9 +4165,6 @@ export async function startControlledWorkforceRun(
       }
     }
 
-    /**
-     * Return the stage to pending so the user can retry.
-     */
     try {
       await releaseAcceptedHandoff({
         handoffId:
@@ -3369,13 +4199,6 @@ export async function startControlledWorkforceRun(
 /* COMPLETE CONTROLLED RUN                                                    */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Safe internal collaboration does not create automatic approval checkpoints.
- *
- * A mission completes only when EVERY handoff is completed.
- *
- * High-risk actions must call requestHighRiskApproval() separately.
- */
 export async function completeControlledWorkforceRun(
   input: {
     run:
@@ -3464,10 +4287,6 @@ export async function completeControlledWorkforceRun(
       content,
     };
 
-  /* ---------------------------------------------------------------------- */
-  /* 1. COMPLETE RUN                                                        */
-  /* ---------------------------------------------------------------------- */
-
   const {
     data:
       run,
@@ -3536,10 +4355,6 @@ export async function completeControlledWorkforceRun(
     );
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* 2. COMPLETE EXACT HANDOFF                                              */
-  /* ---------------------------------------------------------------------- */
-
   const {
     data:
       completedHandoff,
@@ -3599,17 +4414,10 @@ export async function completeControlledWorkforceRun(
   if (
     !completedHandoff
   ) {
-    /**
-     * The output remains recorded, but mission cannot be falsely advanced.
-     */
     throw new Error(
       "The workforce output was recorded, but the accepted handoff could not be completed. Refresh the workforce before executing another stage.",
     );
   }
-
-  /* ---------------------------------------------------------------------- */
-  /* 3. DETERMINE REAL MISSION COMPLETION                                   */
-  /* ---------------------------------------------------------------------- */
 
   const incompleteHandoffs =
     await listIncompleteMissionHandoffs(
@@ -3725,10 +4533,6 @@ export async function failControlledWorkforceRun(
       ) ||
     "The provider did not return a usable workforce output.";
 
-  /* ---------------------------------------------------------------------- */
-  /* RECORD FAILURE                                                         */
-  /* ---------------------------------------------------------------------- */
-
   const {
     error:
       runError,
@@ -3775,10 +4579,6 @@ export async function failControlledWorkforceRun(
       runError,
     );
   }
-
-  /* ---------------------------------------------------------------------- */
-  /* RELEASE EXACT HANDOFF                                                  */
-  /* ---------------------------------------------------------------------- */
 
   const {
     error:
@@ -3830,10 +4630,6 @@ export async function failControlledWorkforceRun(
       handoffError,
     );
   }
-
-  /* ---------------------------------------------------------------------- */
-  /* KEEP MISSION RETRYABLE                                                 */
-  /* ---------------------------------------------------------------------- */
 
   const pendingApprovalCount =
     await countPendingMissionApprovals(
@@ -3894,11 +4690,6 @@ export async function failControlledWorkforceRun(
 /* HIGH-RISK APPROVAL REQUEST                                                 */
 /* -------------------------------------------------------------------------- */
 
-/**
- * This is the owner interruption boundary.
- *
- * Safe internal work must NOT call this function.
- */
 export async function requestHighRiskApproval(
   input:
     HighRiskApprovalInput,
@@ -3920,11 +4711,6 @@ export async function requestHighRiskApproval(
       "Approval justification",
     );
 
-  /**
-   * We deliberately avoid `.eq("mission_id", null)`.
-   *
-   * PostgREST null comparisons should use `is`.
-   */
   let existingQuery =
     db
       .from(
@@ -4220,10 +5006,6 @@ export async function decideApproval(
     data as
       Approval;
 
-  /* ---------------------------------------------------------------------- */
-  /* LEGACY INTERNAL REVIEW COMPATIBILITY                                   */
-  /* ---------------------------------------------------------------------- */
-
   if (
     approval.action_type ===
       "review_growth_coordination_output" &&
@@ -4284,15 +5066,6 @@ export async function decideApproval(
     return approval;
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* HIGH-RISK APPROVAL                                                      */
-  /* ---------------------------------------------------------------------- */
-
-  /**
-   * Approval means authority was granted or refused.
-   *
-   * It does NOT mean the external action executed.
-   */
   if (
     approval.mission_id
   ) {
@@ -4506,10 +5279,6 @@ async function createCollaborationMission(
       "Mission objective",
     );
 
-  /**
-   * Synchronise source employees before creating a workflow so every stage
-   * references a real current employee record.
-   */
   const employees =
     await installCossaGrowthWorkforce(
       organisationId,
@@ -4786,10 +5555,6 @@ async function createCollaborationMission(
   if (
     error
   ) {
-    /**
-     * Preserve truth instead of leaving a mission looking ready when its
-     * handoff plan failed to materialise.
-     */
     const {
       error:
         missionFailureError,
@@ -4877,10 +5642,6 @@ async function createCollaborationMission(
       `The workflow expected ${definition.stages.length} handoffs but Supabase returned ${createdHandoffs.length}. The mission was not queued.`,
     );
   }
-
-  /* ---------------------------------------------------------------------- */
-  /* QUEUE ONLY AFTER ALL HANDOFFS EXIST                                    */
-  /* ---------------------------------------------------------------------- */
 
   const {
     data:
