@@ -6,10 +6,13 @@ import {
 import {
   Building2,
   Code2,
+  FileStack,
+  HardHat,
   LayoutDashboard,
   Megaphone,
   PackageSearch,
   Settings2,
+  Sparkles,
   Store,
   TrendingUp,
   Workflow,
@@ -59,13 +62,19 @@ interface SidebarNavigationGroup {
 /* -------------------------------------------------------------------------- */
 
 /**
- * CEO-style navigation.
+ * CEO-style company navigation.
  *
- * Important:
- * - Every destination below points to a route that actually exists.
- * - AI tools are intentionally excluded from this sidebar.
- * - Detailed AI tools belong in the global top navigation.
- * - The sidebar represents the structure of the company.
+ * Sidebar purpose:
+ *
+ * 1. Show the structure of the company.
+ * 2. Keep detailed AI tools out of the sidebar.
+ * 3. Give each operating business its own workspace.
+ * 4. Prevent Store, Tech, Construction, Facility Services and NexDocs from
+ *    all dumping the user into /ai/workforce.
+ *
+ * Detailed AI tools belong in the global top navigation.
+ *
+ * /ai/workforce remains the GROUP-WIDE workforce command centre.
  */
 const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
   {
@@ -76,7 +85,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
         title: "Command Center",
 
         description:
-          "Company overview, priorities, health and operating command.",
+          "Group-wide overview, priorities, business health, opportunities and operating command.",
 
         to: "/command-center",
 
@@ -95,7 +104,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
         title: "AI Company",
 
         description:
-          "AI departments, employees, workforce coordination and executive control.",
+          "Group-wide AI departments, employees, workforce coordination and executive control.",
 
         to: "/ai/workforce",
 
@@ -110,6 +119,87 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
   },
 
   {
+    label: "Businesses",
+
+    items: [
+      {
+        title: "Cossa Store",
+
+        description:
+          "Store command centre for products, catalogue, suppliers, merchandising, dropshipping, marketing and store AI employees.",
+
+        to: "/businesses/store",
+
+        icon: Store,
+
+        matchPrefixes: [
+          "/businesses/store",
+        ],
+      },
+
+      {
+        title: "Cossa Tech",
+
+        description:
+          "Technology command centre for websites, software, automation, technical delivery and Cossa Tech AI employees.",
+
+        to: "/businesses/tech",
+
+        icon: Code2,
+
+        matchPrefixes: [
+          "/businesses/tech",
+        ],
+      },
+
+      {
+        title: "Cossa Construction",
+
+        description:
+          "Construction command centre for leads, quotations, projects, tenders, documents, marketing and construction operations.",
+
+        to: "/businesses/construction",
+
+        icon: HardHat,
+
+        matchPrefixes: [
+          "/businesses/construction",
+        ],
+      },
+
+      {
+        title: "Facility Services",
+
+        description:
+          "Facility Services command centre for customers, quotations, service work, leads, marketing and operational delivery.",
+
+        to: "/businesses/facility-services",
+
+        icon: Wrench,
+
+        matchPrefixes: [
+          "/businesses/facility-services",
+        ],
+      },
+
+      {
+        title: "NexDocs",
+
+        description:
+          "Document business command centre for proposals, quotations, contracts, document workflows and AI-assisted document production.",
+
+        to: "/businesses/nexdocs",
+
+        icon: FileStack,
+
+        matchPrefixes: [
+          "/businesses/nexdocs",
+        ],
+      },
+    ],
+  },
+
+  {
     label: "Revenue",
 
     items: [
@@ -117,7 +207,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
         title: "Marketing & Growth",
 
         description:
-          "Marketing strategy, SEO, campaigns, content, social media and advertising.",
+          "Group marketing strategy, SEO, campaigns, content, social media, advertising and growth intelligence.",
 
         to: "/marketing/ai-director",
 
@@ -132,7 +222,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
         title: "Sales & Revenue",
 
         description:
-          "CRM, leads, customers, pipeline, opportunities, quotations and revenue intelligence.",
+          "Group CRM, leads, customers, pipeline, opportunities, quotations and revenue intelligence.",
 
         to: "/sales/crm",
 
@@ -146,57 +236,14 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
   },
 
   {
-    label: "Businesses",
-
-    items: [
-      {
-        title: "Cossa Store",
-
-        description:
-          "Store workforce, product intelligence, suppliers, merchandising and commercial operations.",
-
-        /**
-         * There is currently no /store route in src/routes.
-         *
-         * Until a dedicated Cossa Store page is created, this correctly opens
-         * the AI Company where the Store department already exists.
-         */
-        to: "/ai/workforce",
-
-        icon: Store,
-
-        matchPrefixes: [],
-      },
-
-      {
-        title: "Cossa Tech",
-
-        description:
-          "Technical workforce, website delivery, software, automation and technology operations.",
-
-        /**
-         * There is currently no /tech route in src/routes.
-         *
-         * The Tech department currently lives inside AI Company.
-         */
-        to: "/ai/workforce",
-
-        icon: Code2,
-
-        matchPrefixes: [],
-      },
-    ],
-  },
-
-  {
-    label: "Operations",
+    label: "Execution",
 
     items: [
       {
         title: "Workflows",
 
         description:
-          "Workflow design, coordinated execution and automation.",
+          "Cross-company workflow design, AI automation and coordinated execution.",
 
         to: "/ai/workflow",
 
@@ -213,16 +260,11 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
         title: "Operations",
 
         description:
-          "Projects, tasks, calendars, documents, reports and business operations.",
+          "Projects, tasks, calendars, documents, reports and group-wide operational execution.",
 
-        /**
-         * /operations itself does not exist.
-         *
-         * /operations/projects is the first real Operations route.
-         */
         to: "/operations/projects",
 
-        icon: Wrench,
+        icon: Sparkles,
 
         matchPrefixes: [
           "/operations",
@@ -239,7 +281,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
         title: "Integrations",
 
         description:
-          "Connected accounts, external systems and authorised business integrations.",
+          "Connected accounts, external systems, publishing channels and authorised integrations.",
 
         to: "/integrations",
 
@@ -254,7 +296,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
         title: "Administration",
 
         description:
-          "Workspace configuration, platform settings and administrative control.",
+          "Workspace configuration, company settings and platform control.",
 
         to: "/settings",
 
@@ -269,7 +311,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 ];
 
 /* -------------------------------------------------------------------------- */
-/* HELPERS                                                                    */
+/* PATH HELPERS                                                               */
 /* -------------------------------------------------------------------------- */
 
 function normalisePathname(
@@ -435,7 +477,7 @@ export function AppSidebar() {
                             tooltip={{
                               children:
                                 (
-                                  <div className="max-w-60">
+                                  <div className="max-w-64">
                                     <p className="font-medium">
                                       {
                                         item.title
