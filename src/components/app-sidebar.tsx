@@ -4,18 +4,14 @@ import {
 } from "@tanstack/react-router";
 
 import {
-  BarChart3,
   Building2,
   Code2,
-  Command,
   LayoutDashboard,
   Megaphone,
   PackageSearch,
   Settings2,
-  ShoppingCart,
   Store,
   TrendingUp,
-  UsersRound,
   Workflow,
   Wrench,
   type LucideIcon,
@@ -50,7 +46,6 @@ interface SidebarNavigationItem {
   description: string;
   to: string;
   icon: LucideIcon;
-
   matchPrefixes?: readonly string[];
 }
 
@@ -60,61 +55,51 @@ interface SidebarNavigationGroup {
 }
 
 /* -------------------------------------------------------------------------- */
-/* CEO / COMPANY SIDEBAR                                                      */
+/* COMPANY NAVIGATION                                                         */
 /* -------------------------------------------------------------------------- */
 
 /**
+ * CEO-style navigation.
+ *
  * Important:
- *
- * This sidebar intentionally exposes only the company's main operating areas.
- *
- * Detailed AI tools are available from the global top navigation.
- * Nothing is deleted. Routes remain available throughout the product.
- *
- * The sidebar should answer:
- *
- * "Where in the company do I want to work?"
- *
- * The top navigation / search should answer:
- *
- * "Which exact tool or employee do I need?"
+ * - Every destination below points to a route that actually exists.
+ * - AI tools are intentionally excluded from this sidebar.
+ * - Detailed AI tools belong in the global top navigation.
+ * - The sidebar represents the structure of the company.
  */
 const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
   {
-    label:
-      "Company",
+    label: "Company",
 
     items: [
       {
-        title:
-          "Command Center",
+        title: "Command Center",
 
         description:
-          "Company overview, priorities and operating command.",
+          "Company overview, priorities, health and operating command.",
 
-        to:
-          "/command-center",
+        to: "/command-center",
 
-        icon:
-          LayoutDashboard,
+        icon: LayoutDashboard,
 
         matchPrefixes: [
           "/command-center",
+          "/mission-control",
+          "/business-health",
+          "/opportunity-radar",
+          "/ai-recommendations",
         ],
       },
 
       {
-        title:
-          "AI Company",
+        title: "AI Company",
 
         description:
-          "Departments, employees and workforce coordination.",
+          "AI departments, employees, workforce coordination and executive control.",
 
-        to:
-          "/ai/workforce",
+        to: "/ai/workforce",
 
-        icon:
-          Building2,
+        icon: Building2,
 
         matchPrefixes: [
           "/ai/workforce",
@@ -125,198 +110,158 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
   },
 
   {
-    label:
-      "Revenue",
+    label: "Revenue",
 
     items: [
       {
-        title:
-          "Marketing & Growth",
+        title: "Marketing & Growth",
 
         description:
-          "Content, campaigns, social media, SEO and advertising.",
+          "Marketing strategy, SEO, campaigns, content, social media and advertising.",
 
-        to:
-          "/ai/workforce",
+        to: "/marketing/ai-director",
 
-        icon:
-          Megaphone,
+        icon: Megaphone,
 
         matchPrefixes: [
           "/marketing",
-          "/growth",
-          "/social",
-          "/campaign",
-          "/seo",
-          "/ads",
         ],
       },
 
       {
-        title:
-          "Sales & Revenue",
+        title: "Sales & Revenue",
 
         description:
-          "Leads, CRM, sales activity, opportunities and customer growth.",
+          "CRM, leads, customers, pipeline, opportunities, quotations and revenue intelligence.",
 
-        to:
-          "/crm",
+        to: "/sales/crm",
 
-        icon:
-          TrendingUp,
+        icon: TrendingUp,
 
         matchPrefixes: [
-          "/crm",
           "/sales",
-          "/leads",
-          "/deals",
-          "/customers",
-          "/revenue",
         ],
       },
     ],
   },
 
   {
-    label:
-      "Businesses",
+    label: "Businesses",
 
     items: [
       {
-        title:
-          "Cossa Store",
+        title: "Cossa Store",
 
         description:
-          "Products, catalogue, suppliers and store operations.",
+          "Store workforce, product intelligence, suppliers, merchandising and commercial operations.",
 
-        to:
-          "/store",
+        /**
+         * There is currently no /store route in src/routes.
+         *
+         * Until a dedicated Cossa Store page is created, this correctly opens
+         * the AI Company where the Store department already exists.
+         */
+        to: "/ai/workforce",
 
-        icon:
-          Store,
+        icon: Store,
 
-        matchPrefixes: [
-          "/store",
-          "/products",
-          "/catalog",
-          "/catalogue",
-          "/suppliers",
-        ],
+        matchPrefixes: [],
       },
 
       {
-        title:
-          "Cossa Tech",
+        title: "Cossa Tech",
 
         description:
-          "Websites, software, automation and technical delivery.",
+          "Technical workforce, website delivery, software, automation and technology operations.",
 
-        to:
-          "/tech",
+        /**
+         * There is currently no /tech route in src/routes.
+         *
+         * The Tech department currently lives inside AI Company.
+         */
+        to: "/ai/workforce",
 
-        icon:
-          Code2,
+        icon: Code2,
 
-        matchPrefixes: [
-          "/tech",
-          "/websites",
-          "/website",
-          "/development",
-        ],
+        matchPrefixes: [],
       },
     ],
   },
 
   {
-    label:
-      "Operations",
+    label: "Operations",
 
     items: [
       {
-        title:
-          "Workflows",
+        title: "Workflows",
 
         description:
-          "Company workflows, automation and coordinated execution.",
+          "Workflow design, coordinated execution and automation.",
 
-        to:
-          "/ai/workflow",
+        to: "/ai/workflow",
 
-        icon:
-          Workflow,
+        icon: Workflow,
 
         matchPrefixes: [
           "/ai/workflow",
-          "/automation",
-          "/workflows",
+          "/ai/automation",
+          "/operations/automation",
         ],
       },
 
       {
-        title:
-          "Operations",
+        title: "Operations",
 
         description:
-          "Internal execution, service delivery and business operations.",
+          "Projects, tasks, calendars, documents, reports and business operations.",
 
-        to:
-          "/operations",
+        /**
+         * /operations itself does not exist.
+         *
+         * /operations/projects is the first real Operations route.
+         */
+        to: "/operations/projects",
 
-        icon:
-          Wrench,
+        icon: Wrench,
 
         matchPrefixes: [
           "/operations",
-          "/projects",
-          "/tasks",
-          "/service",
         ],
       },
     ],
   },
 
   {
-    label:
-      "Platform",
+    label: "Platform",
 
     items: [
       {
-        title:
-          "Integrations",
+        title: "Integrations",
 
         description:
-          "Connected accounts, publishing channels and external systems.",
+          "Connected accounts, external systems and authorised business integrations.",
 
-        to:
-          "/integrations",
+        to: "/integrations",
 
-        icon:
-          PackageSearch,
+        icon: PackageSearch,
 
         matchPrefixes: [
           "/integrations",
-          "/connections",
         ],
       },
 
       {
-        title:
-          "Administration",
+        title: "Administration",
 
         description:
-          "Platform configuration, business settings and system control.",
+          "Workspace configuration, platform settings and administrative control.",
 
-        to:
-          "/settings",
+        to: "/settings",
 
-        icon:
-          Settings2,
+        icon: Settings2,
 
         matchPrefixes: [
           "/settings",
-          "/admin",
-          "/organisation",
-          "/organization",
         ],
       },
     ],
@@ -327,30 +272,66 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 /* HELPERS                                                                    */
 /* -------------------------------------------------------------------------- */
 
+function normalisePathname(
+  pathname: string,
+): string {
+  if (pathname === "/") {
+    return pathname;
+  }
+
+  return pathname.replace(
+    /\/+$/,
+    "",
+  );
+}
+
+function pathMatchesPrefix(
+  pathname: string,
+  prefix: string,
+): boolean {
+  const normalisedPathname =
+    normalisePathname(
+      pathname,
+    );
+
+  const normalisedPrefix =
+    normalisePathname(
+      prefix,
+    );
+
+  return (
+    normalisedPathname ===
+      normalisedPrefix ||
+    normalisedPathname.startsWith(
+      `${normalisedPrefix}/`,
+    )
+  );
+}
+
 function isNavigationItemActive(
   pathname: string,
   item: SidebarNavigationItem,
 ): boolean {
   if (
-    pathname ===
-    item.to
+    pathMatchesPrefix(
+      pathname,
+      item.to,
+    )
   ) {
     return true;
   }
 
-  const prefixes =
-    item.matchPrefixes ??
-    [];
-
-  return prefixes.some(
-    (
-      prefix,
-    ) =>
-      pathname ===
-        prefix ||
-      pathname.startsWith(
-        `${prefix}/`,
-      ),
+  return (
+    item.matchPrefixes?.some(
+      (
+        prefix,
+      ) =>
+        pathMatchesPrefix(
+          pathname,
+          prefix,
+        ),
+    ) ??
+    false
   );
 }
 
@@ -388,21 +369,17 @@ export function AppSidebar() {
 
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="px-2 py-2">
-          {collapsed ? (
-            <Link
-              to="/command-center"
-              aria-label="GROWTH command center"
-            >
+          <Link
+            to="/command-center"
+            aria-label="GROWTH Command Center"
+            className="block"
+          >
+            {collapsed ? (
               <GrowthSymbol className="mx-auto h-9 w-9" />
-            </Link>
-          ) : (
-            <Link
-              to="/command-center"
-              aria-label="GROWTH command center"
-            >
+            ) : (
               <GrowthProductBrand />
-            </Link>
-          )}
+            )}
+          </Link>
         </div>
       </SidebarHeader>
 
@@ -410,7 +387,7 @@ export function AppSidebar() {
       {/* COMPANY NAVIGATION                                                 */}
       {/* ------------------------------------------------------------------ */}
 
-      <SidebarContent>
+      <SidebarContent className="py-1">
         {COMPANY_SIDEBAR.map(
           (
             group,
@@ -419,9 +396,10 @@ export function AppSidebar() {
               key={
                 group.label
               }
+              className="py-1"
             >
               {!collapsed ? (
-                <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground/80">
+                <SidebarGroupLabel className="h-7 px-2 text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                   {
                     group.label
                   }
@@ -429,7 +407,7 @@ export function AppSidebar() {
               ) : null}
 
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="gap-1">
                   {group.items.map(
                     (
                       item,
@@ -454,50 +432,74 @@ export function AppSidebar() {
                             isActive={
                               active
                             }
-                            tooltip={
-                              collapsed
-                                ? {
-                                    children:
-                                      (
-                                        <div className="max-w-56">
-                                          <p className="font-medium">
-                                            {
-                                              item.title
-                                            }
-                                          </p>
+                            tooltip={{
+                              children:
+                                (
+                                  <div className="max-w-60">
+                                    <p className="font-medium">
+                                      {
+                                        item.title
+                                      }
+                                    </p>
 
-                                          <p className="mt-1 text-xs text-muted-foreground">
-                                            {
-                                              item.description
-                                            }
-                                          </p>
-                                        </div>
-                                      ),
-                                  }
-                                : item.title
-                            }
+                                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                      {
+                                        item.description
+                                      }
+                                    </p>
+                                  </div>
+                                ),
+                            }}
                             className={
                               active
-                                ? "min-h-10 bg-primary/10 text-primary"
-                                : "min-h-10"
+                                ? [
+                                    "min-h-10",
+                                    "rounded-lg",
+                                    "border",
+                                    "border-primary/20",
+                                    "bg-primary/10",
+                                    "font-medium",
+                                    "text-primary",
+                                    "hover:bg-primary/15",
+                                    "hover:text-primary",
+                                  ].join(
+                                    " ",
+                                  )
+                                : [
+                                    "min-h-10",
+                                    "rounded-lg",
+                                    "border",
+                                    "border-transparent",
+                                    "text-sidebar-foreground/80",
+                                    "transition-colors",
+                                    "hover:border-sidebar-border",
+                                    "hover:bg-sidebar-accent",
+                                    "hover:text-sidebar-accent-foreground",
+                                  ].join(
+                                    " ",
+                                  )
                             }
                           >
                             <Link
                               to={
                                 item.to
                               }
-                              className="flex items-center gap-2"
+                              className="flex w-full items-center gap-2"
                             >
-                              <Icon className="h-4 w-4 shrink-0" />
+                              <Icon
+                                className={
+                                  active
+                                    ? "h-4 w-4 shrink-0 text-primary"
+                                    : "h-4 w-4 shrink-0"
+                                }
+                              />
 
                               {!collapsed ? (
-                                <div className="min-w-0">
-                                  <span className="block truncate text-sm">
-                                    {
-                                      item.title
-                                    }
-                                  </span>
-                                </div>
+                                <span className="min-w-0 flex-1 truncate text-sm">
+                                  {
+                                    item.title
+                                  }
+                                </span>
                               ) : null}
                             </Link>
                           </SidebarMenuButton>
