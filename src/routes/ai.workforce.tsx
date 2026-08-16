@@ -7,20 +7,31 @@ import {
 import {
   useMemo,
   useState,
+  type LucideIcon,
   type ReactNode,
 } from "react";
 
 import {
+  Activity,
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
+  BarChart3,
   BrainCircuit,
+  Building2,
   CheckCircle2,
+  ChevronRight,
+  ClipboardList,
   Code2,
+  Command,
   FileCheck2,
   FilePenLine,
+  Filter,
   Globe2,
+  History,
   ImageIcon,
   KeyRound,
+  LayoutDashboard,
   Megaphone,
   PanelTop,
   Play,
@@ -32,6 +43,8 @@ import {
   Store,
   UsersRound,
   Workflow,
+  X,
+  Zap,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -82,678 +95,619 @@ export const Route = createFileRoute("/ai/workforce")({
       {
         name: "description",
         content:
-          "Cossa Nexus Holdings AI workforce command centre for coordinated internal execution, specialist workforce readiness, employee handoffs and owner-controlled high-risk actions.",
+          "Cossa Nexus Holdings AI company command centre for departments, employees, coordinated missions, operational execution and owner-controlled actions.",
       },
     ],
   }),
 });
 
 /* -------------------------------------------------------------------------- */
+/* TYPES                                                                      */
+/* -------------------------------------------------------------------------- */
+
+type WorkforceView =
+  | "command"
+  | "departments"
+  | "employees"
+  | "workflows"
+  | "activity"
+  | "control";
+
+type OperationalState =
+  | "working"
+  | "idle"
+  | "waiting"
+  | "approval"
+  | "attention"
+  | "inactive";
+
+interface EmployeeOperationalView {
+  state: OperationalState;
+  label: string;
+  detail: string;
+  currentTask: string;
+  lastActivity: string | null;
+  assignedCount: number;
+  pendingCount: number;
+  runningCount: number;
+  failedCount: number;
+  approvalCount: number;
+  latestProvider: string | null;
+  latestModel: string | null;
+  latestFailure: string | null;
+  historicalFailureCount: number;
+  retryReady: boolean;
+}
+
+interface DepartmentDefinition {
+  key: string;
+  name: string;
+  shortName: string;
+  description: string;
+  icon: LucideIcon;
+  employeeKeys: readonly string[];
+}
+
+interface ResponsibilityDefinition {
+  employeeKey: string;
+  label: string;
+  keywords: readonly string[];
+}
+
+interface EmployeeDirectoryItem {
+  employee: AiEmployee;
+  operational: EmployeeOperationalView;
+  departmentKeys: string[];
+  responsibilityLabels: string[];
+  searchText: string;
+}
+
+/* -------------------------------------------------------------------------- */
 /* CONSTANTS                                                                  */
 /* -------------------------------------------------------------------------- */
 
-const GROWTH_MISSION_PREFIX =
-  "Growth coordination:";
+const GROWTH_MISSION_PREFIX = "Growth coordination:";
 
-const DEFAULT_WORKFORCE_PROVIDER =
-  "groq" as const;
+const DEFAULT_WORKFORCE_PROVIDER = "groq" as const;
 
-const DEFAULT_WORKFORCE_MODEL =
-  "llama-3.3-70b-versatile";
+const DEFAULT_WORKFORCE_MODEL = "llama-3.3-70b-versatile";
 
 /**
- * Provider-safety limits.
+ * Keep workforce calls significantly below historical provider ceilings.
  *
- * Groq rejected historical workforce prompts because individual messages
- * exceeded 12,000 characters.
- *
- * We intentionally remain below that provider ceiling.
+ * The page should pass concise operating context, not a book.
  */
-const MAX_STAGE_PROMPT_CHARS =
-  10_500;
+const MAX_STAGE_PROMPT_CHARS = 6_000;
 
-const MAX_PRIOR_OUTPUTS =
-  3;
+const MAX_PRIOR_OUTPUTS = 2;
 
-const MAX_PRIOR_OUTPUT_CHARS =
-  1_800;
+const MAX_PRIOR_OUTPUT_CHARS = 900;
 
-const MAX_AUTHORISEDEVIDENCE_ITEMS =
-  3;
+const MAX_AUTHORISEDEVIDENCE_ITEMS = 2;
 
-const MAX_AUTHORISEDEVIDENCE_CHARS =
-  2_000;
+const MAX_AUTHORISEDEVIDENCE_CHARS = 1_200;
 
-const MAX_HANDOFF_CONTEXT_CHARS =
-  1_200;
+const MAX_HANDOFF_CONTEXT_CHARS = 700;
 
-/**
- * Retry policy for temporary provider failures.
- *
- * The same mission run remains active while provider retries occur.
- * We only mark the run failed after all retry attempts are exhausted.
- */
-const PROVIDER_MAX_ATTEMPTS =
-  3;
+const PROVIDER_MAX_ATTEMPTS = 3;
 
-const PROVIDER_RETRY_DELAYS_MS = [
-  2_000,
-  5_000,
-] as const;
+const PROVIDER_RETRY_DELAYS_MS = [2_000, 5_000] as const;
 
-/**
- * Delay between automatic employees.
- *
- * This deliberately reduces burst pressure against the AI provider.
- */
-const WORKFORCE_STAGE_DELAY_MS =
-  2_000;
+const WORKFORCE_STAGE_DELAY_MS = 2_000;
 
-/**
- * This must match the real Growth workflow created in workforce-data.ts.
- *
- * Website
- * → Strategy
- * → Content
- * → Creative
- * → Schedule
- * → Social Management
- * → Growth Analysis
- * → Paid Media
- * → AI CEO
- */
+/* -------------------------------------------------------------------------- */
+/* EXECUTABLE GROWTH WORKFLOW                                                 */
+/* -------------------------------------------------------------------------- */
+
 const EXECUTABLE_GROWTH_WORKFLOW = [
   {
-    key:
-      "website-seo-monitor",
-
-    label:
-      "Website intelligence",
-
+    key: "website-seo-monitor",
+    label: "Website intelligence",
     description:
       "Checks authorised Cossa web properties and passes verified website, SEO and content observations into the Growth system.",
-
-    icon:
-      Globe2,
+    icon: Globe2,
   },
-
   {
-    key:
+    key: "social-strategy-planner",
+    label: "Social strategy",
+    description:
+      "Builds channel strategy, audience direction, campaign angles, positioning and marketing priorities.",
+    icon: Megaphone,
+  },
+  {
+    key: "content-writer",
+    label: "Content production",
+    description:
+      "Produces marketing, educational, awareness and conversion-focused written content.",
+    icon: FilePenLine,
+  },
+  {
+    key: "creative-media-producer",
+    label: "Creative media",
+    description:
+      "Creates production-ready visual requirements for graphics, campaigns, banners and media.",
+    icon: ImageIcon,
+  },
+  {
+    key: "social-schedule-coordinator",
+    label: "Content coordination",
+    description:
+      "Organises approved copy and creative packages into channel schedules and publishing queues.",
+    icon: PanelTop,
+  },
+  {
+    key: "social-media-manager",
+    label: "Social management",
+    description:
+      "Owns channel readiness, publishing preparation and authorised social execution.",
+    icon: Megaphone,
+  },
+  {
+    key: "account-growth-analyst",
+    label: "Growth analysis",
+    description:
+      "Analyses authorised account and campaign evidence for growth and conversion improvements.",
+    icon: BarChart3,
+  },
+  {
+    key: "paid-media-specialist",
+    label: "Paid media",
+    description:
+      "Prepares advertising strategy and optimisation recommendations without unauthorised spend.",
+    icon: KeyRound,
+  },
+  {
+    key: "ai-ceo",
+    label: "AI CEO",
+    description:
+      "Synthesises workforce outputs and escalates only genuine owner decisions.",
+    icon: BrainCircuit,
+  },
+] as const;
+
+const EXECUTABLE_GROWTH_WORKFLOW_KEYS = new Set<string>(
+  EXECUTABLE_GROWTH_WORKFLOW.map((step) => step.key),
+);
+
+/* -------------------------------------------------------------------------- */
+/* DEPARTMENT MODEL                                                           */
+/* -------------------------------------------------------------------------- */
+
+const DEPARTMENTS: DepartmentDefinition[] = [
+  {
+    key: "executive",
+    name: "Executive Office",
+    shortName: "Executive",
+    description:
+      "Company-wide coordination, owner briefing, escalation and executive decision support.",
+    icon: BrainCircuit,
+    employeeKeys: ["ai-ceo"],
+  },
+  {
+    key: "growth",
+    name: "Marketing & Growth",
+    shortName: "Growth",
+    description:
+      "Social media, SEO, content, creative production, campaign planning, account growth and paid media.",
+    icon: Megaphone,
+    employeeKeys: [
+      "website-seo-monitor",
       "social-strategy-planner",
-
-    label:
-      "Social strategy",
-
-    description:
-      "Builds channel strategy, audience direction, campaign angles, positioning and marketing priorities from verified information.",
-
-    icon:
-      Megaphone,
-  },
-
-  {
-    key:
       "content-writer",
-
-    label:
-      "Content production",
-
-    description:
-      "Produces accurate marketing, educational, awareness, pain-point, solution and conversion-focused written content.",
-
-    icon:
-      FilePenLine,
-  },
-
-  {
-    key:
       "creative-media-producer",
-
-    label:
-      "Creative media",
-
-    description:
-      "Turns content and campaign requirements into production-ready visual briefs, brochures, graphics, banners and media requirements.",
-
-    icon:
-      ImageIcon,
-  },
-
-  {
-    key:
       "social-schedule-coordinator",
-
-    label:
-      "Content coordination",
-
-    description:
-      "Organises complete copy-and-creative packages into practical channel schedules and publishing queues.",
-
-    icon:
-      PanelTop,
-  },
-
-  {
-    key:
       "social-media-manager",
-
-    label:
-      "Social management",
-
-    description:
-      "Owns day-to-day channel readiness, publishing preparation, campaign continuity and authorised social execution.",
-
-    icon:
-      Megaphone,
-  },
-
-  {
-    key:
       "account-growth-analyst",
-
-    label:
-      "Growth analysis",
-
-    description:
-      "Analyses authorised account and campaign evidence to identify audience, content and conversion improvements.",
-
-    icon:
-      UsersRound,
-  },
-
-  {
-    key:
       "paid-media-specialist",
-
-    label:
-      "Paid media",
-
-    description:
-      "Prepares advertising strategy, targeting and optimisation recommendations while spend and launch authority remain owner-controlled.",
-
-    icon:
-      KeyRound,
+    ],
   },
-
   {
-    key:
+    key: "store",
+    name: "Cossa Store",
+    shortName: "Store",
+    description:
+      "Catalogue operations, product intelligence, supplier sourcing, merchandising and social commerce.",
+    icon: Store,
+    employeeKeys: [
+      "store-operations-manager",
+      "product-intelligence-analyst",
+      "supplier-sourcing-analyst",
+      "broker-deal-intelligence-analyst",
+      "creative-media-producer",
+      "social-media-manager",
+    ],
+  },
+  {
+    key: "tech",
+    name: "Cossa Tech",
+    shortName: "Tech",
+    description:
+      "Website delivery, technology solutions, technical implementation, website content and SEO quality.",
+    icon: Code2,
+    employeeKeys: [
+      "tech-solutions-specialist",
+      "website-delivery-specialist",
+      "website-seo-monitor",
+      "content-writer",
+      "creative-media-producer",
       "ai-ceo",
-
-    label:
-      "AI CEO",
-
+    ],
+  },
+  {
+    key: "revenue",
+    name: "Revenue & Procurement",
+    shortName: "Revenue",
     description:
-      "Synthesises workforce outputs, resolves ordinary internal questions and escalates only genuine owner decisions.",
-
-    icon:
-      BrainCircuit,
+      "Lead handling, customer reactivation, commercial opportunities, sourcing, procurement and deal intelligence.",
+    icon: Search,
+    employeeKeys: [
+      "lead-intake-coordinator",
+      "customer-reactivation-analyst",
+      "broker-deal-intelligence-analyst",
+      "procurement-intelligence-analyst",
+    ],
   },
-] as const;
-
-const EXECUTABLE_GROWTH_WORKFLOW_KEYS =
-  new Set<string>(
-    EXECUTABLE_GROWTH_WORKFLOW.map(
-      (
-        step,
-      ) =>
-        step.key,
-    ),
-  );
+];
 
 /* -------------------------------------------------------------------------- */
-/* BUSINESS OPERATING ROLES                                                   */
+/* RESPONSIBILITY / SEARCH MATRIX                                             */
 /* -------------------------------------------------------------------------- */
 
-const BUSINESS_OPERATING_ROLES = [
+const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] = [
   {
-    business:
-      "Growth & Social",
-
-    icon:
-      Megaphone,
-
-    roles: [
-      {
-        key:
-          "social-strategy-planner",
-
-        name:
-          "Social Strategy Planner",
-
-        responsibility:
-          "Channel strategy, audience planning, marketing angles and campaign direction.",
-      },
-
-      {
-        key:
-          "content-writer",
-
-        name:
-          "Content Writer",
-
-        responsibility:
-          "Marketing copy, educational content, conversion copy and campaign content.",
-      },
-
-      {
-        key:
-          "creative-media-producer",
-
-        name:
-          "Creative Media Producer",
-
-        responsibility:
-          "Images, promotional graphics, brochures, campaign creatives and social visual assets.",
-      },
-
-      {
-        key:
-          "social-schedule-coordinator",
-
-        name:
-          "Social Schedule Coordinator",
-
-        responsibility:
-          "Content calendars, timing, channel coordination and publishing preparation.",
-      },
-
-      {
-        key:
-          "social-media-manager",
-
-        name:
-          "Social Media Manager",
-
-        responsibility:
-          "Daily social channel management, publishing coordination, content continuity and channel health.",
-      },
-
-      {
-        key:
-          "account-growth-analyst",
-
-        name:
-          "Account Growth Analyst",
-
-        responsibility:
-          "Performance analysis, audience growth, conversion opportunities and account improvement.",
-      },
-
-      {
-        key:
-          "paid-media-specialist",
-
-        name:
-          "Paid Media Specialist",
-
-        responsibility:
-          "Advertising planning, creative direction, targeting and measurement without unauthorised spend.",
-      },
+    employeeKey: "ai-ceo",
+    label: "Executive coordination",
+    keywords: [
+      "ceo",
+      "boss",
+      "executive",
+      "company",
+      "coordinate",
+      "delegate",
+      "decision",
+      "briefing",
+      "strategy",
+      "manage team",
+      "who should do this",
     ],
   },
-
   {
-    business:
-      "Cossa Store",
-
-    icon:
-      Store,
-
-    roles: [
-      {
-        key:
-          "store-operations-manager",
-
-        name:
-          "Store Operations Manager",
-
-        responsibility:
-          "Catalogue health, product status, merchandising, store quality and commercial workflow coordination.",
-      },
-
-      {
-        key:
-          "product-intelligence-analyst",
-
-        name:
-          "Product Intelligence Analyst",
-
-        responsibility:
-          "Product trends, demand signals, pricing research, product gaps and merchandising intelligence.",
-      },
-
-      {
-        key:
-          "supplier-sourcing-analyst",
-
-        name:
-          "Supplier Sourcing Analyst",
-
-        responsibility:
-          "Legitimate supplier discovery, evidence collection, supplier comparison and sourcing preparation.",
-      },
-
-      {
-        key:
-          "broker-deal-intelligence-analyst",
-
-        name:
-          "Broker & Deal Intelligence Analyst",
-
-        responsibility:
-          "Commercial opportunities, partners, distributors, suppliers and legitimate deal intelligence.",
-      },
-
-      {
-        key:
-          "creative-media-producer",
-
-        name:
-          "Creative Media Producer",
-
-        responsibility:
-          "Product visuals, catalogue creatives, promotional graphics, brochures and social-commerce assets.",
-      },
-
-      {
-        key:
-          "social-media-manager",
-
-        name:
-          "Social Media Manager",
-
-        responsibility:
-          "Store social publishing coordination, product campaigns and channel activity.",
-      },
+    employeeKey: "website-seo-monitor",
+    label: "Website & SEO monitoring",
+    keywords: [
+      "seo",
+      "website seo",
+      "ranking",
+      "website health",
+      "website audit",
+      "search engine",
+      "meta title",
+      "meta description",
+      "website performance",
+      "keywords",
     ],
   },
-
   {
-    business:
-      "Cossa Tech",
-
-    icon:
-      Code2,
-
-    roles: [
-      {
-        key:
-          "tech-solutions-specialist",
-
-        name:
-          "Tech Solutions Specialist",
-
-        responsibility:
-          "Technology solution planning, implementation support and technical service delivery.",
-      },
-
-      {
-        key:
-          "website-delivery-specialist",
-
-        name:
-          "Website Delivery Specialist",
-
-        responsibility:
-          "Website planning, implementation, client requirements and delivery workflow support.",
-      },
-
-      {
-        key:
-          "website-seo-monitor",
-
-        name:
-          "Website & SEO Monitor",
-
-        responsibility:
-          "Website quality, SEO observations, website health evidence and improvement requirements.",
-      },
-
-      {
-        key:
-          "content-writer",
-
-        name:
-          "Content Writer",
-
-        responsibility:
-          "Website copy, service explanations, landing-page content and customer-facing written material.",
-      },
-
-      {
-        key:
-          "creative-media-producer",
-
-        name:
-          "Creative Media Producer",
-
-        responsibility:
-          "Website graphics, digital brochures, banners, mock-ups and client-facing visual assets.",
-      },
-
-      {
-        key:
-          "ai-ceo",
-
-        name:
-          "Cossa AI CEO",
-
-        responsibility:
-          "Cross-department reasoning, workforce coordination, escalation and executive synthesis.",
-      },
+    employeeKey: "social-strategy-planner",
+    label: "Social strategy",
+    keywords: [
+      "social strategy",
+      "marketing strategy",
+      "campaign strategy",
+      "audience",
+      "content pillars",
+      "marketing angle",
+      "social plan",
+      "facebook strategy",
+      "instagram strategy",
+      "tiktok strategy",
     ],
   },
-
   {
-    business:
-      "Revenue & Procurement",
-
-    icon:
-      Search,
-
-    roles: [
-      {
-        key:
-          "customer-reactivation-analyst",
-
-        name:
-          "Customer Reactivation Analyst",
-
-        responsibility:
-          "Retention opportunities, dormant-customer analysis and consent-aware reactivation preparation.",
-      },
-
-      {
-        key:
-          "broker-deal-intelligence-analyst",
-
-        name:
-          "Broker & Deal Intelligence Analyst",
-
-        responsibility:
-          "Commercial matching, buyers, partners, suppliers, brokers and legitimate opportunity intelligence.",
-      },
-
-      {
-        key:
-          "procurement-intelligence-analyst",
-
-        name:
-          "Procurement Intelligence Analyst",
-
-        responsibility:
-          "Tender, RFQ, supplier and procurement opportunity analysis.",
-      },
+    employeeKey: "content-writer",
+    label: "Content & copywriting",
+    keywords: [
+      "content",
+      "write",
+      "writing",
+      "post",
+      "caption",
+      "copy",
+      "article",
+      "blog",
+      "website copy",
+      "landing page",
+      "script",
+      "headline",
+      "description",
+      "marketing copy",
     ],
   },
-] as const;
+  {
+    employeeKey: "creative-media-producer",
+    label: "Creative & design production",
+    keywords: [
+      "flyer",
+      "poster",
+      "graphic",
+      "design",
+      "image",
+      "creative",
+      "brochure",
+      "banner",
+      "visual",
+      "reel",
+      "video",
+      "thumbnail",
+      "advert",
+      "ad creative",
+      "social graphic",
+    ],
+  },
+  {
+    employeeKey: "social-schedule-coordinator",
+    label: "Content scheduling",
+    keywords: [
+      "schedule",
+      "calendar",
+      "content calendar",
+      "posting time",
+      "publishing plan",
+      "queue",
+      "social calendar",
+    ],
+  },
+  {
+    employeeKey: "social-media-manager",
+    label: "Social media management",
+    keywords: [
+      "social media",
+      "facebook",
+      "instagram",
+      "tiktok",
+      "linkedin",
+      "youtube",
+      "whatsapp status",
+      "publish",
+      "social account",
+      "community",
+      "posting",
+    ],
+  },
+  {
+    employeeKey: "account-growth-analyst",
+    label: "Growth analytics",
+    keywords: [
+      "analytics",
+      "growth",
+      "performance",
+      "engagement",
+      "conversion",
+      "account growth",
+      "audience growth",
+      "metrics",
+      "results",
+      "improve account",
+    ],
+  },
+  {
+    employeeKey: "paid-media-specialist",
+    label: "Paid advertising",
+    keywords: [
+      "ads",
+      "advertising",
+      "google ads",
+      "meta ads",
+      "facebook ads",
+      "paid media",
+      "campaign budget",
+      "targeting",
+      "cpc",
+      "roas",
+      "ad strategy",
+    ],
+  },
+  {
+    employeeKey: "store-operations-manager",
+    label: "Store operations",
+    keywords: [
+      "store",
+      "catalogue",
+      "catalog",
+      "merchandising",
+      "store quality",
+      "ecommerce operations",
+      "shop",
+    ],
+  },
+  {
+    employeeKey: "product-intelligence-analyst",
+    label: "Product intelligence",
+    keywords: [
+      "product",
+      "products",
+      "product research",
+      "trending product",
+      "product demand",
+      "pricing research",
+      "product opportunity",
+      "what to sell",
+      "dropshipping product",
+    ],
+  },
+  {
+    employeeKey: "supplier-sourcing-analyst",
+    label: "Supplier sourcing",
+    keywords: [
+      "supplier",
+      "suppliers",
+      "source product",
+      "sourcing",
+      "manufacturer",
+      "wholesaler",
+      "vendor",
+      "dropshipping supplier",
+    ],
+  },
+  {
+    employeeKey: "broker-deal-intelligence-analyst",
+    label: "Deals & partnerships",
+    keywords: [
+      "deal",
+      "broker",
+      "partner",
+      "partnership",
+      "buyer",
+      "distributor",
+      "commercial opportunity",
+      "business opportunity",
+    ],
+  },
+  {
+    employeeKey: "procurement-intelligence-analyst",
+    label: "Procurement intelligence",
+    keywords: [
+      "tender",
+      "rfq",
+      "procurement",
+      "quotation opportunity",
+      "bid",
+      "government tender",
+      "supplier opportunity",
+    ],
+  },
+  {
+    employeeKey: "customer-reactivation-analyst",
+    label: "Customer reactivation",
+    keywords: [
+      "reactivate customer",
+      "old customer",
+      "dormant customer",
+      "retention",
+      "repeat customer",
+      "follow up customer",
+      "win back",
+    ],
+  },
+  {
+    employeeKey: "lead-intake-coordinator",
+    label: "Lead intake",
+    keywords: [
+      "lead",
+      "new lead",
+      "enquiry",
+      "inquiry",
+      "qualification",
+      "customer enquiry",
+      "sales lead",
+      "lead intake",
+    ],
+  },
+  {
+    employeeKey: "tech-solutions-specialist",
+    label: "Technology solutions",
+    keywords: [
+      "tech",
+      "technology",
+      "software",
+      "technical",
+      "system",
+      "solution",
+      "implementation",
+      "automation",
+    ],
+  },
+  {
+    employeeKey: "website-delivery-specialist",
+    label: "Website delivery",
+    keywords: [
+      "website",
+      "build website",
+      "web development",
+      "landing page implementation",
+      "client website",
+      "web design",
+      "website delivery",
+    ],
+  },
+];
 
 /* -------------------------------------------------------------------------- */
 /* GENERIC HELPERS                                                            */
 /* -------------------------------------------------------------------------- */
 
-function sleep(
-  milliseconds:
-    number,
-): Promise<void> {
-  return new Promise(
-    (
-      resolve,
-    ) => {
-      window.setTimeout(
-        resolve,
-        milliseconds,
-      );
-    },
-  );
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
 }
 
-function clampText(
-  value:
-    string,
+function clampText(value: string, maxCharacters: number): string {
+  const cleaned = value.trim();
 
-  maxCharacters:
-    number,
-): string {
-  const cleaned =
-    value.trim();
-
-  if (
-    cleaned.length <=
-    maxCharacters
-  ) {
+  if (cleaned.length <= maxCharacters) {
     return cleaned;
   }
 
   return `${cleaned.slice(
     0,
-    Math.max(
-      0,
-      maxCharacters -
-        80,
-    ),
-  )}\n\n[Context truncated by Cossa AI to protect provider message limits.]`;
+    Math.max(0, maxCharacters - 80),
+  )}\n\n[Context truncated by Cossa AI.]`;
 }
 
-function formatStatus(
-  value:
-    string |
-    null |
-    undefined,
-): string {
+function formatStatus(value: string | null | undefined): string {
   if (!value) {
     return "Unknown";
   }
 
   return value
-    .replace(
-      /_/g,
-      " ",
-    )
-    .replace(
-      /\b\w/g,
-      (
-        letter,
-      ) =>
-        letter.toUpperCase(),
-    );
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function formatDateTime(
-  value:
-    string |
-    null |
-    undefined,
-): string {
+function formatDateTime(value: string | null | undefined): string {
   if (!value) {
     return "No activity recorded";
   }
 
-  const date =
-    new Date(
-      value,
-    );
+  const date = new Date(value);
 
-  if (
-    Number.isNaN(
-      date.getTime(),
-    )
-  ) {
+  if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  return date.toLocaleString(
-    "en-ZA",
-    {
-      dateStyle:
-        "medium",
-
-      timeStyle:
-        "short",
-    },
-  );
+  return date.toLocaleString("en-ZA", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
-function latestRunTime(
-  run:
-    MissionRun,
-): string {
-  return (
-    run.completed_at ??
-    run.started_at ??
-    run.created_at ??
-    ""
-  );
+function latestRunTime(run: MissionRun): string {
+  return run.completed_at ?? run.started_at ?? run.created_at ?? "";
 }
 
-function employeeDepartment(
-  employee:
-    AiEmployee,
-): string {
-  return (
-    employee.department?.trim() ||
-    "Department not recorded"
-  );
+function employeeDepartment(employee: AiEmployee): string {
+  return employee.department?.trim() || "Department not recorded";
 }
 
-function employeeBusinessUnit(
-  employee:
-    AiEmployee,
-): string {
-  return employee.business_unit_id
-    ? "Assigned business unit"
-    : "Group-wide";
+function employeeBusinessUnit(employee: AiEmployee): string {
+  return employee.business_unit_id ? "Assigned business unit" : "Group-wide";
 }
 
-function normaliseErrorMessage(
-  error:
-    unknown,
-): string {
-  if (
-    error instanceof
-    Error
-  ) {
+function normaliseErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
     return error.message;
   }
 
-  if (
-    typeof error ===
-    "string"
-  ) {
+  if (typeof error === "string") {
     return error;
   }
 
   return "Unknown workforce provider error.";
 }
 
-function isRetryableProviderError(
-  error:
-    unknown,
-): boolean {
-  const message =
-    normaliseErrorMessage(
-      error,
-    ).toLowerCase();
+function isRetryableProviderError(error: unknown): boolean {
+  const message = normaliseErrorMessage(error).toLowerCase();
 
   return [
     "rate limit",
@@ -774,144 +728,154 @@ function isRetryableProviderError(
     "connection reset",
     "network error",
     "fetch failed",
-  ].some(
-    (
-      marker,
-    ) =>
-      message.includes(
-        marker,
-      ),
-  );
+  ].some((marker) => message.includes(marker));
+}
+
+/* -------------------------------------------------------------------------- */
+/* SEARCH HELPERS                                                             */
+/* -------------------------------------------------------------------------- */
+
+function departmentKeysForEmployee(employeeKey: string): string[] {
+  return DEPARTMENTS.filter((department) =>
+    department.employeeKeys.includes(employeeKey),
+  ).map((department) => department.key);
+}
+
+function responsibilityLabelsForEmployee(employeeKey: string): string[] {
+  return RESPONSIBILITY_MATRIX.filter(
+    (item) => item.employeeKey === employeeKey,
+  ).map((item) => item.label);
+}
+
+function searchTermsForEmployee(employee: AiEmployee): string {
+  const responsibilityTerms = RESPONSIBILITY_MATRIX.filter(
+    (item) => item.employeeKey === employee.employee_key,
+  ).flatMap((item) => [item.label, ...item.keywords]);
+
+  const departmentTerms = DEPARTMENTS.filter((department) =>
+    department.employeeKeys.includes(employee.employee_key),
+  ).flatMap((department) => [
+    department.name,
+    department.shortName,
+    department.description,
+  ]);
+
+  return [
+    employee.name,
+    employee.title,
+    employee.employee_key,
+    employee.department ?? "",
+    employee.mission ?? "",
+    ...responsibilityTerms,
+    ...departmentTerms,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function searchScore(employee: EmployeeDirectoryItem, query: string): number {
+  const q = query.trim().toLowerCase();
+
+  if (!q) {
+    return 0;
+  }
+
+  let score = 0;
+
+  const employeeName = employee.employee.name.toLowerCase();
+  const employeeTitle = employee.employee.title.toLowerCase();
+  const employeeKey = employee.employee.employee_key.toLowerCase();
+
+  if (employeeName === q || employeeTitle === q) {
+    score += 200;
+  }
+
+  if (employeeName.includes(q)) {
+    score += 100;
+  }
+
+  if (employeeTitle.includes(q)) {
+    score += 90;
+  }
+
+  if (employeeKey.includes(q)) {
+    score += 80;
+  }
+
+  for (const responsibility of RESPONSIBILITY_MATRIX) {
+    if (responsibility.employeeKey !== employee.employee.employee_key) {
+      continue;
+    }
+
+    if (responsibility.label.toLowerCase().includes(q)) {
+      score += 75;
+    }
+
+    for (const keyword of responsibility.keywords) {
+      const keywordLower = keyword.toLowerCase();
+
+      if (keywordLower === q) {
+        score += 120;
+      } else if (keywordLower.includes(q) || q.includes(keywordLower)) {
+        score += 55;
+      }
+    }
+  }
+
+  if (employee.searchText.includes(q)) {
+    score += 20;
+  }
+
+  return score;
 }
 
 /* -------------------------------------------------------------------------- */
 /* CONTEXT COMPACTION                                                         */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Every employee does NOT need every word written by every previous employee.
- *
- * We retain only the latest useful worker outputs and cap each output.
- *
- * This prevents an exponentially growing prompt chain.
- */
-function compactPriorOutputsForPrompt(
-  outputs:
-    string[],
-): string[] {
+function compactPriorOutputsForPrompt(outputs: string[]): string[] {
   return outputs
-    .map(
-      (
-        output,
-      ) =>
-        output.trim(),
-    )
-    .filter(
-      Boolean,
-    )
-    .slice(
-      -MAX_PRIOR_OUTPUTS,
-    )
-    .map(
-      (
-        output,
-      ) =>
-        clampText(
-          output,
-          MAX_PRIOR_OUTPUT_CHARS,
-        ),
-    );
+    .map((output) => output.trim())
+    .filter(Boolean)
+    .slice(-MAX_PRIOR_OUTPUTS)
+    .map((output) => clampText(output, MAX_PRIOR_OUTPUT_CHARS));
 }
 
-function compactAuthorisedEvidence(
-  evidence:
-    string[],
-): string[] {
+function compactAuthorisedEvidence(evidence: string[]): string[] {
   return evidence
-    .map(
-      (
-        item,
-      ) =>
-        item.trim(),
-    )
-    .filter(
-      Boolean,
-    )
-    .slice(
-      0,
-      MAX_AUTHORISEDEVIDENCE_ITEMS,
-    )
-    .map(
-      (
-        item,
-      ) =>
-        clampText(
-          item,
-          MAX_AUTHORISEDEVIDENCE_CHARS,
-        ),
-    );
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, MAX_AUTHORISEDEVIDENCE_ITEMS)
+    .map((item) => clampText(item, MAX_AUTHORISEDEVIDENCE_CHARS));
 }
 
 /* -------------------------------------------------------------------------- */
 /* WORKFLOW HELPERS                                                           */
 /* -------------------------------------------------------------------------- */
 
-function handoffStageNumber(
-  handoff:
-    EmployeeHandoff,
-): number | null {
-  const stage =
-    handoff.context?.stage;
+function handoffStageNumber(handoff: EmployeeHandoff): number | null {
+  const stage = handoff.context?.stage;
 
-  return typeof stage ===
-      "number" &&
-    Number.isFinite(
-      stage,
-    )
-    ? stage
-    : null;
+  return typeof stage === "number" && Number.isFinite(stage) ? stage : null;
 }
 
 function sortWorkflowHandoffs(
-  handoffs:
-    EmployeeHandoff[],
+  handoffs: EmployeeHandoff[],
 ): EmployeeHandoff[] {
-  return [
-    ...handoffs,
-  ].sort(
-    (
-      left,
-      right,
-    ) => {
-      const leftStage =
-        handoffStageNumber(
-          left,
-        );
+  return [...handoffs].sort((left, right) => {
+    const leftStage = handoffStageNumber(left);
+    const rightStage = handoffStageNumber(right);
 
-      const rightStage =
-        handoffStageNumber(
-          right,
-        );
+    if (
+      leftStage !== null &&
+      rightStage !== null &&
+      leftStage !== rightStage
+    ) {
+      return leftStage - rightStage;
+    }
 
-      if (
-        leftStage !==
-          null &&
-        rightStage !==
-          null &&
-        leftStage !==
-          rightStage
-      ) {
-        return (
-          leftStage -
-          rightStage
-        );
-      }
-
-      return left.created_at.localeCompare(
-        right.created_at,
-      );
-    },
-  );
+    return left.created_at.localeCompare(right.created_at);
+  });
 }
 
 function nextWorkflowEmployeeForHandoff({
@@ -919,118 +883,31 @@ function nextWorkflowEmployeeForHandoff({
   workflowHandoffs,
   employees,
 }: {
-  currentHandoff:
-    EmployeeHandoff;
-
-  workflowHandoffs:
-    EmployeeHandoff[];
-
-  employees:
-    AiEmployee[];
+  currentHandoff: EmployeeHandoff;
+  workflowHandoffs: EmployeeHandoff[];
+  employees: AiEmployee[];
 }): AiEmployee | null {
-  const ordered =
-    sortWorkflowHandoffs(
-      workflowHandoffs,
-    );
+  const ordered = sortWorkflowHandoffs(workflowHandoffs);
 
-  const currentIndex =
-    ordered.findIndex(
-      (
-        handoff,
-      ) =>
-        handoff.id ===
-        currentHandoff.id,
-    );
+  const currentIndex = ordered.findIndex(
+    (handoff) => handoff.id === currentHandoff.id,
+  );
 
-  if (
-    currentIndex <
-      0 ||
-    currentIndex >=
-      ordered.length -
-        1
-  ) {
+  if (currentIndex < 0 || currentIndex >= ordered.length - 1) {
     return null;
   }
 
-  const nextHandoff =
-    ordered[
-      currentIndex +
-        1
-    ];
+  const nextHandoff = ordered[currentIndex + 1];
 
   return (
     employees.find(
-      (
-        employee,
-      ) =>
-        employee.id ===
-        nextHandoff.to_employee_id,
-    ) ??
-    null
+      (employee) => employee.id === nextHandoff.to_employee_id,
+    ) ?? null
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* WORKFORCE MONITOR TYPES                                                    */
-/* -------------------------------------------------------------------------- */
-
-type OperationalState =
-  | "working"
-  | "idle"
-  | "waiting"
-  | "approval"
-  | "attention"
-  | "inactive";
-
-interface EmployeeOperationalView {
-  state:
-    OperationalState;
-
-  label:
-    string;
-
-  detail:
-    string;
-
-  currentTask:
-    string;
-
-  lastActivity:
-    string | null;
-
-  assignedCount:
-    number;
-
-  pendingCount:
-    number;
-
-  runningCount:
-    number;
-
-  failedCount:
-    number;
-
-  approvalCount:
-    number;
-
-  latestProvider:
-    string | null;
-
-  latestModel:
-    string | null;
-
-  latestFailure:
-    string | null;
-
-  historicalFailureCount:
-    number;
-
-  retryReady:
-    boolean;
-}
-
-/* -------------------------------------------------------------------------- */
-/* WORKFORCE STATUS DERIVATION                                                */
+/* OPERATIONAL STATE                                                          */
 /* -------------------------------------------------------------------------- */
 
 function employeeOperationalView({
@@ -1039,186 +916,75 @@ function employeeOperationalView({
   runs,
   approvals,
 }: {
-  employee:
-    AiEmployee;
-
-  handoffs:
-    EmployeeHandoff[];
-
-  runs:
-    MissionRun[];
-
-  approvals:
-    Approval[];
+  employee: AiEmployee;
+  handoffs: EmployeeHandoff[];
+  runs: MissionRun[];
+  approvals: Approval[];
 }): EmployeeOperationalView {
-  const employeeHandoffs =
-    handoffs.filter(
-      (
-        handoff,
-      ) =>
-        handoff.to_employee_id ===
-        employee.id,
-    );
+  const employeeHandoffs = handoffs.filter(
+    (handoff) => handoff.to_employee_id === employee.id,
+  );
 
-  const employeeRuns =
-    runs.filter(
-      (
-        run,
-      ) =>
-        run.employee_id ===
-        employee.id,
-    );
+  const employeeRuns = runs.filter(
+    (run) => run.employee_id === employee.id,
+  );
 
-  const employeeRunIds =
-    new Set(
-      employeeRuns.map(
-        (
-          run,
-        ) =>
-          run.id,
-      ),
-    );
+  const employeeRunIds = new Set(employeeRuns.map((run) => run.id));
 
-  const employeeApprovals =
-    approvals.filter(
-      (
-        approval,
-      ) =>
-        approval.requested_by_employee_id ===
-          employee.id ||
-        (
-          approval.run_id !==
-            null &&
-          employeeRunIds.has(
-            approval.run_id,
-          )
-        ),
-    );
+  const employeeApprovals = approvals.filter(
+    (approval) =>
+      approval.requested_by_employee_id === employee.id ||
+      (approval.run_id !== null && employeeRunIds.has(approval.run_id)),
+  );
 
-  const pendingHandoffs =
-    employeeHandoffs.filter(
-      (
-        handoff,
-      ) =>
-        handoff.status ===
-        "pending",
-    );
+  const pendingHandoffs = employeeHandoffs.filter(
+    (handoff) => handoff.status === "pending",
+  );
 
-  const acceptedHandoffs =
-    employeeHandoffs.filter(
-      (
-        handoff,
-      ) =>
-        handoff.status ===
-        "accepted",
-    );
+  const acceptedHandoffs = employeeHandoffs.filter(
+    (handoff) => handoff.status === "accepted",
+  );
 
-  const activeRuns =
-    employeeRuns.filter(
-      (
-        run,
-      ) =>
-        run.status ===
-        "running",
-    );
+  const activeRuns = employeeRuns.filter(
+    (run) => run.status === "running",
+  );
 
-  const failedRuns =
-    employeeRuns.filter(
-      (
-        run,
-      ) =>
-        run.status ===
-        "failed",
-    );
+  const failedRuns = employeeRuns.filter(
+    (run) => run.status === "failed",
+  );
 
-  const orderedHandoffs =
-    [
-      ...employeeHandoffs,
-    ].sort(
-      (
-        left,
-        right,
-      ) =>
-        right.created_at.localeCompare(
-          left.created_at,
-        ),
-    );
+  const orderedHandoffs = [...employeeHandoffs].sort((left, right) =>
+    right.created_at.localeCompare(left.created_at),
+  );
 
-  const orderedRuns =
-    [
-      ...employeeRuns,
-    ].sort(
-      (
-        left,
-        right,
-      ) =>
-        latestRunTime(
-          right,
-        ).localeCompare(
-          latestRunTime(
-            left,
-          ),
-        ),
-    );
+  const orderedRuns = [...employeeRuns].sort((left, right) =>
+    latestRunTime(right).localeCompare(latestRunTime(left)),
+  );
 
-  const latestHandoff =
-    orderedHandoffs[0];
+  const latestHandoff = orderedHandoffs[0];
+  const latestRun = orderedRuns[0];
 
-  const latestRun =
-    orderedRuns[0];
-
-  /**
-   * A failed run is CURRENT only when it remains the newest run.
-   *
-   * As soon as the employee later completes a successful run, historical
-   * failures remain visible in the audit count but no longer define the
-   * employee's operational state.
-   */
   const latestFailure =
-    latestRun?.status ===
-    "failed"
+    latestRun?.status === "failed"
       ? latestRun.error_message ||
         latestRun.error_code ||
         "The latest recorded run failed."
       : null;
 
   const retryReady =
-    latestRun?.status ===
-      "failed" &&
-    pendingHandoffs.length >
-      0;
+    latestRun?.status === "failed" && pendingHandoffs.length > 0;
 
-  const latestActivityCandidates =
-    [
-      latestRun
-        ? latestRunTime(
-            latestRun,
-          )
-        : "",
-
-      latestHandoff?.completed_at ??
-        "",
-
-      latestHandoff?.accepted_at ??
-        "",
-
-      latestHandoff?.created_at ??
-        "",
-    ].filter(
-      Boolean,
-    );
+  const latestActivityCandidates = [
+    latestRun ? latestRunTime(latestRun) : "",
+    latestHandoff?.completed_at ?? "",
+    latestHandoff?.accepted_at ?? "",
+    latestHandoff?.created_at ?? "",
+  ].filter(Boolean);
 
   const latestActivity =
-    latestActivityCandidates.sort(
-      (
-        left,
-        right,
-      ) =>
-        right.localeCompare(
-          left,
-        ),
-    )[0] ??
-    null;
+    latestActivityCandidates.sort((left, right) =>
+      right.localeCompare(left),
+    )[0] ?? null;
 
   const currentTask =
     acceptedHandoffs[0]?.reason ??
@@ -1228,181 +994,93 @@ function employeeOperationalView({
 
   const common = {
     currentTask,
-
-    lastActivity:
-      latestActivity,
-
-    assignedCount:
-      employeeHandoffs.length,
-
-    pendingCount:
-      pendingHandoffs.length,
-
-    runningCount:
-      activeRuns.length +
-      acceptedHandoffs.length,
-
-    failedCount:
-      failedRuns.length,
-
-    historicalFailureCount:
-      failedRuns.length,
-
-    approvalCount:
-      employeeApprovals.length,
-
-    latestProvider:
-      latestRun?.model_provider ??
-      null,
-
-    latestModel:
-      latestRun?.model_name ??
-      null,
-
+    lastActivity: latestActivity,
+    assignedCount: employeeHandoffs.length,
+    pendingCount: pendingHandoffs.length,
+    runningCount: activeRuns.length + acceptedHandoffs.length,
+    failedCount: failedRuns.length,
+    historicalFailureCount: failedRuns.length,
+    approvalCount: employeeApprovals.length,
+    latestProvider: latestRun?.model_provider ?? null,
+    latestModel: latestRun?.model_name ?? null,
     latestFailure,
-
     retryReady,
   };
 
-  if (
-    employee.status !==
-    "active"
-  ) {
+  if (employee.status !== "active") {
     return {
       ...common,
-
-      state:
-        "inactive",
-
-      label:
-        `${formatStatus(
-          employee.status,
-        )} — Not operational`,
-
+      state: "inactive",
+      label: `${formatStatus(employee.status)} — Not operational`,
       detail:
-        employee.status ===
-        "paused"
-          ? "This employee has been intentionally paused and cannot start new work."
-          : employee.status ===
-              "retired"
-            ? "This employee is retired and cannot start new work."
-            : "The employee profile exists but is not currently active.",
+        employee.status === "paused"
+          ? "This employee is paused and cannot receive new work."
+          : employee.status === "retired"
+            ? "This employee is retired."
+            : "This employee profile is not currently active.",
     };
   }
 
-  if (
-    activeRuns.length >
-      0 ||
-    acceptedHandoffs.length >
-      0
-  ) {
+  if (activeRuns.length > 0 || acceptedHandoffs.length > 0) {
     return {
       ...common,
-
-      state:
-        "working",
-
-      label:
-        "Active — Working",
-
+      state: "working",
+      label: "Active — Working",
       detail:
-        "A real workforce run or accepted handoff is currently recorded for this employee.",
+        "A real workforce run or accepted handoff is currently recorded.",
     };
   }
 
-  if (
-    employeeApprovals.length >
-    0
-  ) {
+  if (employeeApprovals.length > 0) {
     return {
       ...common,
-
-      state:
-        "approval",
-
-      label:
-        "Active — Approval required",
-
+      state: "approval",
+      label: "Active — Approval required",
       detail:
         "Recorded work has reached an owner-controlled approval checkpoint.",
     };
   }
 
-  /**
-   * A failed run that has already been returned to a pending handoff is
-   * retry-ready rather than permanently broken.
-   */
-  if (
-    retryReady
-  ) {
+  if (retryReady) {
     return {
       ...common,
-
-      state:
-        "waiting",
-
-      label:
-        "Active — Retry ready",
-
+      state: "waiting",
+      label: "Active — Retry ready",
       detail:
-        "The previous attempt failed, but the handoff has safely returned to pending and can be retried.",
+        "The previous attempt failed, but the task safely returned to pending.",
     };
   }
 
-  if (
-    latestRun?.status ===
-    "failed"
-  ) {
+  if (latestRun?.status === "failed") {
     return {
       ...common,
-
-      state:
-        "attention",
-
-      label:
-        "Active — Needs attention",
-
+      state: "attention",
+      label: "Active — Needs attention",
       detail:
         latestFailure ??
-        "The latest workforce run failed and no retry-ready handoff is currently available.",
+        "The latest workforce run failed and has not returned to a retryable state.",
     };
   }
 
-  if (
-    pendingHandoffs.length >
-    0
-  ) {
+  if (pendingHandoffs.length > 0) {
     return {
       ...common,
-
-      state:
-        "waiting",
-
-      label:
-        "Active — Assigned",
-
+      state: "waiting",
+      label: "Active — Assigned",
       detail:
-        "A real task has been assigned and is ready for the workforce executor to claim.",
+        "A real task is assigned and waiting for the workforce executor.",
     };
   }
 
   return {
     ...common,
-
-    state:
-      "idle",
-
-    label:
-      "Active — Available",
-
-    currentTask:
-      "No task currently assigned",
-
+    state: "idle",
+    label: "Active — Available",
+    currentTask: "No task currently assigned",
     detail:
-      employeeHandoffs.length >
-      0
-        ? "This employee has recorded work history and is available for the next appropriate task."
-        : "The employee is active and available, but no real task has yet been assigned.",
+      employeeHandoffs.length > 0
+        ? "This employee is available for the next appropriate task."
+        : "This employee is active and available.",
   };
 }
 
@@ -1410,83 +1088,35 @@ function employeeOperationalView({
 /* OUTPUT HELPERS                                                             */
 /* -------------------------------------------------------------------------- */
 
-function reviewableOutputContent(
-  run:
-    MissionRun,
-): string | null {
-  if (
-    !run.output ||
-    typeof run.output !==
-      "object"
-  ) {
+function reviewableOutputContent(run: MissionRun): string | null {
+  if (!run.output || typeof run.output !== "object") {
     return null;
   }
 
-  const content =
-    (
-      run.output as {
-        content?: unknown;
-      }
-    ).content;
+  const content = (run.output as { content?: unknown }).content;
 
-  return typeof content ===
-      "string" &&
-    content.trim()
-    ? content
-    : null;
+  return typeof content === "string" && content.trim() ? content : null;
 }
 
 function websiteReportEvidence(
-  report:
-    OfficialWebsiteHealthReport,
+  report: OfficialWebsiteHealthReport,
 ): string {
   return [
-    "Authorised read-only official Cossa website health result",
-
+    "Official Cossa website health",
     `Website: ${report.website}`,
-
-    `Checked at: ${report.checked_at}`,
-
     `Availability: ${report.availability}`,
-
-    `HTTP status: ${
-      report.http_status ??
-      "not available"
+    `HTTP: ${report.http_status ?? "unknown"}`,
+    `Response: ${report.response_time_ms ?? "unknown"} ms`,
+    `Title: ${report.page_title ?? "not detected"}`,
+    `Noindex: ${report.noindex_detected ? "yes" : "no"}`,
+    `Issues: ${
+      report.issues.length > 0 ? report.issues.join("; ") : "none"
     }`,
-
-    `Response time: ${
-      report.response_time_ms ??
-      "not available"
-    } ms`,
-
-    `Page title: ${
-      report.page_title ??
-      "not detected"
-    }`,
-
-    `Noindex detected: ${
-      report.noindex_detected
-        ? "yes"
-        : "no"
-    }`,
-
-    `Reported issues: ${
-      report.issues.length >
-      0
-        ? report.issues.join(
-            "; ",
-          )
-        : "none"
-    }`,
-
-    `Scope: ${report.monitoring_scope}`,
-  ].join(
-    "\n",
-  );
+  ].join("\n");
 }
 
 /* -------------------------------------------------------------------------- */
-/* CONTROLLED STAGE PROMPT                                                    */
+/* COMPACT CONTROLLED STAGE PROMPT                                            */
 /* -------------------------------------------------------------------------- */
 
 function controlledStagePrompt({
@@ -1497,187 +1127,90 @@ function controlledStagePrompt({
   priorOutputs,
   authorisedEvidence,
 }: {
-  mission:
-    Mission;
-
-  handoff:
-    EmployeeHandoff;
-
-  employee:
-    AiEmployee;
-
-  nextEmployee:
-    AiEmployee | null;
-
-  priorOutputs:
-    string[];
-
-  authorisedEvidence:
-    string[];
+  mission: Mission;
+  handoff: EmployeeHandoff;
+  employee: AiEmployee;
+  nextEmployee: AiEmployee | null;
+  priorOutputs: string[];
+  authorisedEvidence: string[];
 }): string {
   const compactPrevious =
-    compactPriorOutputsForPrompt(
-      priorOutputs,
-    );
+    compactPriorOutputsForPrompt(priorOutputs);
 
   const compactEvidence =
-    compactAuthorisedEvidence(
-      authorisedEvidence,
-    );
+    compactAuthorisedEvidence(authorisedEvidence);
 
-  const stage =
-    handoffStageNumber(
-      handoff,
-    );
+  const stage = handoffStageNumber(handoff);
 
   const totalStages =
-    typeof handoff.context
-        ?.total_stages ===
-      "number"
+    typeof handoff.context?.total_stages === "number"
       ? handoff.context.total_stages
       : null;
 
-  const nextWorkerInstruction =
-    nextEmployee
-      ? [
-          `The ACTUAL next employee in the recorded workflow is ${nextEmployee.name}.`,
-          `Next employee title: ${nextEmployee.title}.`,
-          `Next employee key: ${nextEmployee.employee_key}.`,
-          "Your Handoff to next employee section MUST name this employee and no other employee.",
-          "Do not invent, substitute or skip a different handoff destination.",
-        ].join(
-          " ",
-        )
-      : [
-          "This is the final recorded employee stage.",
-          "There is no next employee in this workflow.",
-          "Your Handoff to next employee section must clearly say that this is the final workforce stage and that no further internal handoff is recorded.",
-        ].join(
-          " ",
-        );
+  const safeHandoffContext = clampText(
+    JSON.stringify(handoff.context),
+    MAX_HANDOFF_CONTEXT_CHARS,
+  );
 
-  const previous =
-    compactPrevious.length >
-    0
-      ? compactPrevious
-          .map(
-            (
-              output,
-              index,
-            ) =>
-              `Earlier workforce output ${index + 1}:\n${output}`,
-          )
-          .join(
-            "\n\n",
-          )
-      : "No earlier workforce output is required for this stage.";
+  const nextInstruction = nextEmployee
+    ? `Next recorded worker: ${nextEmployee.name} (${nextEmployee.employee_key}). Hand work only to that worker.`
+    : "This is the final recorded stage. Do not invent another worker.";
 
   const evidence =
-    compactEvidence.length >
-    0
-      ? compactEvidence.join(
-          "\n\n",
-        )
-      : "No additional authorised evidence was collected for this stage.";
+    compactEvidence.length > 0
+      ? compactEvidence.join("\n\n")
+      : "No extra authorised evidence.";
 
-  const safeHandoffContext =
-    clampText(
-      JSON.stringify(
-        handoff.context,
-      ),
-      MAX_HANDOFF_CONTEXT_CHARS,
-    );
+  const previous =
+    compactPrevious.length > 0
+      ? compactPrevious
+          .map(
+            (output, index) =>
+              `Prior output ${index + 1}:\n${output}`,
+          )
+          .join("\n\n")
+      : "No prior output required.";
 
-  const prompt =
-    [
-      `You are ${employee.title}, an active Cossa AI employee.`,
+  const prompt = [
+    `Role: ${employee.title} (${employee.employee_key}).`,
+    `Department: ${employee.department}.`,
+    stage !== null
+      ? `Workflow stage: ${stage}${totalStages ? `/${totalStages}` : ""}.`
+      : "",
+    `Assigned work: ${handoff.reason}`,
+    `Mission objective: ${mission.objective}`,
+    `Target: ${mission.target_market || "unspecified"} / ${
+      mission.target_location || "unspecified"
+    }.`,
+    nextInstruction,
 
-      `Employee name: ${employee.name}.`,
+    "Complete the safe internal work now.",
+    "Use verified Cossa information only.",
+    "Do not invent customers, suppliers, products, prices, results, account access, publication, spend or external actions.",
+    "Normal research, analysis, drafting, content, visual briefs, scheduling and internal handoffs do not need owner approval.",
+    "Escalate only money, legal commitments, supplier orders, credentials, destructive changes, irreversible changes or sensitive external communication.",
+    "If something is missing, name the missing information or integration briefly.",
+    "Do not repeat earlier outputs unnecessarily.",
+    "For visual-dependent work, provide format, subject, headline, key text, brand treatment, channel/dimensions and CTA.",
+    "Never claim publishing or asset generation unless verified execution exists.",
 
-      `Employee key: ${employee.employee_key}.`,
+    "Return these short sections:",
+    "Verified inputs",
+    "Work completed",
+    "Visual or media requirements",
+    "Missing information or integrations",
+    "Handoff to next employee",
+    "High-risk owner decisions required",
+    "External actions status",
 
-      `Department: ${employee.department}.`,
+    `Context: ${safeHandoffContext}`,
+    `Evidence:\n${evidence}`,
+    previous,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
-      `Employee mission: ${employee.mission}`,
-
-      stage !==
-        null
-        ? `Recorded workflow stage: ${stage}${totalStages ? ` of ${totalStages}` : ""}.`
-        : "Recorded workflow stage number is unavailable.",
-
-      nextWorkerInstruction,
-
-      "Complete the assigned internal stage professionally and hand useful work forward.",
-
-      "Do not behave like a placeholder. If safe internal work can be completed from supplied verified information, complete it now.",
-
-      "Do not request owner approval for normal internal analysis, planning, drafting, research synthesis, SEO recommendations, content creation, creative briefing, scheduling, catalogue review, supplier-candidate analysis or employee-to-employee handoffs.",
-
-      "Escalate only genuinely high-risk actions such as spending money, legal commitments, signed contracts, supplier orders, advertising spend, credential changes, destructive changes, irreversible account changes or sensitive external communication.",
-
-      "Use only verified Cossa knowledge, authorised operational records, authorised evidence and earlier recorded workforce outputs.",
-
-      "A prior worker statement is context, not automatic proof. Do not strengthen an unsupported prior claim into a verified fact.",
-
-      "If information is unavailable, identify the exact missing information, source or integration instead of inventing it.",
-
-      "Never invent customers, suppliers, products, inventory, sales, campaign performance, website performance, testimonials, revenue, delivery times, prices, partnerships, social account access, publishing activity or completed external actions.",
-
-      "Do not use unsupported superiority claims such as leading provider, number one, best, trusted by thousands or market leader unless verified evidence explicitly supports them.",
-
-      "Social and marketing content must not disclose private Cossa financial or operational information.",
-
-      "Marketing work may use education, awareness, problem identification, solution marketing, trust-building and calls to action when supported by verified information.",
-
-      "Whenever a social, advertising, website or product item should have a visual, provide a concrete visual requirement covering format, subject, headline, key text, brand treatment, channel or dimensions and intended CTA.",
-
-      "Do not claim that an image, brochure, banner, video or graphic was generated unless an authorised media-generation workflow actually created the asset.",
-
-      "Do not claim that social content was published unless a verified authorised publishing integration returned evidence of publication.",
-
-      "Do not unnecessarily stop the internal workflow. Complete your safe work and make the next recorded employee's required input explicit.",
-
-      "Keep the response focused. Do not repeat entire earlier outputs. Extract only what is useful for your own stage.",
-
-      "Use these headings exactly:",
-
-      "Verified inputs",
-      "Work completed",
-      "Visual or media requirements",
-      "Missing information or integrations",
-      "Handoff to next employee",
-      "High-risk owner decisions required",
-      "External actions status",
-
-      `Mission objective: ${mission.objective}`,
-
-      `Mission instruction: ${mission.instruction}`,
-
-      `Target market: ${
-        mission.target_market ||
-        "Not specified"
-      }`,
-
-      `Target location: ${
-        mission.target_location ||
-        "Not specified"
-      }`,
-
-      `Assigned handoff: ${handoff.reason}`,
-
-      `Recorded handoff context: ${safeHandoffContext}`,
-
-      `Authorised evidence:\n${evidence}`,
-
-      previous,
-    ].join(
-      "\n\n",
-    );
-
-  return clampText(
-    prompt,
-    MAX_STAGE_PROMPT_CHARS,
-  );
+  return clampText(prompt, MAX_STAGE_PROMPT_CHARS);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1685,678 +1218,447 @@ function controlledStagePrompt({
 /* -------------------------------------------------------------------------- */
 
 function AiWorkforce() {
-  const queryClient =
-    useQueryClient();
+  const queryClient = useQueryClient();
 
-  const [
-    objective,
-    setObjective,
-  ] =
-    useState(
-      "Build and continuously improve Cossa Nexus Holdings' professional social, digital growth, customer-acquisition and commercial operating system using verified company information.",
-    );
+  const [view, setView] =
+    useState<WorkforceView>("command");
 
-  const [
-    targetMarket,
-    setTargetMarket,
-  ] =
-    useState(
-      "South Africa",
-    );
+  const [selectedDepartment, setSelectedDepartment] =
+    useState<string>("all");
 
-  const [
-    targetLocation,
-    setTargetLocation,
-  ] =
-    useState(
-      "Gauteng",
-    );
+  const [employeeSearch, setEmployeeSearch] =
+    useState("");
 
-  const [
-    selectedMissionId,
-    setSelectedMissionId,
-  ] =
-    useState<
-      string | null
-    >(
-      null,
-    );
+  const [selectedEmployeeId, setSelectedEmployeeId] =
+    useState<string | null>(null);
+
+  const [objective, setObjective] = useState(
+    "Build and continuously improve Cossa Nexus Holdings' professional social, digital growth, customer-acquisition and commercial operating system using verified company information.",
+  );
+
+  const [targetMarket, setTargetMarket] =
+    useState("South Africa");
+
+  const [targetLocation, setTargetLocation] =
+    useState("Gauteng");
+
+  const [selectedMissionId, setSelectedMissionId] =
+    useState<string | null>(null);
+
+  const [ceoCommand, setCeoCommand] =
+    useState("");
 
   /* ------------------------------------------------------------------------ */
   /* QUERIES                                                                  */
   /* ------------------------------------------------------------------------ */
 
-  const employeesQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-employees",
-      ],
+  const employeesQuery = useQuery({
+    queryKey: ["ai-workforce-employees"],
+    queryFn: () => listEmployees(),
+  });
 
-      queryFn:
-        () =>
-          listEmployees(),
-    });
+  const missionsQuery = useQuery({
+    queryKey: ["ai-workforce-missions"],
+    queryFn: () => listMissions(),
+  });
 
-  const missionsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-missions",
-      ],
+  const handoffsQuery = useQuery({
+    queryKey: ["ai-workforce-handoffs"],
+    queryFn: () => listEmployeeHandoffs(),
+  });
 
-      queryFn:
-        () =>
-          listMissions(),
-    });
+  const runsQuery = useQuery({
+    queryKey: ["ai-workforce-runs"],
+    queryFn: () => listWorkforceRuns(),
+  });
 
-  const handoffsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-handoffs",
-      ],
-
-      queryFn:
-        () =>
-          listEmployeeHandoffs(),
-    });
-
-  const runsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-runs",
-      ],
-
-      queryFn:
-        () =>
-          listWorkforceRuns(),
-    });
-
-  const approvalsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-approvals",
-      ],
-
-      queryFn:
-        () =>
-          listPendingApprovals(),
-    });
+  const approvalsQuery = useQuery({
+    queryKey: ["ai-workforce-approvals"],
+    queryFn: () => listPendingApprovals(),
+  });
 
   /* ------------------------------------------------------------------------ */
   /* REFRESH                                                                  */
   /* ------------------------------------------------------------------------ */
 
-  const refreshWorkforce =
-    async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-employees",
-          ],
-        }),
-
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-missions",
-          ],
-        }),
-
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-handoffs",
-          ],
-        }),
-
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-runs",
-          ],
-        }),
-
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-approvals",
-          ],
-        }),
-      ]);
-    };
+  const refreshWorkforce = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["ai-workforce-employees"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["ai-workforce-missions"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["ai-workforce-handoffs"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["ai-workforce-runs"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["ai-workforce-approvals"],
+      }),
+    ]);
+  };
 
   /* ------------------------------------------------------------------------ */
   /* SETUP                                                                    */
   /* ------------------------------------------------------------------------ */
 
-  const installMutation =
-    useMutation({
-      mutationFn:
-        installCossaGrowthWorkforce,
+  const installMutation = useMutation({
+    mutationFn: installCossaGrowthWorkforce,
 
-      onSuccess:
-        async (
-          result,
-        ) => {
-          await refreshWorkforce();
+    onSuccess: async (result) => {
+      await refreshWorkforce();
 
-          const activeCount =
-            result.filter(
-              (
-                employee,
-              ) =>
-                employee.status ===
-                "active",
-            ).length;
+      const activeCount = result.filter(
+        (employee) => employee.status === "active",
+      ).length;
 
-          toast.success(
-            "Cossa workforce synchronized",
-            {
-              description:
-                `${result.length} employee profiles are recorded. ${activeCount} are active. Existing custom employee records were preserved.`,
-            },
-          );
-        },
+      toast.success("Cossa workforce synchronised", {
+        description: `${result.length} source employee profiles are recorded and ${activeCount} are active. Existing custom employees were preserved.`,
+      });
+    },
 
-      onError:
-        (
-          error,
-        ) => {
-          toast.error(
-            "Workforce setup could not be completed",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
+    onError: (error) => {
+      toast.error("Workforce setup could not be completed", {
+        description: normaliseErrorMessage(error),
+      });
+    },
+  });
 
   /* ------------------------------------------------------------------------ */
   /* COORDINATION                                                             */
   /* ------------------------------------------------------------------------ */
 
-  const coordinationMutation =
-    useMutation({
-      mutationFn:
-        createGrowthCoordinationMission,
+  const coordinationMutation = useMutation({
+    mutationFn: createGrowthCoordinationMission,
 
-      onSuccess:
-        async ({
-          mission,
-          handoffs: createdHandoffs,
-        }) => {
-          setSelectedMissionId(
-            mission.id,
-          );
+    onSuccess: async ({
+      mission,
+      handoffs: createdHandoffs,
+    }) => {
+      setSelectedMissionId(mission.id);
 
-          await refreshWorkforce();
+      await refreshWorkforce();
 
-          toast.success(
-            "Coordination mission created",
-            {
-              description:
-                `${mission.title} created ${createdHandoffs.length} real employee handoff stages.`,
-            },
-          );
-        },
+      toast.success("CEO mission created", {
+        description: `${createdHandoffs.length} real workforce handoff stages were created.`,
+      });
 
-      onError:
-        (
-          error,
-        ) => {
-          toast.error(
-            "Coordination mission could not be created",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
+      setView("workflows");
+    },
+
+    onError: (error) => {
+      toast.error("Mission could not be created", {
+        description: normaliseErrorMessage(error),
+      });
+    },
+  });
 
   /* ------------------------------------------------------------------------ */
   /* SOURCE DATA                                                              */
   /* ------------------------------------------------------------------------ */
 
-  const employees =
-    employeesQuery.data ??
-    [];
+  const employees = employeesQuery.data ?? [];
+  const missions = missionsQuery.data ?? [];
+  const handoffs = handoffsQuery.data ?? [];
+  const runs = runsQuery.data ?? [];
+  const approvals = approvalsQuery.data ?? [];
 
-  const missions =
-    missionsQuery.data ??
-    [];
+  const employeesByKey = useMemo(
+    () =>
+      new Map(
+        employees.map((employee) => [
+          employee.employee_key,
+          employee,
+        ]),
+      ),
+    [employees],
+  );
 
-  const handoffs =
-    handoffsQuery.data ??
-    [];
+  /* ------------------------------------------------------------------------ */
+  /* OPERATIONAL DIRECTORY                                                    */
+  /* ------------------------------------------------------------------------ */
 
-  const runs =
-    runsQuery.data ??
-    [];
+  const employeeOperationalViews = useMemo(
+    () =>
+      employees.map((employee) => ({
+        employee,
+        operational: employeeOperationalView({
+          employee,
+          handoffs,
+          runs,
+          approvals,
+        }),
+      })),
+    [employees, handoffs, runs, approvals],
+  );
 
-  const approvals =
-    approvalsQuery.data ??
-    [];
-
-  const employeesByKey =
-    useMemo(
-      () =>
-        new Map(
-          employees.map(
-            (
-              employee,
-            ) => [
+  const employeeDirectory = useMemo<EmployeeDirectoryItem[]>(
+    () =>
+      employeeOperationalViews.map(
+        ({ employee, operational }) => ({
+          employee,
+          operational,
+          departmentKeys: departmentKeysForEmployee(
+            employee.employee_key,
+          ),
+          responsibilityLabels:
+            responsibilityLabelsForEmployee(
               employee.employee_key,
-              employee,
-            ],
+            ),
+          searchText: searchTermsForEmployee(employee),
+        }),
+      ),
+    [employeeOperationalViews],
+  );
+
+  const workforceCounts = useMemo(() => {
+    let working = 0;
+    let idle = 0;
+    let waiting = 0;
+    let approval = 0;
+    let attention = 0;
+    let inactive = 0;
+
+    for (const item of employeeOperationalViews) {
+      switch (item.operational.state) {
+        case "working":
+          working += 1;
+          break;
+        case "idle":
+          idle += 1;
+          break;
+        case "waiting":
+          waiting += 1;
+          break;
+        case "approval":
+          approval += 1;
+          break;
+        case "attention":
+          attention += 1;
+          break;
+        case "inactive":
+          inactive += 1;
+          break;
+        default:
+          break;
+      }
+    }
+
+    return {
+      working,
+      idle,
+      waiting,
+      approval,
+      attention,
+      inactive,
+    };
+  }, [employeeOperationalViews]);
+
+  const departments = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          employees.map((employee) =>
+            employeeDepartment(employee),
           ),
         ),
+      ).sort(),
+    [employees],
+  );
 
-      [
-        employees,
-      ],
-    );
+  const searchedEmployees = useMemo(() => {
+    const query = employeeSearch.trim().toLowerCase();
 
-  /* ------------------------------------------------------------------------ */
-  /* OPERATIONAL STATE                                                        */
-  /* ------------------------------------------------------------------------ */
-
-  const employeeOperationalViews =
-    useMemo(
-      () =>
-        employees.map(
-          (
-            employee,
-          ) => ({
-            employee,
-
-            operational:
-              employeeOperationalView({
-                employee,
-                handoffs,
-                runs,
-                approvals,
-              }),
-          }),
-        ),
-
-      [
-        employees,
-        handoffs,
-        runs,
-        approvals,
-      ],
-    );
-
-  const workforceCounts =
-    useMemo(
-      () => {
-        let working =
-          0;
-
-        let idle =
-          0;
-
-        let waiting =
-          0;
-
-        let approval =
-          0;
-
-        let attention =
-          0;
-
-        let inactive =
-          0;
-
-        for (
-          const item of
-            employeeOperationalViews
+    return employeeDirectory
+      .filter((item) => {
+        if (
+          selectedDepartment !== "all" &&
+          !item.departmentKeys.includes(selectedDepartment)
         ) {
-          switch (
-            item.operational.state
-          ) {
-            case "working":
-              working +=
-                1;
-              break;
-
-            case "idle":
-              idle +=
-                1;
-              break;
-
-            case "waiting":
-              waiting +=
-                1;
-              break;
-
-            case "approval":
-              approval +=
-                1;
-              break;
-
-            case "attention":
-              attention +=
-                1;
-              break;
-
-            case "inactive":
-              inactive +=
-                1;
-              break;
-
-            default:
-              break;
-          }
+          return false;
         }
 
-        return {
-          working,
-          idle,
-          waiting,
-          approval,
-          attention,
-          inactive,
-        };
-      },
+        if (!query) {
+          return true;
+        }
 
-      [
-        employeeOperationalViews,
-      ],
-    );
+        return searchScore(item, query) > 0;
+      })
+      .sort((left, right) => {
+        if (!query) {
+          if (
+            left.operational.state === "working" &&
+            right.operational.state !== "working"
+          ) {
+            return -1;
+          }
 
-  const departments =
-    useMemo(
-      () =>
-        Array.from(
-          new Set(
-            employees.map(
-              (
-                employee,
-              ) =>
-                employeeDepartment(
-                  employee,
-                ),
-            ),
-          ),
-        ).sort(),
+          if (
+            right.operational.state === "working" &&
+            left.operational.state !== "working"
+          ) {
+            return 1;
+          }
 
-      [
-        employees,
-      ],
-    );
+          return left.employee.name.localeCompare(
+            right.employee.name,
+          );
+        }
+
+        return (
+          searchScore(right, query) -
+          searchScore(left, query)
+        );
+      });
+  }, [
+    employeeDirectory,
+    employeeSearch,
+    selectedDepartment,
+  ]);
+
+  const selectedEmployee =
+    employeeDirectory.find(
+      (item) => item.employee.id === selectedEmployeeId,
+    ) ?? null;
 
   /* ------------------------------------------------------------------------ */
-  /* BUSINESS ROLE READINESS                                                  */
+  /* READINESS                                                                */
   /* ------------------------------------------------------------------------ */
 
-  const requiredRoleKeys =
-    useMemo(
-      () =>
-        Array.from(
-          new Set(
-            BUSINESS_OPERATING_ROLES.flatMap(
-              (
-                business,
-              ) =>
-                business.roles.map(
-                  (
-                    role,
-                  ) =>
-                    role.key,
-                ),
-            ),
+  const requiredRoleKeys = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          DEPARTMENTS.flatMap((department) =>
+            department.employeeKeys,
           ),
         ),
+      ),
+    [],
+  );
 
-      [],
-    );
-
-  const requiredRolesInstalled =
-    requiredRoleKeys.filter(
-      (
-        key,
-      ) =>
-        employeesByKey.has(
-          key,
-        ),
-    ).length;
-
-  const requiredRolesActive =
-    requiredRoleKeys.filter(
-      (
-        key,
-      ) =>
-        employeesByKey.get(
-          key,
-        )?.status ===
-        "active",
-    ).length;
-
-  const executableGrowthRolesActive =
-    EXECUTABLE_GROWTH_WORKFLOW.filter(
-      (
-        stage,
-      ) =>
-        employeesByKey.get(
-          stage.key,
-        )?.status ===
-        "active",
-    ).length;
-
-  /* ------------------------------------------------------------------------ */
-  /* SOURCE WORKFORCE STATUS                                                  */
-  /* ------------------------------------------------------------------------ */
+  const requiredRolesActive = requiredRoleKeys.filter(
+    (key) =>
+      employeesByKey.get(key)?.status === "active",
+  ).length;
 
   const installedDefaultEmployees =
-    COSSA_GROWTH_WORKFORCE.filter(
-      (
-        profile,
-      ) =>
-        employeesByKey.has(
-          profile.employee_key,
-        ),
+    COSSA_GROWTH_WORKFORCE.filter((profile) =>
+      employeesByKey.has(profile.employee_key),
     );
 
   const activeDefaultEmployees =
     COSSA_GROWTH_WORKFORCE.filter(
-      (
-        profile,
-      ) =>
-        employeesByKey.get(
-          profile.employee_key,
-        )?.status ===
+      (profile) =>
+        employeesByKey.get(profile.employee_key)?.status ===
         "active",
     );
 
   const activeExecutableWorkflowEmployees =
     EXECUTABLE_GROWTH_WORKFLOW.filter(
-      (
-        step,
-      ) =>
-        employeesByKey.get(
-          step.key,
-        )?.status ===
-        "active",
+      (step) =>
+        employeesByKey.get(step.key)?.status === "active",
     );
 
   /* ------------------------------------------------------------------------ */
-  /* GROWTH WORKFLOW                                                          */
+  /* MISSION DATA                                                             */
   /* ------------------------------------------------------------------------ */
 
-  const coordinationMissions =
-    missions.filter(
-      (
-        mission,
-      ) =>
-        mission.title.startsWith(
-          GROWTH_MISSION_PREFIX,
-        ),
-    );
+  const coordinationMissions = missions.filter((mission) =>
+    mission.title.startsWith(GROWTH_MISSION_PREFIX),
+  );
 
-  const coordinationMissionIds =
-    new Set(
-      coordinationMissions.map(
-        (
-          mission,
-        ) =>
-          mission.id,
-      ),
-    );
+  const coordinationMissionIds = new Set(
+    coordinationMissions.map((mission) => mission.id),
+  );
 
-  const pendingHandoffs =
-    handoffs.filter(
-      (
-        handoff,
-      ) =>
-        handoff.status ===
-          "pending" &&
-        coordinationMissionIds.has(
-          handoff.mission_id,
-        ),
-    );
+  const pendingHandoffs = handoffs.filter(
+    (handoff) =>
+      handoff.status === "pending" &&
+      coordinationMissionIds.has(handoff.mission_id),
+  );
 
   const selectedMission =
     coordinationMissions.find(
-      (
-        mission,
-      ) =>
-        mission.id ===
-        selectedMissionId,
+      (mission) => mission.id === selectedMissionId,
     ) ??
     coordinationMissions[0] ??
     null;
 
-  const selectedMissionHandoffs =
-    selectedMission
-      ? sortWorkflowHandoffs(
-          handoffs.filter(
-            (
-              handoff,
-            ) =>
-              handoff.mission_id ===
-              selectedMission.id,
-          ),
-        )
-      : [];
+  const selectedMissionHandoffs = selectedMission
+    ? sortWorkflowHandoffs(
+        handoffs.filter(
+          (handoff) =>
+            handoff.mission_id === selectedMission.id,
+        ),
+      )
+    : [];
 
-  /**
-   * Never skip an earlier incomplete workflow stage.
-   */
   const firstIncompleteHandoff =
     selectedMissionHandoffs.find(
-      (
-        handoff,
-      ) =>
-        handoff.status !==
-        "completed",
-    ) ??
-    null;
+      (handoff) => handoff.status !== "completed",
+    ) ?? null;
 
   const nextHandoff =
-    firstIncompleteHandoff?.status ===
-    "pending"
+    firstIncompleteHandoff?.status === "pending"
       ? firstIncompleteHandoff
       : null;
 
   const blockedHandoff =
     firstIncompleteHandoff &&
-    firstIncompleteHandoff.status !==
-      "pending"
+    firstIncompleteHandoff.status !== "pending"
       ? firstIncompleteHandoff
       : null;
 
-  const nextEmployee =
-    firstIncompleteHandoff
-      ? employees.find(
-          (
-            employee,
-          ) =>
-            employee.id ===
-            firstIncompleteHandoff.to_employee_id,
-        ) ??
-        null
-      : null;
+  const nextEmployee = firstIncompleteHandoff
+    ? employees.find(
+        (employee) =>
+          employee.id ===
+          firstIncompleteHandoff.to_employee_id,
+      ) ?? null
+    : null;
 
-  /**
-   * Execution context flows oldest → newest.
-   */
-  const selectedMissionRuns =
-    selectedMission
-      ? runs
-          .filter(
-            (
-              run,
-            ) =>
-              run.mission_id ===
-              selectedMission.id,
-          )
-          .sort(
-            (
-              left,
-              right,
-            ) =>
-              latestRunTime(
-                left,
-              ).localeCompare(
-                latestRunTime(
-                  right,
-                ),
-              ),
-          )
-      : [];
-
-  const reviewableOutputs =
-    selectedMissionRuns
-      .map(
-        (
-          run,
-        ) => ({
-          run,
-
-          content:
-            reviewableOutputContent(
-              run,
-            ),
-        }),
-      )
-      .filter(
-        (
-          item,
-        ): item is {
-          run:
-            MissionRun;
-
-          content:
-            string;
-        } =>
-          Boolean(
-            item.content,
+  const selectedMissionRuns = selectedMission
+    ? runs
+        .filter(
+          (run) => run.mission_id === selectedMission.id,
+        )
+        .sort((left, right) =>
+          latestRunTime(left).localeCompare(
+            latestRunTime(right),
           ),
-      );
+        )
+    : [];
 
-  const displayReviewableOutputs =
-    [
-      ...reviewableOutputs,
-    ].reverse();
+  const reviewableOutputs = selectedMissionRuns
+    .map((run) => ({
+      run,
+      content: reviewableOutputContent(run),
+    }))
+    .filter(
+      (
+        item,
+      ): item is {
+        run: MissionRun;
+        content: string;
+      } => Boolean(item.content),
+    );
+
+  const displayReviewableOutputs = [
+    ...reviewableOutputs,
+  ].reverse();
 
   const selectedMissionFailedRuns =
     selectedMissionRuns.filter(
-      (
-        run,
-      ) =>
-        run.status ===
-        "failed",
+      (run) => run.status === "failed",
     );
 
   const selectedMissionCompletedRuns =
     selectedMissionRuns.filter(
-      (
-        run,
-      ) =>
-        run.status ===
-        "completed",
+      (run) => run.status === "completed",
     );
 
   const isLoading =
@@ -2369,8 +1671,37 @@ function AiWorkforce() {
   const canCreateCoordination =
     activeExecutableWorkflowEmployees.length ===
       EXECUTABLE_GROWTH_WORKFLOW.length &&
-    objective.trim().length >
-      0;
+    objective.trim().length > 0;
+
+  /* ------------------------------------------------------------------------ */
+  /* CEO COMMAND                                                              */
+  /* ------------------------------------------------------------------------ */
+
+  function submitCeoCommand() {
+    const command = ceoCommand.trim();
+
+    if (!command) {
+      return;
+    }
+
+    if (
+      activeExecutableWorkflowEmployees.length !==
+      EXECUTABLE_GROWTH_WORKFLOW.length
+    ) {
+      toast.error("Growth workforce is not fully active", {
+        description: `${activeExecutableWorkflowEmployees.length} of ${EXECUTABLE_GROWTH_WORKFLOW.length} executable employees are active.`,
+      });
+      return;
+    }
+
+    setObjective(command);
+
+    coordinationMutation.mutate({
+      objective: command,
+      target_market: targetMarket,
+      target_location: targetLocation,
+    });
+  }
 
   /* ------------------------------------------------------------------------ */
   /* PROVIDER EXECUTION                                                       */
@@ -2380,98 +1711,64 @@ function AiWorkforce() {
     prompt,
     employee,
   }: {
-    prompt:
-      string;
-
-    employee:
-      AiEmployee;
+    prompt: string;
+    employee: AiEmployee;
   }): Promise<string> {
-    let lastError:
-      unknown =
-      null;
+    let lastError: unknown = null;
 
     for (
-      let attempt =
-        1;
-      attempt <=
-      PROVIDER_MAX_ATTEMPTS;
-      attempt +=
-        1
+      let attempt = 1;
+      attempt <= PROVIDER_MAX_ATTEMPTS;
+      attempt += 1
     ) {
       try {
-        const content =
-          await streamChat(
-            [
-              {
-                role:
-                  "user",
+        const content = await streamChat(
+          [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          () => undefined,
+          undefined,
+          employee.system_instructions,
+          DEFAULT_WORKFORCE_PROVIDER,
+        );
 
-                content:
-                  prompt,
-              },
-            ],
-
-            () =>
-              undefined,
-
-            undefined,
-
-            employee.system_instructions,
-
-            DEFAULT_WORKFORCE_PROVIDER,
-          );
-
-        if (
-          !content.trim()
-        ) {
+        if (!content.trim()) {
           throw new Error(
             `${employee.name} did not return a usable workforce output.`,
           );
         }
 
         return content.trim();
-      } catch (
-        error
-      ) {
-        lastError =
-          error;
+      } catch (error) {
+        lastError = error;
 
         const retryable =
-          isRetryableProviderError(
-            error,
-          );
+          isRetryableProviderError(error);
 
         const hasAnotherAttempt =
-          attempt <
-          PROVIDER_MAX_ATTEMPTS;
+          attempt < PROVIDER_MAX_ATTEMPTS;
 
-        if (
-          !retryable ||
-          !hasAnotherAttempt
-        ) {
+        if (!retryable || !hasAnotherAttempt) {
           break;
         }
 
         const delay =
-          PROVIDER_RETRY_DELAYS_MS[
-            attempt -
-              1
-          ] ??
+          PROVIDER_RETRY_DELAYS_MS[attempt - 1] ??
           5_000;
 
         console.warn(
-          `Cossa AI workforce provider attempt ${attempt} failed for ${employee.employee_key}. Retrying in ${delay}ms.`,
+          `Cossa AI provider attempt ${attempt} failed for ${employee.employee_key}. Retrying in ${delay}ms.`,
           error,
         );
 
-        await sleep(
-          delay,
-        );
+        await sleep(delay);
       }
     }
 
-    throw lastError instanceof
-      Error
+    throw lastError instanceof Error
       ? lastError
       : new Error(
           "The workforce provider failed after all retry attempts.",
@@ -2488,37 +1785,21 @@ function AiWorkforce() {
     employee,
     priorOutputs,
   }: {
-    mission:
-      Mission;
-
-    handoff:
-      EmployeeHandoff;
-
-    employee:
-      AiEmployee;
-
-    priorOutputs:
-      string[];
+    mission: Mission;
+    handoff: EmployeeHandoff;
+    employee: AiEmployee;
+    priorOutputs: string[];
   }): Promise<{
-    content:
-      string;
-
-    finalStage:
-      boolean;
+    content: string;
+    finalStage: boolean;
   }> {
-    if (
-      employee.status !==
-      "active"
-    ) {
+    if (employee.status !== "active") {
       throw new Error(
         `${employee.name} is ${employee.status} and cannot execute this stage.`,
       );
     }
 
-    if (
-      handoff.status !==
-      "pending"
-    ) {
+    if (handoff.status !== "pending") {
       throw new Error(
         `${employee.name}'s handoff is ${handoff.status}, not pending. The workflow will not skip or duplicate this stage.`,
       );
@@ -2526,18 +1807,13 @@ function AiWorkforce() {
 
     const actualNextEmployee =
       nextWorkflowEmployeeForHandoff({
-        currentHandoff:
-          handoff,
-
-        workflowHandoffs:
-          selectedMissionHandoffs,
-
+        currentHandoff: handoff,
+        workflowHandoffs: selectedMissionHandoffs,
         employees,
       });
 
     const authorisedEvidence =
-      employee.employee_key ===
-      "website-seo-monitor"
+      employee.employee_key === "website-seo-monitor"
         ? [
             websiteReportEvidence(
               await checkOfficialWebsite(),
@@ -2546,108 +1822,64 @@ function AiWorkforce() {
         : [];
 
     const compactPriorOutputs =
-      compactPriorOutputsForPrompt(
-        priorOutputs,
-      );
+      compactPriorOutputsForPrompt(priorOutputs);
 
     const compactEvidence =
-      compactAuthorisedEvidence(
-        authorisedEvidence,
-      );
+      compactAuthorisedEvidence(authorisedEvidence);
 
-    const run =
-      await startControlledWorkforceRun({
-        mission,
-
-        handoff,
-
-        employee,
-
-        provider:
-          DEFAULT_WORKFORCE_PROVIDER,
-
-        modelName:
-          DEFAULT_WORKFORCE_MODEL,
-
-        priorOutputs:
-          compactPriorOutputs,
-
-        authorisedEvidence:
-          compactEvidence,
-      });
+    const run = await startControlledWorkforceRun({
+      mission,
+      handoff,
+      employee,
+      provider: DEFAULT_WORKFORCE_PROVIDER,
+      modelName: DEFAULT_WORKFORCE_MODEL,
+      priorOutputs: compactPriorOutputs,
+      authorisedEvidence: compactEvidence,
+    });
 
     try {
-      const prompt =
-        controlledStagePrompt({
-          mission,
+      const prompt = controlledStagePrompt({
+        mission,
+        handoff,
+        employee,
+        nextEmployee: actualNextEmployee,
+        priorOutputs: compactPriorOutputs,
+        authorisedEvidence: compactEvidence,
+      });
 
-          handoff,
-
-          employee,
-
-          nextEmployee:
-            actualNextEmployee,
-
-          priorOutputs:
-            compactPriorOutputs,
-
-          authorisedEvidence:
-            compactEvidence,
-        });
-
-      if (
-        prompt.length >
-        MAX_STAGE_PROMPT_CHARS
-      ) {
+      if (prompt.length > MAX_STAGE_PROMPT_CHARS) {
         throw new Error(
-          `Cossa AI workforce prompt safety check failed. Prompt length ${prompt.length} exceeds the configured ${MAX_STAGE_PROMPT_CHARS} character ceiling.`,
+          `Cossa AI prompt safety check failed. Prompt length ${prompt.length} exceeds ${MAX_STAGE_PROMPT_CHARS}.`,
         );
       }
 
-      const content =
-        await executeProviderWithRetry({
-          prompt,
-
-          employee,
-        });
+      const content = await executeProviderWithRetry({
+        prompt,
+        employee,
+      });
 
       const result =
         await completeControlledWorkforceRun({
           run,
-
           handoff,
-
           employee,
-
           content,
         });
 
       return {
         content,
-
-        finalStage:
-          result.finalStage,
+        finalStage: result.finalStage,
       };
-    } catch (
-      error
-    ) {
-      const message =
-        normaliseErrorMessage(
-          error,
-        );
+    } catch (error) {
+      const message = normaliseErrorMessage(error);
 
       try {
         await failControlledWorkforceRun({
           run,
-
           handoff,
-
-          errorMessage:
-            message,
+          errorMessage: message,
         });
-      } catch (
-        cleanupError
-      ) {
+      } catch (cleanupError) {
         console.error(
           "Unable to record controlled workforce failure",
           cleanupError,
@@ -2662,462 +1894,424 @@ function AiWorkforce() {
   /* RUN NEXT STAGE                                                           */
   /* ------------------------------------------------------------------------ */
 
-  const runNextStageMutation =
-    useMutation({
-      mutationFn:
-        async () => {
-          if (
-            !selectedMission
-          ) {
-            throw new Error(
-              "Select a Growth coordination mission first.",
-            );
-          }
+  const runNextStageMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedMission) {
+        throw new Error(
+          "Select a Growth coordination mission first.",
+        );
+      }
 
-          if (
-            blockedHandoff
-          ) {
-            throw new Error(
-              `The next workflow stage is currently ${blockedHandoff.status}. Cossa AI will not skip that earlier stage.`,
-            );
-          }
+      if (blockedHandoff) {
+        throw new Error(
+          `The next workflow stage is ${blockedHandoff.status}. Cossa AI will not skip it.`,
+        );
+      }
 
-          if (
-            !nextHandoff ||
-            !nextEmployee
-          ) {
-            throw new Error(
-              "This mission has no executable pending workforce stage.",
-            );
-          }
+      if (!nextHandoff || !nextEmployee) {
+        throw new Error(
+          "This mission has no executable pending stage.",
+        );
+      }
 
-          const priorOutputs =
-            compactPriorOutputsForPrompt(
-              reviewableOutputs.map(
-                (
-                  item,
-                ) =>
-                  item.content,
-              ),
-            );
+      const priorOutputs =
+        compactPriorOutputsForPrompt(
+          reviewableOutputs.map(
+            (item) => item.content,
+          ),
+        );
 
-          return executeControlledHandoff({
-            mission:
-              selectedMission,
+      return executeControlledHandoff({
+        mission: selectedMission,
+        handoff: nextHandoff,
+        employee: nextEmployee,
+        priorOutputs,
+      });
+    },
 
-            handoff:
-              nextHandoff,
+    onSuccess: async ({ finalStage }) => {
+      await refreshWorkforce();
 
-            employee:
-              nextEmployee,
-
-            priorOutputs,
-          });
+      toast.success(
+        finalStage
+          ? "Growth workflow completed"
+          : "Employee stage completed",
+        {
+          description: finalStage
+            ? "All recorded stages completed successfully."
+            : "The employee completed the stage and handed work forward.",
         },
+      );
+    },
 
-      onSuccess:
-        async ({
-          finalStage,
-        }) => {
-          await refreshWorkforce();
-
-          toast.success(
-            finalStage
-              ? "Growth workforce chain completed"
-              : "Employee stage completed",
-            {
-              description:
-                finalStage
-                  ? "All recorded Growth stages completed successfully. Historical failed attempts remain in the audit trail."
-                  : "The employee completed its internal work and the next recorded handoff is ready.",
-            },
-          );
-        },
-
-      onError:
-        (
-          error,
-        ) => {
-          toast.error(
-            "Workforce stage could not run",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
+    onError: (error) => {
+      toast.error("Workforce stage could not run", {
+        description: normaliseErrorMessage(error),
+      });
+    },
+  });
 
   /* ------------------------------------------------------------------------ */
   /* AUTOMATIC SAFE CHAIN                                                     */
   /* ------------------------------------------------------------------------ */
 
-  const runSafeWorkflowMutation =
-    useMutation({
-      mutationFn:
-        async () => {
-          if (
-            !selectedMission
-          ) {
-            throw new Error(
-              "Select a Growth coordination mission first.",
-            );
-          }
+  const runSafeWorkflowMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedMission) {
+        throw new Error(
+          "Select a Growth coordination mission first.",
+        );
+      }
 
-          if (
-            selectedMission.status ===
-            "completed"
-          ) {
-            throw new Error(
-              "This mission is already completed.",
-            );
-          }
+      if (selectedMission.status === "completed") {
+        throw new Error(
+          "This mission is already completed.",
+        );
+      }
 
-          if (
-            selectedMission.status ===
-            "awaiting_approval"
-          ) {
-            throw new Error(
-              "This mission is currently paused at an approval-controlled action.",
-            );
-          }
+      if (
+        selectedMission.status === "awaiting_approval"
+      ) {
+        throw new Error(
+          "This mission is paused at an owner approval checkpoint.",
+        );
+      }
 
-          const incomplete =
-            selectedMissionHandoffs.filter(
-              (
-                handoff,
-              ) =>
-                handoff.status !==
-                "completed",
-            );
+      const incomplete =
+        selectedMissionHandoffs.filter(
+          (handoff) =>
+            handoff.status !== "completed",
+        );
 
-          if (
-            incomplete.length ===
-            0
-          ) {
-            throw new Error(
-              "This mission has no incomplete workforce stages.",
-            );
-          }
+      if (incomplete.length === 0) {
+        throw new Error(
+          "This mission has no incomplete stages.",
+        );
+      }
 
-          const firstIncomplete =
-            incomplete[0];
+      const firstIncomplete = incomplete[0];
 
-          if (
-            firstIncomplete.status ===
-            "accepted"
-          ) {
-            const employee =
-              employees.find(
-                (
-                  candidate,
-                ) =>
-                  candidate.id ===
-                  firstIncomplete.to_employee_id,
-              );
+      if (firstIncomplete.status === "accepted") {
+        const employee = employees.find(
+          (candidate) =>
+            candidate.id ===
+            firstIncomplete.to_employee_id,
+        );
 
-            throw new Error(
-              `${
-                employee?.name ??
-                "The next employee"
-              } already owns the next workflow stage. The chain will not skip that accepted handoff.`,
-            );
-          }
+        throw new Error(
+          `${
+            employee?.name ?? "The next employee"
+          } already owns the next stage. The chain will not skip it.`,
+        );
+      }
 
-          if (
-            firstIncomplete.status !==
-            "pending"
-          ) {
-            throw new Error(
-              `The next workflow stage is ${firstIncomplete.status}. Automatic execution will not skip it.`,
-            );
-          }
+      if (firstIncomplete.status !== "pending") {
+        throw new Error(
+          `The next workflow stage is ${firstIncomplete.status}. Automatic execution will not skip it.`,
+        );
+      }
 
-          /**
-           * Only contiguous pending stages are eligible.
-           *
-           * Any accepted/rejected/non-pending incomplete stage terminates the
-           * automatic sequence.
-           */
-          const pendingSequence:
-            EmployeeHandoff[] =
-            [];
+      const pendingSequence: EmployeeHandoff[] =
+        [];
 
-          for (
-            const handoff of
-              incomplete
-          ) {
-            if (
-              handoff.status !==
-              "pending"
-            ) {
-              break;
-            }
+      for (const handoff of incomplete) {
+        if (handoff.status !== "pending") {
+          break;
+        }
 
-            pendingSequence.push(
-              handoff,
-            );
-          }
+        pendingSequence.push(handoff);
+      }
 
-          if (
-            pendingSequence.length ===
-            0
-          ) {
-            throw new Error(
-              "No executable pending workflow stage is available.",
-            );
-          }
+      if (pendingSequence.length === 0) {
+        throw new Error(
+          "No executable pending workflow stage is available.",
+        );
+      }
 
-          let accumulatedOutputs =
-            compactPriorOutputsForPrompt(
-              reviewableOutputs.map(
-                (
-                  item,
-                ) =>
-                  item.content,
-              ),
-            );
+      let accumulatedOutputs =
+        compactPriorOutputsForPrompt(
+          reviewableOutputs.map(
+            (item) => item.content,
+          ),
+        );
 
-          let completedStages =
-            0;
+      let completedStages = 0;
+      let reachedFinalStage = false;
 
-          let reachedFinalStage =
-            false;
+      for (
+        let index = 0;
+        index < pendingSequence.length;
+        index += 1
+      ) {
+        const handoff = pendingSequence[index];
 
-          for (
-            let index =
-              0;
-            index <
-            pendingSequence.length;
-            index +=
-              1
-          ) {
-            const handoff =
-              pendingSequence[
-                index
-              ];
+        const employee = employees.find(
+          (candidate) =>
+            candidate.id ===
+            handoff.to_employee_id,
+        );
 
-            const employee =
-              employees.find(
-                (
-                  candidate,
-                ) =>
-                  candidate.id ===
-                  handoff.to_employee_id,
-              );
-
-            if (!employee) {
-              throw new Error(
-                `A pending handoff references employee ${handoff.to_employee_id}, but that employee record was not found.`,
-              );
-            }
-
-            if (
-              employee.status !==
-              "active"
-            ) {
-              throw new Error(
-                `${employee.name} is ${employee.status}. Automatic execution stopped because an inactive employee cannot truthfully execute work.`,
-              );
-            }
-
-            const result =
-              await executeControlledHandoff({
-                mission:
-                  selectedMission,
-
-                handoff,
-
-                employee,
-
-                priorOutputs:
-                  accumulatedOutputs,
-              });
-
-            accumulatedOutputs =
-              compactPriorOutputsForPrompt([
-                ...accumulatedOutputs,
-                result.content,
-              ]);
-
-            completedStages +=
-              1;
-
-            reachedFinalStage =
-              result.finalStage;
-
-            if (
-              reachedFinalStage
-            ) {
-              break;
-            }
-
-            /**
-             * Prevent burst pressure against Groq between employees.
-             */
-            if (
-              index <
-              pendingSequence.length -
-                1
-            ) {
-              await sleep(
-                WORKFORCE_STAGE_DELAY_MS,
-              );
-            }
-          }
-
-          return {
-            completedStages,
-
-            reachedFinalStage,
-          };
-        },
-
-      onSuccess:
-        async ({
-          completedStages,
-          reachedFinalStage,
-        }) => {
-          await refreshWorkforce();
-
-          toast.success(
-            reachedFinalStage
-              ? "Safe workforce chain completed"
-              : "Safe workforce chain progressed",
-            {
-              description:
-                `${completedStages} employee stage${completedStages === 1 ? "" : "s"} completed and handed work forward. Provider retries and stage pacing were applied automatically where required.`,
-            },
+        if (!employee) {
+          throw new Error(
+            `Pending handoff references missing employee ${handoff.to_employee_id}.`,
           );
-        },
+        }
 
-      onError:
-        (
-          error,
-        ) => {
-          toast.error(
-            "Automatic workforce chain stopped",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
+        if (employee.status !== "active") {
+          throw new Error(
+            `${employee.name} is ${employee.status}. Automatic execution stopped.`,
           );
+        }
+
+        const result =
+          await executeControlledHandoff({
+            mission: selectedMission,
+            handoff,
+            employee,
+            priorOutputs: accumulatedOutputs,
+          });
+
+        accumulatedOutputs =
+          compactPriorOutputsForPrompt([
+            ...accumulatedOutputs,
+            result.content,
+          ]);
+
+        completedStages += 1;
+        reachedFinalStage = result.finalStage;
+
+        if (reachedFinalStage) {
+          break;
+        }
+
+        if (index < pendingSequence.length - 1) {
+          await sleep(
+            WORKFORCE_STAGE_DELAY_MS,
+          );
+        }
+      }
+
+      return {
+        completedStages,
+        reachedFinalStage,
+      };
+    },
+
+    onSuccess: async ({
+      completedStages,
+      reachedFinalStage,
+    }) => {
+      await refreshWorkforce();
+
+      toast.success(
+        reachedFinalStage
+          ? "Workforce mission completed"
+          : "Workforce mission progressed",
+        {
+          description: `${completedStages} employee stage${
+            completedStages === 1 ? "" : "s"
+          } completed.`,
         },
-    });
+      );
+    },
+
+    onError: (error) => {
+      toast.error(
+        "Automatic workforce chain stopped",
+        {
+          description: normaliseErrorMessage(error),
+        },
+      );
+    },
+  });
 
   /* ------------------------------------------------------------------------ */
   /* RENDER                                                                   */
   /* ------------------------------------------------------------------------ */
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-6">
-      {/* HERO */}
+    <div className="mx-auto flex max-w-[1600px] flex-col gap-5">
+      {/* COMPANY HEADER */}
 
-      <section className="glass-card relative overflow-hidden p-5 sm:p-6 md:p-8">
+      <section className="glass-card relative overflow-hidden p-5 sm:p-6">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
 
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
-                <Workflow className="h-5 w-5" />
+        <div className="relative flex flex-col gap-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow">
+                  <Building2 className="h-5 w-5" />
+                </div>
+
+                <StatusBadge
+                  status={workspaceRuntimeStatus()}
+                />
               </div>
 
-              <StatusBadge
-                status={
-                  workspaceRuntimeStatus()
-                }
-              />
+              <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
+                Cossa{" "}
+                <span className="text-gradient-gold">
+                  AI Company
+                </span>
+              </h1>
+
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+                Find the right department or employee,
+                delegate work to the AI CEO, and monitor
+                company execution without digging through
+                technical records.
+              </p>
             </div>
 
-            <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
-              Cossa{" "}
-              <span className="text-gradient-gold">
-                AI Workforce
-              </span>
-            </h1>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  void refreshWorkforce()
+                }
+                disabled={isLoading}
+                className="border-primary/40 text-primary hover:bg-primary/10"
+              >
+                <RefreshCw className="mr-1.5 h-4 w-4" />
+                Refresh
+              </Button>
 
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Cossa AI employees operate as one coordinated business system.
-              Safe internal work can move employee to employee automatically,
-              while genuine high-risk, irreversible, legal and financial
-              actions remain owner-controlled.
-            </p>
+              <Button
+                asChild
+                className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+              >
+                <Link to="/ai/ceo">
+                  <BrainCircuit className="mr-1.5 h-4 w-4" />
+                  Open AI CEO
+                </Link>
+              </Button>
+            </div>
           </div>
 
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                void refreshWorkforce()
-              }
-              disabled={
-                isLoading
-              }
-              className="w-full border-primary/40 text-primary hover:bg-primary/10 sm:w-auto"
-            >
-              <RefreshCw className="mr-1.5 h-4 w-4" />
+          {/* UNIVERSAL SEARCH */}
 
-              Refresh records
-            </Button>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
 
-            <Button
-              type="button"
-              onClick={() =>
-                installMutation.mutate()
-              }
-              disabled={
-                installMutation.isPending
-              }
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow sm:w-auto"
-            >
-              <UsersRound className="mr-1.5 h-4 w-4" />
+            <input
+              value={employeeSearch}
+              onChange={(event) => {
+                setEmployeeSearch(event.target.value);
 
-              {installMutation.isPending
-                ? "Synchronising workforce…"
-                : "Synchronise workforce"}
-            </Button>
+                if (event.target.value.trim()) {
+                  setView("employees");
+                  setSelectedDepartment("all");
+                }
+              }}
+              placeholder='Find anyone by name or responsibility — try "flyer", "SEO", "Facebook", "supplier", "website", "lead"...'
+              className="h-14 w-full rounded-2xl border border-primary/30 bg-background/60 pl-12 pr-12 text-sm outline-none transition focus:border-primary/70 focus:ring-2 focus:ring-primary/10"
+            />
+
+            {employeeSearch ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setEmployeeSearch("")
+                }
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
 
-      {/* TOP METRICS */}
+      {/* COMPANY NAVIGATION */}
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+      <section className="glass-card overflow-x-auto p-2">
+        <div className="flex min-w-max gap-1">
+          <TopNavButton
+            active={view === "command"}
+            icon={Command}
+            label="Command Centre"
+            onClick={() =>
+              setView("command")
+            }
+          />
+
+          <TopNavButton
+            active={view === "departments"}
+            icon={Building2}
+            label="Departments"
+            onClick={() =>
+              setView("departments")
+            }
+          />
+
+          <TopNavButton
+            active={view === "employees"}
+            icon={UsersRound}
+            label="Employees"
+            onClick={() =>
+              setView("employees")
+            }
+          />
+
+          <TopNavButton
+            active={view === "workflows"}
+            icon={Workflow}
+            label="Workflows"
+            onClick={() =>
+              setView("workflows")
+            }
+          />
+
+          <TopNavButton
+            active={view === "activity"}
+            icon={Activity}
+            label="Activity"
+            onClick={() =>
+              setView("activity")
+            }
+          />
+
+          <TopNavButton
+            active={view === "control"}
+            icon={ShieldCheck}
+            label="Control Room"
+            onClick={() =>
+              setView("control")
+            }
+          />
+        </div>
+      </section>
+
+      {/* TOP COMPANY METRICS */}
+
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Metric
-          label="Total employees"
-          value={String(
-            employees.length,
-          )}
+          label="Employees"
+          value={String(employees.length)}
         />
 
         <Metric
-          label="Active profiles"
+          label="Active"
           value={String(
             employees.filter(
-              (
-                employee,
-              ) =>
-                employee.status ===
-                "active",
+              (employee) =>
+                employee.status === "active",
             ).length,
           )}
         />
 
         <Metric
-          label="Working"
+          label="Working now"
           value={String(
             workforceCounts.working,
           )}
         />
 
         <Metric
-          label="Assigned / retry"
+          label="Assigned"
           value={String(
             workforceCounts.waiting,
           )}
@@ -3131,7 +2325,7 @@ function AiWorkforce() {
         />
 
         <Metric
-          label="Attention"
+          label="Needs attention"
           value={String(
             workforceCounts.attention +
               workforceCounts.approval,
@@ -3144,1398 +2338,1213 @@ function AiWorkforce() {
         />
       </section>
 
-      {/* REAL SOCIAL OPERATING LINE */}
+      {/* -------------------------------------------------------------------- */}
+      {/* COMMAND CENTRE                                                       */}
+      {/* -------------------------------------------------------------------- */}
 
-      <section className="glass-card p-4 sm:p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Social operating model
-            </p>
+      {view === "command" ? (
+        <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+          <section className="glass-card p-5 sm:p-6">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                <BrainCircuit className="h-5 w-5" />
+              </div>
 
-            <h2 className="mt-1 font-display text-xl font-semibold">
-              Nine-stage executable Growth collaboration line
-            </h2>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                  CEO command
+                </p>
 
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              This represents the same nine employees expected by the Growth
-              mission backend. A stage is marked active only when the
-              corresponding live employee profile is active.
-            </p>
-          </div>
+                <h2 className="mt-1 font-display text-2xl font-semibold">
+                  Tell the AI CEO what result you need
+                </h2>
 
-          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-64">
-            <MiniMetric
-              label="Required"
-              value={
-                EXECUTABLE_GROWTH_WORKFLOW.length
-              }
-            />
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                  You should not have to decide which
+                  employee comes first. Give the objective;
+                  the recorded Growth workforce can coordinate
+                  the work through the correct internal stages.
+                </p>
+              </div>
+            </div>
 
-            <MiniMetric
-              label="Active"
-              value={
-                executableGrowthRolesActive
-              }
-              warning={
-                executableGrowthRolesActive <
-                EXECUTABLE_GROWTH_WORKFLOW.length
-              }
-            />
-          </div>
-        </div>
+            <div className="mt-5 rounded-2xl border border-primary/25 bg-primary/5 p-3">
+              <textarea
+                value={ceoCommand}
+                onChange={(event) =>
+                  setCeoCommand(
+                    event.target.value,
+                  )
+                }
+                rows={4}
+                placeholder="Example: Create a professional Facebook campaign for Cossa Facility Services in Gauteng, including copy, visual requirements and a posting plan. Do not publish or spend money."
+                className="w-full resize-y bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
+              />
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-9">
-          {EXECUTABLE_GROWTH_WORKFLOW.map(
-            (
-              stage,
-              index,
-            ) => {
-              const Icon =
-                stage.icon;
-
-              const employee =
-                employeesByKey.get(
-                  stage.key,
-                );
-
-              const active =
-                employee?.status ===
-                "active";
-
-              return (
-                <div
-                  key={
-                    stage.key
-                  }
-                  className="relative min-w-0 rounded-xl border border-border/60 bg-card/40 p-3"
-                >
-                  {index <
-                  EXECUTABLE_GROWTH_WORKFLOW.length -
-                    1 ? (
-                    <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 rounded-full bg-background p-1 text-primary xl:block" />
-                  ) : null}
-
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                    <Icon className="h-4 w-4" />
-                  </div>
-
-                  <p className="mt-3 break-words text-xs font-semibold">
-                    {
-                      stage.label
-                    }
-                  </p>
-
-                  <span
-                    className={
-                      active
-                        ? "mt-2 inline-block text-[9px] uppercase tracking-wider text-success"
-                        : employee
-                          ? "mt-2 inline-block text-[9px] uppercase tracking-wider text-warning"
-                          : "mt-2 inline-block text-[9px] uppercase tracking-wider text-muted-foreground"
-                    }
-                  >
-                    {active
-                      ? "Active"
-                      : employee
-                        ? formatStatus(
-                            employee.status,
-                          )
-                        : "Missing"}
-                  </span>
+              <div className="mt-3 flex flex-col gap-2 border-t border-primary/15 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs text-muted-foreground">
+                  Target:{" "}
+                  <strong className="text-foreground">
+                    {targetMarket}
+                  </strong>
+                  {" · "}
+                  <strong className="text-foreground">
+                    {targetLocation}
+                  </strong>
                 </div>
-              );
-            },
-          )}
-        </div>
-      </section>
 
-      {/* BUSINESS WORKFORCE READINESS */}
-
-      <section className="glass-card p-4 sm:p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Operating workforce
-            </p>
-
-            <h2 className="mt-1 font-display text-xl font-semibold">
-              Growth, Store, Tech and Revenue readiness
-            </h2>
-
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              Specialist coverage is checked directly against live employee
-              records. Missing roles remain visible until they really exist.
-            </p>
-          </div>
-
-          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-64">
-            <MiniMetric
-              label="Required"
-              value={
-                requiredRoleKeys.length
-              }
-            />
-
-            <MiniMetric
-              label="Active"
-              value={
-                requiredRolesActive
-              }
-              warning={
-                requiredRolesActive <
-                requiredRoleKeys.length
-              }
-            />
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          {BUSINESS_OPERATING_ROLES.map(
-            (
-              business,
-            ) => {
-              const Icon =
-                business.icon;
-
-              return (
-                <article
-                  key={
-                    business.business
+                <Button
+                  type="button"
+                  onClick={submitCeoCommand}
+                  disabled={
+                    !ceoCommand.trim() ||
+                    coordinationMutation.isPending
                   }
-                  className="rounded-xl border border-border/60 bg-card/40 p-4"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                      <Icon className="h-5 w-5" />
+                  {coordinationMutation.isPending ? (
+                    <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-1.5 h-4 w-4" />
+                  )}
+
+                  {coordinationMutation.isPending
+                    ? "CEO is organising the team…"
+                    : "Delegate to AI CEO"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Quick requests
+              </p>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {[
+                  "Create a Facebook post and visual brief for Cossa.",
+                  "Prepare a professional flyer campaign for Cossa Facility Services.",
+                  "Audit our website and prepare SEO improvements.",
+                  "Build a 7-day social-media content plan.",
+                  "Prepare a paid-media recommendation without spending money.",
+                  "Create a campaign for Cossa Store products.",
+                ].map((request) => (
+                  <button
+                    key={request}
+                    type="button"
+                    onClick={() =>
+                      setCeoCommand(request)
+                    }
+                    className="rounded-xl border border-border/60 bg-card/40 p-3 text-left text-xs leading-relaxed transition hover:border-primary/40 hover:bg-primary/5"
+                  >
+                    <div className="flex items-start gap-2">
+                      <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                      <span>{request}</span>
                     </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
 
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-semibold">
-                        {
-                          business.business
-                        }
-                      </h3>
+          <section className="glass-card p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                  Company departments
+                </p>
 
-                      <p className="text-xs text-muted-foreground">
-                        Specialist workforce coverage
-                      </p>
-                    </div>
-                  </div>
+                <h2 className="mt-1 font-display text-xl font-semibold">
+                  Go straight to the team
+                </h2>
+              </div>
 
-                  <div className="mt-4 space-y-3">
-                    {business.roles.map(
-                      (
-                        role,
-                      ) => {
-                        const employee =
-                          employeesByKey.get(
-                            role.key,
-                          );
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setView("departments")
+                }
+                className="text-primary"
+              >
+                View all
+                <ArrowRight className="ml-1.5 h-4 w-4" />
+              </Button>
+            </div>
 
-                        const active =
-                          employee?.status ===
-                          "active";
+            <div className="mt-4 space-y-2">
+              {DEPARTMENTS.map(
+                (department) => {
+                  const Icon =
+                    department.icon;
 
-                        return (
-                          <div
-                            key={
-                              `${business.business}-${role.key}`
-                            }
-                            className="rounded-lg border border-border/50 bg-background/30 p-3"
-                          >
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="min-w-0">
-                                <p className="text-xs font-medium">
-                                  {
-                                    role.name
-                                  }
-                                </p>
+                  const activeCount =
+                    department.employeeKeys.filter(
+                      (key) =>
+                        employeesByKey.get(key)
+                          ?.status === "active",
+                    ).length;
 
-                                <p className="mt-1 break-words text-[11px] leading-relaxed text-muted-foreground">
-                                  {
-                                    role.responsibility
-                                  }
-                                </p>
-                              </div>
-
-                              <span
-                                className={
-                                  active
-                                    ? "w-fit shrink-0 rounded-full border border-success/35 bg-success/10 px-2 py-1 text-[9px] uppercase tracking-wider text-success"
-                                    : employee
-                                      ? "w-fit shrink-0 rounded-full border border-warning/35 bg-warning/10 px-2 py-1 text-[9px] uppercase tracking-wider text-warning"
-                                      : "w-fit shrink-0 rounded-full border border-border bg-secondary/40 px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground"
-                                }
-                              >
-                                {active
-                                  ? "Active"
-                                  : employee
-                                    ? formatStatus(
-                                        employee.status,
-                                      )
-                                    : "Missing"}
-                              </span>
-                            </div>
-                          </div>
+                  return (
+                    <button
+                      key={department.key}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDepartment(
+                          department.key,
                         );
-                      },
-                    )}
-                  </div>
-                </article>
-              );
-            },
-          )}
+                        setEmployeeSearch("");
+                        setView("employees");
+                      }}
+                      className="group flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card/40 p-3 text-left transition hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Icon className="h-5 w-5" />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          {department.name}
+                        </p>
+
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {activeCount} active team member
+                          {activeCount === 1
+                            ? ""
+                            : "s"}
+                        </p>
+                      </div>
+
+                      <ChevronRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" />
+                    </button>
+                  );
+                },
+              )}
+            </div>
+          </section>
+
+          {/* CURRENT WORK */}
+
+          <section className="glass-card p-5 xl:col-span-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                  Current work
+                </p>
+
+                <h2 className="mt-1 font-display text-xl font-semibold">
+                  What needs attention now
+                </h2>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setView("activity")
+                }
+                className="border-primary/30 text-primary"
+              >
+                <Activity className="mr-1.5 h-4 w-4" />
+                Open activity
+              </Button>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <QueueCard
+                icon={Play}
+                title="Working"
+                value={workforceCounts.working}
+                description="Employees with a real running record."
+              />
+
+              <QueueCard
+                icon={ClipboardList}
+                title="Assigned"
+                value={workforceCounts.waiting}
+                description="Tasks waiting or ready to retry."
+              />
+
+              <QueueCard
+                icon={AlertTriangle}
+                title="Needs attention"
+                value={
+                  workforceCounts.attention +
+                  workforceCounts.approval
+                }
+                description="Failures or owner-controlled checkpoints."
+                warning={
+                  workforceCounts.attention +
+                    workforceCounts.approval >
+                  0
+                }
+              />
+            </div>
+          </section>
         </div>
+      ) : null}
 
-        {requiredRolesInstalled <
-        requiredRoleKeys.length ? (
-          <div className="mt-4 rounded-xl border border-warning/30 bg-warning/10 p-4">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+      {/* -------------------------------------------------------------------- */}
+      {/* DEPARTMENTS                                                          */}
+      {/* -------------------------------------------------------------------- */}
 
-              <p className="text-xs leading-relaxed text-warning">
-                Some specialist roles are still absent from the live employee
-                table. Synchronising the workforce installs only source
-                profiles that actually exist in COSSA_GROWTH_WORKFORCE.
+      {view === "departments" ? (
+        <section className="glass-card p-5 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                Organisation
+              </p>
+
+              <h2 className="mt-1 font-display text-2xl font-semibold">
+                Departments
+              </h2>
+
+              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                Choose the business function first.
+                Every department opens directly to the
+                employees responsible for that work.
               </p>
             </div>
-          </div>
-        ) : null}
-      </section>
 
-      {/* SOURCE WORKFORCE STATUS */}
-
-      <section className="glass-card p-4 sm:p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Workforce integrity
-            </p>
-
-            <h2 className="mt-1 font-display text-xl font-semibold">
-              Source-defined workforce
-            </h2>
-
-            <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              Existing custom employees are preserved. Missing source profiles
-              can be installed without deleting or silently replacing existing
-              workforce records.
-            </p>
+            <span className="text-xs text-muted-foreground">
+              {DEPARTMENTS.length} operating groups
+            </span>
           </div>
 
-          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-64">
-            <MiniMetric
-              label="Installed"
-              value={
-                installedDefaultEmployees.length
-              }
-            />
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {DEPARTMENTS.map(
+              (department) => {
+                const Icon =
+                  department.icon;
 
-            <MiniMetric
-              label="Active"
-              value={
-                activeDefaultEmployees.length
-              }
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 break-words text-xs text-muted-foreground">
-          Source profiles:{" "}
-          <strong className="text-foreground">
-            {
-              COSSA_GROWTH_WORKFORCE.length
-            }
-          </strong>
-
-          {" · "}
-
-          Recorded:{" "}
-          <strong className="text-foreground">
-            {
-              installedDefaultEmployees.length
-            }
-          </strong>
-
-          {" · "}
-
-          Active:{" "}
-          <strong className="text-foreground">
-            {
-              activeDefaultEmployees.length
-            }
-          </strong>
-
-          {" · "}
-
-          Departments:{" "}
-          <strong className="text-foreground">
-            {
-              departments.length
-            }
-          </strong>
-        </div>
-      </section>
-
-      {/* FULL WORKFORCE DIRECTORY */}
-
-      <section className="glass-card p-4 sm:p-5">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Workforce command centre
-            </p>
-
-            <h2 className="mt-1 font-display text-xl font-semibold">
-              All Cossa AI employees
-            </h2>
-          </div>
-
-          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Current state is derived from the newest employee activity.
-            Historical failures remain auditable without permanently marking a
-            later-successful employee as broken.
-          </p>
-        </div>
-
-        {employeesQuery.isLoading ? (
-          <div className="mt-5 rounded-xl border border-border/60 bg-card/30 p-6 text-sm text-muted-foreground">
-            Loading workforce records…
-          </div>
-        ) : employeesQuery.isError ? (
-          <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
-            The workforce database could not be loaded.
-          </div>
-        ) : employees.length ===
-          0 ? (
-          <div className="mt-5 rounded-xl border border-warning/30 bg-warning/10 p-5 text-sm text-warning">
-            No AI employee records were returned from the workforce database.
-          </div>
-        ) : (
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {employeeOperationalViews.map(
-              ({
-                employee,
-                operational,
-              }) => {
-                const inExecutableGrowthWorkflow =
-                  EXECUTABLE_GROWTH_WORKFLOW_KEYS.has(
-                    employee.employee_key,
+                const team =
+                  employeeDirectory.filter(
+                    (item) =>
+                      department.employeeKeys.includes(
+                        item.employee.employee_key,
+                      ),
                   );
+
+                const activeTeam = team.filter(
+                  (item) =>
+                    item.employee.status ===
+                    "active",
+                );
 
                 return (
                   <article
-                    key={
-                      employee.id
-                    }
-                    className="min-w-0 rounded-xl border border-border/60 bg-card/40 p-4"
+                    key={department.key}
+                    className="group rounded-2xl border border-border/60 bg-card/40 p-5 transition hover:border-primary/40 hover:bg-primary/5"
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="break-words text-base font-semibold">
-                          {
-                            employee.name
-                          }
-                        </p>
-
-                        <p className="mt-0.5 break-words text-xs text-muted-foreground">
-                          {
-                            employee.title
-                          }
-                        </p>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                        <Icon className="h-6 w-6" />
                       </div>
 
-                      <OperationalBadge
-                        state={
-                          operational.state
-                        }
-                        label={
-                          operational.label
-                        }
-                      />
+                      <span className="rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[10px] text-success">
+                        {activeTeam.length} active
+                      </span>
                     </div>
 
-                    <div className="mt-4 grid gap-2 text-xs">
-                      <EmployeeDetail
-                        label="Department"
-                        value={employeeDepartment(
-                          employee,
-                        )}
-                      />
+                    <h3 className="mt-4 font-display text-xl font-semibold">
+                      {department.name}
+                    </h3>
 
-                      <EmployeeDetail
-                        label="Business unit"
-                        value={employeeBusinessUnit(
-                          employee,
-                        )}
-                      />
-
-                      <EmployeeDetail
-                        label="Profile status"
-                        value={formatStatus(
-                          employee.status,
-                        )}
-                      />
-
-                      <EmployeeDetail
-                        label="Growth mission line"
-                        value={
-                          inExecutableGrowthWorkflow
-                            ? "Executable stage"
-                            : "Specialist / separate workflow"
-                        }
-                      />
-
-                      <EmployeeDetail
-                        label="Approval default"
-                        value={
-                          employee.requires_approval_by_default
-                            ? "Approval-controlled"
-                            : "Safe internal work allowed"
-                        }
-                      />
-                    </div>
-
-                    <div className="mt-4 rounded-lg border border-border/50 bg-background/35 p-3">
-                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                        Current task
-                      </p>
-
-                      <p className="mt-1 break-words text-xs leading-relaxed">
-                        {
-                          operational.currentTask
-                        }
-                      </p>
-                    </div>
-
-                    <p className="mt-3 break-words text-xs leading-relaxed text-muted-foreground">
-                      {
-                        operational.detail
-                      }
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      {department.description}
                     </p>
 
-                    {operational.latestFailure ? (
-                      <div
-                        className={
-                          operational.retryReady
-                            ? "mt-3 rounded-lg border border-warning/30 bg-warning/10 p-3"
-                            : "mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3"
-                        }
-                      >
-                        <p
-                          className={
-                            operational.retryReady
-                              ? "text-[10px] uppercase tracking-widest text-warning"
-                              : "text-[10px] uppercase tracking-widest text-destructive"
-                          }
-                        >
-                          {operational.retryReady
-                            ? "Previous attempt — retry available"
-                            : "Current failure"}
-                        </p>
+                    <div className="mt-4 flex flex-wrap gap-1.5">
+                      {team
+                        .slice(0, 5)
+                        .map((item) => (
+                          <span
+                            key={item.employee.id}
+                            className="rounded-full border border-border/60 bg-background/50 px-2 py-1 text-[10px] text-muted-foreground"
+                          >
+                            {item.employee.name}
+                          </span>
+                        ))}
 
-                        <p
-                          className={
-                            operational.retryReady
-                              ? "mt-1 break-words text-xs leading-relaxed text-warning"
-                              : "mt-1 break-words text-xs leading-relaxed text-destructive"
-                          }
-                        >
-                          {
-                            operational.latestFailure
-                          }
-                        </p>
-                      </div>
-                    ) : null}
-
-                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      <MiniMetric
-                        label="Assigned"
-                        value={
-                          operational.assignedCount
-                        }
-                      />
-
-                      <MiniMetric
-                        label="Pending"
-                        value={
-                          operational.pendingCount
-                        }
-                      />
-
-                      <MiniMetric
-                        label="Running"
-                        value={
-                          operational.runningCount
-                        }
-                      />
-
-                      <MiniMetric
-                        label="Failed history"
-                        value={
-                          operational.historicalFailureCount
-                        }
-                        warning={
-                          operational.latestFailure !==
-                          null
-                        }
-                      />
+                      {team.length > 5 ? (
+                        <span className="rounded-full border border-border/60 bg-background/50 px-2 py-1 text-[10px] text-muted-foreground">
+                          +{team.length - 5}
+                        </span>
+                      ) : null}
                     </div>
 
-                    <div className="mt-4 grid gap-2 border-t border-border/50 pt-3 text-xs">
-                      <EmployeeDetail
-                        label="Latest provider"
-                        value={
-                          operational.latestProvider ??
-                          "No provider run recorded"
-                        }
-                      />
-
-                      <EmployeeDetail
-                        label="Latest model"
-                        value={
-                          operational.latestModel ??
-                          "No model run recorded"
-                        }
-                      />
-
-                      <EmployeeDetail
-                        label="Pending approvals"
-                        value={String(
-                          operational.approvalCount,
-                        )}
-                      />
-                    </div>
-
-                    <div className="mt-4 border-t border-border/50 pt-3">
-                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                        Last recorded activity
-                      </p>
-
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatDateTime(
-                          operational.lastActivity,
-                        )}
-                      </p>
-                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDepartment(
+                          department.key,
+                        );
+                        setEmployeeSearch("");
+                        setView("employees");
+                      }}
+                      className="mt-5 w-full bg-primary/10 text-primary hover:bg-primary/20"
+                      variant="ghost"
+                    >
+                      Open department
+                      <ArrowRight className="ml-1.5 h-4 w-4" />
+                    </Button>
                   </article>
                 );
               },
             )}
           </div>
-        )}
-      </section>
+        </section>
+      ) : null}
 
-      {/* EXECUTABLE GROWTH WORKFLOW */}
+      {/* -------------------------------------------------------------------- */}
+      {/* EMPLOYEE DIRECTORY                                                   */}
+      {/* -------------------------------------------------------------------- */}
 
-      <section className="glass-card p-4 sm:p-5">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Real executable handoff line
-            </p>
+      {view === "employees" ? (
+        <section className="glass-card p-4 sm:p-5">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                  Employee directory
+                </p>
 
-            <h2 className="mt-1 font-display text-xl font-semibold">
-              Current Growth workflow
-            </h2>
-          </div>
+                <h2 className="mt-1 font-display text-2xl font-semibold">
+                  Find the right person quickly
+                </h2>
 
-          <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-            These nine employee stages match the current Growth mission backend.
-            The chain runs sequentially and never skips an earlier incomplete
-            employee stage.
-          </p>
-        </div>
+                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                  Search by employee, responsibility or
+                  normal business language. For example:
+                  flyer, SEO, Facebook, supplier, website,
+                  lead or advertising.
+                </p>
+              </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-9">
-          {EXECUTABLE_GROWTH_WORKFLOW.map(
-            (
-              step,
-              index,
-            ) => {
-              const Icon =
-                step.icon;
+              <span className="text-xs text-muted-foreground">
+                {searchedEmployees.length} matching
+                employee
+                {searchedEmployees.length === 1
+                  ? ""
+                  : "s"}
+              </span>
+            </div>
 
-              const employee =
-                employeesByKey.get(
-                  step.key,
-                );
+            {/* DEPARTMENT FILTERS */}
 
-              const active =
-                employee?.status ===
-                "active";
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <FilterChip
+                active={
+                  selectedDepartment === "all"
+                }
+                label={`All employees (${employees.length})`}
+                onClick={() =>
+                  setSelectedDepartment("all")
+                }
+              />
 
-              return (
-                <div
-                  key={
-                    step.key
-                  }
-                  className="relative min-w-0 rounded-xl border border-border/60 bg-card/40 p-4"
-                >
-                  {index <
-                  EXECUTABLE_GROWTH_WORKFLOW.length -
-                    1 ? (
-                    <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 rounded-full bg-background p-1 text-primary xl:block" />
-                  ) : null}
+              {DEPARTMENTS.map(
+                (department) => {
+                  const count =
+                    employeeDirectory.filter(
+                      (item) =>
+                        item.departmentKeys.includes(
+                          department.key,
+                        ),
+                    ).length;
 
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                    <Icon className="h-4 w-4" />
-                  </div>
-
-                  <div className="mt-3 break-words text-sm font-semibold">
-                    {
-                      step.label
-                    }
-                  </div>
-
-                  <p className="mt-1 break-words text-xs leading-relaxed text-muted-foreground">
-                    {
-                      step.description
-                    }
-                  </p>
-
-                  <div className="mt-3 inline-flex items-center gap-1 text-[10px] uppercase tracking-widest">
-                    <CheckCircle2
-                      className={
-                        active
-                          ? "h-3 w-3 text-success"
-                          : employee
-                            ? "h-3 w-3 text-warning"
-                            : "h-3 w-3 text-muted-foreground"
+                  return (
+                    <FilterChip
+                      key={department.key}
+                      active={
+                        selectedDepartment ===
+                        department.key
+                      }
+                      label={`${department.shortName} (${count})`}
+                      onClick={() =>
+                        setSelectedDepartment(
+                          department.key,
+                        )
                       }
                     />
+                  );
+                },
+              )}
+            </div>
 
-                    <span
-                      className={
-                        active
-                          ? "text-success"
-                          : employee
-                            ? "text-warning"
-                            : "text-muted-foreground"
-                      }
-                    >
-                      {active
-                        ? "Installed — active"
-                        : employee
-                          ? `Installed — ${employee.status}`
-                          : "Not installed"}
-                    </span>
-                  </div>
-                </div>
-              );
-            },
-          )}
-        </div>
-      </section>
+            {/* LOCAL SEARCH */}
 
-      {/* AUTOMATIC EXECUTION */}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
-      <section className="glass-card p-4 sm:p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Automatic safe execution
-            </p>
-
-            <h2 className="mt-1 font-display text-xl font-semibold">
-              Run internal employees hand-to-hand
-            </h2>
-
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              Context is compacted before every employee, the exact recorded
-              next worker is supplied to the model, temporary provider failures
-              receive bounded retries and the executor pauses between employees
-              to reduce provider rate-limit pressure.
-            </p>
-          </div>
-
-          {coordinationMissions.length >
-          0 ? (
-            <label className="grid w-full gap-1 text-xs font-medium text-muted-foreground lg:w-auto">
-              Coordination mission
-
-              <select
-                value={
-                  selectedMission?.id ??
-                  ""
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setSelectedMissionId(
-                    event.target.value ||
-                      null,
+              <input
+                value={employeeSearch}
+                onChange={(event) =>
+                  setEmployeeSearch(
+                    event.target.value,
                   )
                 }
-                className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50 sm:min-w-64"
-              >
-                {coordinationMissions.map(
-                  (
-                    mission,
-                  ) => (
-                    <option
-                      key={
-                        mission.id
+                placeholder="Search employee or responsibility…"
+                className="w-full rounded-xl border border-border/60 bg-background/50 py-3 pl-10 pr-10 text-sm outline-none focus:border-primary/50"
+              />
+
+              {employeeSearch ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEmployeeSearch("")
+                  }
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+
+            {employeesQuery.isLoading ? (
+              <div className="rounded-xl border border-border/60 bg-card/30 p-6 text-sm text-muted-foreground">
+                Loading employees…
+              </div>
+            ) : searchedEmployees.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border/60 p-8 text-center">
+                <Search className="mx-auto h-6 w-6 text-muted-foreground" />
+
+                <p className="mt-3 text-sm font-medium">
+                  No employee matched that search
+                </p>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Try a responsibility such as flyer,
+                  website, SEO, content, supplier, tender,
+                  Facebook or leads.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {searchedEmployees.map(
+                  (item) => (
+                    <EmployeeCard
+                      key={item.employee.id}
+                      item={item}
+                      onOpen={() =>
+                        setSelectedEmployeeId(
+                          item.employee.id,
+                        )
                       }
-                      value={
-                        mission.id
-                      }
-                    >
-                      {mission.objective.slice(
-                        0,
-                        100,
-                      )}
-                    </option>
+                    />
                   ),
                 )}
-              </select>
-            </label>
-          ) : null}
-        </div>
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null}
 
-        {!selectedMission ? (
-          <p className="mt-4 rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-            Create a Growth coordination mission first.
-          </p>
-        ) : (
-          <div className="mt-5 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
-            <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Current execution position
-              </p>
+      {/* -------------------------------------------------------------------- */}
+      {/* WORKFLOWS                                                            */}
+      {/* -------------------------------------------------------------------- */}
 
-              <h3 className="mt-1 break-words text-sm font-semibold">
-                {nextEmployee
-                  ? `${nextEmployee.name} — ${nextEmployee.title}`
-                  : firstIncompleteHandoff
-                    ? "Workflow stage blocked"
-                    : "No incomplete employee stage"}
-              </h3>
+      {view === "workflows" ? (
+        <div className="grid gap-5">
+          {/* CURRENT WORKFLOW */}
 
-              <p className="mt-3 break-words text-xs leading-relaxed text-muted-foreground">
-                {firstIncompleteHandoff?.reason ??
-                  "No incomplete handoff remains for this mission."}
-              </p>
+          <section className="glass-card p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                  Active workflow
+                </p>
 
-              {nextHandoff &&
-              nextEmployee ? (
-                <div className="mt-4 rounded-lg border border-primary/25 bg-primary/5 p-3">
-                  <p className="text-[10px] uppercase tracking-widest text-primary">
-                    Recorded next handoff
-                  </p>
+                <h2 className="mt-1 font-display text-2xl font-semibold">
+                  Growth workforce execution
+                </h2>
 
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    The model will be explicitly told the real next employee
-                    after{" "}
-                    <strong className="text-foreground">
-                      {
-                        nextEmployee.name
-                      }
-                    </strong>
-                    . It may not invent or substitute another worker.
-                  </p>
-                </div>
+                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                  This is the operational workflow view.
+                  Use it when you want to inspect or manually
+                  progress a coordinated mission.
+                </p>
+              </div>
+
+              {coordinationMissions.length > 0 ? (
+                <label className="grid gap-1 text-xs text-muted-foreground">
+                  Mission
+
+                  <select
+                    value={
+                      selectedMission?.id ?? ""
+                    }
+                    onChange={(event) =>
+                      setSelectedMissionId(
+                        event.target.value ||
+                          null,
+                      )
+                    }
+                    className="min-w-72 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                  >
+                    {coordinationMissions.map(
+                      (mission) => (
+                        <option
+                          key={mission.id}
+                          value={mission.id}
+                        >
+                          {mission.objective.slice(
+                            0,
+                            100,
+                          )}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
               ) : null}
+            </div>
 
-              {blockedHandoff ? (
-                <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            {/* PIPELINE */}
 
-                    <div>
-                      <p className="text-xs font-medium text-warning">
-                        Earlier stage cannot be skipped
+            <div className="mt-5 grid gap-2 md:grid-cols-3 xl:grid-cols-9">
+              {EXECUTABLE_GROWTH_WORKFLOW.map(
+                (step, index) => {
+                  const Icon = step.icon;
+
+                  const handoff =
+                    selectedMissionHandoffs[index];
+
+                  const status =
+                    handoff?.status ?? "not_created";
+
+                  return (
+                    <div
+                      key={step.key}
+                      className="relative rounded-xl border border-border/60 bg-card/40 p-3"
+                    >
+                      {index <
+                      EXECUTABLE_GROWTH_WORKFLOW.length -
+                        1 ? (
+                        <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 rounded-full bg-background p-1 text-primary xl:block" />
+                      ) : null}
+
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                        <Icon className="h-4 w-4" />
+                      </div>
+
+                      <p className="mt-2 text-xs font-medium">
+                        {step.label}
                       </p>
 
-                      <p className="mt-1 text-[11px] leading-relaxed text-warning">
-                        The first incomplete handoff is{" "}
+                      <p
+                        className={
+                          status === "completed"
+                            ? "mt-1 text-[9px] uppercase tracking-widest text-success"
+                            : status === "accepted"
+                              ? "mt-1 text-[9px] uppercase tracking-widest text-warning"
+                              : status === "pending"
+                                ? "mt-1 text-[9px] uppercase tracking-widest text-primary"
+                                : "mt-1 text-[9px] uppercase tracking-widest text-muted-foreground"
+                        }
+                      >
+                        {formatStatus(status)}
+                      </p>
+                    </div>
+                  );
+                },
+              )}
+            </div>
+
+            {!selectedMission ? (
+              <div className="mt-5 rounded-xl border border-dashed border-border/60 p-5 text-sm text-muted-foreground">
+                No Growth coordination mission is
+                selected.
+              </div>
+            ) : (
+              <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="rounded-xl border border-border/60 bg-card/40 p-4">
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    Current position
+                  </p>
+
+                  <h3 className="mt-1 text-base font-semibold">
+                    {nextEmployee
+                      ? `${nextEmployee.name} — ${nextEmployee.title}`
+                      : firstIncompleteHandoff
+                        ? "Workflow stage blocked"
+                        : "Workflow complete"}
+                  </h3>
+
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    {firstIncompleteHandoff?.reason ??
+                      "No incomplete handoff remains."}
+                  </p>
+
+                  {blockedHandoff ? (
+                    <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3">
+                      <p className="text-xs text-warning">
+                        Earlier stage is{" "}
                         <strong>
                           {formatStatus(
                             blockedHandoff.status,
                           )}
                         </strong>
-                        . The executor will not run a later employee until this
-                        stage is recovered or completed.
+                        . Cossa AI will not skip it.
                       </p>
                     </div>
+                  ) : null}
+
+                  <div className="mt-4 grid gap-2">
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        runSafeWorkflowMutation.mutate()
+                      }
+                      disabled={
+                        !nextHandoff ||
+                        Boolean(blockedHandoff) ||
+                        runSafeWorkflowMutation.isPending ||
+                        runNextStageMutation.isPending ||
+                        selectedMission.status ===
+                          "awaiting_approval" ||
+                        selectedMission.status ===
+                          "completed"
+                      }
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+                    >
+                      {runSafeWorkflowMutation.isPending ? (
+                        <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Workflow className="mr-1.5 h-4 w-4" />
+                      )}
+
+                      {runSafeWorkflowMutation.isPending
+                        ? "Team is working…"
+                        : "Run safe workflow"}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        runNextStageMutation.mutate()
+                      }
+                      disabled={
+                        !nextHandoff ||
+                        !nextEmployee ||
+                        Boolean(blockedHandoff) ||
+                        nextEmployee.status !==
+                          "active" ||
+                        runNextStageMutation.isPending ||
+                        runSafeWorkflowMutation.isPending ||
+                        selectedMission.status ===
+                          "awaiting_approval" ||
+                        selectedMission.status ===
+                          "completed"
+                      }
+                      className="border-primary/40 text-primary"
+                    >
+                      {runNextStageMutation.isPending ? (
+                        <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Play className="mr-1.5 h-4 w-4" />
+                      )}
+
+                      Run next employee only
+                    </Button>
                   </div>
                 </div>
-              ) : null}
 
-              <div className="mt-4 grid gap-2">
-                <Button
-                  type="button"
-                  onClick={() =>
-                    runSafeWorkflowMutation.mutate()
-                  }
-                  disabled={
-                    !nextHandoff ||
-                    Boolean(
-                      blockedHandoff,
-                    ) ||
-                    runSafeWorkflowMutation.isPending ||
-                    runNextStageMutation.isPending ||
-                    selectedMission.status ===
-                      "awaiting_approval" ||
-                    selectedMission.status ===
-                      "completed"
-                  }
-                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-                >
-                  {runSafeWorkflowMutation.isPending ? (
-                    <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Workflow className="mr-1.5 h-4 w-4" />
-                  )}
+                <div className="rounded-xl border border-border/60 bg-card/40 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                        Mission outputs
+                      </p>
 
-                  {runSafeWorkflowMutation.isPending
-                    ? "Employees are working hand-to-hand…"
-                    : "Run all safe pending stages"}
-                </Button>
+                      <h3 className="text-sm font-semibold">
+                        {reviewableOutputs.length} saved
+                        employee output
+                        {reviewableOutputs.length === 1
+                          ? ""
+                          : "s"}
+                      </h3>
+                    </div>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    runNextStageMutation.mutate()
-                  }
-                  disabled={
-                    !nextHandoff ||
-                    !nextEmployee ||
-                    Boolean(
-                      blockedHandoff,
-                    ) ||
-                    nextEmployee.status !==
-                      "active" ||
-                    runNextStageMutation.isPending ||
-                    runSafeWorkflowMutation.isPending ||
-                    selectedMission.status ===
-                      "awaiting_approval" ||
-                    selectedMission.status ===
-                      "completed"
-                  }
-                  className="w-full border-primary/40 text-primary hover:bg-primary/10"
-                >
-                  {runNextStageMutation.isPending ? (
-                    <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Play className="mr-1.5 h-4 w-4" />
-                  )}
+                    <FileCheck2 className="h-5 w-5 text-primary" />
+                  </div>
 
-                  Run only next stage
-                </Button>
-              </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <MiniMetric
+                      label="Completed"
+                      value={
+                        selectedMissionCompletedRuns.length
+                      }
+                    />
 
-              <div className="mt-4 rounded-lg border border-border/60 bg-background/30 p-3">
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  Execution protections
-                </p>
+                    <MiniMetric
+                      label="Pending"
+                      value={
+                        selectedMissionHandoffs.filter(
+                          (handoff) =>
+                            handoff.status ===
+                            "pending",
+                        ).length
+                      }
+                    />
 
-                <div className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                  <p>
-                    Context limit: latest{" "}
-                    {MAX_PRIOR_OUTPUTS} worker outputs, max{" "}
-                    {MAX_PRIOR_OUTPUT_CHARS.toLocaleString()} characters each.
-                  </p>
+                    <MiniMetric
+                      label="Failed history"
+                      value={
+                        selectedMissionFailedRuns.length
+                      }
+                      warning={
+                        selectedMissionFailedRuns.length >
+                        0
+                      }
+                    />
+                  </div>
 
-                  <p>
-                    Prompt ceiling:{" "}
-                    {MAX_STAGE_PROMPT_CHARS.toLocaleString()} characters.
-                  </p>
+                  {displayReviewableOutputs.length >
+                  0 ? (
+                    <div className="mt-4 max-h-96 space-y-3 overflow-y-auto pr-1">
+                      {displayReviewableOutputs.map(
+                        ({ run, content }) => {
+                          const worker =
+                            employees.find(
+                              (employee) =>
+                                employee.id ===
+                                run.employee_id,
+                            );
 
-                  <p>
-                    Provider attempts: maximum{" "}
-                    {PROVIDER_MAX_ATTEMPTS} for temporary retryable failures.
-                  </p>
+                          return (
+                            <article
+                              key={run.id}
+                              className="rounded-lg border border-border/60 bg-background/40 p-3"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-xs font-medium">
+                                  {worker?.name ??
+                                    "Recorded worker"}
+                                </span>
 
-                  <p>
-                    Automatic worker pacing:{" "}
-                    {WORKFORCE_STAGE_DELAY_MS / 1_000} seconds between stages.
-                  </p>
-                </div>
-              </div>
+                                <span className="text-[9px] uppercase tracking-widest text-success">
+                                  completed
+                                </span>
+                              </div>
 
-              <div className="mt-4 rounded-lg border border-border/60 bg-background/30 p-3">
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  Execution boundary
-                </p>
-
-                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                  This page can run the safe chain while the browser request
-                  remains active. Permanent unattended execution, recurring
-                  work, scheduled posting and autonomous external publishing
-                  still need a server-side worker or scheduler with verified
-                  authorised integrations.
-                </p>
-              </div>
-            </div>
-
-            <div className="min-w-0 rounded-xl border border-border/60 bg-card/40 p-4">
-              <div className="flex items-center gap-2">
-                <FileCheck2 className="h-4 w-4 shrink-0 text-primary" />
-
-                <div className="min-w-0">
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Recorded outputs
-                  </p>
-
-                  <h3 className="text-sm font-semibold">
-                    {
-                      reviewableOutputs.length
-                    }{" "}
-                    employee outputs saved
-                  </h3>
-                </div>
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                <MiniMetric
-                  label="Completed runs"
-                  value={
-                    selectedMissionCompletedRuns.length
-                  }
-                />
-
-                <MiniMetric
-                  label="Historical failures"
-                  value={
-                    selectedMissionFailedRuns.length
-                  }
-                  warning={
-                    selectedMissionFailedRuns.length >
-                    0
-                  }
-                />
-
-                <MiniMetric
-                  label="Pending handoffs"
-                  value={
-                    selectedMissionHandoffs.filter(
-                      (
-                        handoff,
-                      ) =>
-                        handoff.status ===
-                        "pending",
-                    ).length
-                  }
-                />
-              </div>
-
-              {reviewableOutputs.length ===
-              0 ? (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  No employee output has been saved for this mission yet.
-                </p>
-              ) : (
-                <div className="mt-3 max-h-96 space-y-3 overflow-y-auto pr-1">
-                  {displayReviewableOutputs.map(
-                    ({
-                      run,
-                      content,
-                    }) => {
-                      const worker =
-                        employees.find(
-                          (
-                            employee,
-                          ) =>
-                            employee.id ===
-                            run.employee_id,
-                        );
-
-                      return (
-                        <article
-                          key={
-                            run.id
-                          }
-                          className="min-w-0 rounded-lg border border-border/60 bg-background/40 p-3"
-                        >
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="min-w-0">
-                              <span className="break-words text-xs font-medium">
-                                {worker?.name ??
-                                  "Recorded worker"}
-                              </span>
-
-                              <p className="mt-0.5 break-words text-[10px] text-muted-foreground">
-                                {run.model_provider ??
-                                  "Provider not recorded"}
-
-                                {run.model_name
-                                  ? ` · ${run.model_name}`
-                                  : ""}
+                              <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                                {content}
                               </p>
-                            </div>
-
-                            <span className="w-fit text-[10px] uppercase tracking-widest text-success">
-                              completed
-                            </span>
-                          </div>
-
-                          <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-muted-foreground">
-                            {
-                              content
-                            }
-                          </p>
-                        </article>
-                      );
-                    },
+                            </article>
+                          );
+                        },
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-xs text-muted-foreground">
+                      No employee output has been saved
+                      for this mission yet.
+                    </p>
                   )}
                 </div>
-              )}
+              </div>
+            )}
+          </section>
 
-              {selectedMissionFailedRuns.length >
-              0 ? (
-                <div className="mt-3 rounded-lg border border-warning/30 bg-warning/10 p-3">
-                  <p className="flex items-start gap-2 text-xs leading-relaxed text-warning">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {/* CREATE MISSION */}
 
-                    This mission has{" "}
-                    {
-                      selectedMissionFailedRuns.length
-                    }{" "}
-                    historical failed run
-                    {selectedMissionFailedRuns.length ===
-                    1
-                      ? ""
-                      : "s"}
-                    . The audit history is preserved. A later successful run
-                    remains successful and is not reclassified as failed.
-                  </p>
-                </div>
-              ) : null}
+          <section className="glass-card p-5">
+            <div className="flex items-start gap-3">
+              <Workflow className="mt-0.5 h-5 w-5 text-primary" />
+
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                  New workflow
+                </p>
+
+                <h2 className="mt-1 font-display text-xl font-semibold">
+                  Create Growth coordination mission
+                </h2>
+              </div>
             </div>
-          </div>
-        )}
-      </section>
 
-      {/* OPERATING AREAS */}
-
-      <section className="grid gap-4 lg:grid-cols-3">
-        <OperatingArea
-          icon={
-            Megaphone
-          }
-          title="Social media"
-          description="Strategy, copy, creative production, scheduling, social management and account-growth analysis form one nine-stage Growth pipeline. Real unattended publishing still requires authenticated social integrations and a background executor."
-        />
-
-        <OperatingArea
-          icon={
-            ShoppingCart
-          }
-          title="Cossa Store"
-          description="Store operations coordinate catalogue health, product intelligence, legitimate supplier sourcing, merchandising, product visuals, campaigns and social-commerce growth."
-        />
-
-        <OperatingArea
-          icon={
-            Code2
-          }
-          title="Cossa Tech"
-          description="Cossa Tech coordinates websites, technical solutions, customer requirements, website content, graphics, SEO quality and delivery instead of leaving technical enquiries without a specialist owner."
-        />
-      </section>
-
-      {/* CREATE MISSION + OWNER CONTROL */}
-
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="glass-card p-4 sm:p-5">
-          <div className="flex items-start gap-2">
-            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-
-            <div>
-              <h2 className="font-display text-xl font-semibold">
-                Create Growth coordination mission
-              </h2>
-
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Creates the real nine-stage Growth workforce chain with linked
-                employee handoffs ready for controlled execution.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-4">
-            <label className="grid gap-1.5 text-sm font-medium">
-              Growth objective
-
+            <div className="mt-4 grid gap-4">
               <textarea
-                value={
-                  objective
-                }
-                onChange={(
-                  event,
-                ) =>
+                value={objective}
+                onChange={(event) =>
                   setObjective(
                     event.target.value,
                   )
                 }
-                rows={
-                  4
-                }
-                className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
+                rows={4}
+                className="w-full resize-y rounded-xl border border-input bg-background px-3 py-3 text-sm outline-none focus:border-primary/50"
               />
-            </label>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-1.5 text-sm font-medium">
-                Target market
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs text-muted-foreground">
+                  Target market
 
-                <input
-                  value={
-                    targetMarket
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setTargetMarket(
-                      event.target.value,
-                    )
-                  }
-                  className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
-                />
-              </label>
+                  <input
+                    value={targetMarket}
+                    onChange={(event) =>
+                      setTargetMarket(
+                        event.target.value,
+                      )
+                    }
+                    className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                  />
+                </label>
 
-              <label className="grid gap-1.5 text-sm font-medium">
-                Target location
+                <label className="grid gap-1 text-xs text-muted-foreground">
+                  Target location
 
-                <input
-                  value={
-                    targetLocation
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setTargetLocation(
-                      event.target.value,
-                    )
-                  }
-                  className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
-                />
-              </label>
+                  <input
+                    value={targetLocation}
+                    onChange={(event) =>
+                      setTargetLocation(
+                        event.target.value,
+                      )
+                    }
+                    className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                  />
+                </label>
+              </div>
+
+              <Button
+                type="button"
+                onClick={() =>
+                  coordinationMutation.mutate({
+                    objective,
+                    target_market: targetMarket,
+                    target_location:
+                      targetLocation,
+                  })
+                }
+                disabled={
+                  !canCreateCoordination ||
+                  coordinationMutation.isPending
+                }
+                className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+              >
+                <Workflow className="mr-1.5 h-4 w-4" />
+
+                {coordinationMutation.isPending
+                  ? "Creating workflow…"
+                  : "Create workflow"}
+              </Button>
             </div>
+          </section>
+        </div>
+      ) : null}
 
-            {!canCreateCoordination ? (
-              <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs leading-relaxed text-warning">
-                The Growth chain requires all{" "}
-                {
-                  EXECUTABLE_GROWTH_WORKFLOW.length
-                }{" "}
-                executable employees to exist and be active.{" "}
-                {
-                  activeExecutableWorkflowEmployees.length
-                }{" "}
-                of{" "}
-                {
-                  EXECUTABLE_GROWTH_WORKFLOW.length
-                }{" "}
-                are currently active.
-              </p>
-            ) : null}
+      {/* -------------------------------------------------------------------- */}
+      {/* ACTIVITY                                                             */}
+      {/* -------------------------------------------------------------------- */}
 
-            <Button
-              type="button"
-              onClick={() =>
-                coordinationMutation.mutate({
-                  objective,
-
-                  target_market:
-                    targetMarket,
-
-                  target_location:
-                    targetLocation,
-                })
-              }
-              disabled={
-                !canCreateCoordination ||
-                coordinationMutation.isPending
-              }
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-            >
-              <Workflow className="mr-1.5 h-4 w-4" />
-
-              {coordinationMutation.isPending
-                ? "Creating nine-stage workflow…"
-                : "Create employee workflow"}
-            </Button>
-          </div>
-        </section>
-
-        <section className="glass-card flex flex-col p-4 sm:p-5">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-            Owner authority
-          </p>
-
-          <h2 className="mt-1 font-display text-xl font-semibold">
-            Interrupt only for real high-risk decisions
-          </h2>
-
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Internal research, analysis, drafting, content creation, visual
-            briefs, scheduling, SEO, catalogue analysis, supplier-candidate
-            research and employee handoffs should continue without unnecessary
-            owner interruption.
-          </p>
-
-          <div className="mt-5 space-y-3 text-sm text-muted-foreground">
-            <OwnerRule>
-              Spending money, supplier orders and advertising budget changes
-              remain owner-controlled.
-            </OwnerRule>
-
-            <OwnerRule>
-              Contracts, legal commitments, signatures and binding commercial
-              terms remain owner-controlled.
-            </OwnerRule>
-
-            <OwnerRule>
-              Credentials, destructive operations and irreversible account
-              changes remain owner-controlled.
-            </OwnerRule>
-
-            <OwnerRule>
-              Missing integrations must be identified accurately rather than
-              simulated.
-            </OwnerRule>
-          </div>
-
-          <div className="mt-auto grid gap-2 pt-6 sm:grid-cols-2">
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary/40 text-primary hover:bg-primary/10"
-            >
-              <Link to="/integrations">
-                <Send className="mr-1.5 h-4 w-4" />
-
-                Connections
-              </Link>
-            </Button>
-
-            <Button
-              asChild
-              className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-            >
-              <Link to="/ai/ceo">
-                <BrainCircuit className="mr-1.5 h-4 w-4" />
-
-                AI CEO
-              </Link>
-            </Button>
-          </div>
-        </section>
-      </div>
-
-      {/* SAVED MISSIONS */}
-
-      <section className="glass-card p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-3">
+      {view === "activity" ? (
+        <section className="glass-card p-5">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Recorded workflows
+              Company activity
             </p>
 
-            <h2 className="mt-1 font-display text-xl font-semibold">
-              Growth mission history
+            <h2 className="mt-1 font-display text-2xl font-semibold">
+              Employee work status
             </h2>
+
+            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+              Current state is based on recorded
+              handoffs, runs and approvals. Historical
+              failures remain visible without overriding
+              later success.
+            </p>
           </div>
 
-          <span className="text-xs text-muted-foreground">
-            {
-              coordinationMissions.length
-            }{" "}
-            saved
-          </span>
-        </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {employeeDirectory
+              .slice()
+              .sort((left, right) => {
+                const priority: Record<
+                  OperationalState,
+                  number
+                > = {
+                  working: 0,
+                  attention: 1,
+                  approval: 2,
+                  waiting: 3,
+                  idle: 4,
+                  inactive: 5,
+                };
 
-        {coordinationMissions.length ===
-        0 ? (
-          <p className="mt-4 rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-            No Growth coordination mission has been created.
-          </p>
-        ) : (
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {coordinationMissions
-              .slice(
-                0,
-                6,
-              )
-              .map(
-                (
-                  mission,
-                ) => {
+                return (
+                  priority[
+                    left.operational.state
+                  ] -
+                  priority[
+                    right.operational.state
+                  ]
+                );
+              })
+              .map((item) => (
+                <EmployeeActivityCard
+                  key={item.employee.id}
+                  item={item}
+                  onOpen={() =>
+                    setSelectedEmployeeId(
+                      item.employee.id,
+                    )
+                  }
+                />
+              ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* -------------------------------------------------------------------- */}
+      {/* CONTROL ROOM                                                         */}
+      {/* -------------------------------------------------------------------- */}
+
+      {view === "control" ? (
+        <div className="grid gap-5">
+          <section className="glass-card p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                  Workforce control room
+                </p>
+
+                <h2 className="mt-1 font-display text-2xl font-semibold">
+                  System integrity & administration
+                </h2>
+
+                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                  Technical controls remain available,
+                  but they no longer block ordinary daily
+                  business work.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                onClick={() =>
+                  installMutation.mutate()
+                }
+                disabled={
+                  installMutation.isPending
+                }
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <UsersRound className="mr-1.5 h-4 w-4" />
+
+                {installMutation.isPending
+                  ? "Synchronising…"
+                  : "Synchronise workforce"}
+              </Button>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <ControlMetric
+                label="Source profiles"
+                value={
+                  COSSA_GROWTH_WORKFORCE.length
+                }
+                description="Profiles defined in Cossa source."
+              />
+
+              <ControlMetric
+                label="Installed"
+                value={
+                  installedDefaultEmployees.length
+                }
+                description="Source profiles recorded."
+              />
+
+              <ControlMetric
+                label="Active source"
+                value={
+                  activeDefaultEmployees.length
+                }
+                description="Installed and active."
+              />
+
+              <ControlMetric
+                label="Departments"
+                value={departments.length}
+                description="Recorded employee departments."
+              />
+            </div>
+          </section>
+
+          <section className="glass-card p-5">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
+
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                  Owner authority
+                </p>
+
+                <h2 className="mt-1 font-display text-xl font-semibold">
+                  High-risk actions remain controlled
+                </h2>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <OwnerRule>
+                Spending money, supplier orders and
+                advertising budget changes remain
+                owner-controlled.
+              </OwnerRule>
+
+              <OwnerRule>
+                Contracts, legal commitments, signatures
+                and binding commercial terms remain
+                owner-controlled.
+              </OwnerRule>
+
+              <OwnerRule>
+                Credentials, destructive operations and
+                irreversible account changes remain
+                owner-controlled.
+              </OwnerRule>
+
+              <OwnerRule>
+                Missing integrations must be reported,
+                never simulated.
+              </OwnerRule>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button
+                asChild
+                variant="outline"
+                className="border-primary/40 text-primary"
+              >
+                <Link to="/integrations">
+                  <Send className="mr-1.5 h-4 w-4" />
+                  Connections
+                </Link>
+              </Button>
+
+              <Button
+                asChild
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Link to="/ai/ceo">
+                  <BrainCircuit className="mr-1.5 h-4 w-4" />
+                  AI CEO
+                </Link>
+              </Button>
+            </div>
+          </section>
+
+          <section className="glass-card p-5">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                  Execution safeguards
+                </p>
+
+                <h2 className="mt-1 font-display text-xl font-semibold">
+                  Provider & context controls
+                </h2>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <ControlMetric
+                label="Prompt ceiling"
+                value={MAX_STAGE_PROMPT_CHARS}
+                description="Maximum characters per stage prompt."
+              />
+
+              <ControlMetric
+                label="Prior outputs"
+                value={MAX_PRIOR_OUTPUTS}
+                description={`Maximum ${MAX_PRIOR_OUTPUT_CHARS} characters each.`}
+              />
+
+              <ControlMetric
+                label="Provider attempts"
+                value={PROVIDER_MAX_ATTEMPTS}
+                description="Maximum temporary retry attempts."
+              />
+
+              <ControlMetric
+                label="Stage delay"
+                value={
+                  WORKFORCE_STAGE_DELAY_MS /
+                  1_000
+                }
+                suffix=" sec"
+                description="Delay between automatic employees."
+              />
+            </div>
+          </section>
+
+          <section className="glass-card p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                  Audit history
+                </p>
+
+                <h2 className="mt-1 font-display text-xl font-semibold">
+                  Growth mission records
+                </h2>
+              </div>
+
+              <span className="text-xs text-muted-foreground">
+                {coordinationMissions.length} saved
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {coordinationMissions
+                .slice(0, 9)
+                .map((mission) => {
                   const missionHandoffs =
                     handoffs.filter(
-                      (
-                        handoff,
-                      ) =>
+                      (handoff) =>
                         handoff.mission_id ===
                         mission.id,
                     );
 
                   const missionRuns =
                     runs.filter(
-                      (
-                        run,
-                      ) =>
+                      (run) =>
                         run.mission_id ===
                         mission.id,
                     );
 
-                  const completedHandoffs =
+                  const completed =
                     missionHandoffs.filter(
-                      (
-                        handoff,
-                      ) =>
+                      (handoff) =>
                         handoff.status ===
                         "completed",
                     ).length;
 
-                  const acceptedHandoffs =
-                    missionHandoffs.filter(
-                      (
-                        handoff,
-                      ) =>
-                        handoff.status ===
-                        "accepted",
-                    ).length;
-
-                  const missionPendingHandoffs =
-                    missionHandoffs.filter(
-                      (
-                        handoff,
-                      ) =>
-                        handoff.status ===
-                        "pending",
-                    ).length;
-
-                  const failedRuns =
+                  const failed =
                     missionRuns.filter(
-                      (
-                        run,
-                      ) =>
-                        run.status ===
-                        "failed",
-                    ).length;
-
-                  const completedRuns =
-                    missionRuns.filter(
-                      (
-                        run,
-                      ) =>
-                        run.status ===
-                        "completed",
+                      (run) =>
+                        run.status === "failed",
                     ).length;
 
                   return (
-                    <article
-                      key={
-                        mission.id
-                      }
-                      className="min-w-0 rounded-xl border border-border/60 bg-card/40 p-4"
+                    <button
+                      key={mission.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMissionId(
+                          mission.id,
+                        );
+                        setView("workflows");
+                      }}
+                      className="rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40"
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-3">
                         <span className="text-[10px] uppercase tracking-widest text-primary">
                           {formatStatus(
                             mission.status,
@@ -4543,207 +3552,505 @@ function AiWorkforce() {
                         </span>
 
                         <span className="text-xs text-muted-foreground">
-                          {
-                            completedHandoffs
-                          }
-                          /
-                          {
-                            missionHandoffs.length
-                          }{" "}
-                          stages
+                          {completed}/
+                          {missionHandoffs.length}
                         </span>
                       </div>
 
-                      <h3 className="mt-2 break-words text-sm font-semibold">
-                        {
-                          mission.objective
-                        }
-                      </h3>
-
-                      <p className="mt-2 line-clamp-3 break-words text-xs leading-relaxed text-muted-foreground">
-                        {
-                          mission.instruction
-                        }
+                      <p className="mt-2 line-clamp-2 text-sm font-medium">
+                        {mission.objective}
                       </p>
 
-                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                        <MiniMetric
-                          label="Completed"
-                          value={
-                            completedHandoffs
-                          }
-                        />
+                      <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground">
+                        <span>
+                          {missionRuns.length} run
+                          {missionRuns.length === 1
+                            ? ""
+                            : "s"}
+                        </span>
 
-                        <MiniMetric
-                          label="Pending"
-                          value={
-                            missionPendingHandoffs
+                        <span
+                          className={
+                            failed > 0
+                              ? "text-warning"
+                              : ""
                           }
-                        />
-
-                        <MiniMetric
-                          label="Accepted"
-                          value={
-                            acceptedHandoffs
-                          }
-                          warning={
-                            acceptedHandoffs >
-                            0
-                          }
-                        />
-
-                        <MiniMetric
-                          label="Success runs"
-                          value={
-                            completedRuns
-                          }
-                        />
-
-                        <MiniMetric
-                          label="Failed history"
-                          value={
-                            failedRuns
-                          }
-                          warning={
-                            failedRuns >
-                            0
-                          }
-                        />
+                        >
+                          {failed} failure
+                          {failed === 1 ? "" : "s"}
+                        </span>
                       </div>
-
-                      {acceptedHandoffs >
-                      0 ? (
-                        <div className="mt-3 rounded-lg border border-warning/30 bg-warning/10 p-3">
-                          <p className="flex items-start gap-2 text-xs leading-relaxed text-warning">
-                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-
-                            This mission currently has an accepted handoff. The
-                            executor will not skip past it.
-                          </p>
-                        </div>
-                      ) : null}
-
-                      {failedRuns >
-                      0 ? (
-                        <div className="mt-3 rounded-lg border border-border/60 bg-background/30 p-3">
-                          <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
-                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-
-                            This mission contains historical failed attempts.
-                            They remain preserved for audit purposes and do not
-                            erase later successful runs.
-                          </p>
-                        </div>
-                      ) : null}
-                    </article>
+                    </button>
                   );
-                },
-              )}
-          </div>
-        )}
-      </section>
-
-      {/* EXECUTION REALITY */}
-
-      <section className="glass-card p-4 sm:p-5">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Operational truth
-            </p>
-
-            <h2 className="mt-1 font-display text-xl font-semibold">
-              Capability must be real, ordered and auditable
-            </h2>
-
-            <p className="mt-2 max-w-4xl text-sm leading-relaxed text-muted-foreground">
-              An active employee profile proves the worker may receive work. A
-              pending handoff proves work is assigned. An accepted handoff
-              proves the stage has been claimed. A running mission run proves
-              execution. A completed run proves an internal result. Failed
-              attempts remain historical audit records. Social publishing
-              requires a real authenticated publishing integration. Visual
-              generation requires a real media-generation workflow. Permanent
-              unattended operation requires a server-side executor or
-              scheduler.
-            </p>
-          </div>
+                })}
+            </div>
+          </section>
         </div>
-      </section>
+      ) : null}
 
-      {/* QUEUE SUMMARY */}
+      {/* EMPLOYEE DRAWER */}
 
-      <section className="glass-card p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Workforce queue
-            </p>
+      {selectedEmployee ? (
+        <EmployeeDrawer
+          item={selectedEmployee}
+          onClose={() =>
+            setSelectedEmployeeId(null)
+          }
+          onOpenDepartment={() => {
+            const firstDepartment =
+              selectedEmployee.departmentKeys[0];
 
-            <h2 className="mt-1 font-display text-xl font-semibold">
-              Current Growth execution position
-            </h2>
-
-            {selectedMission &&
-            firstIncompleteHandoff ? (
-              <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-                First incomplete stage:{" "}
-                <strong className="text-foreground">
-                  {nextEmployee?.name ??
-                    "Unknown employee"}
-                </strong>
-                {" · "}
-                {formatStatus(
-                  firstIncompleteHandoff.status,
-                )}
-              </p>
-            ) : selectedMission ? (
-              <p className="mt-2 text-xs text-success">
-                No incomplete stage remains in the selected mission.
-              </p>
-            ) : null}
-          </div>
-
-          <div className="text-xs text-muted-foreground">
-            {
-              pendingHandoffs.length
-            }{" "}
-            Growth handoff
-            {pendingHandoffs.length ===
-            1
-              ? ""
-              : "s"}{" "}
-            pending
-          </div>
-        </div>
-      </section>
+            if (firstDepartment) {
+              setSelectedDepartment(
+                firstDepartment,
+              );
+              setEmployeeSearch("");
+              setSelectedEmployeeId(null);
+              setView("employees");
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* UI HELPERS                                                                 */
+/* UI COMPONENTS                                                              */
 /* -------------------------------------------------------------------------- */
+
+function TopNavButton({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        active
+          ? "flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+          : "flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+      }
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
+  );
+}
+
+function FilterChip({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        active
+          ? "shrink-0 rounded-full border border-primary bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary"
+          : "shrink-0 rounded-full border border-border/60 bg-background/40 px-3 py-1.5 text-xs text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+      }
+    >
+      {label}
+    </button>
+  );
+}
+
+function EmployeeCard({
+  item,
+  onOpen,
+}: {
+  item: EmployeeDirectoryItem;
+  onOpen: () => void;
+}) {
+  const { employee, operational } = item;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">
+            {employee.name}
+          </p>
+
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {employee.title}
+          </p>
+        </div>
+
+        <OperationalBadge
+          state={operational.state}
+          label={operational.label}
+        />
+      </div>
+
+      {item.responsibilityLabels.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {item.responsibilityLabels.map(
+            (label) => (
+              <span
+                key={label}
+                className="rounded-full border border-primary/20 bg-primary/5 px-2 py-1 text-[9px] text-primary"
+              >
+                {label}
+              </span>
+            ),
+          )}
+        </div>
+      ) : null}
+
+      <div className="mt-4 rounded-lg border border-border/50 bg-background/30 p-3">
+        <p className="text-[9px] uppercase tracking-widest text-muted-foreground">
+          Current work
+        </p>
+
+        <p className="mt-1 line-clamp-2 text-xs leading-relaxed">
+          {operational.currentTask}
+        </p>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3">
+        <span className="text-[10px] text-muted-foreground">
+          {employeeDepartment(employee)}
+        </span>
+
+        <span className="flex items-center gap-1 text-[10px] font-medium text-primary">
+          Open employee
+          <ChevronRight className="h-3.5 w-3.5" />
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function EmployeeActivityCard({
+  item,
+  onOpen,
+}: {
+  item: EmployeeDirectoryItem;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold">
+            {item.employee.name}
+          </p>
+
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {item.employee.title}
+          </p>
+        </div>
+
+        <OperationalBadge
+          state={item.operational.state}
+          label={item.operational.label}
+        />
+      </div>
+
+      <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+        {item.operational.currentTask}
+      </p>
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <MiniMetric
+          label="Pending"
+          value={item.operational.pendingCount}
+        />
+
+        <MiniMetric
+          label="Running"
+          value={item.operational.runningCount}
+        />
+
+        <MiniMetric
+          label="Failures"
+          value={
+            item.operational.historicalFailureCount
+          }
+          warning={
+            item.operational.latestFailure !==
+            null
+          }
+        />
+      </div>
+    </button>
+  );
+}
+
+function EmployeeDrawer({
+  item,
+  onClose,
+  onOpenDepartment,
+}: {
+  item: EmployeeDirectoryItem;
+  onClose: () => void;
+  onOpenDepartment: () => void;
+}) {
+  const { employee, operational } = item;
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute inset-0 cursor-default"
+        aria-label="Close employee profile"
+      />
+
+      <aside className="relative z-10 h-full w-full max-w-xl overflow-y-auto border-l border-border bg-background p-5 shadow-2xl sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-border/60 p-2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-6">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary gold-glow">
+            <UsersRound className="h-6 w-6" />
+          </div>
+
+          <h2 className="mt-4 font-display text-2xl font-semibold">
+            {employee.name}
+          </h2>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            {employee.title}
+          </p>
+
+          <div className="mt-3">
+            <OperationalBadge
+              state={operational.state}
+              label={operational.label}
+            />
+          </div>
+        </div>
+
+        <section className="mt-6 rounded-xl border border-border/60 bg-card/40 p-4">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            What this employee owns
+          </p>
+
+          {item.responsibilityLabels.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {item.responsibilityLabels.map(
+                (label) => (
+                  <span
+                    key={label}
+                    className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-xs text-primary"
+                  >
+                    {label}
+                  </span>
+                ),
+              )}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">
+              No responsibility matrix label has
+              been assigned yet.
+            </p>
+          )}
+
+          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+            {employee.mission}
+          </p>
+        </section>
+
+        <section className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Current task
+          </p>
+
+          <p className="mt-2 text-sm leading-relaxed">
+            {operational.currentTask}
+          </p>
+
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            {operational.detail}
+          </p>
+        </section>
+
+        <section className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4">
+          <div className="grid gap-3 text-xs">
+            <EmployeeDetail
+              label="Department"
+              value={employeeDepartment(employee)}
+            />
+
+            <EmployeeDetail
+              label="Business unit"
+              value={employeeBusinessUnit(employee)}
+            />
+
+            <EmployeeDetail
+              label="Status"
+              value={formatStatus(employee.status)}
+            />
+
+            <EmployeeDetail
+              label="Approval default"
+              value={
+                employee.requires_approval_by_default
+                  ? "Approval-controlled"
+                  : "Safe internal work allowed"
+              }
+            />
+
+            <EmployeeDetail
+              label="Latest provider"
+              value={
+                operational.latestProvider ??
+                "No provider run recorded"
+              }
+            />
+
+            <EmployeeDetail
+              label="Latest model"
+              value={
+                operational.latestModel ??
+                "No model run recorded"
+              }
+            />
+
+            <EmployeeDetail
+              label="Last activity"
+              value={formatDateTime(
+                operational.lastActivity,
+              )}
+            />
+          </div>
+        </section>
+
+        <section className="mt-4 grid grid-cols-4 gap-2">
+          <MiniMetric
+            label="Assigned"
+            value={operational.assignedCount}
+          />
+
+          <MiniMetric
+            label="Pending"
+            value={operational.pendingCount}
+          />
+
+          <MiniMetric
+            label="Running"
+            value={operational.runningCount}
+          />
+
+          <MiniMetric
+            label="Failures"
+            value={
+              operational.historicalFailureCount
+            }
+            warning={
+              operational.latestFailure !== null
+            }
+          />
+        </section>
+
+        {operational.latestFailure ? (
+          <section className="mt-4 rounded-xl border border-warning/30 bg-warning/10 p-4">
+            <p className="text-[10px] uppercase tracking-widest text-warning">
+              {operational.retryReady
+                ? "Previous attempt — retry ready"
+                : "Latest failure"}
+            </p>
+
+            <p className="mt-2 text-xs leading-relaxed text-warning">
+              {operational.latestFailure}
+            </p>
+          </section>
+        ) : null}
+
+        <div className="mt-6 grid gap-2 sm:grid-cols-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onOpenDepartment}
+            className="border-primary/40 text-primary"
+          >
+            <Building2 className="mr-1.5 h-4 w-4" />
+            Open team
+          </Button>
+
+          <Button
+            asChild
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            <Link to="/ai/ceo">
+              <BrainCircuit className="mr-1.5 h-4 w-4" />
+              Delegate through CEO
+            </Link>
+          </Button>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-border/60 bg-background/30 p-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Direct assignment
+          </p>
+
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            This profile is ready for a direct
+            employee-assignment control, but the current
+            imported workforce API does not expose a safe
+            standalone handoff-creation function. We will
+            connect this when workforce-data.ts is upgraded
+            rather than pretending the task was assigned.
+          </p>
+        </div>
+      </aside>
+    </div>
+  );
+}
 
 function Metric({
   label,
   value,
   warning = false,
 }: {
-  label:
-    string;
-
-  value:
-    string;
-
-  warning?:
-    boolean;
+  label: string;
+  value: string;
+  warning?: boolean;
 }) {
   return (
     <div className="glass-card min-w-0 p-4">
-      <div className="break-words text-[10px] uppercase tracking-widest text-muted-foreground">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
         {label}
       </div>
 
@@ -4765,17 +4072,12 @@ function MiniMetric({
   value,
   warning = false,
 }: {
-  label:
-    string;
-
-  value:
-    number;
-
-  warning?:
-    boolean;
+  label: string;
+  value: number;
+  warning?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-border/50 bg-background/30 p-2 text-center">
+    <div className="rounded-lg border border-border/50 bg-background/30 p-2 text-center">
       <div
         className={
           warning
@@ -4786,9 +4088,86 @@ function MiniMetric({
         {value}
       </div>
 
-      <div className="mt-0.5 break-words text-[9px] uppercase tracking-widest text-muted-foreground">
+      <div className="mt-0.5 text-[9px] uppercase tracking-widest text-muted-foreground">
         {label}
       </div>
+    </div>
+  );
+}
+
+function QueueCard({
+  icon: Icon,
+  title,
+  value,
+  description,
+  warning = false,
+}: {
+  icon: LucideIcon;
+  title: string;
+  value: number;
+  description: string;
+  warning?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/40 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div
+          className={
+            warning
+              ? "flex h-9 w-9 items-center justify-center rounded-lg bg-warning/10 text-warning"
+              : "flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"
+          }
+        >
+          <Icon className="h-4 w-4" />
+        </div>
+
+        <span
+          className={
+            warning
+              ? "font-display text-2xl font-semibold text-warning"
+              : "font-display text-2xl font-semibold"
+          }
+        >
+          {value}
+        </span>
+      </div>
+
+      <p className="mt-3 text-sm font-medium">
+        {title}
+      </p>
+
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function ControlMetric({
+  label,
+  value,
+  description,
+  suffix = "",
+}: {
+  label: string;
+  value: number;
+  description: string;
+  suffix?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/40 p-4">
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </p>
+
+      <p className="mt-2 font-display text-2xl font-semibold">
+        {value.toLocaleString()}
+        {suffix}
+      </p>
+
+      <p className="mt-1 text-xs text-muted-foreground">
+        {description}
+      </p>
     </div>
   );
 }
@@ -4797,11 +4176,8 @@ function EmployeeDetail({
   label,
   value,
 }: {
-  label:
-    string;
-
-  value:
-    string;
+  label: string;
+  value: string;
 }) {
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
@@ -4809,7 +4185,7 @@ function EmployeeDetail({
         {label}
       </span>
 
-      <span className="break-words font-medium text-foreground sm:max-w-[58%] sm:text-right">
+      <span className="break-words font-medium text-foreground sm:max-w-[60%] sm:text-right">
         {value}
       </span>
     </div>
@@ -4819,48 +4195,14 @@ function EmployeeDetail({
 function OwnerRule({
   children,
 }: {
-  children:
-    ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <div className="flex items-start gap-2">
+    <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-card/40 p-3 text-sm text-muted-foreground">
       <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 
-      <span>
-        {children}
-      </span>
+      <span>{children}</span>
     </div>
-  );
-}
-
-function OperatingArea({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon:
-    typeof Store;
-
-  title:
-    string;
-
-  description:
-    string;
-}) {
-  return (
-    <article className="glass-card min-w-0 p-5">
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
-        <Icon className="h-5 w-5" />
-      </div>
-
-      <h3 className="mt-3 break-words font-display text-lg font-semibold">
-        {title}
-      </h3>
-
-      <p className="mt-2 break-words text-sm leading-relaxed text-muted-foreground">
-        {description}
-      </p>
-    </article>
   );
 }
 
@@ -4868,33 +4210,25 @@ function OperationalBadge({
   state,
   label,
 }: {
-  state:
-    OperationalState;
-
-  label:
-    string;
+  state: OperationalState;
+  label: string;
 }) {
   const className =
-    state ===
-    "working"
+    state === "working"
       ? "border-success/35 bg-success/10 text-success"
-      : state ===
-          "attention"
+      : state === "attention"
         ? "border-destructive/35 bg-destructive/10 text-destructive"
-        : state ===
-            "approval"
+        : state === "approval"
           ? "border-warning/35 bg-warning/10 text-warning"
-          : state ===
-              "waiting"
+          : state === "waiting"
             ? "border-primary/35 bg-primary/10 text-primary"
-            : state ===
-                "inactive"
+            : state === "inactive"
               ? "border-border bg-secondary/50 text-muted-foreground"
               : "border-border bg-secondary/40 text-muted-foreground";
 
   return (
     <span
-      className={`w-fit max-w-full shrink-0 break-words rounded-full border px-2.5 py-1 text-[9px] font-medium uppercase tracking-wider ${className}`}
+      className={`w-fit max-w-full shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-medium uppercase tracking-wider ${className}`}
     >
       {label}
     </span>
