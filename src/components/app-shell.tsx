@@ -8,6 +8,7 @@ import {
 import {
   Link,
   useRouter,
+  useRouterState,
 } from "@tanstack/react-router";
 
 import {
@@ -29,15 +30,12 @@ import {
   PackageSearch,
   Search,
   Settings2,
-  ShieldCheck,
   Sparkles,
   UsersRound,
   User,
   UserRoundCog,
   WalletCards,
   Workflow,
-  Wrench,
-  X,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -59,11 +57,40 @@ import { Button } from "@/components/ui/button";
 /* TYPES                                                                      */
 /* -------------------------------------------------------------------------- */
 
+type WorkforceView =
+  | "command"
+  | "departments"
+  | "employees"
+  | "workflows"
+  | "activity"
+  | "control";
+
+type WorkforceDepartment =
+  | "all"
+  | "executive"
+  | "growth"
+  | "store"
+  | "tech"
+  | "revenue";
+
+interface WorkforceSearchTarget {
+  view: WorkforceView;
+  department: WorkforceDepartment;
+}
+
+interface CompanyNavigationItem {
+  title: string;
+  to: string;
+  icon: LucideIcon;
+  workforceSearch?: WorkforceSearchTarget;
+}
+
 interface AiToolItem {
   title: string;
   description: string;
   to: string;
   icon: LucideIcon;
+  workforceSearch?: WorkforceSearchTarget;
 }
 
 interface AiToolGroup {
@@ -76,7 +103,19 @@ interface AiToolGroup {
 /* COMPANY NAVIGATION                                                         */
 /* -------------------------------------------------------------------------- */
 
-const COMPANY_NAVIGATION = [
+/**
+ * Global company navigation.
+ *
+ * Important:
+ *
+ * - Company opens the group command centre.
+ * - Departments, Employees, Workflows and Activity are views inside
+ *   the AI Workforce operating system.
+ * - The dedicated /ai/workflow route remains available separately as the
+ *   advanced Workflow Builder inside the AI Tools menu.
+ * - Integrations remains a standalone platform route.
+ */
+const COMPANY_NAVIGATION: CompanyNavigationItem[] = [
   {
     title: "Company",
     to: "/command-center",
@@ -87,24 +126,40 @@ const COMPANY_NAVIGATION = [
     title: "Departments",
     to: "/ai/workforce",
     icon: Building2,
+    workforceSearch: {
+      view: "departments",
+      department: "all",
+    },
   },
 
   {
     title: "Employees",
     to: "/ai/workforce",
     icon: UsersRound,
+    workforceSearch: {
+      view: "employees",
+      department: "all",
+    },
   },
 
   {
     title: "Workflows",
-    to: "/ai/workflow",
+    to: "/ai/workforce",
     icon: Workflow,
+    workforceSearch: {
+      view: "workflows",
+      department: "all",
+    },
   },
 
   {
     title: "Activity",
     to: "/ai/workforce",
     icon: Activity,
+    workforceSearch: {
+      view: "activity",
+      department: "all",
+    },
   },
 
   {
@@ -112,7 +167,7 @@ const COMPANY_NAVIGATION = [
     to: "/integrations",
     icon: Network,
   },
-] as const;
+];
 
 /* -------------------------------------------------------------------------- */
 /* AI TOOL ORGANISATION                                                       */
@@ -127,59 +182,52 @@ const AI_TOOL_GROUPS: AiToolGroup[] = [
 
     items: [
       {
-        title:
-          "Cossa AI",
+        title: "Cossa AI",
 
         description:
           "General Cossa business intelligence and assistance.",
 
-        to:
-          "/ai/cossa",
+        to: "/ai/cossa",
 
-        icon:
-          Sparkles,
+        icon: Sparkles,
       },
 
       {
-        title:
-          "AI CEO",
+        title: "AI CEO",
 
         description:
           "Delegate outcomes and coordinate the right employees.",
 
-        to:
-          "/ai/ceo",
+        to: "/ai/ceo",
 
-        icon:
-          BrainCircuit,
+        icon: BrainCircuit,
       },
 
       {
-        title:
-          "AI Workforce",
+        title: "AI Workforce",
 
         description:
           "Departments, employees, missions and workforce execution.",
 
-        to:
-          "/ai/workforce",
+        to: "/ai/workforce",
 
-        icon:
-          UsersRound,
+        icon: UsersRound,
+
+        workforceSearch: {
+          view: "command",
+          department: "all",
+        },
       },
 
       {
-        title:
-          "AI Business Consultant",
+        title: "AI Business Consultant",
 
         description:
           "Business strategy, diagnosis and decision support.",
 
-        to:
-          "/ai/consultant",
+        to: "/ai/consultant",
 
-        icon:
-          BarChart3,
+        icon: BarChart3,
       },
     ],
   },
@@ -192,45 +240,36 @@ const AI_TOOL_GROUPS: AiToolGroup[] = [
 
     items: [
       {
-        title:
-          "AI Sales Assistant",
+        title: "AI Sales Assistant",
 
         description:
           "Sales support, opportunities and conversion assistance.",
 
-        to:
-          "/ai/sales-assistant",
+        to: "/ai/sales-assistant",
 
-        icon:
-          Megaphone,
+        icon: Megaphone,
       },
 
       {
-        title:
-          "AI Customer Support",
+        title: "AI Customer Support",
 
         description:
           "Customer-service workflows and response assistance.",
 
-        to:
-          "/ai/support",
+        to: "/ai/support",
 
-        icon:
-          Headphones,
+        icon: Headphones,
       },
 
       {
-        title:
-          "AI CRM Specialist",
+        title: "AI CRM Specialist",
 
         description:
           "CRM intelligence, lead management and pipeline support.",
 
-        to:
-          "/ai/crm-specialist",
+        to: "/ai/crm-specialist",
 
-        icon:
-          UsersRound,
+        icon: UsersRound,
       },
     ],
   },
@@ -243,59 +282,47 @@ const AI_TOOL_GROUPS: AiToolGroup[] = [
 
     items: [
       {
-        title:
-          "AI Automation",
+        title: "AI Automation",
 
         description:
           "Automate repeatable internal business processes.",
 
-        to:
-          "/ai/automation",
+        to: "/ai/automation",
 
-        icon:
-          Zap,
+        icon: Zap,
       },
 
       {
-        title:
-          "Workflow Builder",
+        title: "Workflow Builder",
 
         description:
-          "Design and coordinate structured business workflows.",
+          "Design and coordinate advanced structured business workflows.",
 
-        to:
-          "/ai/workflow",
+        to: "/ai/workflow",
 
-        icon:
-          Workflow,
+        icon: Workflow,
       },
 
       {
-        title:
-          "AI Operations Manager",
+        title: "AI Operations Manager",
 
         description:
           "Operational planning and business process coordination.",
 
-        to:
-          "/ai/operations-manager",
+        to: "/ai/operations-manager",
 
-        icon:
-          Settings2,
+        icon: Settings2,
       },
 
       {
-        title:
-          "AI Project Manager",
+        title: "AI Project Manager",
 
         description:
           "Project planning, coordination and progress management.",
 
-        to:
-          "/ai/project-manager",
+        to: "/ai/project-manager",
 
-        icon:
-          PackageSearch,
+        icon: PackageSearch,
       },
     ],
   },
@@ -308,59 +335,47 @@ const AI_TOOL_GROUPS: AiToolGroup[] = [
 
     items: [
       {
-        title:
-          "Prompt Library",
+        title: "Prompt Library",
 
         description:
           "Reusable Cossa prompts and operating instructions.",
 
-        to:
-          "/ai/prompts",
+        to: "/ai/prompts",
 
-        icon:
-          BookOpen,
+        icon: BookOpen,
       },
 
       {
-        title:
-          "Knowledge Base",
+        title: "Knowledge Base",
 
         description:
           "Verified company information and AI reference material.",
 
-        to:
-          "/ai/knowledge",
+        to: "/ai/knowledge",
 
-        icon:
-          FileText,
+        icon: FileText,
       },
 
       {
-        title:
-          "AI Memory",
+        title: "AI Memory",
 
         description:
           "Persistent company and workflow memory.",
 
-        to:
-          "/ai/memory",
+        to: "/ai/memory",
 
-        icon:
-          MemoryStick,
+        icon: MemoryStick,
       },
 
       {
-        title:
-          "AI Document Assistant",
+        title: "AI Document Assistant",
 
         description:
           "Business documents, analysis and document workflows.",
 
-        to:
-          "/ai/document-assistant",
+        to: "/ai/document-assistant",
 
-        icon:
-          FileText,
+        icon: FileText,
       },
     ],
   },
@@ -373,49 +388,134 @@ const AI_TOOL_GROUPS: AiToolGroup[] = [
 
     items: [
       {
-        title:
-          "AI Finance Assistant",
+        title: "AI Finance Assistant",
 
         description:
           "Finance support, analysis and financial administration.",
 
-        to:
-          "/ai/finance",
+        to: "/ai/finance",
 
-        icon:
-          WalletCards,
+        icon: WalletCards,
       },
 
       {
-        title:
-          "AI HR Assistant",
+        title: "AI HR Assistant",
 
         description:
           "HR, people operations and workforce support.",
 
-        to:
-          "/ai/hr",
+        to: "/ai/hr",
 
-        icon:
-          UserRoundCog,
+        icon: UserRoundCog,
       },
 
       {
-        title:
-          "Voice AI",
+        title: "Voice AI",
 
         description:
           "Voice-enabled business and customer workflows.",
 
-        to:
-          "/ai/voice",
+        to: "/ai/voice",
 
-        icon:
-          Bot,
+        icon: Bot,
       },
     ],
   },
 ];
+
+/* -------------------------------------------------------------------------- */
+/* PATH HELPERS                                                               */
+/* -------------------------------------------------------------------------- */
+
+function normalisePathname(
+  pathname: string,
+): string {
+  if (pathname === "/") {
+    return pathname;
+  }
+
+  return pathname.replace(
+    /\/+$/,
+    "",
+  );
+}
+
+function pathMatchesPrefix(
+  pathname: string,
+  prefix: string,
+): boolean {
+  const normalisedPathname =
+    normalisePathname(
+      pathname,
+    );
+
+  const normalisedPrefix =
+    normalisePathname(
+      prefix,
+    );
+
+  return (
+    normalisedPathname ===
+      normalisedPrefix ||
+    normalisedPathname.startsWith(
+      `${normalisedPrefix}/`,
+    )
+  );
+}
+
+function normaliseSearchValue(
+  value: unknown,
+): string | null {
+  return typeof value === "string"
+    ? value
+    : null;
+}
+
+function companyNavigationItemActive({
+  item,
+  pathname,
+  search,
+}: {
+  item: CompanyNavigationItem;
+  pathname: string;
+  search: Record<string, unknown>;
+}): boolean {
+  if (
+    item.to ===
+    "/ai/workforce"
+  ) {
+    if (
+      !pathMatchesPrefix(
+        pathname,
+        "/ai/workforce",
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      !item.workforceSearch
+    ) {
+      return true;
+    }
+
+    const currentView =
+      normaliseSearchValue(
+        search.view,
+      ) ??
+      "command";
+
+    return (
+      currentView ===
+      item.workforceSearch.view
+    );
+  }
+
+  return pathMatchesPrefix(
+    pathname,
+    item.to,
+  );
+}
 
 /* -------------------------------------------------------------------------- */
 /* APP SHELL                                                                  */
@@ -424,11 +524,27 @@ const AI_TOOL_GROUPS: AiToolGroup[] = [
 export function AppShell({
   children,
 }: {
-  children:
-    ReactNode;
+  children: ReactNode;
 }) {
   const router =
     useRouter();
+
+  const routerLocation =
+    useRouterState({
+      select:
+        (
+          state,
+        ) => ({
+          pathname:
+            state.location.pathname,
+
+          search:
+            state.location.search as Record<
+              string,
+              unknown
+            >,
+        }),
+    });
 
   const [
     signingOut,
@@ -464,25 +580,46 @@ export function AppShell({
   /* ------------------------------------------------------------------------ */
 
   async function signOut() {
+    if (
+      signingOut
+    ) {
+      return;
+    }
+
     setSigningOut(
       true,
     );
 
-    const {
-      supabase,
-    } =
-      await import(
-        "@/integrations/supabase/client"
+    try {
+      const {
+        supabase,
+      } =
+        await import(
+          "@/integrations/supabase/client"
+        );
+
+      await supabase.auth.signOut();
+
+      await router.navigate({
+        to: "/login",
+      });
+    } finally {
+      setSigningOut(
+        false,
       );
+    }
+  }
 
-    await supabase.auth.signOut();
+  /* ------------------------------------------------------------------------ */
+  /* CLOSE MENUS                                                              */
+  /* ------------------------------------------------------------------------ */
 
-    await router.navigate({
-      to:
-        "/login",
-    });
+  function closeHeaderMenus() {
+    setAiToolsOpen(
+      false,
+    );
 
-    setSigningOut(
+    setMobileCompanyNavOpen(
       false,
     );
   }
@@ -494,14 +631,12 @@ export function AppShell({
   useEffect(
     () => {
       function handlePointerDown(
-        event:
-          MouseEvent,
+        event: MouseEvent,
       ) {
         if (
           aiToolsRef.current &&
           !aiToolsRef.current.contains(
-            event.target as
-              Node,
+            event.target as Node,
           )
         ) {
           setAiToolsOpen(
@@ -532,20 +667,13 @@ export function AppShell({
   useEffect(
     () => {
       function handleKeyDown(
-        event:
-          KeyboardEvent,
+        event: KeyboardEvent,
       ) {
         if (
           event.key ===
           "Escape"
         ) {
-          setAiToolsOpen(
-            false,
-          );
-
-          setMobileCompanyNavOpen(
-            false,
-          );
+          closeHeaderMenus();
         }
       }
 
@@ -565,22 +693,39 @@ export function AppShell({
   );
 
   /* ------------------------------------------------------------------------ */
+  /* CLOSE MENUS AFTER ROUTE CHANGES                                          */
+  /* ------------------------------------------------------------------------ */
+
+  useEffect(
+    () => {
+      closeHeaderMenus();
+    },
+    [
+      routerLocation.pathname,
+    ],
+  );
+
+  /* ------------------------------------------------------------------------ */
   /* RENDER                                                                   */
   /* ------------------------------------------------------------------------ */
 
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
-        {/* EXISTING SIDEBAR */}
+        {/* ---------------------------------------------------------------- */}
+        {/* SIDEBAR                                                         */}
+        {/* ---------------------------------------------------------------- */}
 
         <AppSidebar />
 
-        {/* MAIN APPLICATION */}
+        {/* ---------------------------------------------------------------- */}
+        {/* MAIN APPLICATION                                                */}
+        {/* ---------------------------------------------------------------- */}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* --------------------------------------------------------------- */}
-          {/* GLOBAL COMPANY HEADER                                           */}
-          {/* --------------------------------------------------------------- */}
+          {/* ------------------------------------------------------------- */}
+          {/* GLOBAL COMPANY HEADER                                         */}
+          {/* ------------------------------------------------------------- */}
 
           <header className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-xl">
             {/* PRIMARY HEADER */}
@@ -588,12 +733,17 @@ export function AppShell({
             <div className="flex h-14 items-center gap-3 px-3 lg:px-4">
               <SidebarTrigger className="shrink-0 text-muted-foreground hover:text-foreground" />
 
-              {/* BRAND — MOBILE */}
+              {/* --------------------------------------------------------- */}
+              {/* BRAND — MOBILE                                            */}
+              {/* --------------------------------------------------------- */}
 
               <Link
                 to="/command-center"
                 className="flex items-center gap-1.5 md:hidden"
                 aria-label="GROWTH command center"
+                onClick={
+                  closeHeaderMenus
+                }
               >
                 <GrowthSymbol className="h-7 w-7" />
 
@@ -602,7 +752,9 @@ export function AppShell({
                 </span>
               </Link>
 
-              {/* DESKTOP COMPANY SEARCH */}
+              {/* --------------------------------------------------------- */}
+              {/* DESKTOP COMPANY SEARCH                                    */}
+              {/* --------------------------------------------------------- */}
 
               <div className="hidden w-[300px] max-w-full items-center gap-2 rounded-lg border border-border/60 bg-card/40 px-3 py-1.5 text-sm text-muted-foreground xl:flex 2xl:w-[380px]">
                 <Search className="h-4 w-4 shrink-0" />
@@ -616,9 +768,9 @@ export function AppShell({
                 </span>
               </div>
 
-              {/* ----------------------------------------------------------- */}
-              {/* DESKTOP COMPANY NAVIGATION                                  */}
-              {/* ----------------------------------------------------------- */}
+              {/* --------------------------------------------------------- */}
+              {/* DESKTOP COMPANY NAVIGATION                                */}
+              {/* --------------------------------------------------------- */}
 
               <nav
                 className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex"
@@ -634,6 +786,17 @@ export function AppShell({
                     const Icon =
                       item.icon;
 
+                    const active =
+                      companyNavigationItemActive({
+                        item,
+
+                        pathname:
+                          routerLocation.pathname,
+
+                        search:
+                          routerLocation.search,
+                      });
+
                     return (
                       <Link
                         key={
@@ -642,7 +805,19 @@ export function AppShell({
                         to={
                           item.to
                         }
-                        className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+                        search={
+                          item.workforceSearch
+                            ? item.workforceSearch
+                            : undefined
+                        }
+                        onClick={
+                          closeHeaderMenus
+                        }
+                        className={
+                          active
+                            ? "flex shrink-0 items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-2 text-xs font-medium text-primary"
+                            : "flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+                        }
                       >
                         <Icon className="h-3.5 w-3.5" />
 
@@ -656,7 +831,9 @@ export function AppShell({
                   },
                 )}
 
-                {/* AI TOOLS MEGA MENU */}
+                {/* ------------------------------------------------------- */}
+                {/* AI TOOLS MEGA MENU                                      */}
+                {/* ------------------------------------------------------- */}
 
                 <div
                   ref={
@@ -666,14 +843,18 @@ export function AppShell({
                 >
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      setMobileCompanyNavOpen(
+                        false,
+                      );
+
                       setAiToolsOpen(
                         (
                           current,
                         ) =>
                           !current,
-                      )
-                    }
+                      );
+                    }}
                     className={
                       aiToolsOpen
                         ? "flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-2 text-xs font-medium text-primary"
@@ -710,16 +891,12 @@ export function AppShell({
                           </p>
 
                           <h2 className="mt-1 font-display text-lg font-semibold">
-                            Business AI
-                            tools
+                            Business AI tools
                           </h2>
 
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Open the
-                            capability you
-                            need without
-                            searching through
-                            the sidebar.
+                            Open the capability you need without searching
+                            through the sidebar.
                           </p>
                         </div>
 
@@ -730,10 +907,8 @@ export function AppShell({
                         >
                           <Link
                             to="/ai/ceo"
-                            onClick={() =>
-                              setAiToolsOpen(
-                                false,
-                              )
+                            onClick={
+                              closeHeaderMenus
                             }
                           >
                             <BrainCircuit className="mr-1.5 h-4 w-4" />
@@ -778,16 +953,17 @@ export function AppShell({
 
                                     return (
                                       <Link
-                                        key={
-                                          item.to
-                                        }
+                                        key={`${group.title}-${item.title}`}
                                         to={
                                           item.to
                                         }
-                                        onClick={() =>
-                                          setAiToolsOpen(
-                                            false,
-                                          )
+                                        search={
+                                          item.workforceSearch
+                                            ? item.workforceSearch
+                                            : undefined
+                                        }
+                                        onClick={
+                                          closeHeaderMenus
                                         }
                                         className="group flex items-start gap-2.5 rounded-xl p-2.5 transition hover:bg-primary/10"
                                       >
@@ -818,15 +994,12 @@ export function AppShell({
                         )}
                       </div>
 
-                      {/* FOOTER */}
+                      {/* MENU FOOTER */}
 
                       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 bg-card/30 px-5 py-3">
                         <p className="text-[10px] text-muted-foreground">
-                          AI employees
-                          and company
-                          departments remain
-                          managed from the
-                          AI Workforce.
+                          AI employees and company departments are managed
+                          through the AI Workforce.
                         </p>
 
                         <div className="flex gap-2">
@@ -838,10 +1011,12 @@ export function AppShell({
                           >
                             <Link
                               to="/ai/workforce"
-                              onClick={() =>
-                                setAiToolsOpen(
-                                  false,
-                                )
+                              search={{
+                                view: "command",
+                                department: "all",
+                              }}
+                              onClick={
+                                closeHeaderMenus
                               }
                             >
                               <UsersRound className="mr-1.5 h-3.5 w-3.5" />
@@ -858,10 +1033,8 @@ export function AppShell({
                           >
                             <Link
                               to="/integrations"
-                              onClick={() =>
-                                setAiToolsOpen(
-                                  false,
-                                )
+                              onClick={
+                                closeHeaderMenus
                               }
                             >
                               <Network className="mr-1.5 h-3.5 w-3.5" />
@@ -884,6 +1057,17 @@ export function AppShell({
                     const Icon =
                       item.icon;
 
+                    const active =
+                      companyNavigationItemActive({
+                        item,
+
+                        pathname:
+                          routerLocation.pathname,
+
+                        search:
+                          routerLocation.search,
+                      });
+
                     return (
                       <Link
                         key={
@@ -892,7 +1076,19 @@ export function AppShell({
                         to={
                           item.to
                         }
-                        className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+                        search={
+                          item.workforceSearch
+                            ? item.workforceSearch
+                            : undefined
+                        }
+                        onClick={
+                          closeHeaderMenus
+                        }
+                        className={
+                          active
+                            ? "flex shrink-0 items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-2 text-xs font-medium text-primary"
+                            : "flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+                        }
                       >
                         <Icon className="h-3.5 w-3.5" />
 
@@ -907,9 +1103,9 @@ export function AppShell({
                 )}
               </nav>
 
-              {/* ----------------------------------------------------------- */}
-              {/* RIGHT ACTIONS                                               */}
-              {/* ----------------------------------------------------------- */}
+              {/* --------------------------------------------------------- */}
+              {/* RIGHT ACTIONS                                             */}
+              {/* --------------------------------------------------------- */}
 
               <div className="ml-auto flex shrink-0 items-center gap-1.5">
                 {/* MOBILE COMPANY MENU */}
@@ -918,14 +1114,18 @@ export function AppShell({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() =>
+                  onClick={() => {
+                    setAiToolsOpen(
+                      false,
+                    );
+
                     setMobileCompanyNavOpen(
                       (
                         current,
                       ) =>
                         !current,
-                    )
-                  }
+                    );
+                  }}
                   className="gap-1.5 text-muted-foreground hover:text-foreground lg:hidden"
                 >
                   <Building2 className="h-4 w-4" />
@@ -948,6 +1148,9 @@ export function AppShell({
                 <Link
                   to="/ai/cossa"
                   className="hidden sm:inline-flex"
+                  onClick={
+                    closeHeaderMenus
+                  }
                 >
                   <Button
                     variant="outline"
@@ -968,7 +1171,12 @@ export function AppShell({
 
                 {/* NOTIFICATIONS */}
 
-                <Link to="/notifications">
+                <Link
+                  to="/notifications"
+                  onClick={
+                    closeHeaderMenus
+                  }
+                >
                   <Button
                     variant="ghost"
                     size="icon"
@@ -991,10 +1199,22 @@ export function AppShell({
                     signingOut
                   }
                   className="rounded-full bg-primary/15 text-primary hover:bg-primary/25"
-                  aria-label="Sign out"
-                  title="Sign out"
+                  aria-label={
+                    signingOut
+                      ? "Signing out"
+                      : "Sign out"
+                  }
+                  title={
+                    signingOut
+                      ? "Signing out"
+                      : "Sign out"
+                  }
                 >
-                  <User className="h-4 w-4" />
+                  {signingOut ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  ) : (
+                    <User className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
             </div>
@@ -1013,6 +1233,17 @@ export function AppShell({
                       const Icon =
                         item.icon;
 
+                      const active =
+                        companyNavigationItemActive({
+                          item,
+
+                          pathname:
+                            routerLocation.pathname,
+
+                          search:
+                            routerLocation.search,
+                        });
+
                       return (
                         <Link
                           key={
@@ -1021,12 +1252,19 @@ export function AppShell({
                           to={
                             item.to
                           }
-                          onClick={() =>
-                            setMobileCompanyNavOpen(
-                              false,
-                            )
+                          search={
+                            item.workforceSearch
+                              ? item.workforceSearch
+                              : undefined
                           }
-                          className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/40 p-3 text-xs font-medium text-muted-foreground transition hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                          onClick={
+                            closeHeaderMenus
+                          }
+                          className={
+                            active
+                              ? "flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 p-3 text-xs font-medium text-primary"
+                              : "flex items-center gap-3 rounded-xl border border-border/50 bg-card/40 p-3 text-xs font-medium text-muted-foreground transition hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                          }
                         >
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
                             <Icon className="h-4 w-4" />
@@ -1042,10 +1280,8 @@ export function AppShell({
 
                   <Link
                     to="/ai/cossa"
-                    onClick={() =>
-                      setMobileCompanyNavOpen(
-                        false,
-                      )
+                    onClick={
+                      closeHeaderMenus
                     }
                     className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs font-medium text-primary sm:col-span-2"
                   >
@@ -1053,7 +1289,25 @@ export function AppShell({
                       <Sparkles className="h-4 w-4" />
                     </div>
 
-                    Open Cossa AI Tools
+                    Open Cossa AI
+                  </Link>
+
+                  <Link
+                    to="/ai/workforce"
+                    search={{
+                      view: "command",
+                      department: "all",
+                    }}
+                    onClick={
+                      closeHeaderMenus
+                    }
+                    className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs font-medium text-primary sm:col-span-2"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15">
+                      <UsersRound className="h-4 w-4" />
+                    </div>
+
+                    Open AI Workforce Command Centre
                   </Link>
                 </div>
               </div>
@@ -1065,9 +1319,7 @@ export function AppShell({
           {/* --------------------------------------------------------------- */}
 
           <main className="flex-1 p-4 md:p-6 lg:p-8">
-            {
-              children
-            }
+            {children}
           </main>
         </div>
       </div>
