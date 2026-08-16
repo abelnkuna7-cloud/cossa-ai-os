@@ -20,6 +20,7 @@ import {
   BrainCircuit,
   Building2,
   ChevronDown,
+  CircleHelp,
   Command,
   FileText,
   Headphones,
@@ -104,9 +105,9 @@ interface AiToolGroup {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Global company navigation.
+ * Global GROWTH company navigation.
  *
- * Important:
+ * Navigation architecture:
  *
  * - Company opens the group command centre.
  * - Departments, Employees, Workflows and Activity are views inside
@@ -114,6 +115,7 @@ interface AiToolGroup {
  * - The dedicated /ai/workflow route remains available separately as the
  *   advanced Workflow Builder inside the AI Tools menu.
  * - Integrations remains a standalone platform route.
+ * - Guide opens the GROWTH operating guide and user documentation.
  */
 const COMPANY_NAVIGATION: CompanyNavigationItem[] = [
   {
@@ -166,6 +168,12 @@ const COMPANY_NAVIGATION: CompanyNavigationItem[] = [
     title: "Integrations",
     to: "/integrations",
     icon: Network,
+  },
+
+  {
+    title: "Guide",
+    to: "/help",
+    icon: CircleHelp,
   },
 ];
 
@@ -575,6 +583,12 @@ export function AppShell({
       null,
     );
 
+  const guideActive =
+    pathMatchesPrefix(
+      routerLocation.pathname,
+      "/help",
+    );
+
   /* ------------------------------------------------------------------------ */
   /* SIGN OUT                                                                 */
   /* ------------------------------------------------------------------------ */
@@ -832,7 +846,7 @@ export function AppShell({
                 )}
 
                 {/* ------------------------------------------------------- */}
-                {/* AI TOOLS MEGA MENU                                      */}
+                {/* AI TOOLS MEGA MENU                                     */}
                 {/* ------------------------------------------------------- */}
 
                 <div
@@ -997,12 +1011,19 @@ export function AppShell({
                       {/* MENU FOOTER */}
 
                       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 bg-card/30 px-5 py-3">
-                        <p className="text-[10px] text-muted-foreground">
-                          AI employees and company departments are managed
-                          through the AI Workforce.
-                        </p>
+                        <div className="min-w-0">
+                          <p className="text-[10px] text-muted-foreground">
+                            AI employees and company departments are managed
+                            through the AI Workforce.
+                          </p>
 
-                        <div className="flex gap-2">
+                          <p className="mt-0.5 text-[9px] text-muted-foreground">
+                            Need help? Open the GROWTH Guide for operating
+                            instructions and platform guidance.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             asChild
                             variant="outline"
@@ -1040,6 +1061,24 @@ export function AppShell({
                               <Network className="mr-1.5 h-3.5 w-3.5" />
 
                               Integrations
+                            </Link>
+                          </Button>
+
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="border-primary/30 text-primary"
+                          >
+                            <Link
+                              to="/help"
+                              onClick={
+                                closeHeaderMenus
+                              }
+                            >
+                              <CircleHelp className="mr-1.5 h-3.5 w-3.5" />
+
+                              GROWTH Guide
                             </Link>
                           </Button>
                         </div>
@@ -1127,6 +1166,10 @@ export function AppShell({
                     );
                   }}
                   className="gap-1.5 text-muted-foreground hover:text-foreground lg:hidden"
+                  aria-expanded={
+                    mobileCompanyNavOpen
+                  }
+                  aria-label="Open company navigation"
                 >
                   <Building2 className="h-4 w-4" />
 
@@ -1142,6 +1185,37 @@ export function AppShell({
                     }
                   />
                 </Button>
+
+                {/* GROWTH GUIDE */}
+
+                <Link
+                  to="/help"
+                  className="hidden md:inline-flex"
+                  onClick={
+                    closeHeaderMenus
+                  }
+                  aria-label="Open GROWTH Guide"
+                >
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={
+                      guideActive
+                        ? "gap-1.5 bg-primary/10 text-primary"
+                        : "gap-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                    }
+                  >
+                    <CircleHelp className="h-3.5 w-3.5" />
+
+                    <span className="hidden 2xl:inline">
+                      GROWTH Guide
+                    </span>
+
+                    <span className="2xl:hidden">
+                      Guide
+                    </span>
+                  </Button>
+                </Link>
 
                 {/* ASK COSSA AI */}
 
@@ -1270,13 +1344,25 @@ export function AppShell({
                             <Icon className="h-4 w-4" />
                           </div>
 
-                          {
-                            item.title
-                          }
+                          <div className="min-w-0">
+                            <span className="block">
+                              {
+                                item.title
+                              }
+                            </span>
+
+                            {item.to === "/help" ? (
+                              <span className="mt-0.5 block text-[9px] font-normal text-muted-foreground">
+                                GROWTH operating guide
+                              </span>
+                            ) : null}
+                          </div>
                         </Link>
                       );
                     },
                   )}
+
+                  {/* MOBILE COSSA AI */}
 
                   <Link
                     to="/ai/cossa"
@@ -1289,8 +1375,18 @@ export function AppShell({
                       <Sparkles className="h-4 w-4" />
                     </div>
 
-                    Open Cossa AI
+                    <div>
+                      <span className="block">
+                        Open Cossa AI
+                      </span>
+
+                      <span className="mt-0.5 block text-[9px] font-normal text-muted-foreground">
+                        Ask questions and access business intelligence.
+                      </span>
+                    </div>
                   </Link>
+
+                  {/* MOBILE WORKFORCE */}
 
                   <Link
                     to="/ai/workforce"
@@ -1307,7 +1403,44 @@ export function AppShell({
                       <UsersRound className="h-4 w-4" />
                     </div>
 
-                    Open AI Workforce Command Centre
+                    <div>
+                      <span className="block">
+                        Open AI Workforce Command Centre
+                      </span>
+
+                      <span className="mt-0.5 block text-[9px] font-normal text-muted-foreground">
+                        Manage departments, employees, workflows and activity.
+                      </span>
+                    </div>
+                  </Link>
+
+                  {/* MOBILE GROWTH GUIDE */}
+
+                  <Link
+                    to="/help"
+                    onClick={
+                      closeHeaderMenus
+                    }
+                    className={
+                      guideActive
+                        ? "flex items-center gap-3 rounded-xl border border-primary/40 bg-primary/10 p-3 text-xs font-medium text-primary sm:col-span-2"
+                        : "flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs font-medium text-primary transition hover:bg-primary/10 sm:col-span-2"
+                    }
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15">
+                      <CircleHelp className="h-4 w-4" />
+                    </div>
+
+                    <div>
+                      <span className="block">
+                        Open GROWTH Guide
+                      </span>
+
+                      <span className="mt-0.5 block text-[9px] font-normal text-muted-foreground">
+                        Learn how to operate GROWTH, its AI workforce and
+                        company tools.
+                      </span>
+                    </div>
                   </Link>
                 </div>
               </div>
