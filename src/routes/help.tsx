@@ -1,22 +1,24 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 import {
+  AlertTriangle,
   ArrowRight,
   BookOpen,
+  Bot,
   BrainCircuit,
   Building2,
   CheckCircle2,
-  Code2,
-  FileStack,
+  CircleHelp,
+  FileText,
   HardHat,
-  HelpCircle,
-  LayoutDashboard,
+  Lightbulb,
   Megaphone,
   Network,
-  Search,
+  PackageSearch,
+  Settings2,
   ShieldCheck,
+  Sparkles,
   Store,
-  TrendingUp,
   UsersRound,
   Workflow,
   Wrench,
@@ -30,17 +32,17 @@ import { Button } from "@/components/ui/button";
 /* -------------------------------------------------------------------------- */
 
 export const Route = createFileRoute("/help")({
-  component: GrowthHelpGuide,
+  component: HelpCentre,
 
   head: () => ({
     meta: [
       {
-        title: "GROWTH User Guide — Cossa Nexus Holdings",
+        title: "Help Centre — GROWTH",
       },
       {
         name: "description",
         content:
-          "Official GROWTH operating guide for Cossa Nexus Holdings, including company workspaces, AI employees, workflows, approvals, business separation and daily operating procedures.",
+          "GROWTH Help Centre for Cossa Nexus Holdings. Learn how to use the company command centre, business workspaces, AI workforce, AI tools, workflows, integrations and operational controls.",
       },
     ],
   }),
@@ -50,324 +52,344 @@ export const Route = createFileRoute("/help")({
 /* TYPES                                                                      */
 /* -------------------------------------------------------------------------- */
 
-interface GuideLink {
+interface HelpSection {
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  items: readonly string[];
+}
+
+interface QuickLink {
   title: string;
   description: string;
   to: string;
   icon: LucideIcon;
 }
 
-interface GuideSection {
-  id: string;
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  items: string[];
-}
-
 /* -------------------------------------------------------------------------- */
-/* BUSINESS WORKSPACES                                                        */
+/* HELP CONTENT                                                               */
 /* -------------------------------------------------------------------------- */
 
-const BUSINESS_WORKSPACES: GuideLink[] = [
+const HELP_SECTIONS: HelpSection[] = [
   {
-    title: "Cossa Store",
+    title: "1. Getting started",
     description:
-      "Products, suppliers, catalogue operations, dropshipping, affiliate marketing, ecommerce growth and Store AI tools.",
-    to: "/businesses/store",
+      "Start from the company level before opening individual AI tools.",
+    icon: Sparkles,
+
+    items: [
+      "Open the Command Center to see the overall company operating environment.",
+      "Use the left sidebar to move between businesses, revenue functions, operations and platform controls.",
+      "Use the top company navigation for departments, employees, workflows, activity and integrations.",
+      "Use Ask Cossa AI when you need general business assistance.",
+      "Use AI CEO when you want to delegate an outcome instead of manually choosing each employee.",
+    ],
+  },
+
+  {
+    title: "2. Company navigation",
+    description:
+      "GROWTH separates company structure from individual AI capabilities.",
+    icon: Building2,
+
+    items: [
+      "Company opens the group-wide Command Center.",
+      "Departments opens the organisational structure inside AI Workforce.",
+      "Employees opens the AI employee directory.",
+      "Workflows opens coordinated workforce execution.",
+      "Activity shows recorded employee work status.",
+      "Integrations manages authorised external systems and connected services.",
+    ],
+  },
+
+  {
+    title: "3. Business workspaces",
+    description:
+      "Each operating business should have its own command centre instead of dumping everything into one page.",
     icon: Store,
+
+    items: [
+      "Cossa Store manages products, suppliers, merchandising, dropshipping, marketing and ecommerce operations.",
+      "Cossa Tech manages websites, software, automation and technical delivery.",
+      "Cossa Construction manages leads, quotations, projects, tenders, documents and construction operations.",
+      "Facility Services manages customers, quotations, recurring services, leads and service delivery.",
+      "NexDocs manages document workflows, proposals, quotations, contracts and document production.",
+    ],
   },
+
   {
-    title: "Cossa Tech",
+    title: "4. AI Workforce",
     description:
-      "Websites, software, automation, systems, technical solutions and technology delivery.",
-    to: "/businesses/tech",
-    icon: Code2,
+      "AI Workforce is the group-wide employee operating system.",
+    icon: UsersRound,
+
+    items: [
+      "Use Command Centre to delegate objectives to the AI CEO.",
+      "Use Departments to find the correct operating team.",
+      "Use Employees to search by name, responsibility or normal business language.",
+      "Use Workflows to inspect and run coordinated missions.",
+      "Use Activity to see which employees are working, assigned, available or need attention.",
+      "Use Control Room for workforce synchronisation, safeguards and audit history.",
+    ],
   },
+
   {
-    title: "Cossa Construction",
+    title: "5. AI CEO",
     description:
-      "Construction leads, quotations, projects, tenders, documents, suppliers and construction operations.",
-    to: "/businesses/construction",
-    icon: HardHat,
+      "AI CEO should be used when the outcome matters more than manually choosing the employee sequence.",
+    icon: BrainCircuit,
+
+    items: [
+      "Describe the business result you want.",
+      "Include the business, target market, location and important restrictions.",
+      "Let the CEO coordinate the appropriate workforce stages.",
+      "Review saved employee outputs before external execution.",
+      "Escalate real owner decisions only when necessary.",
+    ],
   },
+
   {
-    title: "Facility Services",
+    title: "6. AI tools",
     description:
-      "Facility-service leads, quotations, cleaning, maintenance, customers, schedules and service delivery.",
-    to: "/businesses/facility-services",
-    icon: Wrench,
+      "Use specialised AI tools when you already know the capability you need.",
+    icon: Bot,
+
+    items: [
+      "Cossa AI handles general company assistance.",
+      "AI Business Consultant handles strategy and diagnosis.",
+      "AI Sales Assistant supports sales and conversion activity.",
+      "AI Customer Support assists customer-service work.",
+      "AI CRM Specialist supports leads and pipeline management.",
+      "AI Automation handles repeatable processes.",
+      "AI Project Manager assists project planning and coordination.",
+      "Knowledge Base, Prompt Library and AI Memory manage reusable company knowledge.",
+      "Finance and HR assistants support administration.",
+    ],
   },
+
   {
-    title: "NexDocs",
+    title: "7. Workflows",
     description:
-      "Professional documents, quotations, proposals, contracts, reports, templates and document workflows.",
-    to: "/businesses/nexdocs",
-    icon: FileStack,
+      "There are two different workflow concepts in GROWTH.",
+    icon: Workflow,
+
+    items: [
+      "AI Workforce Workflows run coordinated employee missions.",
+      "Workflow Builder is the advanced workflow-design tool.",
+      "Do not skip blocked employee stages.",
+      "Automatic execution should stop when a genuine approval checkpoint is reached.",
+      "Saved outputs should remain reviewable after each completed stage.",
+    ],
   },
-];
+
+  {
+    title: "8. Marketing and growth",
+    description:
+      "Use Marketing & Growth for campaigns, SEO, content, social media and advertising planning.",
+    icon: Megaphone,
+
+    items: [
+      "Website intelligence should use verified website information.",
+      "Content production should not invent products, prices, customers or results.",
+      "Creative work should include clear production requirements when asset-generation capability is unavailable.",
+      "Paid-media recommendations should not spend money without owner approval.",
+      "Publishing should only be claimed when a real authorised integration executed it.",
+    ],
+  },
+
+  {
+    title: "9. Integrations",
+    description:
+      "Integrations are what turn internal AI planning into verified external actions.",
+    icon: Network,
+
+    items: [
+      "Connect only authorised business accounts.",
+      "Do not give AI tools unrestricted credentials when limited permissions are sufficient.",
+      "A missing integration must be reported instead of simulated.",
+      "Publishing, messaging, payments and account changes should only be reported as completed when the integration confirms execution.",
+    ],
+  },
+
+  {
+    title: "10. Owner approval and safety",
+    description:
+      "Routine internal work should move quickly. High-risk actions remain controlled.",
+    icon: ShieldCheck,
+
+    items: [
+      "Normal research, analysis, drafting, planning and internal handoffs can proceed without unnecessary approval.",
+      "Spending money requires owner control.",
+      "Supplier orders require owner control.",
+      "Contracts and binding legal commitments require owner control.",
+      "Credentials and sensitive access changes require owner control.",
+      "Destructive or irreversible changes require owner control.",
+      "Sensitive external communications should be reviewed when the consequences are significant.",
+    ],
+  },
+
+  {
+    title: "11. Troubleshooting",
+    description:
+      "When something does not work, identify whether the problem is navigation, workforce state, provider execution or missing integration.",
+    icon: AlertTriangle,
+
+    items: [
+      "Refresh the page and workforce data first.",
+      "Check whether the required employee is active.",
+      "Check whether an earlier workflow stage is still pending or accepted.",
+      "Review the latest recorded failure instead of relying only on historical failure counts.",
+      "Check integrations when external execution is missing.",
+      "Check provider or rate-limit errors when an AI employee fails to produce an output.",
+      "Do not bypass recorded workflow state by manually pretending a stage completed.",
+    ],
+  },
+] as const;
 
 /* -------------------------------------------------------------------------- */
-/* CORE PLATFORM LINKS                                                        */
+/* QUICK LINKS                                                                */
 /* -------------------------------------------------------------------------- */
 
-const CORE_PLATFORM_LINKS: GuideLink[] = [
+const QUICK_LINKS: QuickLink[] = [
   {
     title: "Command Center",
     description:
-      "Start here for the group-wide overview, priorities, opportunities, health and executive operating information.",
+      "Open the group-wide operating overview.",
     to: "/command-center",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "AI Company",
-    description:
-      "Manage AI departments, employees, missions, execution and workforce coordination.",
-    to: "/ai/workforce",
     icon: Building2,
   },
+
+  {
+    title: "AI Workforce",
+    description:
+      "Departments, employees, missions and execution.",
+    to: "/ai/workforce",
+    icon: UsersRound,
+  },
+
   {
     title: "AI CEO",
     description:
-      "Delegate an outcome when several employees or departments need to work together.",
+      "Delegate a result to the company AI leadership layer.",
     to: "/ai/ceo",
     icon: BrainCircuit,
   },
+
   {
-    title: "Marketing & Growth",
+    title: "Workflow Builder",
     description:
-      "Group-wide marketing strategy, campaigns, content, SEO, social media and advertising.",
-    to: "/marketing/ai-director",
-    icon: Megaphone,
-  },
-  {
-    title: "Sales & Revenue",
-    description:
-      "CRM, leads, customers, opportunities, pipeline and revenue activity.",
-    to: "/sales/crm",
-    icon: TrendingUp,
-  },
-  {
-    title: "Workflows",
-    description:
-      "Design repeatable business processes and coordinate cross-company execution.",
+      "Design advanced repeatable workflows.",
     to: "/ai/workflow",
     icon: Workflow,
   },
+
   {
     title: "Integrations",
     description:
-      "Manage authorised external systems, accounts, publishing channels and connected services.",
+      "Manage connected systems and authorised accounts.",
     to: "/integrations",
     icon: Network,
   },
-];
+
+  {
+    title: "Marketing & Growth",
+    description:
+      "Open campaigns, SEO, social and growth tools.",
+    to: "/marketing/ai-director",
+    icon: Megaphone,
+  },
+] as const;
 
 /* -------------------------------------------------------------------------- */
-/* GUIDE SECTIONS                                                             */
+/* BUSINESS LINKS                                                             */
 /* -------------------------------------------------------------------------- */
 
-const GUIDE_SECTIONS: GuideSection[] = [
+const BUSINESS_LINKS: QuickLink[] = [
   {
-    id: "structure",
-    title: "How GROWTH is organised",
+    title: "Cossa Store",
     description:
-      "Use the platform from the company level down to the exact business capability you need.",
-    icon: Building2,
-    items: [
-      "Company level is for group-wide management and executive control.",
-      "Business workspaces are for subsidiary-specific work.",
-      "Departments organise capabilities such as marketing, sales, operations and technology.",
-      "AI employees perform defined specialist responsibilities.",
-      "Workflows coordinate multiple stages when one task requires several capabilities.",
-      "The owner remains in control of genuinely high-risk actions.",
-    ],
+      "Products, suppliers, merchandising, dropshipping and ecommerce.",
+    to: "/businesses/store",
+    icon: Store,
   },
-  {
-    id: "business-rule",
-    title: "Business separation rule",
-    description:
-      "Every piece of work should clearly belong to the correct Cossa business.",
-    icon: CheckCircle2,
-    items: [
-      "Product sourcing and ecommerce operations belong primarily to Cossa Store.",
-      "Website development and technical solutions belong primarily to Cossa Tech.",
-      "Construction quotations, tenders and construction projects belong to Cossa Construction.",
-      "Cleaning, maintenance and facility-service delivery belong to Facility Services.",
-      "Professional document production belongs primarily to NexDocs.",
-      "Marketing can support every business, but it must know which business it is promoting.",
-      "Sales can support every business, but every lead and opportunity should have a clear business owner.",
-    ],
-  },
-  {
-    id: "ai-ceo",
-    title: "When to use the AI CEO",
-    description:
-      "Use the AI CEO when you know the result you need but do not want to manually choose every employee.",
-    icon: BrainCircuit,
-    items: [
-      "Give the AI CEO the business objective, target market and location where relevant.",
-      "The AI CEO should identify the correct business, department and employees.",
-      "The AI CEO should coordinate handoffs instead of making you manage every internal step.",
-      "The AI CEO should escalate only genuine owner decisions.",
-      "The AI CEO must not pretend an external action happened when no authorised execution exists.",
-    ],
-  },
-  {
-    id: "employees",
-    title: "How to use AI employees",
-    description:
-      "Use the employee directory when you already know the capability you need.",
-    icon: UsersRound,
-    items: [
-      'Search normal business language such as "flyer", "SEO", "supplier", "tender", "Facebook", "website", "product", "lead" or "advertising".',
-      "Open an employee to see responsibilities, current task, status and recorded activity.",
-      "Use specialists for focused work and the AI CEO for coordinated multi-employee work.",
-      "Do not expect one employee to own unrelated business functions.",
-    ],
-  },
-  {
-    id: "workflows",
-    title: "How workflows should work",
-    description:
-      "Use workflows for repeatable multi-step business processes.",
-    icon: Workflow,
-    items: [
-      "Marketing workflows can move from research to strategy, content, creative, scheduling, publishing preparation and analysis.",
-      "Store workflows can move from product research to supplier sourcing, pricing, merchandising, marketing and sales analysis.",
-      "Construction workflows can move from lead intake to quotation, approval, project setup, delivery and follow-up.",
-      "Facility Services workflows can move from enquiry to qualification, quotation, scheduling, service delivery and customer follow-up.",
-      "Required workflow stages should not be silently skipped.",
-    ],
-  },
-  {
-    id: "approvals",
-    title: "Owner approvals",
-    description:
-      "Normal internal work should continue without creating unnecessary approval bottlenecks.",
-    icon: ShieldCheck,
-    items: [
-      "Research, analysis, drafting, planning and internal recommendations normally do not require approval.",
-      "Content drafts, visual briefs and workflow planning normally do not require approval.",
-      "Spending money requires owner control.",
-      "Supplier orders require owner control.",
-      "Contracts, legal commitments and signatures require owner control.",
-      "Credentials, destructive actions and irreversible account changes require owner control.",
-      "Sensitive external communication may require owner approval.",
-    ],
-  },
-  {
-    id: "integrity",
-    title: "Data and execution integrity",
-    description:
-      "GROWTH must distinguish between recommendations, drafts, internal work and real external actions.",
-    icon: ShieldCheck,
-    items: [
-      "Never invent customers.",
-      "Never invent suppliers.",
-      "Never invent prices or sales results.",
-      "Never claim account access that has not been verified.",
-      "Never claim publishing occurred unless an authorised integration performed it.",
-      "Never claim money was spent unless the transaction actually happened.",
-      "If an integration or information source is missing, state what is missing.",
-    ],
-  },
-];
 
-/* -------------------------------------------------------------------------- */
-/* DAILY OPERATING STEPS                                                      */
-/* -------------------------------------------------------------------------- */
+  {
+    title: "Cossa Tech",
+    description:
+      "Websites, software, automation and technical delivery.",
+    to: "/businesses/tech",
+    icon: PackageSearch,
+  },
 
-const DAILY_STEPS = [
   {
-    number: "01",
-    title: "Open Command Center",
+    title: "Cossa Construction",
     description:
-      "Review priorities, alerts, opportunities, current work and company status.",
+      "Construction leads, quotations, projects and tenders.",
+    to: "/businesses/construction",
+    icon: HardHat,
   },
+
   {
-    number: "02",
-    title: "Choose the business",
+    title: "Facility Services",
     description:
-      "Open Store, Tech, Construction, Facility Services or NexDocs before starting subsidiary-specific work.",
+      "Service customers, quotations, jobs and recurring operations.",
+    to: "/businesses/facility-services",
+    icon: Wrench,
   },
+
   {
-    number: "03",
-    title: "Choose the capability",
+    title: "NexDocs",
     description:
-      "Open the relevant AI employee, marketing tool, sales tool, workflow, document tool or operations area.",
+      "Document production, proposals, quotations and document workflows.",
+    to: "/businesses/nexdocs",
+    icon: FileText,
   },
-  {
-    number: "04",
-    title: "Delegate complex work",
-    description:
-      "Use the AI CEO when the result requires several employees or departments.",
-  },
-  {
-    number: "05",
-    title: "Review the output",
-    description:
-      "Check completed work, missing information, recommendations, approvals and the next action.",
-  },
-  {
-    number: "06",
-    title: "Approve only high-risk actions",
-    description:
-      "Keep normal safe internal work moving while retaining control over money, legal and irreversible actions.",
-  },
-];
+] as const;
 
 /* -------------------------------------------------------------------------- */
 /* PAGE                                                                       */
 /* -------------------------------------------------------------------------- */
 
-function GrowthHelpGuide() {
+function HelpCentre() {
   return (
     <div className="mx-auto flex max-w-[1500px] flex-col gap-6">
-      {/* HERO */}
+      {/* ------------------------------------------------------------------ */}
+      {/* HERO                                                               */}
+      {/* ------------------------------------------------------------------ */}
 
       <section className="glass-card relative overflow-hidden p-6 sm:p-8">
         <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
 
-        <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-4xl">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary gold-glow">
-                <BookOpen className="h-6 w-6" />
-              </div>
-
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
-                  Official operating guide
-                </p>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Cossa Nexus Holdings
-                </p>
-              </div>
-            </div>
-
-            <h1 className="mt-5 font-display text-3xl font-semibold md:text-5xl">
-              How to use{" "}
-              <span className="text-gradient-gold">
-                GROWTH
-              </span>
-            </h1>
-
-            <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground md:text-base">
-              GROWTH is the operating platform for coordinating Cossa Nexus
-              Holdings. Start with the business you want to work on, then open
-              the relevant department, AI employee, tool or workflow.
-            </p>
+        <div className="relative">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary gold-glow">
+            <CircleHelp className="h-7 w-7" />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <p className="mt-5 text-xs font-medium uppercase tracking-[0.2em] text-primary">
+            GROWTH operating guide
+          </p>
+
+          <h1 className="mt-2 font-display text-3xl font-semibold md:text-4xl">
+            Help{" "}
+            <span className="text-gradient-gold">
+              Centre
+            </span>
+          </h1>
+
+          <p className="mt-3 max-w-4xl text-sm leading-relaxed text-muted-foreground">
+            Learn how to operate GROWTH as the Cossa Nexus Holdings business
+            operating system. This guide explains where to work, when to use
+            AI employees, when to use specialised AI tools, how workflows work
+            and which actions remain owner-controlled.
+          </p>
+
+          <div className="mt-6 flex flex-wrap gap-2">
             <Button
               asChild
               className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
             >
               <Link to="/command-center">
-                <LayoutDashboard className="mr-1.5 h-4 w-4" />
+                <Building2 className="mr-1.5 h-4 w-4" />
                 Open Command Center
               </Link>
             </Button>
@@ -377,176 +399,160 @@ function GrowthHelpGuide() {
               variant="outline"
               className="border-primary/40 text-primary"
             >
-              <Link to="/ai/ceo">
-                <BrainCircuit className="mr-1.5 h-4 w-4" />
-                Ask AI CEO
+              <Link
+                to="/ai/workforce"
+                search={{
+                  view: "command",
+                  department: "all",
+                }}
+              >
+                <UsersRound className="mr-1.5 h-4 w-4" />
+                Open AI Workforce
               </Link>
             </Button>
           </div>
         </div>
       </section>
 
-      {/* CORE PRINCIPLE */}
+      {/* ------------------------------------------------------------------ */}
+      {/* FIRST STEPS                                                        */}
+      {/* ------------------------------------------------------------------ */}
 
       <section className="glass-card p-5 sm:p-6">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <HelpCircle className="h-5 w-5" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-success/10 text-success">
+            <CheckCircle2 className="h-5 w-5" />
           </div>
 
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Core operating principle
+              Recommended starting point
             </p>
 
             <h2 className="mt-1 font-display text-2xl font-semibold">
-              Business → Capability → Execution
+              Use GROWTH from company level down
             </h2>
 
             <p className="mt-2 max-w-4xl text-sm leading-relaxed text-muted-foreground">
-              GROWTH should answer three questions quickly: which business are
-              you working on, which capability do you need, and what is the next
-              action?
+              Do not start by opening random AI tools. Start with the business
+              objective, then move to the correct business workspace,
+              department or AI employee.
             </p>
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <PrincipleCard
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <StepCard
             number="1"
             title="Choose the business"
-            description="Start with the subsidiary or group-wide function that owns the work."
+            description="Decide whether the work belongs to Store, Tech, Construction, Facility Services, NexDocs or group-wide operations."
           />
 
-          <PrincipleCard
+          <StepCard
             number="2"
-            title="Choose the capability"
-            description="Open the relevant employee, department, tool or workflow."
+            title="Define the outcome"
+            description="State the result you need instead of only naming a tool."
           />
 
-          <PrincipleCard
+          <StepCard
             number="3"
-            title="Execute and review"
-            description="Complete the safe work, review outputs and escalate only genuine owner decisions."
+            title="Delegate correctly"
+            description="Use AI CEO for coordinated outcomes or a specialist tool for focused work."
+          />
+
+          <StepCard
+            number="4"
+            title="Review execution"
+            description="Check outputs, approvals, integrations and recorded completion before relying on the result."
           />
         </div>
       </section>
 
-      {/* BUSINESSES */}
+      {/* ------------------------------------------------------------------ */}
+      {/* QUICK LINKS                                                        */}
+      {/* ------------------------------------------------------------------ */}
 
       <section>
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-            Business workspaces
+            Quick access
           </p>
 
           <h2 className="mt-1 font-display text-2xl font-semibold">
-            Start with the company you are working on
+            Main GROWTH controls
           </h2>
-
-          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            Each operating business has its own workspace so its tools and AI
-            capabilities do not become mixed with unrelated businesses.
-          </p>
         </div>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {BUSINESS_WORKSPACES.map((business) => (
-            <GuideLinkCard
-              key={business.to}
-              item={business}
-              actionLabel="Open business"
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* PLATFORM */}
-
-      <section className="glass-card p-5 sm:p-6">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-            Group-wide platform
-          </p>
-
-          <h2 className="mt-1 font-display text-2xl font-semibold">
-            Shared Cossa capabilities
-          </h2>
-
-          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            These areas operate across the group and can support more than one
-            business.
-          </p>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {CORE_PLATFORM_LINKS.map((item) => (
-            <GuideLinkCard
-              key={item.to}
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {QUICK_LINKS.map((item) => (
+            <HelpLinkCard
+              key={item.title}
               item={item}
-              actionLabel="Open"
-              compact
             />
           ))}
         </div>
       </section>
 
-      {/* DAILY WORKFLOW */}
+      {/* ------------------------------------------------------------------ */}
+      {/* BUSINESS WORKSPACES                                                */}
+      {/* ------------------------------------------------------------------ */}
 
-      <section>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-            Recommended daily method
-          </p>
+      <section className="glass-card p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <Store className="mt-0.5 h-5 w-5 text-primary" />
 
-          <h2 className="mt-1 font-display text-2xl font-semibold">
-            Operate GROWTH in six steps
-          </h2>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+              Businesses
+            </p>
+
+            <h2 className="mt-1 font-display text-2xl font-semibold">
+              Open the correct company workspace
+            </h2>
+
+            <p className="mt-2 max-w-4xl text-sm text-muted-foreground">
+              Business workspaces organise the tools relevant to each
+              subsidiary so normal operations do not become mixed together.
+            </p>
+          </div>
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {DAILY_STEPS.map((step) => (
-            <article
-              key={step.number}
-              className="rounded-2xl border border-border/60 bg-card/40 p-5"
-            >
-              <span className="text-xs font-semibold tracking-[0.18em] text-primary">
-                {step.number}
-              </span>
-
-              <h3 className="mt-3 text-base font-semibold">
-                {step.title}
-              </h3>
-
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {step.description}
-              </p>
-            </article>
+          {BUSINESS_LINKS.map((item) => (
+            <HelpLinkCard
+              key={item.title}
+              item={item}
+            />
           ))}
         </div>
       </section>
 
-      {/* GUIDE DETAILS */}
+      {/* ------------------------------------------------------------------ */}
+      {/* DETAILED GUIDE                                                     */}
+      {/* ------------------------------------------------------------------ */}
 
-      <section className="glass-card p-5 sm:p-6">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-            Operating guidelines
-          </p>
+      <section>
+        <div className="flex items-start gap-3">
+          <BookOpen className="mt-0.5 h-5 w-5 text-primary" />
 
-          <h2 className="mt-1 font-display text-2xl font-semibold">
-            Rules for using GROWTH correctly
-          </h2>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+              Full operating guide
+            </p>
+
+            <h2 className="mt-1 font-display text-2xl font-semibold">
+              How to use GROWTH
+            </h2>
+          </div>
         </div>
 
-        <div className="mt-6 space-y-4">
-          {GUIDE_SECTIONS.map((section) => {
+        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          {HELP_SECTIONS.map((section) => {
             const Icon = section.icon;
 
             return (
               <article
-                key={section.id}
-                id={section.id}
+                key={section.title}
                 className="rounded-2xl border border-border/60 bg-card/40 p-5"
               >
                 <div className="flex items-start gap-3">
@@ -555,27 +561,27 @@ function GrowthHelpGuide() {
                   </div>
 
                   <div>
-                    <h3 className="text-lg font-semibold">
+                    <h3 className="font-display text-lg font-semibold">
                       {section.title}
                     </h3>
 
-                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                       {section.description}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-2 md:grid-cols-2">
+                <div className="mt-4 space-y-2">
                   {section.items.map((item) => (
                     <div
                       key={item}
-                      className="flex items-start gap-2 rounded-xl border border-border/50 bg-background/30 p-3"
+                      className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground"
                     >
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 
-                      <p className="text-xs leading-relaxed text-muted-foreground">
+                      <span>
                         {item}
-                      </p>
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -585,101 +591,78 @@ function GrowthHelpGuide() {
         </div>
       </section>
 
-      {/* SEARCH EXAMPLES */}
+      {/* ------------------------------------------------------------------ */}
+      {/* OPERATING PRINCIPLE                                                */}
+      {/* ------------------------------------------------------------------ */}
 
-      <section className="glass-card p-5 sm:p-6">
+      <section className="glass-card border-primary/20 p-5 sm:p-6">
         <div className="flex items-start gap-3">
-          <Search className="mt-1 h-5 w-5 text-primary" />
+          <Lightbulb className="mt-0.5 h-5 w-5 text-primary" />
 
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Employee search
+              Core operating principle
             </p>
 
             <h2 className="mt-1 font-display text-xl font-semibold">
-              Search using normal business language
+              Plan fast. Verify facts. Control real-world risk.
             </h2>
 
-            <p className="mt-2 text-sm text-muted-foreground">
-              You do not need to remember employee names.
+            <p className="mt-2 max-w-4xl text-sm leading-relaxed text-muted-foreground">
+              GROWTH should automate ordinary internal work aggressively, but it
+              must never pretend an external action happened. Research,
+              drafting, analysis, planning and coordination should move quickly.
+              Money, contracts, credentials, supplier commitments, destructive
+              changes and irreversible external actions remain controlled.
             </p>
           </div>
         </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {[
-            "flyer",
-            "SEO",
-            "supplier",
-            "tender",
-            "Facebook",
-            "website",
-            "product",
-            "lead",
-            "advertising",
-            "customer follow-up",
-            "content",
-            "automation",
-          ].map((term) => (
-            <span
-              key={term}
-              className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs text-primary"
-            >
-              {term}
-            </span>
-          ))}
-        </div>
-
-        <Button
-          asChild
-          variant="outline"
-          className="mt-5 border-primary/40 text-primary"
-        >
-          <Link to="/ai/workforce">
-            <UsersRound className="mr-1.5 h-4 w-4" />
-            Open Employee Directory
-          </Link>
-        </Button>
       </section>
 
-      {/* FINAL PRINCIPLE */}
+      {/* ------------------------------------------------------------------ */}
+      {/* SUPPORT ACTIONS                                                    */}
+      {/* ------------------------------------------------------------------ */}
 
-      <section className="rounded-2xl border border-primary/25 bg-primary/5 p-6 sm:p-8">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-          GROWTH standard
-        </p>
+      <section className="glass-card p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+              Still unsure?
+            </p>
 
-        <h2 className="mt-2 font-display text-2xl font-semibold">
-          The platform should reduce searching, confusion and duplicate work.
-        </h2>
+            <h2 className="mt-1 font-display text-xl font-semibold">
+              Ask the system instead of guessing
+            </h2>
 
-        <p className="mt-3 max-w-4xl text-sm leading-relaxed text-muted-foreground">
-          If a Store task requires hunting through Construction, or a
-          Construction quotation requires searching unrelated Store tools, the
-          organisation should be improved. Every important function should be
-          reachable from the business that owns it.
-        </p>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              If you do not know which employee, department or workflow should
+              handle a task, delegate the outcome through Cossa AI or the AI
+              CEO.
+            </p>
+          </div>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Button
-            asChild
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <Link to="/command-center">
-              Start using GROWTH
-              <ArrowRight className="ml-1.5 h-4 w-4" />
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              asChild
+              variant="outline"
+              className="border-primary/40 text-primary"
+            >
+              <Link to="/ai/cossa">
+                <Sparkles className="mr-1.5 h-4 w-4" />
+                Ask Cossa AI
+              </Link>
+            </Button>
 
-          <Button
-            asChild
-            variant="outline"
-            className="border-primary/40 text-primary"
-          >
-            <Link to="/ai/workforce">
-              Open AI Company
-            </Link>
-          </Button>
+            <Button
+              asChild
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Link to="/ai/ceo">
+                <BrainCircuit className="mr-1.5 h-4 w-4" />
+                Ask AI CEO
+              </Link>
+            </Button>
+          </div>
         </div>
       </section>
     </div>
@@ -687,50 +670,10 @@ function GrowthHelpGuide() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* UI COMPONENTS                                                              */
+/* COMPONENTS                                                                 */
 /* -------------------------------------------------------------------------- */
 
-function GuideLinkCard({
-  item,
-  actionLabel,
-  compact = false,
-}: {
-  item: GuideLink;
-  actionLabel: string;
-  compact?: boolean;
-}) {
-  const Icon = item.icon;
-
-  return (
-    <Link
-      to={item.to}
-      className={
-        compact
-          ? "group rounded-xl border border-border/60 bg-background/30 p-4 transition hover:border-primary/40 hover:bg-primary/5"
-          : "group rounded-2xl border border-border/60 bg-card/40 p-5 transition hover:border-primary/40 hover:bg-primary/5"
-      }
-    >
-      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition group-hover:bg-primary/15">
-        <Icon className="h-5 w-5" />
-      </div>
-
-      <h3 className="mt-4 text-base font-semibold">
-        {item.title}
-      </h3>
-
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        {item.description}
-      </p>
-
-      <span className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary">
-        {actionLabel}
-        <ArrowRight className="h-3.5 w-3.5" />
-      </span>
-    </Link>
-  );
-}
-
-function PrincipleCard({
+function StepCard({
   number,
   title,
   description,
@@ -741,7 +684,7 @@ function PrincipleCard({
 }) {
   return (
     <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-xs font-semibold text-primary">
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-sm font-semibold text-primary">
         {number}
       </div>
 
@@ -753,5 +696,36 @@ function PrincipleCard({
         {description}
       </p>
     </div>
+  );
+}
+
+function HelpLinkCard({
+  item,
+}: {
+  item: QuickLink;
+}) {
+  const Icon = item.icon;
+
+  return (
+    <Link
+      to={item.to}
+      className="group rounded-2xl border border-border/60 bg-card/40 p-5 transition hover:border-primary/40 hover:bg-primary/5"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Icon className="h-5 w-5" />
+        </div>
+
+        <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" />
+      </div>
+
+      <h3 className="mt-4 text-sm font-semibold">
+        {item.title}
+      </h3>
+
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+        {item.description}
+      </p>
+    </Link>
   );
 }
