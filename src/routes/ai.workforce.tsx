@@ -1,5653 +1,4934 @@
-import {
-  createFileRoute,
-  Link,
-  useNavigate,
-} from "@tanstack/react-router";
+// Production Lead Hunter data and verification layer.
+//
+// Responsibilities:
+// - Define revenue-focused private and public-sector hunting strategies.
+// - Support guided searches and custom natural-language search instructions.
+// - Separate physical, remote and hybrid service opportunities.
+// - Support local, provincial, national, African and worldwide targeting.
+// - Request verified public prospect research from a secure server endpoint.
+// - Validate returned evidence before displaying or saving prospects.
+// - Reject invented, incomplete or unsupported prospect records.
+// - Preserve server-side scoring and server-normalised hunt instructions.
+// - Reconcile explicit natural-language mission instructions with UI selections.
+// - Detect likely duplicates in the existing Growth CRM.
+// - Save approved prospects into the existing public.leads table.
+// - Preserve independent-source verification metadata.
+// - Preserve procurement verification metadata for tenders and RFQs.
+// - Preserve objective website-audit findings.
+// - Preserve AI interpretation metadata without allowing AI to create facts.
+//
+// Important:
+// This browser file does not scrape or search the internet directly.
+// Real research must be performed by the authenticated server route:
+// POST /api/lead-hunter/search
+//
+// API keys, search providers, AI-provider keys and government-data integrations
+// must remain server-side and must never be exposed in this client file.
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
-import {
-  useMemo,
-  useState,
-  type LucideIcon,
-  type ReactNode,
-} from "react";
+const db = supabase as unknown as {
+  from: (table: string) => any;
+};
 
-import {
-  Activity,
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  BarChart3,
-  BrainCircuit,
-  Building2,
-  ChevronRight,
-  ClipboardList,
-  Code2,
-  Command,
-  FileCheck2,
-  FilePenLine,
-  Filter,
-  Globe2,
-  ImageIcon,
-  KeyRound,
-  Megaphone,
-  PanelTop,
-  Play,
-  RefreshCw,
-  Search,
-  Send,
-  ShieldCheck,
-  Store,
-  UsersRound,
-  Workflow,
-  X,
-  Zap,
-} from "lucide-react";
+export const LEAD_HUNTER_SEARCH_ENDPOINT = "/api/lead-hunter/search";
 
-import { toast } from "sonner";
+export const MAX_HUNT_RESULTS = 50;
+export const DEFAULT_HUNT_RESULTS = 15;
 
-import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/status-badge";
+export const MAX_CUSTOM_SEARCH_INSTRUCTION_LENGTH = 2_500;
+export const DEFAULT_MAX_SEARCH_QUERIES = 5;
+export const MAX_ALLOWED_SEARCH_QUERIES = 10;
+export const DEFAULT_SEARCH_CACHE_HOURS = 24;
 
-import {
-  COSSA_GROWTH_WORKFORCE,
-  completeControlledWorkforceRun,
-  createGrowthCoordinationMission,
-  failControlledWorkforceRun,
-  installCossaGrowthWorkforce,
-  listEmployeeHandoffs,
-  listEmployees,
-  listMissions,
-  listPendingApprovals,
-  listWorkforceRuns,
-  startControlledWorkforceRun,
-  type AiEmployee,
-  type Approval,
-  type EmployeeHandoff,
-  type Mission,
-  type MissionRun,
-} from "@/lib/workforce-data";
+export type LeadHunterSector =
+  | "private"
+  | "government"
+  | "nonprofit"
+  | "mixed";
 
-import { streamChat } from "@/lib/ai-stream";
+export type LeadHunterCompany =
+  | "cossa_nexus_construction"
+  | "cossa_facility_services"
+  | "cossa_tech"
+  | "cossa_ai_growth"
+  | "nexdocs"
+  | "cossa_store"
+  | "cossa_nexus_holdings";
 
-import {
-  checkOfficialWebsite,
-  type OfficialWebsiteHealthReport,
-} from "@/lib/website-health";
+export type LeadHunterServiceCategory =
+  | "construction"
+  | "renovation"
+  | "property_maintenance"
+  | "painting"
+  | "tiling"
+  | "ceilings"
+  | "roofing"
+  | "plumbing"
+  | "facility_management"
+  | "commercial_cleaning"
+  | "deep_cleaning"
+  | "hygiene"
+  | "landscaping"
+  | "waste_management"
+  | "website_design"
+  | "logo_design"
+  | "branding"
+  | "seo"
+  | "digital_marketing"
+  | "social_media_management"
+  | "google_business_profile"
+  | "lead_generation"
+  | "crm"
+  | "ai_automation"
+  | "business_documents"
+  | "quotations"
+  | "proposals"
+  | "contracts"
+  | "ecommerce"
+  | "general";
 
-import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
+export type LeadHunterSearchScope =
+  | "local"
+  | "city"
+  | "province"
+  | "south_africa"
+  | "africa"
+  | "worldwide"
+  | "custom"
+  | "unrestricted";
 
-/* -------------------------------------------------------------------------- */
-/* TYPES                                                                      */
-/* -------------------------------------------------------------------------- */
+export type LeadHunterDeliveryModel =
+  | "auto"
+  | "physical"
+  | "remote"
+  | "hybrid";
 
-type WorkforceView =
-  | "command"
-  | "departments"
-  | "employees"
-  | "workflows"
-  | "activity"
-  | "control";
+export type LeadHunterSearchDepth =
+  | "economy"
+  | "standard"
+  | "deep";
 
-type WorkforceDepartment =
-  | "all"
-  | "executive"
-  | "growth"
-  | "store"
-  | "tech"
-  | "revenue";
+export type LeadHunterRevenueMode =
+  | "balanced"
+  | "quick_revenue"
+  | "easy_wins"
+  | "recurring_revenue"
+  | "high_value"
+  | "strategic";
 
-interface WorkforceSearch {
-  view: WorkforceView;
-  department: WorkforceDepartment;
-}
+export type LeadHunterObjective =
+  | "find_customers"
+  | "find_projects"
+  | "find_active_tenders"
+  | "find_rfqs"
+  | "find_supplier_registrations"
+  | "find_subcontracting"
+  | "find_partners"
+  | "find_weak_websites"
+  | "find_branding_gaps"
+  | "find_marketing_gaps"
+  | "find_technology_gaps"
+  | "find_maintenance_needs"
+  | "find_cleaning_contracts"
+  | "find_recurring_contracts"
+  | "find_immediate_cashflow"
+  | "search_everything_relevant";
 
-type OperationalState =
-  | "working"
+export type ProspectVerificationStatus =
+  | "unverified"
+  | "partially_verified"
+  | "verified"
+  | "rejected";
+
+export type ProspectClassification =
+  | "prospect"
+  | "qualified_prospect"
+  | "active_opportunity"
+  | "tender"
+  | "supplier_opportunity"
+  | "partnership"
+  | "referral_source"
+  | "historical_signal"
+  | "rejected";
+
+export type OpportunitySize =
+  | "micro"
+  | "small"
+  | "medium"
+  | "large"
+  | "strategic"
+  | "unknown";
+
+export type EvidenceType =
+  | "official_website"
+  | "government_portal"
+  | "tender_notice"
+  | "procurement_notice"
+  | "company_directory"
+  | "business_profile"
+  | "job_posting"
+  | "news_report"
+  | "social_profile"
+  | "contact_page"
+  | "website_audit"
+  | "other_public_source";
+
+export type ProspectSignalType =
+  | "active_tender"
+  | "request_for_quote"
+  | "request_for_proposal"
+  | "supplier_registration"
+  | "new_development"
+  | "renovation_need"
+  | "maintenance_need"
+  | "cleaning_need"
+  | "website_problem"
+  | "missing_website"
+  | "mobile_website_problem"
+  | "branding_problem"
+  | "missing_logo"
+  | "seo_gap"
+  | "inactive_marketing"
+  | "missing_whatsapp"
+  | "missing_contact_form"
+  | "weak_google_profile"
+  | "hiring_signal"
+  | "new_branch"
+  | "business_expansion"
+  | "poor_customer_experience"
+  | "document_need"
+  | "technology_need"
+  | "general_fit";
+
+export type ProspectSalesPriority =
+  | "hot"
+  | "warm"
+  | "cold"
+  | "research";
+
+export type HuntStatus =
   | "idle"
-  | "waiting"
-  | "approval"
-  | "attention"
-  | "inactive";
+  | "searching"
+  | "completed"
+  | "failed";
 
-interface EmployeeOperationalView {
-  state: OperationalState;
-  label: string;
-  detail: string;
-  currentTask: string;
-  lastActivity: string | null;
-  assignedCount: number;
-  pendingCount: number;
-  runningCount: number;
-  failedCount: number;
-  approvalCount: number;
-  latestProvider: string | null;
-  latestModel: string | null;
-  latestFailure: string | null;
-  historicalFailureCount: number;
-  retryReady: boolean;
+export type ProcurementCurrentStatus =
+  | "active"
+  | "expired"
+  | "unknown"
+  | "not_applicable";
+
+export type WebsiteAuditFindingType =
+  | "missing_contact_form"
+  | "missing_whatsapp"
+  | "mobile_issue"
+  | "broken_link"
+  | "missing_https"
+  | "missing_meta_description"
+  | "weak_title"
+  | "missing_schema"
+  | "slow_page"
+  | "conversion_gap"
+  | "other";
+
+export interface ProspectEvidence {
+  id?: string;
+  type: EvidenceType;
+  title: string;
+  url: string;
+  publisher: string | null;
+  published_at: string | null;
+  checked_at: string;
+  excerpt: string | null;
+  supports: string[];
+  independent_source_key?: string | null;
+  is_official_source?: boolean;
 }
 
-interface DepartmentDefinition {
-  key: Exclude<WorkforceDepartment, "all">;
+export interface ProspectSignal {
+  type: ProspectSignalType;
+  title: string;
+  explanation: string;
+  evidence_url: string;
+  detected_at: string;
+  confidence: number;
+}
+
+export interface ProspectVerificationMeta {
+  independent_source_count: number;
+  corroborating_domains: string[];
+  official_source_count: number;
+  source_cluster_id: string | null;
+  cross_verified: boolean;
+  verification_notes: string[];
+}
+
+export interface ProcurementVerification {
+  reference_number: string | null;
+  closing_date: string | null;
+  briefing_date: string | null;
+  issuing_body: string | null;
+  submission_method: string | null;
+  source_is_official: boolean;
+  service_match_verified: boolean;
+  current_status: ProcurementCurrentStatus;
+}
+
+export interface WebsiteAuditFinding {
+  type: WebsiteAuditFindingType;
+  severity: "low" | "medium" | "high";
+  evidence: string;
+  source_url: string;
+  verified: boolean;
+}
+
+export interface AiInterpretationMeta {
+  used: boolean;
+  provider: string | null;
+  model: string | null;
+  confidence: number | null;
+  grounded_source_urls: string[];
+  may_not_create_facts: true;
+}
+
+export interface LeadHunterProspect {
+  id: string;
+  organisation_name: string;
+  trading_name: string | null;
+
+  sector: LeadHunterSector;
+  industry: string | null;
+  organisation_type: string | null;
+
+  website: string | null;
+  public_phone: string | null;
+  public_email: string | null;
+
+  /** Internal public-identity keys used only to prevent duplicate results. */
+  identity_keys?: string[];
+
+  contact_page_url: string | null;
+
+  contact_name: string | null;
+  contact_title: string | null;
+  decision_maker_route: string | null;
+
+  address: string | null;
+  suburb: string | null;
+  city: string | null;
+  province: string | null;
+  country: string;
+
+  recommended_company: LeadHunterCompany;
+  recommended_service: LeadHunterServiceCategory;
+  service_fit_reason: string;
+
+  opportunity_summary: string;
+  opportunity_size: OpportunitySize;
+  estimated_value: number | null;
+
+  classification: ProspectClassification;
+  verification_status: ProspectVerificationStatus;
+
+  fit_score: number;
+  intent_score: number;
+  evidence_score: number;
+  timing_score: number;
+  contactability_score: number;
+  total_score: number;
+
+  revenue_potential_score: number;
+  ease_to_close_score: number;
+  recurring_revenue_score: number;
+  geographic_fit_score: number;
+  sales_priority: ProspectSalesPriority;
+  why_contact: string[];
+
+  signals: ProspectSignal[];
+  evidence: ProspectEvidence[];
+
+  primary_source_url: string;
+  date_verified: string;
+
+  next_action: string;
+  outreach_angle: string | null;
+
+  duplicate_status:
+    | "not_checked"
+    | "clear"
+    | "possible_duplicate"
+    | "existing_crm_lead"
+    | "excluded_existing_crm_lead";
+
+  duplicate_lead_id: string | null;
+  rejection_reasons: string[];
+
+  raw_provider_name: string | null;
+  raw_provider_result_id: string | null;
+
+  /**
+   * Optional at the transport boundary for backwards compatibility with an
+   * older server route, but validateProspect always normalises these fields.
+   */
+  verification_meta?: ProspectVerificationMeta;
+  procurement?: ProcurementVerification | null;
+  website_audit?: WebsiteAuditFinding[];
+  ai_interpretation?: AiInterpretationMeta | null;
+  entity_cluster_id?: string | null;
+}
+
+export interface LeadHunterSearchRequest {
+  sector: LeadHunterSector;
+  companies: LeadHunterCompany[];
+  services: LeadHunterServiceCategory[];
+
+  locations: string[];
+  industries: string[];
+  organisation_types: string[];
+
+  result_count: number;
+
+  minimum_score: number;
+  minimum_evidence_sources: number;
+
+  include_small_projects: boolean;
+  include_large_projects: boolean;
+  include_private_sector: boolean;
+  include_government_sector: boolean;
+  include_nonprofits: boolean;
+
+  require_public_phone_or_email: boolean;
+  require_website: boolean;
+  require_opportunity_signal: boolean;
+
+  tender_keywords: string[];
+  prospect_keywords: string[];
+
+  verified_sources_only: boolean;
+  exclude_existing_crm_leads: boolean;
+  notes: string | null;
+
+  search_instruction?: string | null;
+
+  search_scope?: LeadHunterSearchScope;
+  delivery_model?: LeadHunterDeliveryModel;
+  search_depth?: LeadHunterSearchDepth;
+  revenue_mode?: LeadHunterRevenueMode;
+
+  objectives?: LeadHunterObjective[];
+
+  countries?: string[];
+  provinces?: string[];
+  cities?: string[];
+  suburbs?: string[];
+
+  radius_km?: number | null;
+
+  search_everything?: boolean;
+  easy_wins_only?: boolean;
+  revenue_first?: boolean;
+
+  max_search_queries?: number;
+  use_cached_results?: boolean;
+  cache_max_age_hours?: number;
+
+  exclude_competitors?: boolean;
+  exclude_directories?: boolean;
+  exclude_expired_procurement?: boolean;
+}
+
+export interface LeadHunterSearchResponse {
+  hunt_id: string;
+  status: HuntStatus;
+  searched_at: string;
+  completed_at: string | null;
+
+  request: LeadHunterSearchRequest;
+  prospects: LeadHunterProspect[];
+
+  source_count: number;
+  accepted_count: number;
+  rejected_count: number;
+
+  warnings: string[];
+  providers_used: string[];
+}
+
+export interface CrmDuplicateMatch {
+  id: string;
   name: string;
-  shortName: string;
+  company: string | null;
+  phone: string | null;
+  email: string | null;
+  source: string | null;
+  status: string;
+  score: number;
+  created_at: string;
+  match_reasons: string[];
+}
+
+export interface SaveProspectResult {
+  lead_id: string;
+  created: boolean;
+  duplicate: boolean;
+  duplicate_match: CrmDuplicateMatch | null;
+}
+
+export interface LeadHunterStrategy {
+  id: string;
+  title: string;
   description: string;
-  icon: LucideIcon;
-  employeeKeys: readonly string[];
+  target_sector: LeadHunterSector;
+  companies: LeadHunterCompany[];
+  services: LeadHunterServiceCategory[];
+  organisation_types: string[];
+  industries: string[];
+  keywords: string[];
+  opportunity_signals: ProspectSignalType[];
+  recommended_locations: string[];
+  minimum_score: number;
+  default_result_count: number;
+
+  search_instruction?: string;
+  search_scope?: LeadHunterSearchScope;
+  delivery_model?: LeadHunterDeliveryModel;
+  revenue_mode?: LeadHunterRevenueMode;
+  objectives?: LeadHunterObjective[];
+
+  /**
+   * Optional strategy search depth. If omitted, requestFromStrategy chooses the
+   * cheapest depth that can cover the strategy's selected services.
+   */
+  search_depth?: LeadHunterSearchDepth;
 }
 
-interface ResponsibilityDefinition {
-  employeeKey: string;
+export const SOUTH_AFRICAN_PROVINCES = [
+  "Gauteng",
+  "Limpopo",
+  "Mpumalanga",
+  "North West",
+  "Free State",
+  "KwaZulu-Natal",
+  "Eastern Cape",
+  "Western Cape",
+  "Northern Cape",
+] as const;
+
+export const PRIORITY_GAUTENG_LOCATIONS = [
+  "Pretoria",
+  "Centurion",
+  "Midrand",
+  "Johannesburg",
+  "Sandton",
+  "Randburg",
+  "Roodepoort",
+  "Kempton Park",
+  "Boksburg",
+  "Benoni",
+  "Germiston",
+  "Alberton",
+  "Vanderbijlpark",
+  "Vereeniging",
+] as const;
+
+export const SOUTH_AFRICAN_COUNTRIES = ["South Africa"] as const;
+
+export const PRIORITY_AFRICAN_MARKETS = [
+  "South Africa",
+  "Botswana",
+  "Namibia",
+  "Zimbabwe",
+  "Zambia",
+  "Mozambique",
+  "Kenya",
+  "Ghana",
+  "Nigeria",
+] as const;
+
+export const PHYSICAL_SERVICE_CATEGORIES: LeadHunterServiceCategory[] = [
+  "construction",
+  "renovation",
+  "property_maintenance",
+  "painting",
+  "tiling",
+  "ceilings",
+  "roofing",
+  "plumbing",
+  "facility_management",
+  "commercial_cleaning",
+  "deep_cleaning",
+  "hygiene",
+  "landscaping",
+  "waste_management",
+];
+
+export const REMOTE_SERVICE_CATEGORIES: LeadHunterServiceCategory[] = [
+  "website_design",
+  "logo_design",
+  "branding",
+  "seo",
+  "digital_marketing",
+  "social_media_management",
+  "google_business_profile",
+  "lead_generation",
+  "crm",
+  "ai_automation",
+  "business_documents",
+  "quotations",
+  "proposals",
+  "contracts",
+  "ecommerce",
+];
+
+export const SEARCH_SCOPE_OPTIONS: Array<{
+  value: LeadHunterSearchScope;
   label: string;
-  keywords: readonly string[];
-}
-
-interface EmployeeDirectoryItem {
-  employee: AiEmployee;
-  operational: EmployeeOperationalView;
-  departmentKeys: string[];
-  responsibilityLabels: string[];
-  searchText: string;
-}
-
-/* -------------------------------------------------------------------------- */
-/* ROUTE SEARCH                                                               */
-/* -------------------------------------------------------------------------- */
-
-const WORKFORCE_VIEWS: readonly WorkforceView[] = [
-  "command",
-  "departments",
-  "employees",
-  "workflows",
-  "activity",
-  "control",
+  description: string;
+}> = [
+  {
+    value: "local",
+    label: "Local area",
+    description: "Search nearby cities, suburbs or a defined service radius.",
+  },
+  {
+    value: "city",
+    label: "Selected cities",
+    description: "Search only the cities and surrounding areas entered.",
+  },
+  {
+    value: "province",
+    label: "Selected provinces",
+    description: "Search one or more South African provinces.",
+  },
+  {
+    value: "south_africa",
+    label: "South Africa",
+    description: "Search nationally across all nine provinces.",
+  },
+  {
+    value: "africa",
+    label: "Africa",
+    description: "Search selected African countries for remotely deliverable services.",
+  },
+  {
+    value: "worldwide",
+    label: "Worldwide",
+    description: "Search international markets for remote digital services.",
+  },
+  {
+    value: "custom",
+    label: "Custom locations",
+    description: "Use your exact countries, provinces, cities and suburbs.",
+  },
+  {
+    value: "unrestricted",
+    label: "No geographic restriction",
+    description: "Let service delivery and opportunity quality determine the market.",
+  },
 ];
 
-const WORKFORCE_DEPARTMENTS: readonly WorkforceDepartment[] = [
-  "all",
-  "executive",
-  "growth",
-  "store",
-  "tech",
-  "revenue",
+export const DELIVERY_MODEL_OPTIONS: Array<{
+  value: LeadHunterDeliveryModel;
+  label: string;
+}> = [
+  { value: "auto", label: "Auto-detect" },
+  { value: "physical", label: "Physical services" },
+  { value: "remote", label: "Remote services" },
+  { value: "hybrid", label: "Physical and remote" },
 ];
 
-function isWorkforceView(
-  value: unknown,
-): value is WorkforceView {
-  return (
-    typeof value === "string" &&
-    WORKFORCE_VIEWS.includes(
-      value as WorkforceView,
-    )
-  );
-}
+export const SEARCH_DEPTH_OPTIONS: Array<{
+  value: LeadHunterSearchDepth;
+  label: string;
+  description: string;
+  maximumQueries: number;
+}> = [
+  {
+    value: "economy",
+    label: "Economy",
+    description: "Lowest credit use. Best for frequent first-customer searches.",
+    maximumQueries: 3,
+  },
+  {
+    value: "standard",
+    label: "Standard",
+    description: "Balanced coverage and verification.",
+    maximumQueries: 5,
+  },
+  {
+    value: "deep",
+    label: "Deep",
+    description: "Broader investigation. Use only for valuable or difficult searches.",
+    maximumQueries: 8,
+  },
+];
 
-function isWorkforceDepartment(
-  value: unknown,
-): value is WorkforceDepartment {
-  return (
-    typeof value === "string" &&
-    WORKFORCE_DEPARTMENTS.includes(
-      value as WorkforceDepartment,
-    )
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* ROUTE                                                                      */
-/* -------------------------------------------------------------------------- */
-
-export const Route = createFileRoute("/ai/workforce")({
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): WorkforceSearch => ({
-    view: isWorkforceView(search.view)
-      ? search.view
-      : "command",
-
-    department: isWorkforceDepartment(
-      search.department,
-    )
-      ? search.department
-      : "all",
-  }),
-
-  component: AiWorkforce,
-
-  head: () => ({
-    meta: [
-      {
-        title: "AI Workforce — Cossa AI",
-      },
-      {
-        name: "description",
-        content:
-          "Cossa Nexus Holdings AI company command centre for departments, employees, coordinated missions, operational execution and owner-controlled actions.",
-      },
-    ],
-  }),
-});
-
-/* -------------------------------------------------------------------------- */
-/* CONSTANTS                                                                  */
-/* -------------------------------------------------------------------------- */
-
-const GROWTH_MISSION_PREFIX =
-  "Growth coordination:";
-
-const DEFAULT_WORKFORCE_PROVIDER =
-  "groq" as const;
-
-const DEFAULT_WORKFORCE_MODEL =
-  "llama-3.3-70b-versatile";
+export const REVENUE_MODE_OPTIONS: Array<{
+  value: LeadHunterRevenueMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "quick_revenue",
+    label: "Quick revenue",
+    description: "Prioritise smaller jobs and reachable customers that can close faster.",
+  },
+  {
+    value: "easy_wins",
+    label: "Easy wins",
+    description: "Prioritise clear service gaps, verified contacts and lower pursuit effort.",
+  },
+  {
+    value: "recurring_revenue",
+    label: "Recurring revenue",
+    description: "Prioritise maintenance, cleaning, marketing and support retainers.",
+  },
+  {
+    value: "high_value",
+    label: "High-value work",
+    description: "Prioritise larger opportunities with stronger commercial value.",
+  },
+  {
+    value: "strategic",
+    label: "Strategic",
+    description: "Prioritise frameworks, supplier routes and long-term accounts.",
+  },
+  {
+    value: "balanced",
+    label: "Balanced",
+    description: "Balance immediate revenue, evidence, contactability and long-term value.",
+  },
+];
 
 /**
- * Keep workforce calls significantly below historical provider ceilings.
+ * Strategy design rule:
  *
- * The page should pass concise operating context, not a book.
+ * A strategy must never select more services than the query budget available
+ * to its default search depth. Large broad strategies therefore use Deep
+ * deliberately, while frequent first-revenue strategies stay focused.
  */
-const MAX_STAGE_PROMPT_CHARS = 6_000;
-
-const MAX_PRIOR_OUTPUTS = 2;
-
-const MAX_PRIOR_OUTPUT_CHARS = 900;
-
-const MAX_AUTHORISEDEVIDENCE_ITEMS = 2;
-
-const MAX_AUTHORISEDEVIDENCE_CHARS = 1_200;
-
-const MAX_HANDOFF_CONTEXT_CHARS = 700;
-
-const PROVIDER_MAX_ATTEMPTS = 3;
-
-const PROVIDER_RETRY_DELAYS_MS = [
-  2_000,
-  5_000,
-] as const;
-
-const WORKFORCE_STAGE_DELAY_MS = 2_000;
-
-/* -------------------------------------------------------------------------- */
-/* EXECUTABLE GROWTH WORKFLOW                                                 */
-/* -------------------------------------------------------------------------- */
-
-const EXECUTABLE_GROWTH_WORKFLOW = [
+export const LEAD_HUNTER_STRATEGIES: LeadHunterStrategy[] = [
   {
-    key: "website-seo-monitor",
-    label: "Website intelligence",
+    id: "first-paying-customers",
+    title: "Find Our First Paying Customers",
     description:
-      "Checks authorised Cossa web properties and passes verified website, SEO and content observations into the Growth system.",
-    icon: Globe2,
-  },
-  {
-    key: "social-strategy-planner",
-    label: "Social strategy",
-    description:
-      "Builds channel strategy, audience direction, campaign angles, positioning and marketing priorities.",
-    icon: Megaphone,
-  },
-  {
-    key: "content-writer",
-    label: "Content production",
-    description:
-      "Produces marketing, educational, awareness and conversion-focused written content.",
-    icon: FilePenLine,
-  },
-  {
-    key: "creative-media-producer",
-    label: "Creative media",
-    description:
-      "Creates production-ready visual requirements for graphics, campaigns, banners and media.",
-    icon: ImageIcon,
-  },
-  {
-    key: "social-schedule-coordinator",
-    label: "Content coordination",
-    description:
-      "Organises approved copy and creative packages into channel schedules and publishing queues.",
-    icon: PanelTop,
-  },
-  {
-    key: "social-media-manager",
-    label: "Social management",
-    description:
-      "Owns channel readiness, publishing preparation and authorised social execution.",
-    icon: Megaphone,
-  },
-  {
-    key: "account-growth-analyst",
-    label: "Growth analysis",
-    description:
-      "Analyses authorised account and campaign evidence for growth and conversion improvements.",
-    icon: BarChart3,
-  },
-  {
-    key: "paid-media-specialist",
-    label: "Paid media",
-    description:
-      "Prepares advertising strategy and optimisation recommendations without unauthorised spend.",
-    icon: KeyRound,
-  },
-  {
-    key: "ai-ceo",
-    label: "AI CEO",
-    description:
-      "Synthesises workforce outputs and escalates only genuine owner decisions.",
-    icon: BrainCircuit,
-  },
-] as const;
-
-/* -------------------------------------------------------------------------- */
-/* DEPARTMENT MODEL                                                           */
-/* -------------------------------------------------------------------------- */
-
-const DEPARTMENTS: DepartmentDefinition[] = [
-  {
-    key: "executive",
-    name: "Executive Office",
-    shortName: "Executive",
-    description:
-      "Company-wide coordination, owner briefing, escalation and executive decision support.",
-    icon: BrainCircuit,
-    employeeKeys: [
-      "ai-ceo",
+      "Prioritise real, reachable organisations with a clear service gap, public contact details and a practical opportunity that Cossa can pursue immediately.",
+    target_sector: "mixed",
+    companies: [
+      "cossa_nexus_construction",
+      "cossa_facility_services",
+      "cossa_tech",
     ],
+    services: [
+      "property_maintenance",
+      "commercial_cleaning",
+      "website_design",
+    ],
+    organisation_types: [
+      "Small business",
+      "Property manager",
+      "School",
+      "Church",
+      "Office",
+      "Retail store",
+      "Professional-services firm",
+    ],
+    industries: [
+      "Property",
+      "Education",
+      "Retail",
+      "Professional services",
+      "Hospitality",
+      "Local services",
+    ],
+    keywords: [
+      "request a quote",
+      "maintenance required",
+      "commercial cleaning",
+      "website redesign",
+      "outdated website",
+    ],
+    opportunity_signals: [
+      "request_for_quote",
+      "maintenance_need",
+      "cleaning_need",
+      "website_problem",
+    ],
+    recommended_locations: [
+      "Pretoria",
+      "Centurion",
+      "Midrand",
+      "Johannesburg",
+      "Gauteng",
+      "South Africa",
+    ],
+    minimum_score: 55,
+    default_result_count: 15,
+    search_instruction:
+      "Find reachable organisations with a publicly evidenced service gap that Cossa can realistically convert into a first paying customer. Prioritise verified contact details, low pursuit effort, immediate need and practical deal size.",
+    search_scope: "south_africa",
+    delivery_model: "auto",
+    revenue_mode: "quick_revenue",
+    objectives: ["find_customers", "find_immediate_cashflow"],
+    search_depth: "economy",
   },
 
   {
-    key: "growth",
-    name: "Marketing & Growth",
-    shortName: "Growth",
+    id: "property-managers-gauteng",
+    title: "Property Managers and Managing Agents",
     description:
-      "Social media, SEO, content, creative production, campaign planning, account growth and paid media.",
-    icon: Megaphone,
-    employeeKeys: [
-      "website-seo-monitor",
-      "social-strategy-planner",
-      "content-writer",
-      "creative-media-producer",
-      "social-schedule-coordinator",
-      "social-media-manager",
-      "account-growth-analyst",
-      "paid-media-specialist",
+      "Find property-management firms, sectional-title managers and estate managers that may procure recurring maintenance, renovations, cleaning, landscaping or facility support.",
+    target_sector: "private",
+    companies: [
+      "cossa_nexus_construction",
+      "cossa_facility_services",
     ],
+    services: [
+      "property_maintenance",
+      "renovation",
+      "commercial_cleaning",
+      "facility_management",
+      "landscaping",
+    ],
+    organisation_types: [
+      "Property management company",
+      "Managing agent",
+      "Estate management company",
+      "Body corporate management company",
+    ],
+    industries: [
+      "Property management",
+      "Real estate",
+      "Sectional-title management",
+    ],
+    keywords: [
+      "property manager",
+      "managing agent",
+      "body corporate",
+      "estate management",
+      "maintenance contractor",
+      "cleaning contractor",
+      "supplier registration",
+    ],
+    opportunity_signals: [
+      "maintenance_need",
+      "renovation_need",
+      "cleaning_need",
+      "supplier_registration",
+    ],
+    recommended_locations: [...PRIORITY_GAUTENG_LOCATIONS],
+    minimum_score: 60,
+    default_result_count: 20,
+    search_scope: "province",
+    delivery_model: "physical",
+    revenue_mode: "recurring_revenue",
+    objectives: [
+      "find_customers",
+      "find_maintenance_needs",
+      "find_cleaning_contracts",
+      "find_recurring_contracts",
+    ],
+    search_depth: "standard",
   },
 
   {
-    key: "store",
-    name: "Cossa Store",
-    shortName: "Store",
+    id: "schools-and-training-centres",
+    title: "Schools, Colleges and Training Centres",
     description:
-      "Catalogue operations, product intelligence, supplier sourcing, merchandising and social commerce.",
-    icon: Store,
-    employeeKeys: [
-      "store-operations-manager",
-      "product-intelligence-analyst",
-      "supplier-sourcing-analyst",
-      "broker-deal-intelligence-analyst",
-      "creative-media-producer",
-      "social-media-manager",
+      "Find public and private education facilities with maintenance, cleaning, painting, roofing, technology, website or document needs.",
+    target_sector: "mixed",
+    companies: [
+      "cossa_nexus_construction",
+      "cossa_facility_services",
+      "cossa_tech",
+      "nexdocs",
     ],
+    services: [
+      "property_maintenance",
+      "painting",
+      "roofing",
+      "commercial_cleaning",
+      "website_design",
+      "business_documents",
+    ],
+    organisation_types: [
+      "Public school",
+      "Private school",
+      "College",
+      "Training centre",
+      "TVET college",
+    ],
+    industries: ["Education", "Training"],
+    keywords: [
+      "school maintenance tender",
+      "school cleaning tender",
+      "school renovation",
+      "college supplier database",
+      "request for quotation",
+      "school website",
+    ],
+    opportunity_signals: [
+      "active_tender",
+      "request_for_quote",
+      "maintenance_need",
+      "cleaning_need",
+      "website_problem",
+    ],
+    recommended_locations: [
+      "Gauteng",
+      "Limpopo",
+      "Mpumalanga",
+      "North West",
+    ],
+    minimum_score: 65,
+    default_result_count: 20,
+    search_scope: "province",
+    delivery_model: "hybrid",
+    revenue_mode: "balanced",
+    objectives: [
+      "find_customers",
+      "find_projects",
+      "find_active_tenders",
+      "find_rfqs",
+    ],
+    search_depth: "deep",
   },
 
   {
-    key: "tech",
-    name: "Cossa Tech",
-    shortName: "Tech",
+    id: "churches-and-nonprofits",
+    title: "Churches and Nonprofit Organisations",
     description:
-      "Website delivery, technology solutions, technical implementation, website content and SEO quality.",
-    icon: Code2,
-    employeeKeys: [
-      "tech-solutions-specialist",
-      "website-delivery-specialist",
-      "website-seo-monitor",
-      "content-writer",
-      "creative-media-producer",
-      "ai-ceo",
+      "Find churches, community centres, charities and nonprofit organisations needing renovations, cleaning, websites, branding, marketing, documents or operational systems.",
+    target_sector: "nonprofit",
+    companies: [
+      "cossa_nexus_construction",
+      "cossa_facility_services",
+      "cossa_tech",
+      "cossa_ai_growth",
+      "nexdocs",
     ],
+    services: [
+      "renovation",
+      "commercial_cleaning",
+      "website_design",
+      "branding",
+      "business_documents",
+    ],
+    organisation_types: [
+      "Church",
+      "Religious organisation",
+      "Nonprofit organisation",
+      "Community centre",
+      "Charity",
+    ],
+    industries: [
+      "Religious organisations",
+      "Nonprofit",
+      "Community services",
+    ],
+    keywords: [
+      "church renovation",
+      "church building project",
+      "community centre maintenance",
+      "nonprofit website",
+      "church cleaning services",
+      "church branding",
+    ],
+    opportunity_signals: [
+      "renovation_need",
+      "maintenance_need",
+      "website_problem",
+      "branding_problem",
+      "document_need",
+    ],
+    recommended_locations: [
+      ...PRIORITY_GAUTENG_LOCATIONS,
+      "South Africa",
+    ],
+    minimum_score: 55,
+    default_result_count: 20,
+    search_scope: "south_africa",
+    delivery_model: "hybrid",
+    revenue_mode: "easy_wins",
+    objectives: [
+      "find_customers",
+      "find_projects",
+      "find_weak_websites",
+      "find_branding_gaps",
+    ],
+    search_depth: "standard",
   },
 
   {
-    key: "revenue",
-    name: "Revenue & Procurement",
-    shortName: "Revenue",
+    id: "retail-and-shopping-centres",
+    title: "Retailers and Shopping Centres",
     description:
-      "Lead handling, customer reactivation, commercial opportunities, sourcing, procurement and deal intelligence.",
-    icon: Search,
-    employeeKeys: [
-      "lead-intake-coordinator",
-      "customer-reactivation-analyst",
-      "broker-deal-intelligence-analyst",
-      "procurement-intelligence-analyst",
+      "Find shopping centres, retail stores, restaurants and franchise locations needing fit-outs, maintenance, cleaning, websites, branding, marketing or customer-growth support.",
+    target_sector: "private",
+    companies: [
+      "cossa_nexus_construction",
+      "cossa_facility_services",
+      "cossa_tech",
+      "cossa_ai_growth",
     ],
+    services: [
+      "renovation",
+      "property_maintenance",
+      "commercial_cleaning",
+      "website_design",
+      "branding",
+      "digital_marketing",
+    ],
+    organisation_types: [
+      "Shopping centre",
+      "Retail store",
+      "Restaurant",
+      "Franchise",
+      "Commercial landlord",
+    ],
+    industries: ["Retail", "Hospitality", "Commercial property"],
+    keywords: [
+      "new store opening",
+      "shop fitting",
+      "retail maintenance",
+      "commercial cleaning contract",
+      "new branch",
+      "website upgrade",
+      "brand redesign",
+    ],
+    opportunity_signals: [
+      "new_branch",
+      "business_expansion",
+      "renovation_need",
+      "maintenance_need",
+      "cleaning_need",
+      "website_problem",
+      "branding_problem",
+    ],
+    recommended_locations: [
+      ...PRIORITY_GAUTENG_LOCATIONS,
+      "South Africa",
+    ],
+    minimum_score: 60,
+    default_result_count: 20,
+    search_scope: "south_africa",
+    delivery_model: "hybrid",
+    revenue_mode: "balanced",
+    objectives: [
+      "find_customers",
+      "find_projects",
+      "find_recurring_contracts",
+      "find_marketing_gaps",
+    ],
+    search_depth: "deep",
+  },
+
+  {
+    id: "industrial-and-warehousing",
+    title: "Industrial Sites, Warehouses and Logistics Firms",
+    description:
+      "Find warehouses, factories, logistics providers and industrial properties with recurring maintenance, cleaning, repairs, painting, facility or technology requirements.",
+    target_sector: "private",
+    companies: [
+      "cossa_nexus_construction",
+      "cossa_facility_services",
+      "cossa_tech",
+    ],
+    services: [
+      "property_maintenance",
+      "painting",
+      "roofing",
+      "facility_management",
+      "commercial_cleaning",
+      "ai_automation",
+      "crm",
+    ],
+    organisation_types: [
+      "Warehouse",
+      "Logistics company",
+      "Factory",
+      "Distribution centre",
+      "Industrial park",
+    ],
+    industries: [
+      "Logistics",
+      "Warehousing",
+      "Manufacturing",
+      "Distribution",
+    ],
+    keywords: [
+      "warehouse maintenance",
+      "industrial cleaning",
+      "facility management tender",
+      "logistics company expansion",
+      "distribution centre contractor",
+    ],
+    opportunity_signals: [
+      "maintenance_need",
+      "cleaning_need",
+      "business_expansion",
+      "technology_need",
+      "supplier_registration",
+    ],
+    recommended_locations: [
+      "Centurion",
+      "Midrand",
+      "Pretoria",
+      "Rosslyn",
+      "Silverton",
+      "Kempton Park",
+      "Boksburg",
+      "Germiston",
+    ],
+    minimum_score: 65,
+    default_result_count: 20,
+    search_scope: "province",
+    delivery_model: "hybrid",
+    revenue_mode: "recurring_revenue",
+    objectives: [
+      "find_customers",
+      "find_maintenance_needs",
+      "find_cleaning_contracts",
+      "find_recurring_contracts",
+    ],
+    search_depth: "deep",
+  },
+
+  {
+    id: "outdated-websites",
+    title: "Businesses with Weak or Outdated Websites",
+    description:
+      "Find legitimate businesses with broken, outdated, slow, non-mobile or poorly converting websites and prepare evidence-based Cossa Tech outreach.",
+    target_sector: "private",
+    companies: ["cossa_tech", "cossa_ai_growth"],
+    services: [
+      "website_design",
+      "seo",
+      "digital_marketing",
+      "lead_generation",
+      "crm",
+    ],
+    organisation_types: [
+      "Small business",
+      "Professional-services firm",
+      "Contractor",
+      "Retailer",
+      "Property business",
+    ],
+    industries: [
+      "Construction",
+      "Professional services",
+      "Retail",
+      "Property",
+      "Hospitality",
+      "Local services",
+    ],
+    keywords: [
+      "outdated website",
+      "website not mobile friendly",
+      "no online quote form",
+      "broken website",
+      "poor local SEO",
+      "inactive website",
+      "missing WhatsApp",
+    ],
+    opportunity_signals: [
+      "website_problem",
+      "mobile_website_problem",
+      "missing_contact_form",
+      "missing_whatsapp",
+      "seo_gap",
+      "inactive_marketing",
+      "technology_need",
+    ],
+    recommended_locations: ["South Africa"],
+    minimum_score: 55,
+    default_result_count: 20,
+    search_instruction:
+      "Find real businesses whose official websites show a specific, verifiable conversion, mobile, design, SEO, contact-form or WhatsApp weakness. Do not treat website-design companies or marketing agencies as prospects.",
+    search_scope: "south_africa",
+    delivery_model: "remote",
+    revenue_mode: "easy_wins",
+    objectives: [
+      "find_customers",
+      "find_weak_websites",
+      "find_marketing_gaps",
+      "find_technology_gaps",
+    ],
+    search_depth: "standard",
+  },
+
+  {
+    id: "logo-and-branding-upgrades",
+    title: "Logo and Branding Upgrade Prospects",
+    description:
+      "Find real organisations with weak, inconsistent, outdated or missing public branding that may benefit from Cossa Tech branding services.",
+    target_sector: "private",
+    companies: ["cossa_tech", "cossa_ai_growth"],
+    services: [
+      "logo_design",
+      "branding",
+      "website_design",
+      "digital_marketing",
+    ],
+    organisation_types: [
+      "Small business",
+      "Contractor",
+      "Restaurant",
+      "Retailer",
+      "Professional-services firm",
+      "Nonprofit organisation",
+    ],
+    industries: [
+      "Local services",
+      "Retail",
+      "Hospitality",
+      "Construction",
+      "Professional services",
+    ],
+    keywords: [
+      "outdated logo",
+      "inconsistent branding",
+      "low quality logo",
+      "missing brand identity",
+      "website logo mismatch",
+      "branding redesign",
+    ],
+    opportunity_signals: [
+      "branding_problem",
+      "missing_logo",
+      "website_problem",
+      "inactive_marketing",
+    ],
+    recommended_locations: ["South Africa"],
+    minimum_score: 55,
+    default_result_count: 15,
+    search_instruction:
+      "Find legitimate organisations with public evidence of weak, inconsistent, outdated or missing branding. Exclude design agencies, marketing agencies, logo designers and competitors.",
+    search_scope: "south_africa",
+    delivery_model: "remote",
+    revenue_mode: "easy_wins",
+    objectives: [
+      "find_customers",
+      "find_branding_gaps",
+      "find_marketing_gaps",
+    ],
+    search_depth: "standard",
+  },
+
+  {
+    id: "inactive-social-profiles",
+    title: "Businesses with Inactive Marketing",
+    description:
+      "Find real businesses whose public marketing presence appears inactive and prepare honest growth-service opportunities supported by evidence.",
+    target_sector: "private",
+    companies: ["cossa_ai_growth", "cossa_tech"],
+    services: [
+      "digital_marketing",
+      "social_media_management",
+      "google_business_profile",
+      "lead_generation",
+      "seo",
+    ],
+    organisation_types: [
+      "Small business",
+      "Local service provider",
+      "Retailer",
+      "Professional firm",
+    ],
+    industries: [
+      "Construction",
+      "Cleaning",
+      "Property",
+      "Retail",
+      "Hospitality",
+      "Professional services",
+    ],
+    keywords: [
+      "inactive Facebook page",
+      "inactive Google Business Profile",
+      "no recent posts",
+      "poor review response",
+      "weak online presence",
+    ],
+    opportunity_signals: [
+      "inactive_marketing",
+      "weak_google_profile",
+      "seo_gap",
+      "poor_customer_experience",
+    ],
+    recommended_locations: ["Gauteng", "South Africa"],
+    minimum_score: 55,
+    default_result_count: 20,
+    search_scope: "south_africa",
+    delivery_model: "remote",
+    revenue_mode: "recurring_revenue",
+    objectives: [
+      "find_customers",
+      "find_marketing_gaps",
+      "find_recurring_contracts",
+    ],
+    search_depth: "standard",
+  },
+
+  {
+    id: "municipal-tenders",
+    title: "Municipal Tenders and RFQs",
+    description:
+      "Find current official municipal tenders, quotations, supplier invitations and procurement notices matching Cossa services.",
+    target_sector: "government",
+    companies: [
+      "cossa_nexus_construction",
+      "cossa_facility_services",
+      "cossa_tech",
+      "nexdocs",
+    ],
+    services: [
+      "construction",
+      "property_maintenance",
+      "commercial_cleaning",
+      "facility_management",
+      "website_design",
+      "business_documents",
+    ],
+    organisation_types: [
+      "Metropolitan municipality",
+      "Local municipality",
+      "District municipality",
+      "Municipal entity",
+    ],
+    industries: [
+      "Government",
+      "Municipal services",
+      "Public infrastructure",
+    ],
+    keywords: [
+      "tender",
+      "RFQ",
+      "RFP",
+      "request for quotation",
+      "supplier database",
+      "maintenance services",
+      "cleaning services",
+      "renovation",
+      "website services",
+    ],
+    opportunity_signals: [
+      "active_tender",
+      "request_for_quote",
+      "request_for_proposal",
+      "supplier_registration",
+    ],
+    recommended_locations: [...SOUTH_AFRICAN_PROVINCES],
+    minimum_score: 70,
+    default_result_count: 15,
+    search_scope: "south_africa",
+    delivery_model: "hybrid",
+    revenue_mode: "balanced",
+    objectives: [
+      "find_active_tenders",
+      "find_rfqs",
+      "find_supplier_registrations",
+    ],
+    search_depth: "deep",
+  },
+
+  {
+    id: "provincial-and-national-procurement",
+    title: "Provincial and National Government Procurement",
+    description:
+      "Find current verified opportunities from departments, public entities, hospitals, schools, agencies and state-owned organisations.",
+    target_sector: "government",
+    companies: [
+      "cossa_nexus_construction",
+      "cossa_facility_services",
+      "cossa_tech",
+      "nexdocs",
+    ],
+    services: [
+      "construction",
+      "renovation",
+      "property_maintenance",
+      "commercial_cleaning",
+      "facility_management",
+      "website_design",
+      "ai_automation",
+      "business_documents",
+    ],
+    organisation_types: [
+      "National department",
+      "Provincial department",
+      "Public entity",
+      "Government agency",
+      "Public hospital",
+      "State-owned organisation",
+    ],
+    industries: [
+      "Government",
+      "Healthcare",
+      "Education",
+      "Public infrastructure",
+    ],
+    keywords: [
+      "eTender",
+      "bid invitation",
+      "request for quotation",
+      "request for proposal",
+      "maintenance tender",
+      "cleaning tender",
+      "construction tender",
+      "ICT tender",
+    ],
+    opportunity_signals: [
+      "active_tender",
+      "request_for_quote",
+      "request_for_proposal",
+      "supplier_registration",
+    ],
+    recommended_locations: [...SOUTH_AFRICAN_PROVINCES],
+    minimum_score: 75,
+    default_result_count: 15,
+    search_scope: "south_africa",
+    delivery_model: "hybrid",
+    revenue_mode: "strategic",
+    objectives: [
+      "find_active_tenders",
+      "find_rfqs",
+      "find_supplier_registrations",
+    ],
+    search_depth: "deep",
+  },
+
+  {
+    id: "small-projects-now",
+    title: "Small Projects Available Now",
+    description:
+      "Find smaller, faster-to-close public requests and private-sector needs that can generate early cash flow without ignoring larger strategic work.",
+    target_sector: "mixed",
+    companies: [
+      "cossa_nexus_construction",
+      "cossa_facility_services",
+      "cossa_tech",
+      "nexdocs",
+    ],
+    services: [
+      "painting",
+      "property_maintenance",
+      "deep_cleaning",
+      "website_design",
+      "business_documents",
+    ],
+    organisation_types: [
+      "Small business",
+      "Property manager",
+      "School",
+      "Church",
+      "Office",
+      "Retail store",
+      "Municipality",
+    ],
+    industries: [
+      "Property",
+      "Education",
+      "Retail",
+      "Local government",
+      "Professional services",
+    ],
+    keywords: [
+      "small works",
+      "minor repairs",
+      "painting quotation",
+      "cleaning quotation",
+      "website redesign",
+      "request for quotation",
+      "urgent maintenance",
+    ],
+    opportunity_signals: [
+      "request_for_quote",
+      "maintenance_need",
+      "cleaning_need",
+      "website_problem",
+      "document_need",
+    ],
+    recommended_locations: [
+      "Pretoria",
+      "Centurion",
+      "Midrand",
+      "Johannesburg",
+      "Gauteng",
+      "South Africa",
+    ],
+    minimum_score: 55,
+    default_result_count: 15,
+    search_scope: "south_africa",
+    delivery_model: "auto",
+    revenue_mode: "quick_revenue",
+    objectives: [
+      "find_customers",
+      "find_projects",
+      "find_immediate_cashflow",
+    ],
+    search_depth: "standard",
   },
 ];
 
-/* -------------------------------------------------------------------------- */
-/* RESPONSIBILITY / SEARCH MATRIX                                             */
-/* -------------------------------------------------------------------------- */
+/**
+ * Default request is intentionally runnable in Economy mode.
+ *
+ * Previous versions selected 10+ services while Economy allowed only three
+ * search queries. That caused the default hunt to fail before it could run.
+ */
+export const DEFAULT_LEAD_HUNTER_REQUEST: LeadHunterSearchRequest = {
+  sector: "mixed",
 
-const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
-  [
-    {
-      employeeKey: "ai-ceo",
-      label: "Executive coordination",
-      keywords: [
-        "ceo",
-        "boss",
-        "executive",
-        "company",
-        "coordinate",
-        "delegate",
-        "decision",
-        "briefing",
-        "strategy",
-        "manage team",
-        "who should do this",
-      ],
-    },
+  companies: [
+    "cossa_nexus_construction",
+    "cossa_facility_services",
+    "cossa_tech",
+  ],
 
-    {
-      employeeKey: "website-seo-monitor",
-      label: "Website & SEO monitoring",
-      keywords: [
-        "seo",
-        "website seo",
-        "ranking",
-        "website health",
-        "website audit",
-        "search engine",
-        "meta title",
-        "meta description",
-        "website performance",
-        "keywords",
-      ],
-    },
+  services: [
+    "property_maintenance",
+    "commercial_cleaning",
+    "website_design",
+  ],
 
-    {
-      employeeKey:
-        "social-strategy-planner",
-      label: "Social strategy",
-      keywords: [
-        "social strategy",
-        "marketing strategy",
-        "campaign strategy",
-        "audience",
-        "content pillars",
-        "marketing angle",
-        "social plan",
-        "facebook strategy",
-        "instagram strategy",
-        "tiktok strategy",
-      ],
-    },
+  locations: [
+    "Pretoria",
+    "Centurion",
+    "Midrand",
+    "Johannesburg",
+    "Gauteng",
+    "South Africa",
+  ],
 
-    {
-      employeeKey: "content-writer",
-      label: "Content & copywriting",
-      keywords: [
-        "content",
-        "write",
-        "writing",
-        "post",
-        "caption",
-        "copy",
-        "article",
-        "blog",
-        "website copy",
-        "landing page",
-        "script",
-        "headline",
-        "description",
-        "marketing copy",
-      ],
-    },
+  industries: [],
+  organisation_types: [],
 
-    {
-      employeeKey:
-        "creative-media-producer",
-      label: "Creative & design production",
-      keywords: [
-        "flyer",
-        "poster",
-        "graphic",
-        "design",
-        "image",
-        "creative",
-        "brochure",
-        "banner",
-        "visual",
-        "reel",
-        "video",
-        "thumbnail",
-        "advert",
-        "ad creative",
-        "social graphic",
-      ],
-    },
+  result_count: DEFAULT_HUNT_RESULTS,
 
-    {
-      employeeKey:
-        "social-schedule-coordinator",
-      label: "Content scheduling",
-      keywords: [
-        "schedule",
-        "calendar",
-        "content calendar",
-        "posting time",
-        "publishing plan",
-        "queue",
-        "social calendar",
-      ],
-    },
+  minimum_score: 55,
+  minimum_evidence_sources: 1,
 
-    {
-      employeeKey: "social-media-manager",
-      label: "Social media management",
-      keywords: [
-        "social media",
-        "facebook",
-        "instagram",
-        "tiktok",
-        "linkedin",
-        "youtube",
-        "whatsapp status",
-        "publish",
-        "social account",
-        "community",
-        "posting",
-      ],
-    },
+  include_small_projects: true,
+  include_large_projects: true,
+  include_private_sector: true,
+  include_government_sector: true,
+  include_nonprofits: true,
 
-    {
-      employeeKey:
-        "account-growth-analyst",
-      label: "Growth analytics",
-      keywords: [
-        "analytics",
-        "growth",
-        "performance",
-        "engagement",
-        "conversion",
-        "account growth",
-        "audience growth",
-        "metrics",
-        "results",
-        "improve account",
-      ],
-    },
+  require_public_phone_or_email: true,
+  require_website: false,
+  require_opportunity_signal: true,
 
-    {
-      employeeKey:
-        "paid-media-specialist",
-      label: "Paid advertising",
-      keywords: [
-        "ads",
-        "advertising",
-        "google ads",
-        "meta ads",
-        "facebook ads",
-        "paid media",
-        "campaign budget",
-        "targeting",
-        "cpc",
-        "roas",
-        "ad strategy",
-      ],
-    },
+  tender_keywords: [
+    "tender",
+    "RFQ",
+    "RFP",
+    "request for quotation",
+    "request for proposal",
+    "supplier registration",
+  ],
 
-    {
-      employeeKey:
-        "store-operations-manager",
-      label: "Store operations",
-      keywords: [
-        "store",
-        "catalogue",
-        "catalog",
-        "merchandising",
-        "store quality",
-        "ecommerce operations",
-        "shop",
-      ],
-    },
+  prospect_keywords: [
+    "maintenance",
+    "commercial cleaning",
+    "website redesign",
+    "outdated website",
+    "request for quotation",
+  ],
 
-    {
-      employeeKey:
-        "product-intelligence-analyst",
-      label: "Product intelligence",
-      keywords: [
-        "product",
-        "products",
-        "product research",
-        "trending product",
-        "product demand",
-        "pricing research",
-        "product opportunity",
-        "what to sell",
-        "dropshipping product",
-      ],
-    },
+  verified_sources_only: true,
+  exclude_existing_crm_leads: true,
 
-    {
-      employeeKey:
-        "supplier-sourcing-analyst",
-      label: "Supplier sourcing",
-      keywords: [
-        "supplier",
-        "suppliers",
-        "source product",
-        "sourcing",
-        "manufacturer",
-        "wholesaler",
-        "vendor",
-        "dropshipping supplier",
-      ],
-    },
+  notes: null,
 
-    {
-      employeeKey:
-        "broker-deal-intelligence-analyst",
-      label: "Deals & partnerships",
-      keywords: [
-        "deal",
-        "broker",
-        "partner",
-        "partnership",
-        "buyer",
-        "distributor",
-        "commercial opportunity",
-        "business opportunity",
-      ],
-    },
+  search_instruction:
+    "Find verified, contactable organisations with a clear service opportunity that Cossa can realistically pursue. Prioritise evidence quality, immediate revenue potential, ease of contact and practical next actions.",
 
-    {
-      employeeKey:
-        "procurement-intelligence-analyst",
-      label: "Procurement intelligence",
-      keywords: [
-        "tender",
-        "rfq",
-        "procurement",
-        "quotation opportunity",
-        "bid",
-        "government tender",
-        "supplier opportunity",
-      ],
-    },
+  search_scope: "south_africa",
+  delivery_model: "auto",
+  search_depth: "economy",
+  revenue_mode: "quick_revenue",
 
-    {
-      employeeKey:
-        "customer-reactivation-analyst",
-      label: "Customer reactivation",
-      keywords: [
-        "reactivate customer",
-        "old customer",
-        "dormant customer",
-        "retention",
-        "repeat customer",
-        "follow up customer",
-        "win back",
-      ],
-    },
+  objectives: [
+    "find_customers",
+    "find_immediate_cashflow",
+  ],
 
-    {
-      employeeKey:
-        "lead-intake-coordinator",
-      label: "Lead intake",
-      keywords: [
-        "lead",
-        "new lead",
-        "enquiry",
-        "inquiry",
-        "qualification",
-        "customer enquiry",
-        "sales lead",
-        "lead intake",
-      ],
-    },
+  countries: ["South Africa"],
 
-    {
-      employeeKey:
-        "tech-solutions-specialist",
-      label: "Technology solutions",
-      keywords: [
-        "tech",
-        "technology",
-        "software",
-        "technical",
-        "system",
-        "solution",
-        "implementation",
-        "automation",
-      ],
-    },
+  provinces: ["Gauteng"],
 
-    {
-      employeeKey:
-        "website-delivery-specialist",
-      label: "Website delivery",
-      keywords: [
-        "website",
-        "build website",
-        "web development",
-        "landing page implementation",
-        "client website",
-        "web design",
-        "website delivery",
-      ],
-    },
-  ];
+  cities: [
+    "Pretoria",
+    "Centurion",
+    "Midrand",
+    "Johannesburg",
+  ],
 
-/* -------------------------------------------------------------------------- */
-/* GENERIC HELPERS                                                            */
-/* -------------------------------------------------------------------------- */
+  suburbs: [],
 
-function sleep(
-  milliseconds: number,
-): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(
-      resolve,
-      milliseconds,
-    );
-  });
-}
+  radius_km: null,
 
-function clampText(
-  value: string,
-  maxCharacters: number,
-): string {
-  const cleaned =
-    value.trim();
+  search_everything: false,
+  easy_wins_only: true,
+  revenue_first: true,
 
-  if (
-    cleaned.length <=
-    maxCharacters
-  ) {
-    return cleaned;
+  max_search_queries: 3,
+
+  use_cached_results: true,
+  cache_max_age_hours: DEFAULT_SEARCH_CACHE_HOURS,
+
+  exclude_competitors: true,
+  exclude_directories: true,
+  exclude_expired_procurement: true,
+};
+
+function cleanText(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
   }
 
-  return `${cleaned.slice(
-    0,
-    Math.max(
-      0,
-      maxCharacters - 80,
-    ),
-  )}\n\n[Context truncated by Cossa AI.]`;
+  const cleaned = value.replace(/\s+/g, " ").trim();
+
+  return cleaned || null;
 }
 
-function formatStatus(
-  value:
-    | string
-    | null
-    | undefined,
-): string {
-  if (!value) {
-    return "Unknown";
+function cleanLongText(
+  value: unknown,
+  maximumLength: number,
+): string | null {
+  const text = cleanText(value);
+
+  if (!text) {
+    return null;
   }
 
-  return value
-    .replace(
-      /_/g,
-      " ",
-    )
-    .replace(
-      /\b\w/g,
-      (letter) =>
-        letter.toUpperCase(),
-    );
+  return text.slice(0, maximumLength);
 }
 
-function formatDateTime(
-  value:
-    | string
-    | null
-    | undefined,
-): string {
-  if (!value) {
-    return "No activity recorded";
+function lowerText(value: unknown): string {
+  return cleanText(value)?.toLowerCase() ?? "";
+}
+
+function uniqueTexts(
+  values: unknown,
+  maximumItems = 50,
+): string[] {
+  if (!Array.isArray(values)) {
+    return [];
   }
-
-  const date =
-    new Date(value);
-
-  if (
-    Number.isNaN(
-      date.getTime(),
-    )
-  ) {
-    return value;
-  }
-
-  return date.toLocaleString(
-    "en-ZA",
-    {
-      dateStyle:
-        "medium",
-      timeStyle:
-        "short",
-    },
-  );
-}
-
-function latestRunTime(
-  run: MissionRun,
-): string {
-  return (
-    run.completed_at ??
-    run.started_at ??
-    run.created_at ??
-    ""
-  );
-}
-
-function employeeDepartment(
-  employee: AiEmployee,
-): string {
-  return (
-    employee.department?.trim() ||
-    "Department not recorded"
-  );
-}
-
-function employeeBusinessUnit(
-  employee: AiEmployee,
-): string {
-  return employee.business_unit_id
-    ? "Assigned business unit"
-    : "Group-wide";
-}
-
-function normaliseErrorMessage(
-  error: unknown,
-): string {
-  if (
-    error instanceof Error
-  ) {
-    return error.message;
-  }
-
-  if (
-    typeof error ===
-    "string"
-  ) {
-    return error;
-  }
-
-  return "Unknown workforce provider error.";
-}
-
-function isRetryableProviderError(
-  error: unknown,
-): boolean {
-  const message =
-    normaliseErrorMessage(
-      error,
-    ).toLowerCase();
 
   return [
-    "rate limit",
-    "rate-limit",
-    "429",
-    "temporarily",
-    "temporary",
-    "timeout",
-    "timed out",
-    "overloaded",
-    "service unavailable",
-    "unavailable",
-    "bad gateway",
-    "gateway timeout",
-    "502",
-    "503",
-    "504",
-    "connection reset",
-    "network error",
-    "fetch failed",
-  ].some((marker) =>
-    message.includes(
-      marker,
+    ...new Set(
+      values
+        .map(cleanText)
+        .filter((value): value is string => Boolean(value)),
     ),
-  );
+  ].slice(0, maximumItems);
 }
 
-/* -------------------------------------------------------------------------- */
-/* SEARCH HELPERS                                                             */
-/* -------------------------------------------------------------------------- */
+function normaliseEmail(value: unknown): string | null {
+  const email = lowerText(value);
 
-function departmentKeysForEmployee(
-  employeeKey: string,
-): string[] {
-  return DEPARTMENTS.filter(
-    (department) =>
-      department.employeeKeys.includes(
-        employeeKey,
-      ),
-  ).map(
-    (department) =>
-      department.key,
-  );
+  if (!email) {
+    return null;
+  }
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ? email
+    : null;
 }
 
-function responsibilityLabelsForEmployee(
-  employeeKey: string,
-): string[] {
-  return RESPONSIBILITY_MATRIX.filter(
-    (item) =>
-      item.employeeKey ===
-      employeeKey,
-  ).map(
-    (item) =>
-      item.label,
-  );
+function normalisePhone(value: unknown): string | null {
+  const text = cleanText(value);
+
+  if (!text) {
+    return null;
+  }
+
+  const phone = text.replace(/[^\d+]/g, "");
+
+  return phone.length >= 9 ? phone : null;
 }
 
-function searchTermsForEmployee(
-  employee: AiEmployee,
-): string {
-  const responsibilityTerms =
-    RESPONSIBILITY_MATRIX.filter(
-      (item) =>
-        item.employeeKey ===
-        employee.employee_key,
-    ).flatMap(
-      (item) => [
-        item.label,
-        ...item.keywords,
-      ],
+function normaliseWebsite(value: unknown): string | null {
+  const text = cleanText(value);
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    const url = new URL(
+      /^https?:\/\//i.test(text)
+        ? text
+        : `https://${text}`,
     );
 
-  const departmentTerms =
-    DEPARTMENTS.filter(
-      (department) =>
-        department.employeeKeys.includes(
-          employee.employee_key,
-        ),
-    ).flatMap(
-      (department) => [
-        department.name,
-        department.shortName,
-        department.description,
-      ],
-    );
+    if (!["http:", "https:"].includes(url.protocol)) {
+      return null;
+    }
 
-  return [
-    employee.name,
-    employee.title,
-    employee.employee_key,
-    employee.department ?? "",
-    employee.mission ?? "",
-    ...responsibilityTerms,
-    ...departmentTerms,
-  ]
-    .join(" ")
-    .toLowerCase();
+    url.hash = "";
+
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
-function searchScore(
-  employee: EmployeeDirectoryItem,
-  query: string,
+function hostnameForUrl(value: unknown): string | null {
+  const url = normaliseWebsite(value);
+
+  if (!url) {
+    return null;
+  }
+
+  try {
+    return new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function registrableSourceKey(hostname: string): string {
+  const parts = hostname.split(".").filter(Boolean);
+
+  if (parts.length <= 2) {
+    return hostname;
+  }
+
+  const southAfricanSecondLevel = new Set([
+    "co.za",
+    "org.za",
+    "gov.za",
+    "ac.za",
+    "net.za",
+  ]);
+
+  const lastTwo = parts.slice(-2).join(".");
+
+  if (
+    parts.length >= 3 &&
+    southAfricanSecondLevel.has(lastTwo)
+  ) {
+    return parts.slice(-3).join(".");
+  }
+
+  return lastTwo;
+}
+
+function evidenceSourceKey(evidence: ProspectEvidence): string | null {
+  const explicit = cleanText(evidence.independent_source_key);
+
+  if (explicit) {
+    return explicit.toLowerCase();
+  }
+
+  const host = hostnameForUrl(evidence.url);
+
+  return host ? registrableSourceKey(host) : null;
+}
+
+function countIndependentEvidenceSources(
+  evidence: ProspectEvidence[],
+): {
+  count: number;
+  domains: string[];
+} {
+  const keys = evidence
+    .map(evidenceSourceKey)
+    .filter((value): value is string => Boolean(value));
+
+  const domains = [...new Set(keys)];
+
+  return {
+    count: domains.length,
+    domains,
+  };
+}
+
+function countOfficialEvidenceSources(
+  evidence: ProspectEvidence[],
 ): number {
-  const q =
-    query
-      .trim()
-      .toLowerCase();
+  return evidence.filter((item) => {
+    if (item.is_official_source === true) {
+      return true;
+    }
 
-  if (!q) {
+    const host = hostnameForUrl(item.url);
+
+    if (!host) {
+      return false;
+    }
+
+    return (
+      host.endsWith(".gov.za") ||
+      host.endsWith(".ac.za") ||
+      item.type === "government_portal" ||
+      item.type === "tender_notice"
+    );
+  }).length;
+}
+
+function clampScore(value: unknown): number {
+  const score = Number(value);
+
+  if (!Number.isFinite(score)) {
     return 0;
   }
 
-  let score = 0;
-
-  const employeeName =
-    employee.employee.name.toLowerCase();
-
-  const employeeTitle =
-    employee.employee.title.toLowerCase();
-
-  const employeeKey =
-    employee.employee.employee_key.toLowerCase();
-
-  if (
-    employeeName === q ||
-    employeeTitle === q
-  ) {
-    score += 200;
-  }
-
-  if (
-    employeeName.includes(q)
-  ) {
-    score += 100;
-  }
-
-  if (
-    employeeTitle.includes(q)
-  ) {
-    score += 90;
-  }
-
-  if (
-    employeeKey.includes(q)
-  ) {
-    score += 80;
-  }
-
-  for (
-    const responsibility
-    of RESPONSIBILITY_MATRIX
-  ) {
-    if (
-      responsibility.employeeKey !==
-      employee.employee.employee_key
-    ) {
-      continue;
-    }
-
-    if (
-      responsibility.label
-        .toLowerCase()
-        .includes(q)
-    ) {
-      score += 75;
-    }
-
-    for (
-      const keyword
-      of responsibility.keywords
-    ) {
-      const keywordLower =
-        keyword.toLowerCase();
-
-      if (
-        keywordLower === q
-      ) {
-        score += 120;
-      } else if (
-        keywordLower.includes(q) ||
-        q.includes(
-          keywordLower,
-        )
-      ) {
-        score += 55;
-      }
-    }
-  }
-
-  if (
-    employee.searchText.includes(
-      q,
-    )
-  ) {
-    score += 20;
-  }
-
-  return score;
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-/* -------------------------------------------------------------------------- */
-/* CONTEXT COMPACTION                                                         */
-/* -------------------------------------------------------------------------- */
-
-function compactPriorOutputsForPrompt(
-  outputs: string[],
-): string[] {
-  return outputs
-    .map(
-      (output) =>
-        output.trim(),
-    )
-    .filter(Boolean)
-    .slice(
-      -MAX_PRIOR_OUTPUTS,
-    )
-    .map(
-      (output) =>
-        clampText(
-          output,
-          MAX_PRIOR_OUTPUT_CHARS,
-        ),
-    );
-}
-
-function compactAuthorisedEvidence(
-  evidence: string[],
-): string[] {
-  return evidence
-    .map(
-      (item) =>
-        item.trim(),
-    )
-    .filter(Boolean)
-    .slice(
-      0,
-      MAX_AUTHORISEDEVIDENCE_ITEMS,
-    )
-    .map(
-      (item) =>
-        clampText(
-          item,
-          MAX_AUTHORISEDEVIDENCE_CHARS,
-        ),
-    );
-}
-
-/* -------------------------------------------------------------------------- */
-/* WORKFLOW HELPERS                                                           */
-/* -------------------------------------------------------------------------- */
-
-function handoffStageNumber(
-  handoff: EmployeeHandoff,
-): number | null {
-  const stage =
-    handoff.context?.stage;
-
-  return (
-    typeof stage ===
-      "number" &&
-    Number.isFinite(stage)
-  )
-    ? stage
-    : null;
-}
-
-function sortWorkflowHandoffs(
-  handoffs: EmployeeHandoff[],
-): EmployeeHandoff[] {
-  return [
-    ...handoffs,
-  ].sort(
-    (
-      left,
-      right,
-    ) => {
-      const leftStage =
-        handoffStageNumber(
-          left,
-        );
-
-      const rightStage =
-        handoffStageNumber(
-          right,
-        );
-
-      if (
-        leftStage !== null &&
-        rightStage !== null &&
-        leftStage !==
-          rightStage
-      ) {
-        return (
-          leftStage -
-          rightStage
-        );
-      }
-
-      return left.created_at.localeCompare(
-        right.created_at,
-      );
-    },
-  );
-}
-
-function nextWorkflowEmployeeForHandoff({
-  currentHandoff,
-  workflowHandoffs,
-  employees,
-}: {
-  currentHandoff: EmployeeHandoff;
-  workflowHandoffs: EmployeeHandoff[];
-  employees: AiEmployee[];
-}): AiEmployee | null {
-  const ordered =
-    sortWorkflowHandoffs(
-      workflowHandoffs,
-    );
-
-  const currentIndex =
-    ordered.findIndex(
-      (handoff) =>
-        handoff.id ===
-        currentHandoff.id,
-    );
-
+function safeNumber(value: unknown): number | null {
   if (
-    currentIndex < 0 ||
-    currentIndex >=
-      ordered.length - 1
+    value === null ||
+    value === undefined ||
+    value === ""
   ) {
     return null;
   }
 
-  const nextHandoff =
-    ordered[
-      currentIndex + 1
-    ];
+  const number = Number(value);
 
-  return (
-    employees.find(
-      (employee) =>
-        employee.id ===
-        nextHandoff.to_employee_id,
-    ) ?? null
+  return Number.isFinite(number) ? number : null;
+}
+
+function safeBoolean(
+  value: unknown,
+  fallback: boolean,
+): boolean {
+  return typeof value === "boolean"
+    ? value
+    : fallback;
+}
+
+function safeDateString(value: unknown): string | null {
+  const text = cleanText(value);
+
+  if (!text) {
+    return null;
+  }
+
+  const date = new Date(text);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString();
+}
+
+function isValidPublicUrl(value: unknown): boolean {
+  return normaliseWebsite(value) !== null;
+}
+
+function samePhone(
+  first: string | null,
+  second: string | null,
+): boolean {
+  if (!first || !second) {
+    return false;
+  }
+
+  const a = first.replace(/\D/g, "");
+  const b = second.replace(/\D/g, "");
+
+  if (a.length < 9 || b.length < 9) {
+    return false;
+  }
+
+  return a === b || a.slice(-9) === b.slice(-9);
+}
+
+function sameEmail(
+  first: string | null,
+  second: string | null,
+): boolean {
+  return Boolean(
+    first &&
+      second &&
+      first.toLowerCase() === second.toLowerCase(),
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* OPERATIONAL STATE                                                          */
-/* -------------------------------------------------------------------------- */
+function similarCompanyName(
+  first: string,
+  second: string,
+): boolean {
+  const normalise = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(
+        /\b(pty|ltd|limited|inc|cc|company|holdings|group|south africa)\b/g,
+        "",
+      )
+      .replace(/[^a-z0-9]/g, "");
 
-function employeeOperationalView({
-  employee,
-  handoffs,
-  runs,
-  approvals,
-}: {
-  employee: AiEmployee;
-  handoffs: EmployeeHandoff[];
-  runs: MissionRun[];
-  approvals: Approval[];
-}): EmployeeOperationalView {
-  const employeeHandoffs =
-    handoffs.filter(
-      (handoff) =>
-        handoff.to_employee_id ===
-        employee.id,
-    );
+  const a = normalise(first);
+  const b = normalise(second);
 
-  const employeeRuns =
-    runs.filter(
-      (run) =>
-        run.employee_id ===
-        employee.id,
-    );
+  return Boolean(
+    a &&
+      b &&
+      (a === b || a.includes(b) || b.includes(a)),
+  );
+}
 
-  const employeeRunIds =
-    new Set(
-      employeeRuns.map(
-        (run) =>
-          run.id,
-      ),
-    );
+function createClientId(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    "randomUUID" in crypto
+  ) {
+    return crypto.randomUUID();
+  }
 
-  const employeeApprovals =
-    approvals.filter(
-      (approval) =>
-        approval.requested_by_employee_id ===
-          employee.id ||
-        (
-          approval.run_id !==
-            null &&
-          employeeRunIds.has(
-            approval.run_id,
-          )
-        ),
-    );
+  return `prospect-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+}
 
-  const pendingHandoffs =
-    employeeHandoffs.filter(
-      (handoff) =>
-        handoff.status ===
-        "pending",
-    );
+export function isPhysicalService(
+  service: LeadHunterServiceCategory,
+): boolean {
+  return PHYSICAL_SERVICE_CATEGORIES.includes(service);
+}
 
-  const acceptedHandoffs =
-    employeeHandoffs.filter(
-      (handoff) =>
-        handoff.status ===
-        "accepted",
-    );
+export function isRemoteService(
+  service: LeadHunterServiceCategory,
+): boolean {
+  return REMOTE_SERVICE_CATEGORIES.includes(service);
+}
 
-  const activeRuns =
-    employeeRuns.filter(
-      (run) =>
-        run.status ===
-        "running",
-    );
+export function inferDeliveryModel(
+  services: LeadHunterServiceCategory[],
+): LeadHunterDeliveryModel {
+  const containsPhysical = services.some(isPhysicalService);
+  const containsRemote = services.some(isRemoteService);
 
-  const failedRuns =
-    employeeRuns.filter(
-      (run) =>
-        run.status ===
-        "failed",
-    );
+  if (containsPhysical && containsRemote) {
+    return "hybrid";
+  }
 
-  const orderedHandoffs = [
-    ...employeeHandoffs,
-  ].sort(
-    (
-      left,
-      right,
-    ) =>
-      right.created_at.localeCompare(
-        left.created_at,
-      ),
+  if (containsPhysical) {
+    return "physical";
+  }
+
+  if (containsRemote) {
+    return "remote";
+  }
+
+  return "auto";
+}
+
+export function maxQueriesForDepth(
+  depth: LeadHunterSearchDepth,
+): number {
+  return (
+    SEARCH_DEPTH_OPTIONS.find(
+      (option) => option.value === depth,
+    )?.maximumQueries ?? DEFAULT_MAX_SEARCH_QUERIES
+  );
+}
+
+export function minimumDepthForServiceCount(
+  serviceCount: number,
+): LeadHunterSearchDepth {
+  if (serviceCount <= maxQueriesForDepth("economy")) {
+    return "economy";
+  }
+
+  if (serviceCount <= maxQueriesForDepth("standard")) {
+    return "standard";
+  }
+
+  return "deep";
+}
+
+function trimServicesToHardMaximum(
+  services: LeadHunterServiceCategory[],
+): LeadHunterServiceCategory[] {
+  return [...new Set(services)].slice(
+    0,
+    maxQueriesForDepth("deep"),
+  );
+}
+
+/*
+ * Extract structured mission fields.
+ *
+ * Supports instructions such as:
+ *
+ * Company: Cossa Nexus Construction
+ * Services: Construction Renovation Property Maintenance
+ * Location: Pretoria Centurion Gauteng
+ * Results: 10
+ * Minimum score: 50
+ * Private sector: YES
+ * Government: NO
+ */
+function extractMissionField(
+  instruction: string,
+  field:
+    | "Company"
+    | "Services"
+    | "Location"
+    | "Results"
+    | "Minimum score"
+    | "Private sector"
+    | "Government"
+    | "Require opportunity signal",
+): string | null {
+  const boundary =
+    "(?=\\s+(?:Company|Services?|Location|Results?|Minimum score|Private sector|Government|Require opportunity signal)\\s*:|$)";
+
+  const pattern = new RegExp(
+    `${field}\\s*:\\s*(.+?)${boundary}`,
+    "i",
   );
 
-  const orderedRuns = [
-    ...employeeRuns,
-  ].sort(
-    (
-      left,
-      right,
-    ) =>
-      latestRunTime(
-        right,
-      ).localeCompare(
-        latestRunTime(
-          left,
-        ),
-      ),
+  return cleanText(instruction.match(pattern)?.[1]);
+}
+
+function extractMissionBooleanField(
+  instruction: string,
+  fieldPattern: string,
+): boolean | null {
+  const match = instruction.match(
+    new RegExp(
+      `\\b(?:${fieldPattern})\\s*:\\s*(yes|no|true|false|on|off)\\b`,
+      "i",
+    ),
   );
 
-  const latestHandoff =
-    orderedHandoffs[0];
+  const value = match?.[1]?.toLowerCase();
 
-  const latestRun =
-    orderedRuns[0];
+  if (["yes", "true", "on"].includes(value ?? "")) {
+    return true;
+  }
 
-  const latestFailure =
-    latestRun?.status ===
-    "failed"
-      ? latestRun.error_message ||
-        latestRun.error_code ||
-        "The latest recorded run failed."
-      : null;
+  if (["no", "false", "off"].includes(value ?? "")) {
+    return false;
+  }
 
-  const retryReady =
-    latestRun?.status ===
-      "failed" &&
-    pendingHandoffs.length >
-      0;
+  return null;
+}
 
-  const latestActivityCandidates =
-    [
-      latestRun
-        ? latestRunTime(
-            latestRun,
-          )
-        : "",
-      latestHandoff
-        ?.completed_at ??
-        "",
-      latestHandoff
-        ?.accepted_at ??
-        "",
-      latestHandoff
-        ?.created_at ??
-        "",
-    ].filter(Boolean);
+function inferCompaniesFromInstruction(
+  instruction: string,
+): LeadHunterCompany[] {
+  const matches: LeadHunterCompany[] = [];
 
-  const latestActivity =
-    latestActivityCandidates.sort(
-      (
-        left,
-        right,
-      ) =>
-        right.localeCompare(
-          left,
+  const companyField = extractMissionField(
+    instruction,
+    "Company",
+  );
+
+  const searchable = companyField ?? instruction;
+
+  const patterns: Array<{
+    company: LeadHunterCompany;
+    pattern: RegExp;
+  }> = [
+    {
+      company: "cossa_nexus_construction",
+      pattern: /\bcossa\s+nexus\s+construction(?:s)?\b/i,
+    },
+    {
+      company: "cossa_facility_services",
+      pattern: /\bcossa\s+facility\s+services\b/i,
+    },
+    {
+      company: "cossa_tech",
+      pattern: /\bcossa\s+tech\b/i,
+    },
+    {
+      company: "cossa_ai_growth",
+      pattern: /\bcossa\s+ai\s+growth\b/i,
+    },
+    {
+      company: "nexdocs",
+      pattern: /\bnexdocs\b/i,
+    },
+    {
+      company: "cossa_store",
+      pattern: /\bcossa\s+store\b/i,
+    },
+    {
+      company: "cossa_nexus_holdings",
+      pattern: /\bcossa\s+nexus\s+holdings\b/i,
+    },
+  ];
+
+  for (const item of patterns) {
+    if (item.pattern.test(searchable)) {
+      matches.push(item.company);
+    }
+  }
+
+  return [...new Set(matches)];
+}
+
+function inferServicesFromInstruction(
+  instruction: string,
+): LeadHunterServiceCategory[] {
+  const serviceField = extractMissionField(
+    instruction,
+    "Services",
+  );
+
+  if (!serviceField) {
+    return [];
+  }
+
+  const matches: LeadHunterServiceCategory[] = [];
+
+  const patterns: Array<{
+    service: LeadHunterServiceCategory;
+    pattern: RegExp;
+  }> = [
+    { service: "construction", pattern: /\bconstruction\b/i },
+    { service: "renovation", pattern: /\brenovation(?:s)?\b|\brefurbishment\b/i },
+    { service: "property_maintenance", pattern: /\bproperty\s+maintenance\b|\bmaintenance\s+services?\b/i },
+    { service: "painting", pattern: /\bpainting\b|\brepainting\b/i },
+    { service: "tiling", pattern: /\btiling\b/i },
+    { service: "ceilings", pattern: /\bceilings?\b/i },
+    { service: "roofing", pattern: /\broofing\b|\broof repairs?\b/i },
+    { service: "plumbing", pattern: /\bplumbing\b/i },
+    { service: "facility_management", pattern: /\bfacilit(?:y|ies)\s+management\b/i },
+    { service: "commercial_cleaning", pattern: /\bcommercial\s+cleaning\b/i },
+    { service: "deep_cleaning", pattern: /\bdeep\s+cleaning\b/i },
+    { service: "hygiene", pattern: /\bhygiene\b|\bsanitation\b/i },
+    { service: "landscaping", pattern: /\blandscaping\b|\bgarden services?\b/i },
+    { service: "waste_management", pattern: /\bwaste\s+management\b/i },
+    { service: "website_design", pattern: /\bwebsite\s+(?:design|redesign|development|upgrade)\b|\bweb\s+design\b/i },
+    { service: "logo_design", pattern: /\blogo\s+(?:design|redesign|upgrade)\b/i },
+    { service: "branding", pattern: /\bbranding\b|\bbrand\s+identity\b/i },
+    { service: "seo", pattern: /\bseo\b|\bsearch engine optimi[sz]ation\b/i },
+    { service: "digital_marketing", pattern: /\bdigital\s+marketing\b/i },
+    { service: "social_media_management", pattern: /\bsocial\s+media\s+management\b/i },
+    { service: "google_business_profile", pattern: /\bgoogle\s+business\s+profile\b|\bgbp\b/i },
+    { service: "lead_generation", pattern: /\blead\s+generation\b/i },
+    { service: "crm", pattern: /\bcrm\b|\bcustomer relationship management\b/i },
+    { service: "ai_automation", pattern: /\bai\s+automation\b|\bworkflow\s+automation\b/i },
+    { service: "business_documents", pattern: /\bbusiness\s+documents?\b/i },
+    { service: "quotations", pattern: /\bquotations?\b|\bquote systems?\b/i },
+    { service: "proposals", pattern: /\bproposals?\b/i },
+    { service: "contracts", pattern: /\bcontracts?\b|\bcontract documents?\b/i },
+    { service: "ecommerce", pattern: /\be-?commerce\b|\bonline store\b/i },
+  ];
+
+  for (const item of patterns) {
+    if (item.pattern.test(serviceField)) {
+      matches.push(item.service);
+    }
+  }
+
+  return [...new Set(matches)];
+}
+
+function inferLocationsFromInstruction(
+  instruction: string,
+): string[] {
+  const locationField = extractMissionField(
+    instruction,
+    "Location",
+  );
+
+  if (locationField) {
+    return [
+      ...new Set(
+        locationField
+          .split(/[,;|]+|\s+(?:and|&)\s+/i)
+          .map((item) => cleanText(item))
+          .filter((item): item is string => Boolean(item)),
+      ),
+    ].slice(0, 25);
+  }
+
+  const knownLocations = [
+    ...PRIORITY_GAUTENG_LOCATIONS,
+    ...SOUTH_AFRICAN_PROVINCES,
+    "South Africa",
+  ];
+
+  return knownLocations.filter((location) =>
+    new RegExp(
+      `\\b${location.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&",
+      )}\\b`,
+      "i",
+    ).test(instruction),
+  );
+}
+
+function inferBuyerTargetsFromInstruction(
+  instruction: string,
+): string[] {
+  const clause = instruction.match(
+    /\b(?:find|target|return)\s+(?:(?:private|public|government|nonprofit)\s+)?([^.\n!]{3,180}?)(?=\s+(?:that|who)\s+(?:could|can|may|need|needs|want|wants|have|has)\b|\s+needing\b)/i,
+  )?.[1];
+
+  if (!clause) {
+    return [];
+  }
+
+  const genericTarget =
+    /^(?:real|verified|qualified)?\s*(?:customer|buyer|lead|prospect|organisation|organization|company|business)(?:s|es)?$/i;
+
+  return [
+    ...new Set(
+      clause
+        .split(/[,;]|\s+(?:and|&)\s+/i)
+        .map((item) => cleanText(item))
+        .filter(
+          (item): item is string =>
+            typeof item === "string" &&
+            !genericTarget.test(item),
         ),
-    )[0] ?? null;
+    ),
+  ].slice(0, 6);
+}
 
-  const currentTask =
-    acceptedHandoffs[0]
-      ?.reason ??
-    pendingHandoffs[0]
-      ?.reason ??
-    latestHandoff
-      ?.reason ??
-    "No task currently assigned";
+function applyInstructionIntent(
+  request: Partial<LeadHunterSearchRequest>,
+): Partial<LeadHunterSearchRequest> {
+  const instruction = cleanLongText(
+    request.search_instruction,
+    MAX_CUSTOM_SEARCH_INSTRUCTION_LENGTH,
+  );
 
-  const common = {
-    currentTask,
-    lastActivity:
-      latestActivity,
-    assignedCount:
-      employeeHandoffs.length,
-    pendingCount:
-      pendingHandoffs.length,
-    runningCount:
-      activeRuns.length +
-      acceptedHandoffs.length,
-    failedCount:
-      failedRuns.length,
-    historicalFailureCount:
-      failedRuns.length,
-    approvalCount:
-      employeeApprovals.length,
-    latestProvider:
-      latestRun?.model_provider ??
-      null,
-    latestModel:
-      latestRun?.model_name ??
-      null,
-    latestFailure,
-    retryReady,
+  if (!instruction) {
+    return request;
+  }
+
+  const next: Partial<LeadHunterSearchRequest> = {
+    ...request,
+    search_instruction: instruction,
   };
 
+  const inferredCompanies =
+    inferCompaniesFromInstruction(instruction);
+
+  if (inferredCompanies.length > 0) {
+    next.companies = inferredCompanies;
+  }
+
+  const inferredServices =
+    inferServicesFromInstruction(instruction);
+
+  if (inferredServices.length > 0) {
+    next.services = inferredServices;
+  }
+
+  const inferredLocations =
+    inferLocationsFromInstruction(instruction);
+
+  if (inferredLocations.length > 0) {
+    next.locations = inferredLocations;
+  }
+
+  const inferredBuyerTargets =
+    inferBuyerTargetsFromInstruction(instruction);
+
+  if (inferredBuyerTargets.length > 0) {
+    next.organisation_types = inferredBuyerTargets;
+  }
+
+  const privateFieldValue = extractMissionBooleanField(
+    instruction,
+    "Private sector",
+  );
+
+  const governmentFieldValue = extractMissionBooleanField(
+    instruction,
+    "Government",
+  );
+
+  const explicitPrivateOnly =
+    /\bprivate[\s-]*sector\s+only\b/i.test(instruction) ||
+    /\bdo not search government\b/i.test(instruction) ||
+    /\bno government\b/i.test(instruction) ||
+    governmentFieldValue === false;
+
+  const explicitGovernmentOnly =
+    /\bgovernment[\s-]*sector\s+only\b/i.test(instruction) ||
+    /\bgovernment opportunities only\b/i.test(instruction) ||
+    privateFieldValue === false;
+
   if (
-    employee.status !==
-    "active"
+    explicitPrivateOnly &&
+    !explicitGovernmentOnly
   ) {
-    return {
-      ...common,
-      state:
-        "inactive",
-      label: `${formatStatus(
-        employee.status,
-      )} — Not operational`,
-      detail:
-        employee.status ===
-        "paused"
-          ? "This employee is paused and cannot receive new work."
-          : employee.status ===
-              "retired"
-            ? "This employee is retired."
-            : "This employee profile is not currently active.",
-    };
+    next.sector = "private";
+    next.include_private_sector = true;
+    next.include_government_sector = false;
+    next.include_nonprofits = false;
+  } else if (
+    explicitGovernmentOnly &&
+    !explicitPrivateOnly
+  ) {
+    next.sector = "government";
+    next.include_private_sector = false;
+    next.include_government_sector = true;
+    next.include_nonprofits = false;
+  }
+
+  const negativeClauses =
+    instruction.match(
+      /\b(?:do not|don't|exclude|without|no)\b[^.!;\n]*/gi,
+    ) ?? [];
+
+  const negativeText = negativeClauses
+    .join(" ")
+    .toLowerCase();
+
+  const excludedServices =
+    new Set<LeadHunterServiceCategory>();
+
+  if (/\bcleaning\b/.test(negativeText)) {
+    excludedServices.add("commercial_cleaning");
+    excludedServices.add("deep_cleaning");
+    excludedServices.add("hygiene");
+  }
+
+  if (/\btechnology\b|\btech\b/.test(negativeText)) {
+    [
+      "website_design",
+      "crm",
+      "ai_automation",
+      "ecommerce",
+      "google_business_profile",
+    ].forEach((service) =>
+      excludedServices.add(service as LeadHunterServiceCategory),
+    );
+  }
+
+  if (/\bmarketing\b/.test(negativeText)) {
+    [
+      "seo",
+      "digital_marketing",
+      "social_media_management",
+      "lead_generation",
+      "google_business_profile",
+    ].forEach((service) =>
+      excludedServices.add(service as LeadHunterServiceCategory),
+    );
+  }
+
+  if (/\bbranding\b|\blogo\b/.test(negativeText)) {
+    excludedServices.add("logo_design");
+    excludedServices.add("branding");
   }
 
   if (
-    activeRuns.length >
-      0 ||
-    acceptedHandoffs.length >
-      0
+    /\bnexdocs\b|\bbusiness documents?\b/.test(
+      negativeText,
+    )
   ) {
-    return {
-      ...common,
-      state:
-        "working",
-      label:
-        "Active — Working",
-      detail:
-        "A real workforce run or accepted handoff is currently recorded.",
-    };
+    [
+      "business_documents",
+      "quotations",
+      "proposals",
+      "contracts",
+    ].forEach((service) =>
+      excludedServices.add(service as LeadHunterServiceCategory),
+    );
+
+    if (next.companies) {
+      next.companies = next.companies.filter(
+        (company) => company !== "nexdocs",
+      );
+    }
   }
 
   if (
-    employeeApprovals.length >
-    0
+    next.services &&
+    excludedServices.size > 0
   ) {
-    return {
-      ...common,
-      state:
-        "approval",
-      label:
-        "Active — Approval required",
-      detail:
-        "Recorded work has reached an owner-controlled approval checkpoint.",
-    };
+    const filtered = next.services.filter(
+      (service) => !excludedServices.has(service),
+    );
+
+    if (filtered.length > 0) {
+      next.services = filtered;
+    }
+  }
+
+  const resultsField = extractMissionField(
+    instruction,
+    "Results",
+  );
+
+  const resultCount = safeNumber(
+    resultsField?.match(/\d+/)?.[0],
+  );
+
+  if (resultCount !== null) {
+    next.result_count = Math.max(
+      1,
+      Math.min(
+        MAX_HUNT_RESULTS,
+        Math.round(resultCount),
+      ),
+    );
+  }
+
+  const minimumScoreField = extractMissionField(
+    instruction,
+    "Minimum score",
+  );
+
+  const minimumScore = safeNumber(
+    minimumScoreField?.match(/\d+/)?.[0],
+  );
+
+  if (minimumScore !== null) {
+    next.minimum_score = clampScore(minimumScore);
+  }
+
+  const requireOpportunitySignal =
+    extractMissionBooleanField(
+      instruction,
+      "Require opportunity (?:signal|evidence)",
+    );
+
+  const allowsResearchProspects =
+    /\bif no active opportunit(?:y|ies) (?:is|are) proven,?\s*(?:return|keep)\b[\s\S]{0,180}?\b(?:research prospects?|low[-\s]priority research)\b/i.test(
+      instruction,
+    ) ||
+    /\b(?:return|keep)\b[\s\S]{0,100}?\b(?:research prospects?|low[-\s]priority research)\b[\s\S]{0,100}?\b(?:no active opportunit(?:y|ies)|not a confirmed active buyer)\b/i.test(
+      instruction,
+    );
+
+  if (allowsResearchProspects) {
+    next.require_opportunity_signal = false;
+  } else if (requireOpportunitySignal !== null) {
+    next.require_opportunity_signal =
+      requireOpportunitySignal;
   }
 
   if (
-    retryReady
+    /\bquick revenue\b|\beasy wins?\b|\bfaster[-\s]to[-\s]close\b|\bsmall(?:er)? jobs?\b/i.test(
+      instruction,
+    )
   ) {
-    return {
-      ...common,
-      state:
-        "waiting",
-      label:
-        "Active — Retry ready",
-      detail:
-        "The previous attempt failed, but the task safely returned to pending.",
-    };
+    next.revenue_mode = "quick_revenue";
+    next.easy_wins_only = true;
+    next.revenue_first = true;
+  }
+
+  return next;
+}
+
+export function calculateProspectScore(
+  prospect: Pick<
+    LeadHunterProspect,
+    | "fit_score"
+    | "intent_score"
+    | "evidence_score"
+    | "timing_score"
+    | "contactability_score"
+  >,
+): number {
+  const weightedScore =
+    clampScore(prospect.fit_score) * 0.3 +
+    clampScore(prospect.intent_score) * 0.25 +
+    clampScore(prospect.evidence_score) * 0.2 +
+    clampScore(prospect.timing_score) * 0.15 +
+    clampScore(prospect.contactability_score) * 0.1;
+
+  return clampScore(weightedScore);
+}
+
+export function calculateSalesPriority({
+  totalScore,
+  intentScore,
+  contactabilityScore,
+  timingScore,
+}: {
+  totalScore: number;
+  intentScore: number;
+  contactabilityScore: number;
+  timingScore: number;
+}): ProspectSalesPriority {
+  if (
+    totalScore >= 80 &&
+    contactabilityScore >= 60 &&
+    (intentScore >= 70 || timingScore >= 75)
+  ) {
+    return "hot";
   }
 
   if (
-    latestRun?.status ===
-    "failed"
+    totalScore >= 65 &&
+    contactabilityScore >= 40
   ) {
-    return {
-      ...common,
-      state:
-        "attention",
-      label:
-        "Active — Needs attention",
-      detail:
-        latestFailure ??
-        "The latest workforce run failed and has not returned to a retryable state.",
-    };
+    return "warm";
   }
 
-  if (
-    pendingHandoffs.length >
-    0
-  ) {
-    return {
-      ...common,
-      state:
-        "waiting",
-      label:
-        "Active — Assigned",
-      detail:
-        "A real task is assigned and waiting for the workforce executor.",
-    };
+  if (totalScore >= 50) {
+    return "cold";
+  }
+
+  return "research";
+}
+
+function normaliseVerificationMeta(
+  candidate:
+    Partial<LeadHunterProspect>,
+  evidence: ProspectEvidence[],
+): ProspectVerificationMeta {
+  const detected = countIndependentEvidenceSources(evidence);
+
+  const raw = candidate.verification_meta;
+
+  const suppliedIndependentCount = safeNumber(
+    raw?.independent_source_count,
+  );
+
+  const suppliedDomains = uniqueTexts(
+    raw?.corroborating_domains,
+    20,
+  )
+    .map((value) => value.toLowerCase())
+    .filter(Boolean);
+
+  const corroboratingDomains =
+    suppliedDomains.length > 0
+      ? suppliedDomains
+      : detected.domains;
+
+  const independentSourceCount = Math.max(
+    detected.count,
+    suppliedIndependentCount !== null
+      ? Math.max(0, Math.round(suppliedIndependentCount))
+      : 0,
+  );
+
+  const officialSourceCount = Math.max(
+    countOfficialEvidenceSources(evidence),
+    Math.max(
+      0,
+      Math.round(
+        safeNumber(raw?.official_source_count) ?? 0,
+      ),
+    ),
+  );
+
+  return {
+    independent_source_count:
+      independentSourceCount,
+
+    corroborating_domains:
+      corroboratingDomains,
+
+    official_source_count:
+      officialSourceCount,
+
+    source_cluster_id:
+      cleanText(raw?.source_cluster_id) ??
+      cleanText(candidate.entity_cluster_id),
+
+    cross_verified:
+      raw?.cross_verified === true ||
+      independentSourceCount >= 2,
+
+    verification_notes:
+      uniqueTexts(
+        raw?.verification_notes,
+        20,
+      ),
+  };
+}
+
+function normaliseProcurement(
+  candidate:
+    Partial<LeadHunterProspect>,
+): ProcurementVerification | null {
+  const raw = candidate.procurement;
+
+  if (!raw) {
+    return null;
+  }
+
+  const status: ProcurementCurrentStatus =
+    raw.current_status === "active" ||
+    raw.current_status === "expired" ||
+    raw.current_status === "unknown" ||
+    raw.current_status === "not_applicable"
+      ? raw.current_status
+      : "unknown";
+
+  return {
+    reference_number:
+      cleanText(raw.reference_number),
+
+    closing_date:
+      safeDateString(raw.closing_date),
+
+    briefing_date:
+      safeDateString(raw.briefing_date),
+
+    issuing_body:
+      cleanText(raw.issuing_body),
+
+    submission_method:
+      cleanText(raw.submission_method),
+
+    source_is_official:
+      raw.source_is_official === true,
+
+    service_match_verified:
+      raw.service_match_verified === true,
+
+    current_status:
+      status,
+  };
+}
+
+function normaliseWebsiteAudit(
+  candidate:
+    Partial<LeadHunterProspect>,
+): WebsiteAuditFinding[] {
+  if (!Array.isArray(candidate.website_audit)) {
+    return [];
+  }
+
+  const validTypes = new Set<WebsiteAuditFindingType>([
+    "missing_contact_form",
+    "missing_whatsapp",
+    "mobile_issue",
+    "broken_link",
+    "missing_https",
+    "missing_meta_description",
+    "weak_title",
+    "missing_schema",
+    "slow_page",
+    "conversion_gap",
+    "other",
+  ]);
+
+  return candidate.website_audit
+    .flatMap((finding): WebsiteAuditFinding[] => {
+      if (!finding || typeof finding !== "object") {
+        return [];
+      }
+
+      const type =
+        validTypes.has(finding.type)
+          ? finding.type
+          : "other";
+
+      const evidence =
+        cleanLongText(finding.evidence, 1_000);
+
+      const sourceUrl =
+        normaliseWebsite(finding.source_url);
+
+      if (!evidence || !sourceUrl) {
+        return [];
+      }
+
+      const severity =
+        finding.severity === "high" ||
+        finding.severity === "medium" ||
+        finding.severity === "low"
+          ? finding.severity
+          : "medium";
+
+      return [
+        {
+          type,
+          severity,
+          evidence,
+          source_url: sourceUrl,
+          verified: finding.verified === true,
+        },
+      ];
+    })
+    .slice(0, 20);
+}
+
+function normaliseAiInterpretation(
+  candidate:
+    Partial<LeadHunterProspect>,
+): AiInterpretationMeta | null {
+  const raw = candidate.ai_interpretation;
+
+  if (!raw) {
+    return null;
   }
 
   return {
-    ...common,
-    state:
-      "idle",
-    label:
-      "Active — Available",
-    currentTask:
-      "No task currently assigned",
-    detail:
-      employeeHandoffs.length >
-      0
-        ? "This employee is available for the next appropriate task."
-        : "This employee is active and available.",
+    used: raw.used === true,
+
+    provider:
+      cleanText(raw.provider),
+
+    model:
+      cleanText(raw.model),
+
+    confidence:
+      raw.confidence === null ||
+      raw.confidence === undefined
+        ? null
+        : clampScore(raw.confidence),
+
+    grounded_source_urls:
+      uniqueTexts(
+        raw.grounded_source_urls,
+        20,
+      )
+        .map(normaliseWebsite)
+        .filter(
+          (value): value is string =>
+            Boolean(value),
+        ),
+
+    may_not_create_facts: true,
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/* OUTPUT HELPERS                                                             */
-/* -------------------------------------------------------------------------- */
-
-function reviewableOutputContent(
-  run: MissionRun,
-): string | null {
-  if (
-    !run.output ||
-    typeof run.output !==
-      "object"
-  ) {
-    return null;
-  }
-
-  const content = (
-    run.output as {
-      content?: unknown;
-    }
-  ).content;
-
+function isProcurementClassification(
+  classification:
+    ProspectClassification | undefined,
+): boolean {
   return (
-    typeof content ===
-      "string" &&
-    content.trim()
-  )
-    ? content
-    : null;
-}
-
-function websiteReportEvidence(
-  report: OfficialWebsiteHealthReport,
-): string {
-  return [
-    "Official Cossa website health",
-    `Website: ${report.website}`,
-    `Availability: ${report.availability}`,
-    `HTTP: ${report.http_status ?? "unknown"}`,
-    `Response: ${report.response_time_ms ?? "unknown"} ms`,
-    `Title: ${report.page_title ?? "not detected"}`,
-    `Noindex: ${report.noindex_detected ? "yes" : "no"}`,
-    `Issues: ${
-      report.issues.length > 0
-        ? report.issues.join(
-            "; ",
-          )
-        : "none"
-    }`,
-  ].join("\n");
-}
-
-/* -------------------------------------------------------------------------- */
-/* COMPACT CONTROLLED STAGE PROMPT                                            */
-/* -------------------------------------------------------------------------- */
-
-function controlledStagePrompt({
-  mission,
-  handoff,
-  employee,
-  nextEmployee,
-  priorOutputs,
-  authorisedEvidence,
-}: {
-  mission: Mission;
-  handoff: EmployeeHandoff;
-  employee: AiEmployee;
-  nextEmployee: AiEmployee | null;
-  priorOutputs: string[];
-  authorisedEvidence: string[];
-}): string {
-  const compactPrevious =
-    compactPriorOutputsForPrompt(
-      priorOutputs,
-    );
-
-  const compactEvidence =
-    compactAuthorisedEvidence(
-      authorisedEvidence,
-    );
-
-  const stage =
-    handoffStageNumber(
-      handoff,
-    );
-
-  const totalStages =
-    typeof handoff.context
-      ?.total_stages ===
-    "number"
-      ? handoff.context
-          .total_stages
-      : null;
-
-  const safeHandoffContext =
-    clampText(
-      JSON.stringify(
-        handoff.context,
-      ),
-      MAX_HANDOFF_CONTEXT_CHARS,
-    );
-
-  const nextInstruction =
-    nextEmployee
-      ? `Next recorded worker: ${nextEmployee.name} (${nextEmployee.employee_key}). Hand work only to that worker.`
-      : "This is the final recorded stage. Do not invent another worker.";
-
-  const evidence =
-    compactEvidence.length >
-    0
-      ? compactEvidence.join(
-          "\n\n",
-        )
-      : "No extra authorised evidence.";
-
-  const previous =
-    compactPrevious.length >
-    0
-      ? compactPrevious
-          .map(
-            (
-              output,
-              index,
-            ) =>
-              `Prior output ${index + 1}:\n${output}`,
-          )
-          .join(
-            "\n\n",
-          )
-      : "No prior output required.";
-
-  const prompt = [
-    `Role: ${employee.title} (${employee.employee_key}).`,
-    `Department: ${employee.department}.`,
-    stage !== null
-      ? `Workflow stage: ${stage}${
-          totalStages
-            ? `/${totalStages}`
-            : ""
-        }.`
-      : "",
-    `Assigned work: ${handoff.reason}`,
-    `Mission objective: ${mission.objective}`,
-    `Target: ${
-      mission.target_market ||
-      "unspecified"
-    } / ${
-      mission.target_location ||
-      "unspecified"
-    }.`,
-    nextInstruction,
-
-    "Complete the safe internal work now.",
-    "Use verified Cossa information only.",
-    "Do not invent customers, suppliers, products, prices, results, account access, publication, spend or external actions.",
-    "Normal research, analysis, drafting, content, visual briefs, scheduling and internal handoffs do not need owner approval.",
-    "Escalate only money, legal commitments, supplier orders, credentials, destructive changes, irreversible changes or sensitive external communication.",
-    "If something is missing, name the missing information or integration briefly.",
-    "Do not repeat earlier outputs unnecessarily.",
-    "For visual-dependent work, provide format, subject, headline, key text, brand treatment, channel/dimensions and CTA.",
-    "Never claim publishing or asset generation unless verified execution exists.",
-
-    "Return these short sections:",
-    "Verified inputs",
-    "Work completed",
-    "Visual or media requirements",
-    "Missing information or integrations",
-    "Handoff to next employee",
-    "High-risk owner decisions required",
-    "External actions status",
-
-    `Context: ${safeHandoffContext}`,
-    `Evidence:\n${evidence}`,
-    previous,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  return clampText(
-    prompt,
-    MAX_STAGE_PROMPT_CHARS,
+    classification === "tender" ||
+    classification === "supplier_opportunity"
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* MAIN                                                                       */
-/* -------------------------------------------------------------------------- */
+function procurementCanBeVerified(
+  classification: ProspectClassification,
+  procurement: ProcurementVerification | null,
+): boolean {
+  if (!isProcurementClassification(classification)) {
+    return true;
+  }
 
-function AiWorkforce() {
-  const queryClient =
-    useQueryClient();
+  if (!procurement) {
+    return false;
+  }
 
-  const navigate =
-    useNavigate({
-      from:
-        "/ai/workforce",
-    });
+  if (classification === "supplier_opportunity") {
+    return (
+      procurement.source_is_official &&
+      procurement.service_match_verified &&
+      procurement.current_status !== "expired"
+    );
+  }
 
-  const search =
-    Route.useSearch();
+  return Boolean(
+    procurement.reference_number &&
+    procurement.closing_date &&
+    procurement.source_is_official &&
+    procurement.service_match_verified &&
+    procurement.current_status === "active",
+  );
+}
 
-  const view =
-    search.view;
+function buildWhyContact(
+  candidate:
+    Partial<LeadHunterProspect>,
+  signals:
+    ProspectSignal[],
+  websiteAudit:
+    WebsiteAuditFinding[],
+): string[] {
+  const reasons = uniqueTexts(
+    candidate.why_contact,
+    10,
+  );
 
-  const selectedDepartment =
-    search.department;
+  if (reasons.length > 0) {
+    return reasons;
+  }
 
-  const [
-    employeeSearch,
-    setEmployeeSearch,
-  ] =
-    useState("");
+  const generated: string[] = [];
 
-  const [
-    selectedEmployeeId,
-    setSelectedEmployeeId,
-  ] =
-    useState<
-      string | null
-    >(null);
+  if (
+    candidate.public_phone ||
+    candidate.public_email
+  ) {
+    generated.push(
+      "Verified public contact route is available.",
+    );
+  }
 
-  const [
-    objective,
-    setObjective,
-  ] =
-    useState(
-      "Build and continuously improve Cossa Nexus Holdings' professional social, digital growth, customer-acquisition and commercial operating system using verified company information.",
+  if (
+    websiteAudit.some(
+      (finding) =>
+        finding.verified &&
+        (
+          finding.type === "missing_contact_form" ||
+          finding.type === "missing_whatsapp" ||
+          finding.type === "mobile_issue" ||
+          finding.type === "conversion_gap"
+        ),
+    )
+  ) {
+    generated.push(
+      "Objective website-audit evidence identifies a public conversion or usability gap.",
+    );
+  }
+
+  if (
+    signals.some(
+      (signal) =>
+        signal.type === "website_problem" ||
+        signal.type === "mobile_website_problem" ||
+        signal.type === "missing_contact_form" ||
+        signal.type === "missing_whatsapp",
+    )
+  ) {
+    generated.push(
+      "A public website or conversion weakness was identified.",
+    );
+  }
+
+  if (
+    signals.some(
+      (signal) =>
+        signal.type === "branding_problem" ||
+        signal.type === "missing_logo",
+    )
+  ) {
+    generated.push(
+      "A public branding weakness was identified.",
+    );
+  }
+
+  if (
+    signals.some(
+      (signal) =>
+        signal.type === "maintenance_need" ||
+        signal.type === "renovation_need" ||
+        signal.type === "cleaning_need",
+    )
+  ) {
+    generated.push(
+      "The organisation shows a relevant physical-service signal.",
+    );
+  }
+
+  if (
+    signals.some(
+      (signal) =>
+        signal.type === "active_tender" ||
+        signal.type === "request_for_quote" ||
+        signal.type === "request_for_proposal",
+    )
+  ) {
+    generated.push(
+      "A public procurement signal was identified.",
+    );
+  }
+
+  return generated;
+}
+
+export function validateProspect(
+  candidate:
+    Partial<LeadHunterProspect>,
+): LeadHunterProspect {
+  const rejectionReasons: string[] = [];
+
+  const organisationName = cleanText(
+    candidate.organisation_name,
+  );
+
+  if (!organisationName) {
+    rejectionReasons.push(
+      "Organisation name is missing.",
+    );
+  }
+
+  const primarySourceUrl = normaliseWebsite(
+    candidate.primary_source_url,
+  );
+
+  if (!primarySourceUrl) {
+    rejectionReasons.push(
+      "No valid primary public source URL was supplied.",
+    );
+  }
+
+  const evidence = Array.isArray(candidate.evidence)
+    ? candidate.evidence
+        .filter(
+          (item): item is ProspectEvidence =>
+            Boolean(
+              item &&
+              cleanText(item.title) &&
+              isValidPublicUrl(item.url),
+            ),
+        )
+        .map((item) => ({
+          ...item,
+
+          title:
+            cleanText(item.title) ??
+            "Public source",
+
+          url:
+            normaliseWebsite(item.url) as string,
+
+          publisher:
+            cleanText(item.publisher),
+
+          published_at:
+            safeDateString(item.published_at),
+
+          checked_at:
+            safeDateString(item.checked_at) ??
+            new Date().toISOString(),
+
+          excerpt:
+            cleanLongText(item.excerpt, 2_000),
+
+          supports:
+            uniqueTexts(item.supports, 20),
+
+          independent_source_key:
+            cleanText(item.independent_source_key),
+
+          is_official_source:
+            item.is_official_source === true,
+        }))
+    : [];
+
+  if (evidence.length === 0) {
+    rejectionReasons.push(
+      "No valid public evidence source was supplied.",
+    );
+  }
+
+  const website = normaliseWebsite(candidate.website);
+  const phone = normalisePhone(candidate.public_phone);
+  const email = normaliseEmail(candidate.public_email);
+
+  if (!website && !phone && !email) {
+    rejectionReasons.push(
+      "No website, public phone number or public email was verified.",
+    );
+  }
+
+  const signals = Array.isArray(candidate.signals)
+    ? candidate.signals
+        .filter(
+          (signal): signal is ProspectSignal =>
+            Boolean(
+              signal &&
+              cleanText(signal.title) &&
+              cleanText(signal.explanation) &&
+              isValidPublicUrl(signal.evidence_url),
+            ),
+        )
+        .map((signal) => ({
+          ...signal,
+
+          title:
+            cleanText(signal.title) ??
+            "Opportunity signal",
+
+          explanation:
+            cleanLongText(
+              signal.explanation,
+              2_000,
+            ) ??
+            "No signal explanation supplied.",
+
+          evidence_url:
+            normaliseWebsite(
+              signal.evidence_url,
+            ) as string,
+
+          detected_at:
+            safeDateString(
+              signal.detected_at,
+            ) ??
+            new Date().toISOString(),
+
+          confidence:
+            clampScore(signal.confidence),
+        }))
+    : [];
+
+  const fitScore = clampScore(candidate.fit_score);
+  const intentScore = clampScore(candidate.intent_score);
+  const evidenceScore = clampScore(candidate.evidence_score);
+  const timingScore = clampScore(candidate.timing_score);
+  const contactabilityScore =
+    clampScore(candidate.contactability_score);
+
+  const suppliedTotalScore =
+    safeNumber(candidate.total_score);
+
+  const totalScore =
+    suppliedTotalScore !== null
+      ? clampScore(suppliedTotalScore)
+      : calculateProspectScore({
+          fit_score: fitScore,
+          intent_score: intentScore,
+          evidence_score: evidenceScore,
+          timing_score: timingScore,
+          contactability_score:
+            contactabilityScore,
+        });
+
+  const revenuePotentialScore =
+    candidate.revenue_potential_score !== undefined
+      ? clampScore(
+          candidate.revenue_potential_score,
+        )
+      : clampScore(
+          totalScore * 0.55 +
+          intentScore * 0.25 +
+          timingScore * 0.2,
+        );
+
+  const easeToCloseScore =
+    candidate.ease_to_close_score !== undefined
+      ? clampScore(
+          candidate.ease_to_close_score,
+        )
+      : clampScore(
+          contactabilityScore * 0.45 +
+          intentScore * 0.3 +
+          fitScore * 0.25,
+        );
+
+  const recurringRevenueScore =
+    candidate.recurring_revenue_score !== undefined
+      ? clampScore(
+          candidate.recurring_revenue_score,
+        )
+      : clampScore(
+          [
+            "facility_management",
+            "commercial_cleaning",
+            "hygiene",
+            "landscaping",
+            "seo",
+            "digital_marketing",
+            "social_media_management",
+            "lead_generation",
+            "crm",
+            "ai_automation",
+          ].includes(
+            candidate.recommended_service ??
+            "general",
+          )
+            ? 75
+            : 35,
+        );
+
+  const geographicFitScore =
+    candidate.geographic_fit_score !== undefined
+      ? clampScore(
+          candidate.geographic_fit_score,
+        )
+      : 60;
+
+  const verificationMeta =
+    normaliseVerificationMeta(
+      candidate,
+      evidence,
     );
 
-  const [
-    targetMarket,
-    setTargetMarket,
-  ] =
-    useState(
+  const procurement =
+    normaliseProcurement(candidate);
+
+  const websiteAudit =
+    normaliseWebsiteAudit(candidate);
+
+  const aiInterpretation =
+    normaliseAiInterpretation(candidate);
+
+  const requestedStatus =
+    candidate.verification_status ??
+    "unverified";
+
+  const requestedClassification =
+    candidate.classification ??
+    "prospect";
+
+  const classification =
+    requestedStatus === "rejected" ||
+    requestedClassification === "rejected"
+      ? "rejected"
+      : requestedClassification;
+
+  const hasStrongContact =
+    Boolean(phone || email);
+
+  const hasAnyPublicIdentity =
+    Boolean(website || phone || email);
+
+  const procurementVerified =
+    procurementCanBeVerified(
+      classification,
+      procurement,
+    );
+
+  /*
+   * Strict verification rules:
+   *
+   * 1. AI confidence never upgrades verification.
+   * 2. Procurement verification must pass independently.
+   * 3. Two pages from the same organisation domain are not treated as two
+   *    independent sources.
+   * 4. A server can still return partially_verified with one official source,
+   *    but "verified" requires independent corroboration.
+   */
+  let verificationStatus:
+    ProspectVerificationStatus;
+
+  if (
+    requestedStatus === "rejected" ||
+    classification === "rejected" ||
+    rejectionReasons.length > 0
+  ) {
+    verificationStatus = "rejected";
+  } else if (
+    requestedStatus === "verified" &&
+    evidenceScore >= 70 &&
+    verificationMeta.independent_source_count >= 2 &&
+    verificationMeta.cross_verified &&
+    hasAnyPublicIdentity &&
+    signals.length >= 1 &&
+    procurementVerified
+  ) {
+    verificationStatus = "verified";
+  } else {
+    verificationStatus = "partially_verified";
+  }
+
+  if (
+    classification === "tender" &&
+    !procurementVerified &&
+    !rejectionReasons.includes(
+      "Tender verification is incomplete.",
+    )
+  ) {
+    rejectionReasons.push(
+      "Tender verification is incomplete.",
+    );
+  }
+
+  const salesPriority =
+    classification === "prospect" &&
+    signals.every(
+      (signal) =>
+        signal.type === "general_fit",
+    )
+      ? "research"
+      : candidate.sales_priority ??
+        calculateSalesPriority({
+          totalScore,
+          intentScore,
+          contactabilityScore,
+          timingScore,
+        });
+
+  const duplicateStatus =
+    candidate.duplicate_status === "clear" ||
+    candidate.duplicate_status === "possible_duplicate" ||
+    candidate.duplicate_status === "existing_crm_lead" ||
+    candidate.duplicate_status === "excluded_existing_crm_lead"
+      ? candidate.duplicate_status
+      : "not_checked";
+
+  return {
+    id:
+      cleanText(candidate.id) ??
+      createClientId(),
+
+    organisation_name:
+      organisationName ??
+      "Rejected prospect",
+
+    trading_name:
+      cleanText(candidate.trading_name),
+
+    sector:
+      candidate.sector ??
+      "private",
+
+    industry:
+      cleanText(candidate.industry),
+
+    organisation_type:
+      cleanText(candidate.organisation_type),
+
+    website,
+
+    public_phone:
+      phone,
+
+    public_email:
+      email,
+
+    identity_keys:
+      uniqueTexts(
+        candidate.identity_keys,
+        30,
+      ).filter(
+        (value) =>
+          /^(phone|email|domain|organisation):.+$/i.test(
+            value,
+          ),
+      ),
+
+    contact_page_url:
+      normaliseWebsite(
+        candidate.contact_page_url,
+      ),
+
+    contact_name:
+      cleanText(candidate.contact_name),
+
+    contact_title:
+      cleanText(candidate.contact_title),
+
+    decision_maker_route:
+      cleanLongText(
+        candidate.decision_maker_route,
+        2_000,
+      ),
+
+    address:
+      cleanText(candidate.address),
+
+    suburb:
+      cleanText(candidate.suburb),
+
+    city:
+      cleanText(candidate.city),
+
+    province:
+      cleanText(candidate.province),
+
+    country:
+      cleanText(candidate.country) ??
       "South Africa",
-    );
 
-  const [
-    targetLocation,
-    setTargetLocation,
-  ] =
-    useState(
-      "Gauteng",
-    );
+    recommended_company:
+      candidate.recommended_company ??
+      "cossa_nexus_holdings",
 
-  const [
-    selectedMissionId,
-    setSelectedMissionId,
-  ] =
-    useState<
-      string | null
-    >(null);
+    recommended_service:
+      candidate.recommended_service ??
+      "general",
 
-  const [
-    ceoCommand,
-    setCeoCommand,
-  ] =
-    useState("");
+    service_fit_reason:
+      cleanLongText(
+        candidate.service_fit_reason,
+        2_500,
+      ) ??
+      "Service fit has not been sufficiently explained.",
 
-  /* ------------------------------------------------------------------------ */
-  /* URL NAVIGATION                                                           */
-  /* ------------------------------------------------------------------------ */
+    opportunity_summary:
+      cleanLongText(
+        candidate.opportunity_summary,
+        2_500,
+      ) ??
+      "No verified opportunity summary supplied.",
 
-  function setView(
-    nextView: WorkforceView,
-  ) {
-    void navigate({
-      search:
-        (
-          previous,
-        ) => ({
-          ...previous,
-          view:
-            nextView,
-        }),
-    });
-  }
+    opportunity_size:
+      candidate.opportunity_size ??
+      "unknown",
 
-  function setSelectedDepartment(
-    department: WorkforceDepartment,
-  ) {
-    void navigate({
-      search:
-        (
-          previous,
-        ) => ({
-          ...previous,
-          department,
-        }),
-    });
-  }
+    estimated_value:
+      safeNumber(
+        candidate.estimated_value,
+      ),
 
-  function openEmployees(
-    department: WorkforceDepartment = "all",
-  ) {
-    void navigate({
-      search:
-        (
-          previous,
-        ) => ({
-          ...previous,
-          view:
-            "employees",
-          department,
-        }),
-    });
-  }
+    classification,
 
-  function openDepartment(
-    department:
-      Exclude<
-        WorkforceDepartment,
-        "all"
-      >,
-  ) {
-    setEmployeeSearch(
+    verification_status:
+      verificationStatus,
+
+    fit_score:
+      fitScore,
+
+    intent_score:
+      intentScore,
+
+    evidence_score:
+      evidenceScore,
+
+    timing_score:
+      timingScore,
+
+    contactability_score:
+      contactabilityScore,
+
+    total_score:
+      totalScore,
+
+    revenue_potential_score:
+      revenuePotentialScore,
+
+    ease_to_close_score:
+      easeToCloseScore,
+
+    recurring_revenue_score:
+      recurringRevenueScore,
+
+    geographic_fit_score:
+      geographicFitScore,
+
+    sales_priority:
+      salesPriority,
+
+    why_contact:
+      buildWhyContact(
+        candidate,
+        signals,
+        websiteAudit,
+      ),
+
+    signals,
+
+    evidence,
+
+    primary_source_url:
+      primarySourceUrl ??
       "",
+
+    date_verified:
+      safeDateString(
+        candidate.date_verified,
+      ) ??
+      new Date().toISOString(),
+
+    next_action:
+      cleanLongText(
+        candidate.next_action,
+        2_000,
+      ) ??
+      "Verify the organisation and identify the correct public procurement or decision-maker route.",
+
+    outreach_angle:
+      cleanLongText(
+        candidate.outreach_angle,
+        2_000,
+      ),
+
+    duplicate_status:
+      duplicateStatus,
+
+    duplicate_lead_id:
+      cleanText(
+        candidate.duplicate_lead_id,
+      ),
+
+    rejection_reasons: [
+      ...new Set([
+        ...(candidate.rejection_reasons ?? []),
+        ...rejectionReasons,
+      ]),
+    ],
+
+    raw_provider_name:
+      cleanText(
+        candidate.raw_provider_name,
+      ),
+
+    raw_provider_result_id:
+      cleanText(
+        candidate.raw_provider_result_id,
+      ),
+
+    verification_meta:
+      verificationMeta,
+
+    procurement,
+
+    website_audit:
+      websiteAudit,
+
+    ai_interpretation:
+      aiInterpretation,
+
+    entity_cluster_id:
+      cleanText(
+        candidate.entity_cluster_id,
+      ) ??
+      verificationMeta.source_cluster_id,
+  };
+}
+
+export function validateSearchRequest(
+  requestInput:
+    Partial<LeadHunterSearchRequest>,
+): LeadHunterSearchRequest {
+  const request = applyInstructionIntent(
+    requestInput,
+  );
+
+  const resultCount = Math.min(
+    MAX_HUNT_RESULTS,
+    Math.max(
+      1,
+      Math.round(
+        Number(
+          request.result_count ??
+          DEFAULT_HUNT_RESULTS,
+        ),
+      ),
+    ),
+  );
+
+  /*
+   * Never silently keep more than eight services because the current server
+   * route has an eight-query Deep ceiling. We preserve user order.
+   */
+  const rawServices =
+    request.services?.length
+      ? request.services
+      : DEFAULT_LEAD_HUNTER_REQUEST.services;
+
+  const services =
+    trimServicesToHardMaximum(rawServices);
+
+  const requestedDeliveryModel =
+    request.delivery_model ??
+    DEFAULT_LEAD_HUNTER_REQUEST.delivery_model ??
+    "auto";
+
+  const deliveryModel =
+    requestedDeliveryModel === "auto"
+      ? inferDeliveryModel(services)
+      : requestedDeliveryModel;
+
+  /*
+   * If callers explicitly choose Economy with too many services, keep the
+   * explicit depth and let UI/server pre-flight show a clear error.
+   *
+   * If depth is missing, choose the cheapest usable depth automatically.
+   */
+  const explicitDepth =
+    request.search_depth;
+
+  const searchDepth =
+    explicitDepth ??
+    minimumDepthForServiceCount(
+      services.length,
     );
 
-    setSelectedEmployeeId(
-      null,
-    );
+  const depthQueryLimit =
+    maxQueriesForDepth(searchDepth);
 
-    openEmployees(
-      department,
-    );
-  }
-
-  /* ------------------------------------------------------------------------ */
-  /* QUERIES                                                                  */
-  /* ------------------------------------------------------------------------ */
-
-  const employeesQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-employees",
-      ],
-      queryFn: () =>
-        listEmployees(),
-    });
-
-  const missionsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-missions",
-      ],
-      queryFn: () =>
-        listMissions(),
-    });
-
-  const handoffsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-handoffs",
-      ],
-      queryFn: () =>
-        listEmployeeHandoffs(),
-    });
-
-  const runsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-runs",
-      ],
-      queryFn: () =>
-        listWorkforceRuns(),
-    });
-
-  const approvalsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-approvals",
-      ],
-      queryFn: () =>
-        listPendingApprovals(),
-    });
-
-  /* ------------------------------------------------------------------------ */
-  /* REFRESH                                                                  */
-  /* ------------------------------------------------------------------------ */
-
-  const refreshWorkforce =
-    async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-employees",
-          ],
-        }),
-
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-missions",
-          ],
-        }),
-
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-handoffs",
-          ],
-        }),
-
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-runs",
-          ],
-        }),
-
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-approvals",
-          ],
-        }),
-      ]);
-    };
-
-  /* ------------------------------------------------------------------------ */
-  /* SETUP                                                                    */
-  /* ------------------------------------------------------------------------ */
-
-  const installMutation =
-    useMutation({
-      mutationFn:
-        installCossaGrowthWorkforce,
-
-      onSuccess:
-        async (
-          result,
-        ) => {
-          await refreshWorkforce();
-
-          const activeCount =
-            result.filter(
-              (employee) =>
-                employee.status ===
-                "active",
-            ).length;
-
-          toast.success(
-            "Cossa workforce synchronised",
-            {
-              description: `${result.length} source employee profiles are recorded and ${activeCount} are active. Existing custom employees were preserved.`,
-            },
-          );
-        },
-
-      onError:
-        (error) => {
-          toast.error(
-            "Workforce setup could not be completed",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
-
-  /* ------------------------------------------------------------------------ */
-  /* COORDINATION                                                             */
-  /* ------------------------------------------------------------------------ */
-
-  const coordinationMutation =
-    useMutation({
-      mutationFn:
-        createGrowthCoordinationMission,
-
-      onSuccess:
-        async ({
-          mission,
-          handoffs:
-            createdHandoffs,
-        }) => {
-          setSelectedMissionId(
-            mission.id,
-          );
-
-          await refreshWorkforce();
-
-          toast.success(
-            "CEO mission created",
-            {
-              description: `${createdHandoffs.length} real workforce handoff stages were created.`,
-            },
-          );
-
-          setView(
-            "workflows",
-          );
-        },
-
-      onError:
-        (error) => {
-          toast.error(
-            "Mission could not be created",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
-
-  /* ------------------------------------------------------------------------ */
-  /* SOURCE DATA                                                              */
-  /* ------------------------------------------------------------------------ */
-
-  const employees =
-    employeesQuery.data ??
-    [];
-
-  const missions =
-    missionsQuery.data ??
-    [];
-
-  const handoffs =
-    handoffsQuery.data ??
-    [];
-
-  const runs =
-    runsQuery.data ??
-    [];
-
-  const approvals =
-    approvalsQuery.data ??
-    [];
-
-  const employeesByKey =
-    useMemo(
-      () =>
-        new Map(
-          employees.map(
-            (
-              employee,
-            ) => [
-              employee.employee_key,
-              employee,
-            ],
+  const requestedQueryLimit =
+    Math.max(
+      1,
+      Math.min(
+        MAX_ALLOWED_SEARCH_QUERIES,
+        Math.round(
+          Number(
+            request.max_search_queries ??
+            depthQueryLimit,
           ),
         ),
-      [
-        employees,
-      ],
+      ),
     );
 
-  /* ------------------------------------------------------------------------ */
-  /* OPERATIONAL DIRECTORY                                                    */
-  /* ------------------------------------------------------------------------ */
-
-  const employeeOperationalViews =
-    useMemo(
-      () =>
-        employees.map(
-          (
-            employee,
-          ) => ({
-            employee,
-
-            operational:
-              employeeOperationalView({
-                employee,
-                handoffs,
-                runs,
-                approvals,
-              }),
-          }),
-        ),
-      [
-        employees,
-        handoffs,
-        runs,
-        approvals,
-      ],
+  const maximumQueries =
+    Math.min(
+      depthQueryLimit,
+      requestedQueryLimit,
     );
 
-  const employeeDirectory =
-    useMemo<
-      EmployeeDirectoryItem[]
-    >(
-      () =>
-        employeeOperationalViews.map(
-          ({
-            employee,
-            operational,
-          }) => ({
-            employee,
-            operational,
+  const objectives =
+    Array.isArray(request.objectives) &&
+    request.objectives.length > 0
+      ? [...new Set(request.objectives)]
+      : DEFAULT_LEAD_HUNTER_REQUEST.objectives ??
+        ["find_customers"];
 
-            departmentKeys:
-              departmentKeysForEmployee(
-                employee.employee_key,
-              ),
-
-            responsibilityLabels:
-              responsibilityLabelsForEmployee(
-                employee.employee_key,
-              ),
-
-            searchText:
-              searchTermsForEmployee(
-                employee,
-              ),
-          }),
-        ),
-      [
-        employeeOperationalViews,
-      ],
+  const searchEverything =
+    safeBoolean(
+      request.search_everything,
+      false,
+    ) ||
+    objectives.includes(
+      "search_everything_relevant",
     );
 
-  const workforceCounts =
-    useMemo(() => {
-      let working = 0;
-      let idle = 0;
-      let waiting = 0;
-      let approval = 0;
-      let attention = 0;
-      let inactive = 0;
+  const locations =
+    uniqueTexts(request.locations, 25);
 
-      for (
-        const item
-        of employeeOperationalViews
-      ) {
-        switch (
-          item.operational
-            .state
-        ) {
-          case "working":
-            working += 1;
-            break;
+  const countries =
+    uniqueTexts(request.countries, 15);
 
-          case "idle":
-            idle += 1;
-            break;
+  const provinces =
+    uniqueTexts(request.provinces, 12);
 
-          case "waiting":
-            waiting += 1;
-            break;
+  const cities =
+    uniqueTexts(request.cities, 25);
 
-          case "approval":
-            approval += 1;
-            break;
+  const suburbs =
+    uniqueTexts(request.suburbs, 30);
 
-          case "attention":
-            attention += 1;
-            break;
+  const fallbackLocations = [
+    ...cities,
+    ...provinces,
+    ...countries,
+  ];
 
-          case "inactive":
-            inactive += 1;
-            break;
+  const tenderKeywords =
+    uniqueTexts(
+      request.tender_keywords,
+      25,
+    );
 
-          default:
-            break;
-        }
-      }
+  const prospectKeywords =
+    uniqueTexts(
+      request.prospect_keywords,
+      35,
+    );
 
-      return {
-        working,
-        idle,
-        waiting,
-        approval,
-        attention,
-        inactive,
-      };
-    }, [
-      employeeOperationalViews,
-    ]);
+  return {
+    ...DEFAULT_LEAD_HUNTER_REQUEST,
+    ...request,
 
-  const departments =
-    useMemo(
-      () =>
-        Array.from(
-          new Set(
-            employees.map(
-              (
-                employee,
-              ) =>
-                employeeDepartment(
-                  employee,
-                ),
+    companies:
+      request.companies?.length
+        ? [...new Set(request.companies)]
+        : DEFAULT_LEAD_HUNTER_REQUEST.companies,
+
+    services,
+
+    locations:
+      locations.length > 0
+        ? locations
+        : fallbackLocations.length > 0
+          ? fallbackLocations
+          : DEFAULT_LEAD_HUNTER_REQUEST.locations,
+
+    industries:
+      uniqueTexts(
+        request.industries,
+        20,
+      ),
+
+    organisation_types:
+      uniqueTexts(
+        request.organisation_types,
+        20,
+      ),
+
+    result_count:
+      resultCount,
+
+    minimum_score:
+      clampScore(
+        request.minimum_score ??
+        DEFAULT_LEAD_HUNTER_REQUEST.minimum_score,
+      ),
+
+    minimum_evidence_sources:
+      Math.max(
+        1,
+        Math.min(
+          5,
+          Math.round(
+            Number(
+              request.minimum_evidence_sources ??
+              1,
             ),
           ),
-        ).sort(),
-      [
-        employees,
-      ],
+        ),
+      ),
+
+    tender_keywords:
+      tenderKeywords.length > 0
+        ? tenderKeywords
+        : DEFAULT_LEAD_HUNTER_REQUEST.tender_keywords,
+
+    prospect_keywords:
+      prospectKeywords.length > 0
+        ? prospectKeywords
+        : DEFAULT_LEAD_HUNTER_REQUEST.prospect_keywords,
+
+    notes:
+      cleanLongText(
+        request.notes,
+        2_000,
+      ),
+
+    search_instruction:
+      cleanLongText(
+        request.search_instruction,
+        MAX_CUSTOM_SEARCH_INSTRUCTION_LENGTH,
+      ) ??
+      DEFAULT_LEAD_HUNTER_REQUEST.search_instruction ??
+      null,
+
+    search_scope:
+      request.search_scope ??
+      DEFAULT_LEAD_HUNTER_REQUEST.search_scope ??
+      "south_africa",
+
+    delivery_model:
+      deliveryModel,
+
+    search_depth:
+      searchDepth,
+
+    revenue_mode:
+      request.revenue_mode ??
+      DEFAULT_LEAD_HUNTER_REQUEST.revenue_mode ??
+      "quick_revenue",
+
+    objectives,
+
+    countries:
+      countries.length > 0
+        ? countries
+        : DEFAULT_LEAD_HUNTER_REQUEST.countries ??
+          ["South Africa"],
+
+    provinces:
+      provinces.length > 0
+        ? provinces
+        : DEFAULT_LEAD_HUNTER_REQUEST.provinces ??
+          [],
+
+    cities:
+      cities.length > 0
+        ? cities
+        : DEFAULT_LEAD_HUNTER_REQUEST.cities ??
+          [],
+
+    suburbs,
+
+    radius_km:
+      request.radius_km === null ||
+      request.radius_km === undefined
+        ? null
+        : Math.max(
+            1,
+            Math.min(
+              500,
+              Math.round(
+                Number(request.radius_km),
+              ),
+            ),
+          ),
+
+    search_everything:
+      searchEverything,
+
+    easy_wins_only:
+      safeBoolean(
+        request.easy_wins_only,
+        DEFAULT_LEAD_HUNTER_REQUEST.easy_wins_only ??
+        true,
+      ),
+
+    revenue_first:
+      safeBoolean(
+        request.revenue_first,
+        DEFAULT_LEAD_HUNTER_REQUEST.revenue_first ??
+        true,
+      ),
+
+    max_search_queries:
+      maximumQueries,
+
+    use_cached_results:
+      safeBoolean(
+        request.use_cached_results,
+        true,
+      ),
+
+    cache_max_age_hours:
+      Math.max(
+        1,
+        Math.min(
+          168,
+          Math.round(
+            Number(
+              request.cache_max_age_hours ??
+              DEFAULT_SEARCH_CACHE_HOURS,
+            ),
+          ),
+        ),
+      ),
+
+    exclude_competitors:
+      safeBoolean(
+        request.exclude_competitors,
+        true,
+      ),
+
+    exclude_directories:
+      safeBoolean(
+        request.exclude_directories,
+        true,
+      ),
+
+    exclude_expired_procurement:
+      safeBoolean(
+        request.exclude_expired_procurement,
+        true,
+      ),
+  };
+}
+
+export function requestFromStrategy(
+  strategy: LeadHunterStrategy,
+  overrides:
+    Partial<LeadHunterSearchRequest> = {},
+): LeadHunterSearchRequest {
+  const defaultProvinces =
+    strategy.recommended_locations.filter(
+      (location) =>
+        SOUTH_AFRICAN_PROVINCES.includes(
+          location as
+            (typeof SOUTH_AFRICAN_PROVINCES)[number],
+        ),
     );
 
-  const searchedEmployees =
-    useMemo(() => {
-      const query =
-        employeeSearch
-          .trim()
-          .toLowerCase();
+  const defaultCities =
+    strategy.recommended_locations.filter(
+      (location) =>
+        !SOUTH_AFRICAN_PROVINCES.includes(
+          location as
+            (typeof SOUTH_AFRICAN_PROVINCES)[number],
+        ) &&
+        location !== "South Africa",
+    );
 
-      return employeeDirectory
-        .filter(
-          (item) => {
-            if (
-              selectedDepartment !==
-                "all" &&
-              !item.departmentKeys.includes(
-                selectedDepartment,
-              )
-            ) {
-              return false;
-            }
+  const strategyDepth =
+    strategy.search_depth ??
+    minimumDepthForServiceCount(
+      strategy.services.length,
+    );
 
-            if (!query) {
-              return true;
-            }
+  const strategyBudget =
+    maxQueriesForDepth(strategyDepth);
 
-            return (
-              searchScore(
-                item,
-                query,
-              ) > 0
-            );
-          },
+  return validateSearchRequest({
+    ...DEFAULT_LEAD_HUNTER_REQUEST,
+
+    sector:
+      strategy.target_sector,
+
+    companies:
+      strategy.companies,
+
+    services:
+      strategy.services,
+
+    locations:
+      strategy.recommended_locations,
+
+    industries:
+      strategy.industries,
+
+    organisation_types:
+      strategy.organisation_types,
+
+    result_count:
+      strategy.default_result_count,
+
+    minimum_score:
+      strategy.minimum_score,
+
+    tender_keywords:
+      strategy.target_sector === "government"
+        ? strategy.keywords
+        : DEFAULT_LEAD_HUNTER_REQUEST.tender_keywords,
+
+    prospect_keywords:
+      strategy.keywords,
+
+    include_private_sector:
+      strategy.target_sector === "private" ||
+      strategy.target_sector === "mixed",
+
+    include_government_sector:
+      strategy.target_sector === "government" ||
+      strategy.target_sector === "mixed",
+
+    include_nonprofits:
+      strategy.target_sector === "nonprofit" ||
+      strategy.target_sector === "mixed",
+
+    search_instruction:
+      strategy.search_instruction ??
+      `Find verified opportunities matching the ${strategy.title} strategy. Use public evidence and exclude unsupported assumptions.`,
+
+    search_scope:
+      strategy.search_scope ??
+      "custom",
+
+    delivery_model:
+      strategy.delivery_model ??
+      "auto",
+
+    revenue_mode:
+      strategy.revenue_mode ??
+      "balanced",
+
+    objectives:
+      strategy.objectives ??
+      ["find_customers"],
+
+    countries:
+      ["South Africa"],
+
+    provinces:
+      defaultProvinces,
+
+    cities:
+      defaultCities,
+
+    search_depth:
+      strategyDepth,
+
+    max_search_queries:
+      strategyBudget,
+
+    ...overrides,
+  });
+}
+
+export function createCustomHuntRequest({
+  instruction,
+  services,
+  companies,
+  scope = "south_africa",
+  deliveryModel = "auto",
+  locations = [],
+  provinces = [],
+  cities = [],
+  countries = ["South Africa"],
+  revenueMode = "quick_revenue",
+  searchDepth,
+}: {
+  instruction: string;
+  services: LeadHunterServiceCategory[];
+  companies: LeadHunterCompany[];
+  scope?: LeadHunterSearchScope;
+  deliveryModel?: LeadHunterDeliveryModel;
+  locations?: string[];
+  provinces?: string[];
+  cities?: string[];
+  countries?: string[];
+  revenueMode?: LeadHunterRevenueMode;
+  searchDepth?: LeadHunterSearchDepth;
+}): LeadHunterSearchRequest {
+  const resolvedDepth =
+    searchDepth ??
+    minimumDepthForServiceCount(
+      services.length,
+    );
+
+  return validateSearchRequest({
+    ...DEFAULT_LEAD_HUNTER_REQUEST,
+
+    search_instruction:
+      instruction,
+
+    services,
+
+    companies,
+
+    search_scope:
+      scope,
+
+    delivery_model:
+      deliveryModel,
+
+    locations,
+
+    provinces,
+
+    cities,
+
+    countries,
+
+    revenue_mode:
+      revenueMode,
+
+    search_depth:
+      resolvedDepth,
+
+    max_search_queries:
+      maxQueriesForDepth(
+        resolvedDepth,
+      ),
+  });
+}
+
+export function buildHuntSummary(
+  requestInput:
+    Partial<LeadHunterSearchRequest>,
+): string[] {
+  const request = validateSearchRequest(
+    requestInput,
+  );
+
+  const summary = [
+    `Mission: ${
+      request.search_instruction ??
+      "Find verified prospects"
+    }`,
+
+    `Sector: ${request.sector}`,
+
+    `Companies: ${request.companies.join(", ")}`,
+
+    `Scope: ${
+      request.search_scope ??
+      "south_africa"
+    }`,
+
+    `Delivery model: ${
+      request.delivery_model ??
+      "auto"
+    }`,
+
+    `Revenue mode: ${
+      request.revenue_mode ??
+      "balanced"
+    }`,
+
+    `Search depth: ${
+      request.search_depth ??
+      "economy"
+    }`,
+
+    `Maximum search queries: ${
+      request.max_search_queries ??
+      maxQueriesForDepth(
+        request.search_depth ??
+        "economy",
+      )
+    }`,
+
+    `Private sector: ${
+      request.include_private_sector
+        ? "YES"
+        : "NO"
+    }`,
+
+    `Government: ${
+      request.include_government_sector
+        ? "YES"
+        : "NO"
+    }`,
+
+    `Nonprofit: ${
+      request.include_nonprofits
+        ? "YES"
+        : "NO"
+    }`,
+
+    `Require opportunity evidence: ${
+      request.require_opportunity_signal
+        ? "YES"
+        : "NO"
+    }`,
+
+    `Services: ${request.services.join(", ")}`,
+
+    `Locations: ${request.locations.join(", ")}`,
+  ];
+
+  if (request.provinces?.length) {
+    summary.push(
+      `Provinces: ${request.provinces.join(", ")}`,
+    );
+  }
+
+  if (request.cities?.length) {
+    summary.push(
+      `Cities: ${request.cities.join(", ")}`,
+    );
+  }
+
+  if (
+    request.organisation_types.length > 0
+  ) {
+    summary.push(
+      `Buyer types: ${request.organisation_types.join(", ")}`,
+    );
+  }
+
+  return summary;
+}
+
+function sectorAllowedForRequest(
+  request: LeadHunterSearchRequest,
+  sector: LeadHunterSector,
+): boolean {
+  if (
+    request.sector !== "mixed" &&
+    request.sector !== sector
+  ) {
+    return false;
+  }
+
+  if (sector === "private") {
+    return request.include_private_sector;
+  }
+
+  if (sector === "government") {
+    return request.include_government_sector;
+  }
+
+  if (sector === "nonprofit") {
+    return request.include_nonprofits;
+  }
+
+  return false;
+}
+
+function prospectHasRequiredOpportunitySignal(
+  prospect: LeadHunterProspect,
+): boolean {
+  if (
+    prospect.signals.some(
+      (signal) =>
+        signal.type !== "general_fit",
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    prospect.website_audit?.some(
+      (finding) =>
+        finding.verified === true,
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    prospect.procurement &&
+    prospect.procurement.current_status === "active" &&
+    prospect.procurement.service_match_verified
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export async function huntProspects(
+  request:
+    Partial<LeadHunterSearchRequest>,
+  signal?: AbortSignal,
+): Promise<LeadHunterSearchResponse> {
+  const validatedRequest =
+    validateSearchRequest(request);
+
+  const {
+    data: { session },
+    error: sessionError,
+  } =
+    await supabase.auth.getSession();
+
+  if (sessionError) {
+    throw new Error(
+      `Lead Hunter authentication failed: ${sessionError.message}`,
+    );
+  }
+
+  if (!session) {
+    throw new Error(
+      "Your session has expired. Sign in again before running the Lead Hunter.",
+    );
+  }
+
+  const response = await fetch(
+    LEAD_HUNTER_SEARCH_ENDPOINT,
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json",
+
+        Authorization:
+          `Bearer ${session.access_token}`,
+      },
+
+      body:
+        JSON.stringify(validatedRequest),
+
+      signal,
+    },
+  );
+
+  if (!response.ok) {
+    const message =
+      await response.text().catch(
+        () => "",
+      );
+
+    throw new Error(
+      message ||
+      `Lead Hunter search failed (${response.status}).`,
+    );
+  }
+
+  const payload =
+    (
+      await response.json()
+    ) as Partial<LeadHunterSearchResponse>;
+
+  const effectiveRequest =
+    payload.request
+      ? validateSearchRequest(
+          payload.request,
         )
-        .sort(
+      : validatedRequest;
+
+  const prospects =
+    Array.isArray(payload.prospects)
+      ? payload.prospects.map(
+          validateProspect,
+        )
+      : [];
+
+  const acceptedProspects =
+    prospects
+      .filter((prospect) => {
+        if (
+          prospect.verification_status ===
+          "rejected"
+        ) {
+          return false;
+        }
+
+        if (
+          effectiveRequest.exclude_existing_crm_leads &&
           (
-            left,
-            right,
-          ) => {
-            if (!query) {
-              if (
-                left.operational
-                  .state ===
-                  "working" &&
-                right.operational
-                  .state !==
-                  "working"
-              ) {
-                return -1;
-              }
+            prospect.duplicate_status ===
+              "existing_crm_lead" ||
+            prospect.duplicate_status ===
+              "excluded_existing_crm_lead"
+          )
+        ) {
+          return false;
+        }
 
-              if (
-                right.operational
-                  .state ===
-                  "working" &&
-                left.operational
-                  .state !==
-                  "working"
-              ) {
-                return 1;
-              }
+        if (
+          !sectorAllowedForRequest(
+            effectiveRequest,
+            prospect.sector,
+          )
+        ) {
+          return false;
+        }
 
-              return left.employee.name.localeCompare(
-                right.employee
-                  .name,
-              );
-            }
+        if (
+          !effectiveRequest.services.includes(
+            prospect.recommended_service,
+          ) ||
+          !effectiveRequest.companies.includes(
+            prospect.recommended_company,
+          )
+        ) {
+          return false;
+        }
 
-            return (
-              searchScore(
-                right,
-                query,
-              ) -
-              searchScore(
-                left,
-                query,
-              )
-            );
-          },
+        if (
+          prospect.total_score <
+          effectiveRequest.minimum_score
+        ) {
+          return false;
+        }
+
+        if (
+          prospect.evidence.length <
+          effectiveRequest.minimum_evidence_sources
+        ) {
+          return false;
+        }
+
+        if (
+          effectiveRequest.verified_sources_only &&
+          prospect.evidence_score < 55
+        ) {
+          return false;
+        }
+
+        if (
+          effectiveRequest.require_public_phone_or_email &&
+          !prospect.public_phone &&
+          !prospect.public_email
+        ) {
+          return false;
+        }
+
+        if (
+          effectiveRequest.require_website &&
+          !prospect.website
+        ) {
+          return false;
+        }
+
+        if (
+          effectiveRequest.require_opportunity_signal &&
+          !prospectHasRequiredOpportunitySignal(
+            prospect,
+          )
+        ) {
+          return false;
+        }
+
+        if (
+          prospect.classification === "tender" &&
+          !procurementCanBeVerified(
+            prospect.classification,
+            prospect.procurement ?? null,
+          )
+        ) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((first, second) => {
+        if (
+          effectiveRequest.revenue_first
+        ) {
+          const firstCommercial =
+            first.total_score * 0.35 +
+            first.revenue_potential_score * 0.25 +
+            first.ease_to_close_score * 0.25 +
+            first.contactability_score * 0.15;
+
+          const secondCommercial =
+            second.total_score * 0.35 +
+            second.revenue_potential_score * 0.25 +
+            second.ease_to_close_score * 0.25 +
+            second.contactability_score * 0.15;
+
+          return (
+            secondCommercial -
+            firstCommercial
+          );
+        }
+
+        return (
+          second.total_score -
+          first.total_score
         );
-    }, [
-      employeeDirectory,
-      employeeSearch,
-      selectedDepartment,
-    ]);
+      })
+      .slice(
+        0,
+        effectiveRequest.result_count,
+      );
 
-  const selectedEmployee =
-    employeeDirectory.find(
-      (item) =>
-        item.employee.id ===
-        selectedEmployeeId,
-    ) ?? null;
+  const rejectedCount =
+    prospects.length -
+    acceptedProspects.length;
 
-  /* ------------------------------------------------------------------------ */
-  /* READINESS                                                                */
-  /* ------------------------------------------------------------------------ */
+  const payloadSourceCount =
+    safeNumber(payload.source_count);
 
-  const installedDefaultEmployees =
-    COSSA_GROWTH_WORKFORCE.filter(
+  const payloadRejectedCount =
+    safeNumber(payload.rejected_count);
+
+  return {
+    hunt_id:
+      cleanText(payload.hunt_id) ??
+      createClientId(),
+
+    status: "completed",
+
+    searched_at:
+      safeDateString(
+        payload.searched_at,
+      ) ??
+      new Date().toISOString(),
+
+    completed_at:
+      safeDateString(
+        payload.completed_at,
+      ) ??
+      new Date().toISOString(),
+
+    request:
+      effectiveRequest,
+
+    prospects:
+      acceptedProspects,
+
+    source_count:
+      payloadSourceCount ??
+      acceptedProspects.reduce(
+        (total, prospect) =>
+          total +
+          prospect.evidence.length,
+        0,
+      ),
+
+    accepted_count:
+      acceptedProspects.length,
+
+    rejected_count:
+      payloadRejectedCount ??
+      rejectedCount,
+
+    warnings:
+      Array.isArray(payload.warnings)
+        ? uniqueTexts(
+            payload.warnings,
+            30,
+          )
+        : [],
+
+    providers_used:
+      Array.isArray(
+        payload.providers_used,
+      )
+        ? uniqueTexts(
+            payload.providers_used,
+            15,
+          )
+        : [],
+  };
+}
+
+export async function findCrmDuplicates(
+  prospect:
+    LeadHunterProspect,
+): Promise<CrmDuplicateMatch[]> {
+  const {
+    data,
+    error,
+  } =
+    await db
+      .from("leads")
+      .select(
+        "id,name,full_name,company,phone,email,source,status,score,created_at",
+      )
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        },
+      )
+      .limit(1000);
+
+  if (error) {
+    throw new Error(
+      `Unable to check CRM duplicates: ${error.message}`,
+    );
+  }
+
+  const prospectPhone =
+    normalisePhone(
+      prospect.public_phone,
+    );
+
+  const prospectEmail =
+    normaliseEmail(
+      prospect.public_email,
+    );
+
+  return (data ?? [])
+    .map(
       (
-        profile,
+        row: Record<string, unknown>,
+      ) => {
+        const rowName =
+          cleanText(row.company) ??
+          cleanText(row.full_name) ??
+          cleanText(row.name) ??
+          "Unnamed lead";
+
+        const matchReasons: string[] = [];
+
+        if (
+          sameEmail(
+            prospectEmail,
+            normaliseEmail(row.email),
+          )
+        ) {
+          matchReasons.push(
+            "Same email address",
+          );
+        }
+
+        if (
+          samePhone(
+            prospectPhone,
+            normalisePhone(row.phone),
+          )
+        ) {
+          matchReasons.push(
+            "Same phone number",
+          );
+        }
+
+        if (
+          similarCompanyName(
+            prospect.organisation_name,
+            rowName,
+          )
+        ) {
+          matchReasons.push(
+            "Similar organisation name",
+          );
+        }
+
+        return {
+          id: String(row.id),
+
+          name:
+            cleanText(row.full_name) ??
+            cleanText(row.name) ??
+            rowName,
+
+          company:
+            cleanText(row.company),
+
+          phone:
+            normalisePhone(row.phone),
+
+          email:
+            normaliseEmail(row.email),
+
+          source:
+            cleanText(row.source),
+
+          status:
+            cleanText(row.status) ??
+            "New",
+
+          score:
+            clampScore(row.score),
+
+          created_at:
+            cleanText(row.created_at) ??
+            "",
+
+          match_reasons:
+            matchReasons,
+        };
+      },
+    )
+    .filter(
+      (
+        match: CrmDuplicateMatch,
       ) =>
-        employeesByKey.has(
-          profile.employee_key,
+        match.match_reasons.length > 0,
+    );
+}
+
+function formatProspectEvidence(
+  prospect:
+    LeadHunterProspect,
+): string {
+  const evidenceLines =
+    prospect.evidence.map(
+      (evidence, index) =>
+        [
+          `${index + 1}. ${evidence.title}`,
+          `URL: ${evidence.url}`,
+          evidence.publisher
+            ? `Publisher: ${evidence.publisher}`
+            : null,
+          evidence.published_at
+            ? `Published: ${evidence.published_at}`
+            : null,
+          `Checked: ${evidence.checked_at}`,
+          evidence.excerpt
+            ? `Evidence: ${evidence.excerpt}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+    );
+
+  const verificationMeta =
+    prospect.verification_meta;
+
+  const procurement =
+    prospect.procurement;
+
+  const websiteAuditLines =
+    (prospect.website_audit ?? [])
+      .filter((finding) => finding.verified)
+      .map(
+        (finding, index) =>
+          `${index + 1}. ${finding.type} (${finding.severity}) — ${finding.evidence} — ${finding.source_url}`,
+      );
+
+  return [
+    "Lead Hunter verified public prospect.",
+    "",
+
+    `Organisation: ${prospect.organisation_name}`,
+    `Sector: ${prospect.sector}`,
+    `Industry: ${prospect.industry ?? "Not confirmed"}`,
+    `Organisation type: ${prospect.organisation_type ?? "Not confirmed"}`,
+    `Website: ${prospect.website ?? "Not found"}`,
+    `Public phone: ${prospect.public_phone ?? "Not found"}`,
+    `Public email: ${prospect.public_email ?? "Not found"}`,
+
+    `Location: ${[
+      prospect.address,
+      prospect.suburb,
+      prospect.city,
+      prospect.province,
+      prospect.country,
+    ]
+      .filter(Boolean)
+      .join(", ")}`,
+
+    "",
+
+    `Recommended Cossa company: ${prospect.recommended_company}`,
+    `Recommended service: ${prospect.recommended_service}`,
+    `Service fit: ${prospect.service_fit_reason}`,
+
+    "",
+
+    `Opportunity: ${prospect.opportunity_summary}`,
+    `Opportunity size: ${prospect.opportunity_size}`,
+
+    `Estimated value: ${
+      prospect.estimated_value !== null
+        ? `R${prospect.estimated_value.toFixed(2)}`
+        : "Not verified"
+    }`,
+
+    "",
+
+    `Classification: ${prospect.classification}`,
+    `Verification: ${prospect.verification_status}`,
+    `Sales priority: ${prospect.sales_priority}`,
+    `Total score: ${prospect.total_score}/100`,
+    `Revenue potential: ${prospect.revenue_potential_score}/100`,
+    `Ease to close: ${prospect.ease_to_close_score}/100`,
+    `Recurring revenue potential: ${prospect.recurring_revenue_score}/100`,
+    `Date verified: ${prospect.date_verified}`,
+
+    verificationMeta
+      ? `Independent source count: ${verificationMeta.independent_source_count}`
+      : null,
+
+    verificationMeta
+      ? `Cross-verified: ${verificationMeta.cross_verified ? "YES" : "NO"}`
+      : null,
+
+    verificationMeta?.corroborating_domains.length
+      ? `Corroborating domains: ${verificationMeta.corroborating_domains.join(", ")}`
+      : null,
+
+    procurement
+      ? `Procurement reference: ${procurement.reference_number ?? "Not verified"}`
+      : null,
+
+    procurement
+      ? `Procurement closing date: ${procurement.closing_date ?? "Not verified"}`
+      : null,
+
+    procurement
+      ? `Procurement status: ${procurement.current_status}`
+      : null,
+
+    "",
+
+    "WHY CONTACT",
+
+    ...(
+      prospect.why_contact.length > 0
+        ? prospect.why_contact.map(
+            (reason) => `- ${reason}`,
+          )
+        : [
+            "- No additional commercial reason supplied.",
+          ]
+    ),
+
+    "",
+
+    `Decision-maker route: ${
+      prospect.decision_maker_route ??
+      "Not yet verified"
+    }`,
+
+    `Recommended next action: ${prospect.next_action}`,
+
+    prospect.outreach_angle
+      ? `Outreach angle: ${prospect.outreach_angle}`
+      : null,
+
+    websiteAuditLines.length > 0
+      ? ""
+      : null,
+
+    websiteAuditLines.length > 0
+      ? "VERIFIED WEBSITE AUDIT"
+      : null,
+
+    ...websiteAuditLines,
+
+    "",
+
+    "PUBLIC EVIDENCE",
+
+    ...evidenceLines,
+  ]
+    .filter(
+      (value) =>
+        value !== null &&
+        value !== undefined,
+    )
+    .join("\n");
+}
+
+export async function saveProspectToCrm(
+  prospectInput:
+    LeadHunterProspect,
+
+  options: {
+    allowPossibleDuplicate?: boolean;
+  } = {},
+): Promise<SaveProspectResult> {
+  const prospect =
+    validateProspect(
+      prospectInput,
+    );
+
+  if (
+    prospect.verification_status ===
+    "rejected"
+  ) {
+    throw new Error(
+      `This prospect cannot be saved because it failed verification: ${prospect.rejection_reasons.join(" ")}`,
+    );
+  }
+
+  if (
+    prospect.duplicate_status ===
+    "excluded_existing_crm_lead"
+  ) {
+    throw new Error(
+      "This prospect was excluded because it already exists in CRM.",
+    );
+  }
+
+  if (!prospect.primary_source_url) {
+    throw new Error(
+      "A verified public source URL is required before saving a prospect.",
+    );
+  }
+
+  if (
+    prospect.classification === "tender" &&
+    !procurementCanBeVerified(
+      prospect.classification,
+      prospect.procurement ?? null,
+    )
+  ) {
+    throw new Error(
+      "This tender cannot be saved as a verified opportunity until its official source, reference number, service match and active closing date are verified.",
+    );
+  }
+
+  const duplicateMatches =
+    await findCrmDuplicates(prospect);
+
+  const strongestDuplicate =
+    duplicateMatches.find(
+      (match) =>
+        match.match_reasons.some(
+          (reason) =>
+            reason === "Same email address" ||
+            reason === "Same phone number",
         ),
-    );
-
-  const activeDefaultEmployees =
-    COSSA_GROWTH_WORKFORCE.filter(
-      (
-        profile,
-      ) =>
-        employeesByKey.get(
-          profile.employee_key,
-        )?.status ===
-        "active",
-    );
-
-  const activeExecutableWorkflowEmployees =
-    EXECUTABLE_GROWTH_WORKFLOW.filter(
-      (
-        step,
-      ) =>
-        employeesByKey.get(
-          step.key,
-        )?.status ===
-        "active",
-    );
-
-  /* ------------------------------------------------------------------------ */
-  /* MISSION DATA                                                             */
-  /* ------------------------------------------------------------------------ */
-
-  const coordinationMissions =
-    missions.filter(
-      (
-        mission,
-      ) =>
-        mission.title.startsWith(
-          GROWTH_MISSION_PREFIX,
-        ),
-    );
-
-  const selectedMission =
-    coordinationMissions.find(
-      (
-        mission,
-      ) =>
-        mission.id ===
-        selectedMissionId,
     ) ??
-    coordinationMissions[0] ??
+    duplicateMatches[0] ??
     null;
 
-  const selectedMissionHandoffs =
-    selectedMission
-      ? sortWorkflowHandoffs(
-          handoffs.filter(
-            (
-              handoff,
-            ) =>
-              handoff.mission_id ===
-              selectedMission.id,
-          ),
-        )
-      : [];
+  if (
+    strongestDuplicate &&
+    !options.allowPossibleDuplicate
+  ) {
+    return {
+      lead_id:
+        strongestDuplicate.id,
 
-  const firstIncompleteHandoff =
-    selectedMissionHandoffs.find(
-      (
-        handoff,
-      ) =>
-        handoff.status !==
-        "completed",
-    ) ?? null;
+      created:
+        false,
 
-  const nextHandoff =
-    firstIncompleteHandoff
-      ?.status ===
-    "pending"
-      ? firstIncompleteHandoff
-      : null;
+      duplicate:
+        true,
 
-  const blockedHandoff =
-    firstIncompleteHandoff &&
-    firstIncompleteHandoff.status !==
-      "pending"
-      ? firstIncompleteHandoff
-      : null;
-
-  const nextEmployee =
-    firstIncompleteHandoff
-      ? employees.find(
-          (
-            employee,
-          ) =>
-            employee.id ===
-            firstIncompleteHandoff.to_employee_id,
-        ) ?? null
-      : null;
-
-  const selectedMissionRuns =
-    selectedMission
-      ? runs
-          .filter(
-            (
-              run,
-            ) =>
-              run.mission_id ===
-              selectedMission.id,
-          )
-          .sort(
-            (
-              left,
-              right,
-            ) =>
-              latestRunTime(
-                left,
-              ).localeCompare(
-                latestRunTime(
-                  right,
-                ),
-              ),
-          )
-      : [];
-
-  const reviewableOutputs =
-    selectedMissionRuns
-      .map(
-        (
-          run,
-        ) => ({
-          run,
-
-          content:
-            reviewableOutputContent(
-              run,
-            ),
-        }),
-      )
-      .filter(
-        (
-          item,
-        ): item is {
-          run: MissionRun;
-          content: string;
-        } =>
-          Boolean(
-            item.content,
-          ),
-      );
-
-  const displayReviewableOutputs =
-    [
-      ...reviewableOutputs,
-    ].reverse();
-
-  const selectedMissionFailedRuns =
-    selectedMissionRuns.filter(
-      (
-        run,
-      ) =>
-        run.status ===
-        "failed",
-    );
-
-  const selectedMissionCompletedRuns =
-    selectedMissionRuns.filter(
-      (
-        run,
-      ) =>
-        run.status ===
-        "completed",
-    );
-
-  const isLoading =
-    employeesQuery.isLoading ||
-    missionsQuery.isLoading ||
-    handoffsQuery.isLoading ||
-    runsQuery.isLoading ||
-    approvalsQuery.isLoading;
-
-  const canCreateCoordination =
-    activeExecutableWorkflowEmployees.length ===
-      EXECUTABLE_GROWTH_WORKFLOW.length &&
-    objective.trim().length >
-      0;
-
-  /* ------------------------------------------------------------------------ */
-  /* CEO COMMAND                                                              */
-  /* ------------------------------------------------------------------------ */
-
-  function submitCeoCommand() {
-    const command =
-      ceoCommand.trim();
-
-    if (!command) {
-      return;
-    }
-
-    if (
-      activeExecutableWorkflowEmployees.length !==
-      EXECUTABLE_GROWTH_WORKFLOW.length
-    ) {
-      toast.error(
-        "Growth workforce is not fully active",
-        {
-          description: `${activeExecutableWorkflowEmployees.length} of ${EXECUTABLE_GROWTH_WORKFLOW.length} executable employees are active.`,
-        },
-      );
-
-      return;
-    }
-
-    setObjective(
-      command,
-    );
-
-    coordinationMutation.mutate({
-      objective:
-        command,
-
-      target_market:
-        targetMarket,
-
-      target_location:
-        targetLocation,
-    });
+      duplicate_match:
+        strongestDuplicate,
+    };
   }
 
-  /* ------------------------------------------------------------------------ */
-  /* PROVIDER EXECUTION                                                       */
-  /* ------------------------------------------------------------------------ */
+  const contactName =
+    prospect.contact_name ??
+    prospect.organisation_name;
 
-  async function executeProviderWithRetry({
-    prompt,
-    employee,
-  }: {
-    prompt: string;
-    employee: AiEmployee;
-  }): Promise<string> {
-    let lastError:
-      unknown =
-      null;
+  const crmStatus =
+    prospect.classification ===
+      "active_opportunity" ||
+    prospect.classification ===
+      "tender" ||
+    prospect.classification ===
+      "supplier_opportunity"
+      ? "Qualified"
+      : "New";
 
-    for (
-      let attempt = 1;
-      attempt <=
-      PROVIDER_MAX_ATTEMPTS;
-      attempt += 1
-    ) {
-      try {
-        const content =
-          await streamChat(
-            [
-              {
-                role:
-                  "user",
+  const crmStage =
+    crmStatus;
 
-                content:
-                  prompt,
-              },
-            ],
+  const estimatedValue =
+    prospect.estimated_value ??
+    0;
 
-            () =>
-              undefined,
+  const {
+    data,
+    error,
+  } =
+    await db
+      .from("leads")
+      .insert({
+        full_name:
+          contactName,
 
-            undefined,
+        name:
+          contactName,
 
-            employee.system_instructions,
+        company:
+          prospect.organisation_name,
 
-            DEFAULT_WORKFORCE_PROVIDER,
-          );
+        phone:
+          prospect.public_phone,
 
-        if (
-          !content.trim()
-        ) {
-          throw new Error(
-            `${employee.name} did not return a usable workforce output.`,
-          );
-        }
+        email:
+          prospect.public_email,
 
-        return content.trim();
-      } catch (error) {
-        lastError =
-          error;
+        service:
+          prospect.recommended_service,
 
-        const retryable =
-          isRetryableProviderError(
-            error,
-          );
+        location: [
+          prospect.suburb,
+          prospect.city,
+          prospect.province,
+          prospect.country,
+        ]
+          .filter(Boolean)
+          .join(", "),
 
-        const hasAnotherAttempt =
-          attempt <
-          PROVIDER_MAX_ATTEMPTS;
+        source:
+          "cossa_verified_lead_hunter",
 
-        if (
-          !retryable ||
-          !hasAnotherAttempt
-        ) {
-          break;
-        }
+        status:
+          crmStatus,
 
-        const delay =
-          PROVIDER_RETRY_DELAYS_MS[
-            attempt - 1
-          ] ??
-          5_000;
+        stage:
+          crmStage,
 
-        console.warn(
-          `Cossa AI provider attempt ${attempt} failed for ${employee.employee_key}. Retrying in ${delay}ms.`,
-          error,
-        );
+        notes:
+          formatProspectEvidence(
+            prospect,
+          ),
 
-        await sleep(
-          delay,
-        );
-      }
-    }
+        score:
+          prospect.total_score,
 
-    throw lastError instanceof
-    Error
-      ? lastError
-      : new Error(
-          "The workforce provider failed after all retry attempts.",
-        );
+        value:
+          estimatedValue,
+
+        estimated_value:
+          estimatedValue,
+
+        next_follow_up:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+  if (error) {
+    throw new Error(
+      `Unable to save the verified prospect to CRM: ${error.message}`,
+    );
   }
 
-  /* ------------------------------------------------------------------------ */
-  /* EXECUTE ONE HANDOFF                                                      */
-  /* ------------------------------------------------------------------------ */
+  if (!data?.id) {
+    throw new Error(
+      "The prospect was not saved because Supabase returned no lead ID.",
+    );
+  }
 
-  async function executeControlledHandoff({
-    mission,
-    handoff,
-    employee,
-    priorOutputs,
-  }: {
-    mission: Mission;
-    handoff: EmployeeHandoff;
-    employee: AiEmployee;
-    priorOutputs: string[];
-  }): Promise<{
-    content: string;
-    finalStage: boolean;
-  }> {
-    if (
-      employee.status !==
-      "active"
-    ) {
-      throw new Error(
-        `${employee.name} is ${employee.status} and cannot execute this stage.`,
-      );
-    }
+  return {
+    lead_id:
+      String(data.id),
 
-    if (
-      handoff.status !==
-      "pending"
-    ) {
-      throw new Error(
-        `${employee.name}'s handoff is ${handoff.status}, not pending. The workflow will not skip or duplicate this stage.`,
-      );
-    }
+    created:
+      true,
 
-    const actualNextEmployee =
-      nextWorkflowEmployeeForHandoff({
-        currentHandoff:
-          handoff,
+    duplicate:
+      false,
 
-        workflowHandoffs:
-          selectedMissionHandoffs,
+    duplicate_match:
+      null,
+  };
+}
 
-        employees,
-      });
+export async function saveProspectsToCrm(
+  prospects:
+    LeadHunterProspect[],
+): Promise<{
+  created: SaveProspectResult[];
+  duplicates: SaveProspectResult[];
+  failed: Array<{
+    prospect: LeadHunterProspect;
+    error: string;
+  }>;
+}> {
+  const created: SaveProspectResult[] = [];
+  const duplicates: SaveProspectResult[] = [];
+  const failed: Array<{
+    prospect: LeadHunterProspect;
+    error: string;
+  }> = [];
 
-    const authorisedEvidence =
-      employee.employee_key ===
-      "website-seo-monitor"
-        ? [
-            websiteReportEvidence(
-              await checkOfficialWebsite(),
-            ),
-          ]
-        : [];
-
-    const compactPriorOutputs =
-      compactPriorOutputsForPrompt(
-        priorOutputs,
-      );
-
-    const compactEvidence =
-      compactAuthorisedEvidence(
-        authorisedEvidence,
-      );
-
-    const run =
-      await startControlledWorkforceRun({
-        mission,
-        handoff,
-        employee,
-
-        provider:
-          DEFAULT_WORKFORCE_PROVIDER,
-
-        modelName:
-          DEFAULT_WORKFORCE_MODEL,
-
-        priorOutputs:
-          compactPriorOutputs,
-
-        authorisedEvidence:
-          compactEvidence,
-      });
-
+  for (const prospect of prospects) {
     try {
-      const prompt =
-        controlledStagePrompt({
-          mission,
-          handoff,
-          employee,
-
-          nextEmployee:
-            actualNextEmployee,
-
-          priorOutputs:
-            compactPriorOutputs,
-
-          authorisedEvidence:
-            compactEvidence,
-        });
-
-      if (
-        prompt.length >
-        MAX_STAGE_PROMPT_CHARS
-      ) {
-        throw new Error(
-          `Cossa AI prompt safety check failed. Prompt length ${prompt.length} exceeds ${MAX_STAGE_PROMPT_CHARS}.`,
-        );
-      }
-
-      const content =
-        await executeProviderWithRetry({
-          prompt,
-          employee,
-        });
-
       const result =
-        await completeControlledWorkforceRun({
-          run,
-          handoff,
-          employee,
-          content,
-        });
-
-      return {
-        content,
-
-        finalStage:
-          result.finalStage,
-      };
-    } catch (error) {
-      const message =
-        normaliseErrorMessage(
-          error,
+        await saveProspectToCrm(
+          prospect,
         );
 
-      try {
-        await failControlledWorkforceRun({
-          run,
-          handoff,
-
-          errorMessage:
-            message,
-        });
-      } catch (
-        cleanupError
-      ) {
-        console.error(
-          "Unable to record controlled workforce failure",
-          cleanupError,
-        );
+      if (result.duplicate) {
+        duplicates.push(result);
+      } else {
+        created.push(result);
       }
+    } catch (error) {
+      failed.push({
+        prospect,
 
-      throw error;
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unknown CRM save error.",
+      });
     }
   }
 
-  /* ------------------------------------------------------------------------ */
-  /* RUN NEXT STAGE                                                           */
-  /* ------------------------------------------------------------------------ */
-
-  const runNextStageMutation =
-    useMutation({
-      mutationFn:
-        async () => {
-          if (
-            !selectedMission
-          ) {
-            throw new Error(
-              "Select a Growth coordination mission first.",
-            );
-          }
-
-          if (
-            blockedHandoff
-          ) {
-            throw new Error(
-              `The next workflow stage is ${blockedHandoff.status}. Cossa AI will not skip it.`,
-            );
-          }
-
-          if (
-            !nextHandoff ||
-            !nextEmployee
-          ) {
-            throw new Error(
-              "This mission has no executable pending stage.",
-            );
-          }
-
-          const priorOutputs =
-            compactPriorOutputsForPrompt(
-              reviewableOutputs.map(
-                (
-                  item,
-                ) =>
-                  item.content,
-              ),
-            );
-
-          return executeControlledHandoff({
-            mission:
-              selectedMission,
-
-            handoff:
-              nextHandoff,
-
-            employee:
-              nextEmployee,
-
-            priorOutputs,
-          });
-        },
-
-      onSuccess:
-        async ({
-          finalStage,
-        }) => {
-          await refreshWorkforce();
-
-          toast.success(
-            finalStage
-              ? "Growth workflow completed"
-              : "Employee stage completed",
-            {
-              description:
-                finalStage
-                  ? "All recorded stages completed successfully."
-                  : "The employee completed the stage and handed work forward.",
-            },
-          );
-        },
-
-      onError:
-        (error) => {
-          toast.error(
-            "Workforce stage could not run",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
-
-  /* ------------------------------------------------------------------------ */
-  /* AUTOMATIC SAFE CHAIN                                                     */
-  /* ------------------------------------------------------------------------ */
-
-  const runSafeWorkflowMutation =
-    useMutation({
-      mutationFn:
-        async () => {
-          if (
-            !selectedMission
-          ) {
-            throw new Error(
-              "Select a Growth coordination mission first.",
-            );
-          }
-
-          if (
-            selectedMission.status ===
-            "completed"
-          ) {
-            throw new Error(
-              "This mission is already completed.",
-            );
-          }
-
-          if (
-            selectedMission.status ===
-            "awaiting_approval"
-          ) {
-            throw new Error(
-              "This mission is paused at an owner approval checkpoint.",
-            );
-          }
-
-          const incomplete =
-            selectedMissionHandoffs.filter(
-              (
-                handoff,
-              ) =>
-                handoff.status !==
-                "completed",
-            );
-
-          if (
-            incomplete.length ===
-            0
-          ) {
-            throw new Error(
-              "This mission has no incomplete stages.",
-            );
-          }
-
-          const firstIncomplete =
-            incomplete[0];
-
-          if (
-            firstIncomplete.status ===
-            "accepted"
-          ) {
-            const employee =
-              employees.find(
-                (
-                  candidate,
-                ) =>
-                  candidate.id ===
-                  firstIncomplete.to_employee_id,
-              );
-
-            throw new Error(
-              `${
-                employee?.name ??
-                "The next employee"
-              } already owns the next stage. The chain will not skip it.`,
-            );
-          }
-
-          if (
-            firstIncomplete.status !==
-            "pending"
-          ) {
-            throw new Error(
-              `The next workflow stage is ${firstIncomplete.status}. Automatic execution will not skip it.`,
-            );
-          }
-
-          const pendingSequence:
-            EmployeeHandoff[] =
-            [];
-
-          for (
-            const handoff
-            of incomplete
-          ) {
-            if (
-              handoff.status !==
-              "pending"
-            ) {
-              break;
-            }
-
-            pendingSequence.push(
-              handoff,
-            );
-          }
-
-          if (
-            pendingSequence.length ===
-            0
-          ) {
-            throw new Error(
-              "No executable pending workflow stage is available.",
-            );
-          }
-
-          let accumulatedOutputs =
-            compactPriorOutputsForPrompt(
-              reviewableOutputs.map(
-                (
-                  item,
-                ) =>
-                  item.content,
-              ),
-            );
-
-          let completedStages =
-            0;
-
-          let reachedFinalStage =
-            false;
-
-          for (
-            let index = 0;
-            index <
-            pendingSequence.length;
-            index += 1
-          ) {
-            const handoff =
-              pendingSequence[
-                index
-              ];
-
-            const employee =
-              employees.find(
-                (
-                  candidate,
-                ) =>
-                  candidate.id ===
-                  handoff.to_employee_id,
-              );
-
-            if (!employee) {
-              throw new Error(
-                `Pending handoff references missing employee ${handoff.to_employee_id}.`,
-              );
-            }
-
-            if (
-              employee.status !==
-              "active"
-            ) {
-              throw new Error(
-                `${employee.name} is ${employee.status}. Automatic execution stopped.`,
-              );
-            }
-
-            const result =
-              await executeControlledHandoff({
-                mission:
-                  selectedMission,
-
-                handoff,
-
-                employee,
-
-                priorOutputs:
-                  accumulatedOutputs,
-              });
-
-            accumulatedOutputs =
-              compactPriorOutputsForPrompt(
-                [
-                  ...accumulatedOutputs,
-                  result.content,
-                ],
-              );
-
-            completedStages +=
-              1;
-
-            reachedFinalStage =
-              result.finalStage;
-
-            if (
-              reachedFinalStage
-            ) {
-              break;
-            }
-
-            if (
-              index <
-              pendingSequence.length -
-                1
-            ) {
-              await sleep(
-                WORKFORCE_STAGE_DELAY_MS,
-              );
-            }
-          }
-
-          return {
-            completedStages,
-            reachedFinalStage,
-          };
-        },
-
-      onSuccess:
-        async ({
-          completedStages,
-          reachedFinalStage,
-        }) => {
-          await refreshWorkforce();
-
-          toast.success(
-            reachedFinalStage
-              ? "Workforce mission completed"
-              : "Workforce mission progressed",
-            {
-              description: `${completedStages} employee stage${
-                completedStages ===
-                1
-                  ? ""
-                  : "s"
-              } completed.`,
-            },
-          );
-        },
-
-      onError:
-        (error) => {
-          toast.error(
-            "Automatic workforce chain stopped",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
-
-  /* ------------------------------------------------------------------------ */
-  /* RENDER                                                                   */
-  /* ------------------------------------------------------------------------ */
-
-  return (
-    <div className="mx-auto flex max-w-[1600px] flex-col gap-5">
-      {/* COMPANY HEADER */}
-
-      <section className="glass-card relative overflow-hidden p-5 sm:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-
-        <div className="relative flex flex-col gap-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow">
-                  <Building2 className="h-5 w-5" />
-                </div>
-
-                <StatusBadge
-                  status={workspaceRuntimeStatus()}
-                />
-              </div>
-
-              <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
-                Cossa{" "}
-                <span className="text-gradient-gold">
-                  AI Company
-                </span>
-              </h1>
-
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-                Find the right department or employee,
-                delegate work to the AI CEO, and monitor
-                company execution without digging through
-                technical records.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  void refreshWorkforce()
-                }
-                disabled={isLoading}
-                className="border-primary/40 text-primary hover:bg-primary/10"
-              >
-                <RefreshCw className="mr-1.5 h-4 w-4" />
-                Refresh
-              </Button>
-
-              <Button
-                asChild
-                className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-              >
-                <Link to="/ai/ceo">
-                  <BrainCircuit className="mr-1.5 h-4 w-4" />
-                  Open AI CEO
-                </Link>
-              </Button>
-            </div>
-          </div>
-
-          {/* UNIVERSAL SEARCH */}
-
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
-
-            <input
-              value={employeeSearch}
-              onChange={(event) => {
-                const value =
-                  event.target.value;
-
-                setEmployeeSearch(
-                  value,
-                );
-
-                if (
-                  value.trim()
-                ) {
-                  openEmployees(
-                    "all",
-                  );
-                }
-              }}
-              placeholder='Find anyone by name or responsibility — try "flyer", "SEO", "Facebook", "supplier", "website", "lead"...'
-              className="h-14 w-full rounded-2xl border border-primary/30 bg-background/60 pl-12 pr-12 text-sm outline-none transition focus:border-primary/70 focus:ring-2 focus:ring-primary/10"
-            />
-
-            {employeeSearch ? (
-              <button
-                type="button"
-                onClick={() =>
-                  setEmployeeSearch(
-                    "",
-                  )
-                }
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="Clear search"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      {/* COMPANY NAVIGATION */}
-
-      <section className="glass-card overflow-x-auto p-2">
-        <div className="flex min-w-max gap-1">
-          <TopNavButton
-            active={
-              view ===
-              "command"
-            }
-            icon={Command}
-            label="Command Centre"
-            onClick={() =>
-              setView(
-                "command",
-              )
-            }
-          />
-
-          <TopNavButton
-            active={
-              view ===
-              "departments"
-            }
-            icon={Building2}
-            label="Departments"
-            onClick={() =>
-              setView(
-                "departments",
-              )
-            }
-          />
-
-          <TopNavButton
-            active={
-              view ===
-              "employees"
-            }
-            icon={UsersRound}
-            label="Employees"
-            onClick={() =>
-              openEmployees(
-                selectedDepartment,
-              )
-            }
-          />
-
-          <TopNavButton
-            active={
-              view ===
-              "workflows"
-            }
-            icon={Workflow}
-            label="Workflows"
-            onClick={() =>
-              setView(
-                "workflows",
-              )
-            }
-          />
-
-          <TopNavButton
-            active={
-              view ===
-              "activity"
-            }
-            icon={Activity}
-            label="Activity"
-            onClick={() =>
-              setView(
-                "activity",
-              )
-            }
-          />
-
-          <TopNavButton
-            active={
-              view ===
-              "control"
-            }
-            icon={ShieldCheck}
-            label="Control Room"
-            onClick={() =>
-              setView(
-                "control",
-              )
-            }
-          />
-        </div>
-      </section>
-
-      {/* TOP COMPANY METRICS */}
-
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Metric
-          label="Employees"
-          value={String(
-            employees.length,
-          )}
-        />
-
-        <Metric
-          label="Active"
-          value={String(
-            employees.filter(
-              (
-                employee,
-              ) =>
-                employee.status ===
-                "active",
-            ).length,
-          )}
-        />
-
-        <Metric
-          label="Working now"
-          value={String(
-            workforceCounts.working,
-          )}
-        />
-
-        <Metric
-          label="Assigned"
-          value={String(
-            workforceCounts.waiting,
-          )}
-        />
-
-        <Metric
-          label="Available"
-          value={String(
-            workforceCounts.idle,
-          )}
-        />
-
-        <Metric
-          label="Needs attention"
-          value={String(
-            workforceCounts.attention +
-              workforceCounts.approval,
-          )}
-          warning={
-            workforceCounts.attention +
-              workforceCounts.approval >
-            0
-          }
-        />
-      </section>
-
-      {/* -------------------------------------------------------------------- */}
-      {/* COMMAND CENTRE                                                       */}
-      {/* -------------------------------------------------------------------- */}
-
-      {view ===
-      "command" ? (
-        <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-          <section className="glass-card p-5 sm:p-6">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                <BrainCircuit className="h-5 w-5" />
-              </div>
-
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                  CEO command
-                </p>
-
-                <h2 className="mt-1 font-display text-2xl font-semibold">
-                  Tell the AI CEO what result you need
-                </h2>
-
-                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  You should not have to decide which
-                  employee comes first. Give the objective;
-                  the recorded Growth workforce can coordinate
-                  the work through the correct internal stages.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-2xl border border-primary/25 bg-primary/5 p-3">
-              <textarea
-                value={ceoCommand}
-                onChange={(event) =>
-                  setCeoCommand(
-                    event.target.value,
-                  )
-                }
-                rows={4}
-                placeholder="Example: Create a professional Facebook campaign for Cossa Facility Services in Gauteng, including copy, visual requirements and a posting plan. Do not publish or spend money."
-                className="w-full resize-y bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
-              />
-
-              <div className="mt-3 flex flex-col gap-2 border-t border-primary/15 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs text-muted-foreground">
-                  Target:{" "}
-                  <strong className="text-foreground">
-                    {targetMarket}
-                  </strong>
-                  {" · "}
-                  <strong className="text-foreground">
-                    {targetLocation}
-                  </strong>
-                </div>
-
-                <Button
-                  type="button"
-                  onClick={
-                    submitCeoCommand
-                  }
-                  disabled={
-                    !ceoCommand.trim() ||
-                    coordinationMutation.isPending
-                  }
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-                >
-                  {coordinationMutation.isPending ? (
-                    <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="mr-1.5 h-4 w-4" />
-                  )}
-
-                  {coordinationMutation.isPending
-                    ? "CEO is organising the team…"
-                    : "Delegate to AI CEO"}
-                </Button>
-              </div>
-            </div>
-
-            <div className="mt-5">
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                Quick requests
-              </p>
-
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {[
-                  "Create a Facebook post and visual brief for Cossa.",
-                  "Prepare a professional flyer campaign for Cossa Facility Services.",
-                  "Audit our website and prepare SEO improvements.",
-                  "Build a 7-day social-media content plan.",
-                  "Prepare a paid-media recommendation without spending money.",
-                  "Create a campaign for Cossa Store products.",
-                ].map(
-                  (
-                    request,
-                  ) => (
-                    <button
-                      key={
-                        request
-                      }
-                      type="button"
-                      onClick={() =>
-                        setCeoCommand(
-                          request,
-                        )
-                      }
-                      className="rounded-xl border border-border/60 bg-card/40 p-3 text-left text-xs leading-relaxed transition hover:border-primary/40 hover:bg-primary/5"
-                    >
-                      <div className="flex items-start gap-2">
-                        <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-
-                        <span>
-                          {
-                            request
-                          }
-                        </span>
-                      </div>
-                    </button>
-                  ),
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section className="glass-card p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                  Company departments
-                </p>
-
-                <h2 className="mt-1 font-display text-xl font-semibold">
-                  Go straight to the team
-                </h2>
-              </div>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  setView(
-                    "departments",
-                  )
-                }
-                className="text-primary"
-              >
-                View all
-
-                <ArrowRight className="ml-1.5 h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="mt-4 space-y-2">
-              {DEPARTMENTS.map(
-                (
-                  department,
-                ) => {
-                  const Icon =
-                    department.icon;
-
-                  const activeCount =
-                    department.employeeKeys.filter(
-                      (
-                        key,
-                      ) =>
-                        employeesByKey.get(
-                          key,
-                        )?.status ===
-                        "active",
-                    ).length;
-
-                  return (
-                    <button
-                      key={
-                        department.key
-                      }
-                      type="button"
-                      onClick={() =>
-                        openDepartment(
-                          department.key,
-                        )
-                      }
-                      className="group flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card/40 p-3 text-left transition hover:border-primary/40 hover:bg-primary/5"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <Icon className="h-5 w-5" />
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">
-                          {
-                            department.name
-                          }
-                        </p>
-
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {
-                            activeCount
-                          }{" "}
-                          active
-                          team
-                          member
-                          {activeCount ===
-                          1
-                            ? ""
-                            : "s"}
-                        </p>
-                      </div>
-
-                      <ChevronRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" />
-                    </button>
-                  );
-                },
-              )}
-            </div>
-          </section>
-
-          {/* CURRENT WORK */}
-
-          <section className="glass-card p-5 xl:col-span-2">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                  Current work
-                </p>
-
-                <h2 className="mt-1 font-display text-xl font-semibold">
-                  What needs attention now
-                </h2>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  setView(
-                    "activity",
-                  )
-                }
-                className="border-primary/30 text-primary"
-              >
-                <Activity className="mr-1.5 h-4 w-4" />
-
-                Open activity
-              </Button>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <QueueCard
-                icon={Play}
-                title="Working"
-                value={
-                  workforceCounts.working
-                }
-                description="Employees with a real running record."
-              />
-
-              <QueueCard
-                icon={ClipboardList}
-                title="Assigned"
-                value={
-                  workforceCounts.waiting
-                }
-                description="Tasks waiting or ready to retry."
-              />
-
-              <QueueCard
-                icon={AlertTriangle}
-                title="Needs attention"
-                value={
-                  workforceCounts.attention +
-                  workforceCounts.approval
-                }
-                description="Failures or owner-controlled checkpoints."
-                warning={
-                  workforceCounts.attention +
-                    workforceCounts.approval >
-                  0
-                }
-              />
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {/* -------------------------------------------------------------------- */}
-      {/* DEPARTMENTS                                                          */}
-      {/* -------------------------------------------------------------------- */}
-
-      {view ===
-      "departments" ? (
-        <section className="glass-card p-5 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                Organisation
-              </p>
-
-              <h2 className="mt-1 font-display text-2xl font-semibold">
-                Departments
-              </h2>
-
-              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                Choose the business function first.
-                Every department opens directly to the
-                employees responsible for that work.
-              </p>
-            </div>
-
-            <span className="text-xs text-muted-foreground">
-              {
-                DEPARTMENTS.length
-              }{" "}
-              operating
-              groups
-            </span>
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {DEPARTMENTS.map(
-              (
-                department,
-              ) => {
-                const Icon =
-                  department.icon;
-
-                const team =
-                  employeeDirectory.filter(
-                    (
-                      item,
-                    ) =>
-                      department.employeeKeys.includes(
-                        item.employee.employee_key,
-                      ),
-                  );
-
-                const activeTeam =
-                  team.filter(
-                    (
-                      item,
-                    ) =>
-                      item.employee.status ===
-                      "active",
-                  );
-
-                return (
-                  <article
-                    key={
-                      department.key
-                    }
-                    className="group rounded-2xl border border-border/60 bg-card/40 p-5 transition hover:border-primary/40 hover:bg-primary/5"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                        <Icon className="h-6 w-6" />
-                      </div>
-
-                      <span className="rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[10px] text-success">
-                        {
-                          activeTeam.length
-                        }{" "}
-                        active
-                      </span>
-                    </div>
-
-                    <h3 className="mt-4 font-display text-xl font-semibold">
-                      {
-                        department.name
-                      }
-                    </h3>
-
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                      {
-                        department.description
-                      }
-                    </p>
-
-                    <div className="mt-4 flex flex-wrap gap-1.5">
-                      {team
-                        .slice(
-                          0,
-                          5,
-                        )
-                        .map(
-                          (
-                            item,
-                          ) => (
-                            <span
-                              key={
-                                item.employee.id
-                              }
-                              className="rounded-full border border-border/60 bg-background/50 px-2 py-1 text-[10px] text-muted-foreground"
-                            >
-                              {
-                                item.employee.name
-                              }
-                            </span>
-                          ),
-                        )}
-
-                      {team.length >
-                      5 ? (
-                        <span className="rounded-full border border-border/60 bg-background/50 px-2 py-1 text-[10px] text-muted-foreground">
-                          +
-                          {team.length -
-                            5}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        openDepartment(
-                          department.key,
-                        )
-                      }
-                      className="mt-5 w-full bg-primary/10 text-primary hover:bg-primary/20"
-                      variant="ghost"
-                    >
-                      Open department
-
-                      <ArrowRight className="ml-1.5 h-4 w-4" />
-                    </Button>
-                  </article>
-                );
-              },
-            )}
-          </div>
-        </section>
-      ) : null}
-
-      {/* -------------------------------------------------------------------- */}
-      {/* EMPLOYEE DIRECTORY                                                   */}
-      {/* -------------------------------------------------------------------- */}
-
-      {view ===
-      "employees" ? (
-        <section className="glass-card p-4 sm:p-5">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                  Employee directory
-                </p>
-
-                <h2 className="mt-1 font-display text-2xl font-semibold">
-                  Find the right person quickly
-                </h2>
-
-                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                  Search by employee, responsibility or
-                  normal business language. For example:
-                  flyer, SEO, Facebook, supplier, website,
-                  lead or advertising.
-                </p>
-              </div>
-
-              <span className="text-xs text-muted-foreground">
-                {
-                  searchedEmployees.length
-                }{" "}
-                matching
-                employee
-                {searchedEmployees.length ===
-                1
-                  ? ""
-                  : "s"}
-              </span>
-            </div>
-
-            {/* DEPARTMENT FILTERS */}
-
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              <FilterChip
-                active={
-                  selectedDepartment ===
-                  "all"
-                }
-                label={`All employees (${employees.length})`}
-                onClick={() =>
-                  setSelectedDepartment(
-                    "all",
-                  )
-                }
-              />
-
-              {DEPARTMENTS.map(
-                (
-                  department,
-                ) => {
-                  const count =
-                    employeeDirectory.filter(
-                      (
-                        item,
-                      ) =>
-                        item.departmentKeys.includes(
-                          department.key,
-                        ),
-                    ).length;
-
-                  return (
-                    <FilterChip
-                      key={
-                        department.key
-                      }
-                      active={
-                        selectedDepartment ===
-                        department.key
-                      }
-                      label={`${department.shortName} (${count})`}
-                      onClick={() =>
-                        setSelectedDepartment(
-                          department.key,
-                        )
-                      }
-                    />
-                  );
-                },
-              )}
-            </div>
-
-            {/* LOCAL SEARCH */}
-
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-              <input
-                value={
-                  employeeSearch
-                }
-                onChange={(event) =>
-                  setEmployeeSearch(
-                    event.target.value,
-                  )
-                }
-                placeholder="Search employee or responsibility…"
-                className="w-full rounded-xl border border-border/60 bg-background/50 py-3 pl-10 pr-10 text-sm outline-none focus:border-primary/50"
-              />
-
-              {employeeSearch ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setEmployeeSearch(
-                      "",
-                    )
-                  }
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label="Clear employee search"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              ) : null}
-            </div>
-
-            {employeesQuery.isLoading ? (
-              <div className="rounded-xl border border-border/60 bg-card/30 p-6 text-sm text-muted-foreground">
-                Loading employees…
-              </div>
-            ) : searchedEmployees.length ===
-              0 ? (
-              <div className="rounded-xl border border-dashed border-border/60 p-8 text-center">
-                <Search className="mx-auto h-6 w-6 text-muted-foreground" />
-
-                <p className="mt-3 text-sm font-medium">
-                  No employee matched that search
-                </p>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Try a responsibility such as flyer,
-                  website, SEO, content, supplier, tender,
-                  Facebook or leads.
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {searchedEmployees.map(
-                  (
-                    item,
-                  ) => (
-                    <EmployeeCard
-                      key={
-                        item.employee.id
-                      }
-                      item={
-                        item
-                      }
-                      onOpen={() =>
-                        setSelectedEmployeeId(
-                          item.employee.id,
-                        )
-                      }
-                    />
-                  ),
-                )}
-              </div>
-            )}
-          </div>
-        </section>
-      ) : null}
-
-      {/* -------------------------------------------------------------------- */}
-      {/* WORKFLOWS                                                            */}
-      {/* -------------------------------------------------------------------- */}
-
-      {view ===
-      "workflows" ? (
-        <div className="grid gap-5">
-          {/* CURRENT WORKFLOW */}
-
-          <section className="glass-card p-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                  Active workflow
-                </p>
-
-                <h2 className="mt-1 font-display text-2xl font-semibold">
-                  Growth workforce execution
-                </h2>
-
-                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                  This is the operational workflow view.
-                  Use it when you want to inspect or manually
-                  progress a coordinated mission.
-                </p>
-              </div>
-
-              {coordinationMissions.length >
-              0 ? (
-                <label className="grid gap-1 text-xs text-muted-foreground">
-                  Mission
-
-                  <select
-                    value={
-                      selectedMission?.id ??
-                      ""
-                    }
-                    onChange={(event) =>
-                      setSelectedMissionId(
-                        event.target.value ||
-                          null,
-                      )
-                    }
-                    className="min-w-72 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
-                  >
-                    {coordinationMissions.map(
-                      (
-                        mission,
-                      ) => (
-                        <option
-                          key={
-                            mission.id
-                          }
-                          value={
-                            mission.id
-                          }
-                        >
-                          {mission.objective.slice(
-                            0,
-                            100,
-                          )}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </label>
-              ) : null}
-            </div>
-
-            {/* PIPELINE */}
-
-            <div className="mt-5 grid gap-2 md:grid-cols-3 xl:grid-cols-9">
-              {EXECUTABLE_GROWTH_WORKFLOW.map(
-                (
-                  step,
-                  index,
-                ) => {
-                  const Icon =
-                    step.icon;
-
-                  const handoff =
-                    selectedMissionHandoffs[
-                      index
-                    ];
-
-                  const status =
-                    handoff?.status ??
-                    "not_created";
-
-                  return (
-                    <div
-                      key={
-                        step.key
-                      }
-                      className="relative rounded-xl border border-border/60 bg-card/40 p-3"
-                    >
-                      {index <
-                      EXECUTABLE_GROWTH_WORKFLOW.length -
-                        1 ? (
-                        <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 rounded-full bg-background p-1 text-primary xl:block" />
-                      ) : null}
-
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                        <Icon className="h-4 w-4" />
-                      </div>
-
-                      <p className="mt-2 text-xs font-medium">
-                        {
-                          step.label
-                        }
-                      </p>
-
-                      <p
-                        className={
-                          status ===
-                          "completed"
-                            ? "mt-1 text-[9px] uppercase tracking-widest text-success"
-                            : status ===
-                                "accepted"
-                              ? "mt-1 text-[9px] uppercase tracking-widest text-warning"
-                              : status ===
-                                  "pending"
-                                ? "mt-1 text-[9px] uppercase tracking-widest text-primary"
-                                : "mt-1 text-[9px] uppercase tracking-widest text-muted-foreground"
-                        }
-                      >
-                        {formatStatus(
-                          status,
-                        )}
-                      </p>
-                    </div>
-                  );
-                },
-              )}
-            </div>
-
-            {!selectedMission ? (
-              <div className="mt-5 rounded-xl border border-dashed border-border/60 p-5 text-sm text-muted-foreground">
-                No Growth coordination mission is selected.
-              </div>
-            ) : (
-              <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Current position
-                  </p>
-
-                  <h3 className="mt-1 text-base font-semibold">
-                    {nextEmployee
-                      ? `${nextEmployee.name} — ${nextEmployee.title}`
-                      : firstIncompleteHandoff
-                        ? "Workflow stage blocked"
-                        : "Workflow complete"}
-                  </h3>
-
-                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                    {firstIncompleteHandoff?.reason ??
-                      "No incomplete handoff remains."}
-                  </p>
-
-                  {blockedHandoff ? (
-                    <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3">
-                      <p className="text-xs text-warning">
-                        Earlier stage is{" "}
-                        <strong>
-                          {formatStatus(
-                            blockedHandoff.status,
-                          )}
-                        </strong>
-                        . Cossa AI will not skip it.
-                      </p>
-                    </div>
-                  ) : null}
-
-                  <div className="mt-4 grid gap-2">
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        runSafeWorkflowMutation.mutate()
-                      }
-                      disabled={
-                        !nextHandoff ||
-                        Boolean(
-                          blockedHandoff,
-                        ) ||
-                        runSafeWorkflowMutation.isPending ||
-                        runNextStageMutation.isPending ||
-                        selectedMission.status ===
-                          "awaiting_approval" ||
-                        selectedMission.status ===
-                          "completed"
-                      }
-                      className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-                    >
-                      {runSafeWorkflowMutation.isPending ? (
-                        <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Workflow className="mr-1.5 h-4 w-4" />
-                      )}
-
-                      {runSafeWorkflowMutation.isPending
-                        ? "Team is working…"
-                        : "Run safe workflow"}
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        runNextStageMutation.mutate()
-                      }
-                      disabled={
-                        !nextHandoff ||
-                        !nextEmployee ||
-                        Boolean(
-                          blockedHandoff,
-                        ) ||
-                        nextEmployee.status !==
-                          "active" ||
-                        runNextStageMutation.isPending ||
-                        runSafeWorkflowMutation.isPending ||
-                        selectedMission.status ===
-                          "awaiting_approval" ||
-                        selectedMission.status ===
-                          "completed"
-                      }
-                      className="border-primary/40 text-primary"
-                    >
-                      {runNextStageMutation.isPending ? (
-                        <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Play className="mr-1.5 h-4 w-4" />
-                      )}
-
-                      Run next employee only
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                        Mission outputs
-                      </p>
-
-                      <h3 className="text-sm font-semibold">
-                        {
-                          reviewableOutputs.length
-                        }{" "}
-                        saved employee
-                        output
-                        {reviewableOutputs.length ===
-                        1
-                          ? ""
-                          : "s"}
-                      </h3>
-                    </div>
-
-                    <FileCheck2 className="h-5 w-5 text-primary" />
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    <MiniMetric
-                      label="Completed"
-                      value={
-                        selectedMissionCompletedRuns.length
-                      }
-                    />
-
-                    <MiniMetric
-                      label="Pending"
-                      value={
-                        selectedMissionHandoffs.filter(
-                          (
-                            handoff,
-                          ) =>
-                            handoff.status ===
-                            "pending",
-                        ).length
-                      }
-                    />
-
-                    <MiniMetric
-                      label="Failed history"
-                      value={
-                        selectedMissionFailedRuns.length
-                      }
-                      warning={
-                        selectedMissionFailedRuns.length >
-                        0
-                      }
-                    />
-                  </div>
-
-                  {displayReviewableOutputs.length >
-                  0 ? (
-                    <div className="mt-4 max-h-96 space-y-3 overflow-y-auto pr-1">
-                      {displayReviewableOutputs.map(
-                        ({
-                          run,
-                          content,
-                        }) => {
-                          const worker =
-                            employees.find(
-                              (
-                                employee,
-                              ) =>
-                                employee.id ===
-                                run.employee_id,
-                            );
-
-                          return (
-                            <article
-                              key={
-                                run.id
-                              }
-                              className="rounded-lg border border-border/60 bg-background/40 p-3"
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-xs font-medium">
-                                  {worker?.name ??
-                                    "Recorded worker"}
-                                </span>
-
-                                <span className="text-[9px] uppercase tracking-widest text-success">
-                                  completed
-                                </span>
-                              </div>
-
-                              <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-                                {
-                                  content
-                                }
-                              </p>
-                            </article>
-                          );
-                        },
-                      )}
-                    </div>
-                  ) : (
-                    <p className="mt-4 text-xs text-muted-foreground">
-                      No employee output has been saved for this mission yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* CREATE MISSION */}
-
-          <section className="glass-card p-5">
-            <div className="flex items-start gap-3">
-              <Workflow className="mt-0.5 h-5 w-5 text-primary" />
-
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                  New workflow
-                </p>
-
-                <h2 className="mt-1 font-display text-xl font-semibold">
-                  Create Growth coordination mission
-                </h2>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4">
-              <textarea
-                value={
-                  objective
-                }
-                onChange={(event) =>
-                  setObjective(
-                    event.target.value,
-                  )
-                }
-                rows={4}
-                className="w-full resize-y rounded-xl border border-input bg-background px-3 py-3 text-sm outline-none focus:border-primary/50"
-              />
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-xs text-muted-foreground">
-                  Target market
-
-                  <input
-                    value={
-                      targetMarket
-                    }
-                    onChange={(event) =>
-                      setTargetMarket(
-                        event.target.value,
-                      )
-                    }
-                    className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
-                  />
-                </label>
-
-                <label className="grid gap-1 text-xs text-muted-foreground">
-                  Target location
-
-                  <input
-                    value={
-                      targetLocation
-                    }
-                    onChange={(event) =>
-                      setTargetLocation(
-                        event.target.value,
-                      )
-                    }
-                    className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
-                  />
-                </label>
-              </div>
-
-              <Button
-                type="button"
-                onClick={() =>
-                  coordinationMutation.mutate(
-                    {
-                      objective,
-
-                      target_market:
-                        targetMarket,
-
-                      target_location:
-                        targetLocation,
-                    },
-                  )
-                }
-                disabled={
-                  !canCreateCoordination ||
-                  coordinationMutation.isPending
-                }
-                className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-              >
-                <Workflow className="mr-1.5 h-4 w-4" />
-
-                {coordinationMutation.isPending
-                  ? "Creating workflow…"
-                  : "Create workflow"}
-              </Button>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {/* -------------------------------------------------------------------- */}
-      {/* ACTIVITY                                                             */}
-      {/* -------------------------------------------------------------------- */}
-
-      {view ===
-      "activity" ? (
-        <section className="glass-card p-5">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-              Company activity
-            </p>
-
-            <h2 className="mt-1 font-display text-2xl font-semibold">
-              Employee work status
-            </h2>
-
-            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              Current state is based on recorded handoffs,
-              runs and approvals. Historical failures remain
-              visible without overriding later success.
-            </p>
-          </div>
-
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {employeeDirectory
-              .slice()
-              .sort(
-                (
-                  left,
-                  right,
-                ) => {
-                  const priority: Record<
-                    OperationalState,
-                    number
-                  > = {
-                    working:
-                      0,
-                    attention:
-                      1,
-                    approval:
-                      2,
-                    waiting:
-                      3,
-                    idle:
-                      4,
-                    inactive:
-                      5,
-                  };
-
-                  return (
-                    priority[
-                      left.operational.state
-                    ] -
-                    priority[
-                      right.operational.state
-                    ]
-                  );
-                },
-              )
-              .map(
-                (
-                  item,
-                ) => (
-                  <EmployeeActivityCard
-                    key={
-                      item.employee.id
-                    }
-                    item={
-                      item
-                    }
-                    onOpen={() =>
-                      setSelectedEmployeeId(
-                        item.employee.id,
-                      )
-                    }
-                  />
-                ),
-              )}
-          </div>
-        </section>
-      ) : null}
-
-      {/* -------------------------------------------------------------------- */}
-      {/* CONTROL ROOM                                                         */}
-      {/* -------------------------------------------------------------------- */}
-
-      {view ===
-      "control" ? (
-        <div className="grid gap-5">
-          <section className="glass-card p-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                  Workforce control room
-                </p>
-
-                <h2 className="mt-1 font-display text-2xl font-semibold">
-                  System integrity & administration
-                </h2>
-
-                <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                  Technical controls remain available,
-                  but they no longer block ordinary daily
-                  business work.
-                </p>
-              </div>
-
-              <Button
-                type="button"
-                onClick={() =>
-                  installMutation.mutate()
-                }
-                disabled={
-                  installMutation.isPending
-                }
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <UsersRound className="mr-1.5 h-4 w-4" />
-
-                {installMutation.isPending
-                  ? "Synchronising…"
-                  : "Synchronise workforce"}
-              </Button>
-            </div>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <ControlMetric
-                label="Source profiles"
-                value={
-                  COSSA_GROWTH_WORKFORCE.length
-                }
-                description="Profiles defined in Cossa source."
-              />
-
-              <ControlMetric
-                label="Installed"
-                value={
-                  installedDefaultEmployees.length
-                }
-                description="Source profiles recorded."
-              />
-
-              <ControlMetric
-                label="Active source"
-                value={
-                  activeDefaultEmployees.length
-                }
-                description="Installed and active."
-              />
-
-              <ControlMetric
-                label="Departments"
-                value={
-                  departments.length
-                }
-                description="Recorded employee departments."
-              />
-            </div>
-          </section>
-
-          <section className="glass-card p-5">
-            <div className="flex items-start gap-3">
-              <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
-
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                  Owner authority
-                </p>
-
-                <h2 className="mt-1 font-display text-xl font-semibold">
-                  High-risk actions remain controlled
-                </h2>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <OwnerRule>
-                Spending money, supplier orders and
-                advertising budget changes remain
-                owner-controlled.
-              </OwnerRule>
-
-              <OwnerRule>
-                Contracts, legal commitments, signatures
-                and binding commercial terms remain
-                owner-controlled.
-              </OwnerRule>
-
-              <OwnerRule>
-                Credentials, destructive operations and
-                irreversible account changes remain
-                owner-controlled.
-              </OwnerRule>
-
-              <OwnerRule>
-                Missing integrations must be reported,
-                never simulated.
-              </OwnerRule>
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Button
-                asChild
-                variant="outline"
-                className="border-primary/40 text-primary"
-              >
-                <Link to="/integrations">
-                  <Send className="mr-1.5 h-4 w-4" />
-
-                  Connections
-                </Link>
-              </Button>
-
-              <Button
-                asChild
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Link to="/ai/ceo">
-                  <BrainCircuit className="mr-1.5 h-4 w-4" />
-
-                  AI CEO
-                </Link>
-              </Button>
-            </div>
-          </section>
-
-          <section className="glass-card p-5">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                  Execution safeguards
-                </p>
-
-                <h2 className="mt-1 font-display text-xl font-semibold">
-                  Provider & context controls
-                </h2>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <ControlMetric
-                label="Prompt ceiling"
-                value={
-                  MAX_STAGE_PROMPT_CHARS
-                }
-                description="Maximum characters per stage prompt."
-              />
-
-              <ControlMetric
-                label="Prior outputs"
-                value={
-                  MAX_PRIOR_OUTPUTS
-                }
-                description={`Maximum ${MAX_PRIOR_OUTPUT_CHARS} characters each.`}
-              />
-
-              <ControlMetric
-                label="Provider attempts"
-                value={
-                  PROVIDER_MAX_ATTEMPTS
-                }
-                description="Maximum temporary retry attempts."
-              />
-
-              <ControlMetric
-                label="Stage delay"
-                value={
-                  WORKFORCE_STAGE_DELAY_MS /
-                  1_000
-                }
-                suffix=" sec"
-                description="Delay between automatic employees."
-              />
-            </div>
-          </section>
-
-          <section className="glass-card p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                  Audit history
-                </p>
-
-                <h2 className="mt-1 font-display text-xl font-semibold">
-                  Growth mission records
-                </h2>
-              </div>
-
-              <span className="text-xs text-muted-foreground">
-                {
-                  coordinationMissions.length
-                }{" "}
-                saved
-              </span>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {coordinationMissions
-                .slice(
-                  0,
-                  9,
-                )
-                .map(
-                  (
-                    mission,
-                  ) => {
-                    const missionHandoffs =
-                      handoffs.filter(
-                        (
-                          handoff,
-                        ) =>
-                          handoff.mission_id ===
-                          mission.id,
-                      );
-
-                    const missionRuns =
-                      runs.filter(
-                        (
-                          run,
-                        ) =>
-                          run.mission_id ===
-                          mission.id,
-                      );
-
-                    const completed =
-                      missionHandoffs.filter(
-                        (
-                          handoff,
-                        ) =>
-                          handoff.status ===
-                          "completed",
-                      ).length;
-
-                    const failed =
-                      missionRuns.filter(
-                        (
-                          run,
-                        ) =>
-                          run.status ===
-                          "failed",
-                      ).length;
-
-                    return (
-                      <button
-                        key={
-                          mission.id
-                        }
-                        type="button"
-                        onClick={() => {
-                          setSelectedMissionId(
-                            mission.id,
-                          );
-
-                          setView(
-                            "workflows",
-                          );
-                        }}
-                        className="rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-[10px] uppercase tracking-widest text-primary">
-                            {formatStatus(
-                              mission.status,
-                            )}
-                          </span>
-
-                          <span className="text-xs text-muted-foreground">
-                            {
-                              completed
-                            }
-                            /
-                            {
-                              missionHandoffs.length
-                            }
-                          </span>
-                        </div>
-
-                        <p className="mt-2 line-clamp-2 text-sm font-medium">
-                          {
-                            mission.objective
-                          }
-                        </p>
-
-                        <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground">
-                          <span>
-                            {
-                              missionRuns.length
-                            }{" "}
-                            run
-                            {missionRuns.length ===
-                            1
-                              ? ""
-                              : "s"}
-                          </span>
-
-                          <span
-                            className={
-                              failed >
-                              0
-                                ? "text-warning"
-                                : ""
-                            }
-                          >
-                            {
-                              failed
-                            }{" "}
-                            failure
-                            {failed ===
-                            1
-                              ? ""
-                              : "s"}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  },
-                )}
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {/* EMPLOYEE DRAWER */}
-
-      {selectedEmployee ? (
-        <EmployeeDrawer
-          item={
-            selectedEmployee
-          }
-          onClose={() =>
-            setSelectedEmployeeId(
-              null,
-            )
-          }
-          onOpenDepartment={() => {
-            const firstDepartment =
-              selectedEmployee.departmentKeys[
-                0
-              ];
-
-            if (
-              firstDepartment &&
-              isWorkforceDepartment(
-                firstDepartment,
-              ) &&
-              firstDepartment !==
-                "all"
-            ) {
-              openDepartment(
-                firstDepartment,
-              );
-            }
-          }}
-        />
-      ) : null}
-    </div>
-  );
+  return {
+    created,
+    duplicates,
+    failed,
+  };
 }
 
-/* -------------------------------------------------------------------------- */
-/* UI COMPONENTS                                                              */
-/* -------------------------------------------------------------------------- */
+export function exportProspectsToCsv(
+  prospects:
+    LeadHunterProspect[],
+): string {
+  const headers = [
+    "Organisation",
+    "Sector",
+    "Industry",
+    "Website",
+    "Public Phone",
+    "Public Email",
+    "City",
+    "Province",
+    "Country",
+    "Recommended Company",
+    "Recommended Service",
+    "Opportunity",
+    "Classification",
+    "Verification",
+    "Independent Sources",
+    "Cross Verified",
+    "Procurement Reference",
+    "Procurement Closing Date",
+    "Procurement Status",
+    "Sales Priority",
+    "Score",
+    "Revenue Potential",
+    "Ease to Close",
+    "Recurring Revenue Potential",
+    "Primary Source",
+    "Date Verified",
+    "Next Action",
+  ];
 
-function TopNavButton({
-  active,
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: LucideIcon;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={
-        onClick
-      }
-      className={
-        active
-          ? "flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
-          : "flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
-      }
-    >
-      <Icon className="h-4 w-4" />
+  const escapeCsv = (
+    value: unknown,
+  ) => {
+    const string = String(value ?? "");
 
-      {label}
-    </button>
+    return `"${string.replace(/"/g, '""')}"`;
+  };
+
+  const rows = prospects.map(
+    (prospect) => [
+      prospect.organisation_name,
+      prospect.sector,
+      prospect.industry,
+      prospect.website,
+      prospect.public_phone,
+      prospect.public_email,
+      prospect.city,
+      prospect.province,
+      prospect.country,
+      prospect.recommended_company,
+      prospect.recommended_service,
+      prospect.opportunity_summary,
+      prospect.classification,
+      prospect.verification_status,
+      prospect.verification_meta?.independent_source_count ?? 0,
+      prospect.verification_meta?.cross_verified ? "YES" : "NO",
+      prospect.procurement?.reference_number,
+      prospect.procurement?.closing_date,
+      prospect.procurement?.current_status,
+      prospect.sales_priority,
+      prospect.total_score,
+      prospect.revenue_potential_score,
+      prospect.ease_to_close_score,
+      prospect.recurring_revenue_score,
+      prospect.primary_source_url,
+      prospect.date_verified,
+      prospect.next_action,
+    ],
   );
-}
 
-function FilterChip({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={
-        onClick
-      }
-      className={
-        active
-          ? "shrink-0 rounded-full border border-primary bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary"
-          : "shrink-0 rounded-full border border-border/60 bg-background/40 px-3 py-1.5 text-xs text-muted-foreground transition hover:border-primary/30 hover:text-primary"
-      }
-    >
-      {label}
-    </button>
-  );
-}
-
-function EmployeeCard({
-  item,
-  onOpen,
-}: {
-  item: EmployeeDirectoryItem;
-  onOpen: () => void;
-}) {
-  const {
-    employee,
-    operational,
-  } =
-    item;
-
-  return (
-    <button
-      type="button"
-      onClick={
-        onOpen
-      }
-      className="group rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">
-            {
-              employee.name
-            }
-          </p>
-
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {
-              employee.title
-            }
-          </p>
-        </div>
-
-        <OperationalBadge
-          state={
-            operational.state
-          }
-          label={
-            operational.label
-          }
-        />
-      </div>
-
-      {item.responsibilityLabels.length >
-      0 ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {item.responsibilityLabels.map(
-            (
-              label,
-            ) => (
-              <span
-                key={
-                  label
-                }
-                className="rounded-full border border-primary/20 bg-primary/5 px-2 py-1 text-[9px] text-primary"
-              >
-                {
-                  label
-                }
-              </span>
-            ),
-          )}
-        </div>
-      ) : null}
-
-      <div className="mt-4 rounded-lg border border-border/50 bg-background/30 p-3">
-        <p className="text-[9px] uppercase tracking-widest text-muted-foreground">
-          Current work
-        </p>
-
-        <p className="mt-1 line-clamp-2 text-xs leading-relaxed">
-          {
-            operational.currentTask
-          }
-        </p>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3">
-        <span className="text-[10px] text-muted-foreground">
-          {employeeDepartment(
-            employee,
-          )}
-        </span>
-
-        <span className="flex items-center gap-1 text-[10px] font-medium text-primary">
-          Open employee
-
-          <ChevronRight className="h-3.5 w-3.5" />
-        </span>
-      </div>
-    </button>
-  );
-}
-
-function EmployeeActivityCard({
-  item,
-  onOpen,
-}: {
-  item: EmployeeDirectoryItem;
-  onOpen: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={
-        onOpen
-      }
-      className="rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold">
-            {
-              item.employee.name
-            }
-          </p>
-
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {
-              item.employee.title
-            }
-          </p>
-        </div>
-
-        <OperationalBadge
-          state={
-            item.operational.state
-          }
-          label={
-            item.operational.label
-          }
-        />
-      </div>
-
-      <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-        {
-          item.operational.currentTask
-        }
-      </p>
-
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        <MiniMetric
-          label="Pending"
-          value={
-            item.operational.pendingCount
-          }
-        />
-
-        <MiniMetric
-          label="Running"
-          value={
-            item.operational.runningCount
-          }
-        />
-
-        <MiniMetric
-          label="Failures"
-          value={
-            item.operational.historicalFailureCount
-          }
-          warning={
-            item.operational.latestFailure !==
-            null
-          }
-        />
-      </div>
-    </button>
-  );
-}
-
-function EmployeeDrawer({
-  item,
-  onClose,
-  onOpenDepartment,
-}: {
-  item: EmployeeDirectoryItem;
-  onClose: () => void;
-  onOpenDepartment: () => void;
-}) {
-  const {
-    employee,
-    operational,
-  } =
-    item;
-
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
-      <button
-        type="button"
-        onClick={
-          onClose
-        }
-        className="absolute inset-0 cursor-default"
-        aria-label="Close employee profile"
-      />
-
-      <aside className="relative z-10 h-full w-full max-w-xl overflow-y-auto border-l border-border bg-background p-5 shadow-2xl sm:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <button
-            type="button"
-            onClick={
-              onClose
-            }
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-
-            Back
-          </button>
-
-          <button
-            type="button"
-            onClick={
-              onClose
-            }
-            className="rounded-lg border border-border/60 p-2 text-muted-foreground hover:text-foreground"
-            aria-label="Close employee profile"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="mt-6">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary gold-glow">
-            <UsersRound className="h-6 w-6" />
-          </div>
-
-          <h2 className="mt-4 font-display text-2xl font-semibold">
-            {
-              employee.name
-            }
-          </h2>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            {
-              employee.title
-            }
-          </p>
-
-          <div className="mt-3">
-            <OperationalBadge
-              state={
-                operational.state
-              }
-              label={
-                operational.label
-              }
-            />
-          </div>
-        </div>
-
-        <section className="mt-6 rounded-xl border border-border/60 bg-card/40 p-4">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            What this employee owns
-          </p>
-
-          {item.responsibilityLabels.length >
-          0 ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {item.responsibilityLabels.map(
-                (
-                  label,
-                ) => (
-                  <span
-                    key={
-                      label
-                    }
-                    className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-xs text-primary"
-                  >
-                    {
-                      label
-                    }
-                  </span>
-                ),
-              )}
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-muted-foreground">
-              No responsibility matrix label has been assigned yet.
-            </p>
-          )}
-
-          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-            {
-              employee.mission
-            }
-          </p>
-        </section>
-
-        <section className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            Current task
-          </p>
-
-          <p className="mt-2 text-sm leading-relaxed">
-            {
-              operational.currentTask
-            }
-          </p>
-
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            {
-              operational.detail
-            }
-          </p>
-        </section>
-
-        <section className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4">
-          <div className="grid gap-3 text-xs">
-            <EmployeeDetail
-              label="Department"
-              value={employeeDepartment(
-                employee,
-              )}
-            />
-
-            <EmployeeDetail
-              label="Business unit"
-              value={employeeBusinessUnit(
-                employee,
-              )}
-            />
-
-            <EmployeeDetail
-              label="Status"
-              value={formatStatus(
-                employee.status,
-              )}
-            />
-
-            <EmployeeDetail
-              label="Approval default"
-              value={
-                employee.requires_approval_by_default
-                  ? "Approval-controlled"
-                  : "Safe internal work allowed"
-              }
-            />
-
-            <EmployeeDetail
-              label="Latest provider"
-              value={
-                operational.latestProvider ??
-                "No provider run recorded"
-              }
-            />
-
-            <EmployeeDetail
-              label="Latest model"
-              value={
-                operational.latestModel ??
-                "No model run recorded"
-              }
-            />
-
-            <EmployeeDetail
-              label="Last activity"
-              value={formatDateTime(
-                operational.lastActivity,
-              )}
-            />
-          </div>
-        </section>
-
-        <section className="mt-4 grid grid-cols-4 gap-2">
-          <MiniMetric
-            label="Assigned"
-            value={
-              operational.assignedCount
-            }
-          />
-
-          <MiniMetric
-            label="Pending"
-            value={
-              operational.pendingCount
-            }
-          />
-
-          <MiniMetric
-            label="Running"
-            value={
-              operational.runningCount
-            }
-          />
-
-          <MiniMetric
-            label="Failures"
-            value={
-              operational.historicalFailureCount
-            }
-            warning={
-              operational.latestFailure !==
-              null
-            }
-          />
-        </section>
-
-        {operational.latestFailure ? (
-          <section className="mt-4 rounded-xl border border-warning/30 bg-warning/10 p-4">
-            <p className="text-[10px] uppercase tracking-widest text-warning">
-              {operational.retryReady
-                ? "Previous attempt — retry ready"
-                : "Latest failure"}
-            </p>
-
-            <p className="mt-2 text-xs leading-relaxed text-warning">
-              {
-                operational.latestFailure
-              }
-            </p>
-          </section>
-        ) : null}
-
-        <div className="mt-6 grid gap-2 sm:grid-cols-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={
-              onOpenDepartment
-            }
-            className="border-primary/40 text-primary"
-          >
-            <Building2 className="mr-1.5 h-4 w-4" />
-
-            Open team
-          </Button>
-
-          <Button
-            asChild
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <Link to="/ai/ceo">
-              <BrainCircuit className="mr-1.5 h-4 w-4" />
-
-              Delegate through CEO
-            </Link>
-          </Button>
-        </div>
-
-        <div className="mt-4 rounded-xl border border-border/60 bg-background/30 p-3">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            Direct assignment
-          </p>
-
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            This profile is ready for a direct employee-assignment control,
-            but the current imported workforce API does not expose a safe
-            standalone handoff-creation function. We will connect this when
-            workforce-data.ts is upgraded rather than pretending the task was
-            assigned.
-          </p>
-        </div>
-      </aside>
-    </div>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  warning = false,
-}: {
-  label: string;
-  value: string;
-  warning?: boolean;
-}) {
-  return (
-    <div className="glass-card min-w-0 p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-        {label}
-      </div>
-
-      <div
-        className={
-          warning
-            ? "mt-2 font-display text-2xl font-semibold text-warning"
-            : "mt-2 font-display text-2xl font-semibold"
-        }
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function MiniMetric({
-  label,
-  value,
-  warning = false,
-}: {
-  label: string;
-  value: number;
-  warning?: boolean;
-}) {
-  return (
-    <div className="rounded-lg border border-border/50 bg-background/30 p-2 text-center">
-      <div
-        className={
-          warning
-            ? "text-sm font-semibold text-warning"
-            : "text-sm font-semibold"
-        }
-      >
-        {value}
-      </div>
-
-      <div className="mt-0.5 text-[9px] uppercase tracking-widest text-muted-foreground">
-        {label}
-      </div>
-    </div>
-  );
-}
-
-function QueueCard({
-  icon: Icon,
-  title,
-  value,
-  description,
-  warning = false,
-}: {
-  icon: LucideIcon;
-  title: string;
-  value: number;
-  description: string;
-  warning?: boolean;
-}) {
-  return (
-    <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div
-          className={
-            warning
-              ? "flex h-9 w-9 items-center justify-center rounded-lg bg-warning/10 text-warning"
-              : "flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"
-          }
-        >
-          <Icon className="h-4 w-4" />
-        </div>
-
-        <span
-          className={
-            warning
-              ? "font-display text-2xl font-semibold text-warning"
-              : "font-display text-2xl font-semibold"
-          }
-        >
-          {value}
-        </span>
-      </div>
-
-      <p className="mt-3 text-sm font-medium">
-        {title}
-      </p>
-
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-function ControlMetric({
-  label,
-  value,
-  description,
-  suffix = "",
-}: {
-  label: string;
-  value: number;
-  description: string;
-  suffix?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-        {label}
-      </p>
-
-      <p className="mt-2 font-display text-2xl font-semibold">
-        {value.toLocaleString()}
-        {suffix}
-      </p>
-
-      <p className="mt-1 text-xs text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-function EmployeeDetail({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-      <span className="text-muted-foreground">
-        {label}
-      </span>
-
-      <span className="break-words font-medium text-foreground sm:max-w-[60%] sm:text-right">
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function OwnerRule({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-card/40 p-3 text-sm text-muted-foreground">
-      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-
-      <span>
-        {children}
-      </span>
-    </div>
-  );
-}
-
-function OperationalBadge({
-  state,
-  label,
-}: {
-  state: OperationalState;
-  label: string;
-}) {
-  const className =
-    state === "working"
-      ? "border-success/35 bg-success/10 text-success"
-      : state === "attention"
-        ? "border-destructive/35 bg-destructive/10 text-destructive"
-        : state === "approval"
-          ? "border-warning/35 bg-warning/10 text-warning"
-          : state === "waiting"
-            ? "border-primary/35 bg-primary/10 text-primary"
-            : state === "inactive"
-              ? "border-border bg-secondary/50 text-muted-foreground"
-              : "border-border bg-secondary/40 text-muted-foreground";
-
-  return (
-    <span
-      className={`w-fit max-w-full shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-medium uppercase tracking-wider ${className}`}
-    >
-      {label}
-    </span>
-  );
+  return [
+    headers
+      .map(escapeCsv)
+      .join(","),
+
+    ...rows.map(
+      (row) =>
+        row
+          .map(escapeCsv)
+          .join(","),
+    ),
+  ].join("\n");
 }
