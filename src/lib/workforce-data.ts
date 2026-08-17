@@ -23,8 +23,8 @@ export const COSSA_ORGANISATION_ID =
 /**
  * Temporary compatibility wrapper.
  *
- * Remove this once the generated Supabase Database types include the complete
- * Cossa AI Workforce schema.
+ * Remove this once generated Supabase Database types include the full Cossa AI
+ * Workforce schema.
  */
 const db =
   supabase as unknown as {
@@ -36,12 +36,6 @@ const db =
 /* CONTEXT / PROVIDER SAFETY                                                  */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Keep stored workforce context small.
- *
- * The page-level executor also compacts prompts, but the backend must not
- * preserve oversized context that later gets fed back into the workforce.
- */
 const WORKFORCE_MAX_PRIOR_OUTPUTS =
   2;
 
@@ -56,6 +50,71 @@ const WORKFORCE_MAX_EVIDENCE_CHARS =
 
 const WORKFORCE_MAX_HANDOFF_CONTEXT_TEXT_CHARS =
   1_200;
+
+/* -------------------------------------------------------------------------- */
+/* LEGACY EMPLOYEE KEYS                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * These aliases protect the workforce from semantic duplicates created by
+ * older underscore-style employee keys.
+ *
+ * During workforce synchronisation:
+ *
+ * - if only the legacy record exists, it is safely renamed to the canonical key
+ * - if both legacy and canonical records exist, the canonical row wins
+ * - this helper never deletes duplicate database rows
+ *
+ * Existing duplicate IDs and foreign-key references should still be merged
+ * later through a controlled Supabase database migration.
+ */
+export const LEGACY_EMPLOYEE_KEY_ALIASES = {
+  lead_intake_coordinator:
+    "lead-intake-coordinator",
+
+  product_intelligence_analyst:
+    "product-intelligence-analyst",
+} as const;
+
+export function canonicalEmployeeKey(
+  value: string,
+): string {
+  const key =
+    value.trim();
+
+  return (
+    LEGACY_EMPLOYEE_KEY_ALIASES[
+      key as keyof typeof LEGACY_EMPLOYEE_KEY_ALIASES
+    ] ??
+    key
+  );
+}
+
+function legacyKeysForCanonicalEmployee(
+  canonicalKey: string,
+): string[] {
+  return Object.entries(
+    LEGACY_EMPLOYEE_KEY_ALIASES,
+  )
+    .filter(
+      (
+        [
+          ,
+          mappedCanonicalKey,
+        ],
+      ) =>
+        mappedCanonicalKey ===
+        canonicalKey,
+    )
+    .map(
+      (
+        [
+          legacyKey,
+        ],
+      ) =>
+        legacyKey,
+    );
+}
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
@@ -101,6 +160,17 @@ export type HandoffStatus =
   | "accepted"
   | "rejected"
   | "completed";
+
+export type WorkforceExecutionProvider =
+  | "groq"
+  | "openai"
+  | "cossa_tool"
+  | "internal_rule";
+
+export type WorkforceExecutionKind =
+  | "language_model"
+  | "tool"
+  | "deterministic";
 
 export interface AiEmployee {
   id: string;
@@ -1065,6 +1135,175 @@ export const COSSA_GROWTH_WORKFORCE =
         "active",
     },
 
+    /* ---------------------------------------------------------------------- */
+    /* LEAD HUNTER                                                            */
+    /* ---------------------------------------------------------------------- */
+
+    {
+      employee_key:
+        "lead-hunter",
+
+      name:
+        "Lead Hunter",
+
+      title:
+        "AI Revenue Lead Hunter & Opportunity Intelligence Specialist",
+
+      department:
+        "Revenue Acquisition",
+
+      mission:
+        "Continuously discover, investigate, verify, rank and hand forward legitimate revenue opportunities for Cossa Nexus Holdings and its authorised businesses using evidence-backed public research rather than invented AI leads.",
+
+      responsibilities: [
+        "Use the authorised Cossa Lead Hunter search engine for real public prospect and opportunity research.",
+        "Route actual research through the authenticated /api/lead-hunter/search server workflow instead of pretending that an AI language model searched the internet.",
+        "Use authorised search providers such as Tavily and SerpAPI only through secure server-side infrastructure where their credentials remain protected.",
+        "Search for direct customers, buyer organisations, active requirements, tenders, RFQs, RFPs, supplier-registration opportunities, subcontracting routes, partnership opportunities, property and facility opportunities, digital weaknesses and commercially relevant expansion signals.",
+        "Match opportunities to Cossa Nexus Construction, Cossa Facility Services, Cossa Tech, Cossa AI Growth, NexDocs, Cossa Store and Cossa Nexus Holdings according to the actual service fit.",
+        "Reject Cossa's own companies and domains from the prospect pool.",
+        "Reject competitors that primarily sell the same selected service unless a separate verified procurement, partnership, subcontracting or supplier-panel opportunity exists.",
+        "Reject business directories, generic lists, recruitment firms, vacancy portals, regulatory guidance, forums, trade-show pages and unsupported informational pages when they do not represent a legitimate buyer.",
+        "Inspect official public websites and public contact routes to verify organisation identity, contactability and relevant business evidence.",
+        "Use objective website evidence to identify legitimate digital and conversion gaps without falsely claiming the organisation requested Cossa's services.",
+        "Require strong procurement evidence before treating a tender, RFQ, RFP or supplier-registration opportunity as actionable.",
+        "Verify procurement references, official issuing sources, service relevance, closing dates and current status when the search engine provides those fields.",
+        "Protect the CRM from duplicate lead inflation by checking known email, phone, organisation and source identity before promoting research prospects.",
+        "Rank prospects using fit, intent, evidence quality, timing, contactability, revenue potential, ease to close, recurring-revenue value and geographic suitability.",
+        "Prioritise quick revenue and realistic conversion opportunities while retaining strategically valuable opportunities when supported by evidence.",
+        "Preserve hunt IDs, prospect IDs, source URLs, evidence URLs and existing CRM identifiers whenever the execution layer makes them available.",
+        "Hand qualified prospects and evidence to the Lead Intake Coordinator instead of automatically claiming they are customers.",
+        "Clearly distinguish research prospects, qualified prospects, active opportunities, partnerships, supplier opportunities and formal procurement opportunities.",
+        "Use search credits efficiently. Prefer cached verified provider results when allowed, avoid unnecessary repeated searches and do not invoke a language model merely to perform deterministic filtering.",
+        "Never manufacture an organisation, phone number, email address, website, tender, opportunity, contact person, procurement reference, closing date, buyer need or evidence source.",
+      ],
+
+      kpis: [
+        "Every returned lead or opportunity is traceable to real public evidence.",
+        "Zero fabricated prospects or fabricated contact details.",
+        "Zero Cossa first-party organisations returned as customer prospects.",
+        "Low competitor and directory contamination.",
+        "Low CRM duplicate contamination.",
+        "High proportion of returned prospects with usable public contact routes.",
+        "High evidence quality and source transparency.",
+        "Accurate separation of research prospects from actual active opportunities.",
+        "Formal procurement opportunities contain verifiable official-source evidence before being treated as actionable.",
+        "Commercial ranking favours realistic revenue potential instead of vanity lead volume.",
+        "Provider usage remains cost-aware and avoids unnecessary Groq or other LLM calls for deterministic discovery work.",
+      ],
+
+      capabilities: [
+        "real public prospect discovery",
+        "buyer intelligence",
+        "customer hunting",
+        "B2B lead intelligence",
+        "revenue opportunity hunting",
+        "private-sector prospect research",
+        "government procurement discovery",
+        "nonprofit buyer research",
+        "tender discovery",
+        "RFQ discovery",
+        "RFP discovery",
+        "supplier-registration discovery",
+        "subcontracting opportunity discovery",
+        "partnership opportunity discovery",
+        "property-manager prospecting",
+        "facility buyer prospecting",
+        "construction buyer prospecting",
+        "commercial cleaning prospecting",
+        "technology buyer prospecting",
+        "website opportunity discovery",
+        "digital-gap intelligence",
+        "objective website audit interpretation",
+        "expansion-signal detection",
+        "commercial signal analysis",
+        "competitor detection",
+        "directory rejection",
+        "recruitment-source rejection",
+        "informational-source rejection",
+        "public-source validation",
+        "official-source verification",
+        "independent-domain corroboration",
+        "source trust analysis",
+        "buyer-fit scoring",
+        "intent scoring",
+        "evidence scoring",
+        "timing scoring",
+        "contactability scoring",
+        "revenue-potential scoring",
+        "ease-to-close scoring",
+        "recurring-revenue scoring",
+        "geographic-fit scoring",
+        "sales-priority ranking",
+        "decision-maker routing",
+        "CRM duplicate protection",
+        "entity clustering",
+        "public contact-route discovery",
+        "phone and email evidence use",
+        "procurement deadline validation",
+        "procurement reference validation",
+        "service-match verification",
+        "bid opportunity screening",
+        "commercial shortlisting",
+        "quick-revenue hunting",
+        "easy-win hunting",
+        "strategic opportunity research",
+        "search-budget optimisation",
+        "provider-cache utilisation",
+        "evidence-preserving handoff",
+      ],
+
+      allowed_actions: [
+        "request authorised Lead Hunter searches through the authenticated Cossa Lead Hunter server route",
+        "use evidence returned by Tavily, SerpAPI and other authorised search providers through the server route",
+        "analyse verified public prospect evidence",
+        "inspect authorised public websites through the Lead Hunter workflow",
+        "rank legitimate opportunities",
+        "reject unsupported or misleading search results",
+        "prepare evidence-backed prospect shortlists",
+        "prepare buyer-fit explanations",
+        "prepare decision-maker routing recommendations",
+        "prepare outreach angles based only on verified evidence",
+        "prepare tender and procurement screening intelligence",
+        "prepare lead handoffs to Lead Intake",
+        "preserve hunt and prospect identifiers supplied by the execution layer",
+        "identify missing research integrations precisely",
+      ],
+
+      prohibited_actions: [
+        ...HIGH_RISK_ACTIONS,
+        "invent prospects",
+        "invent organisations",
+        "invent public contact details",
+        "invent buyer intent",
+        "invent tenders",
+        "invent RFQs",
+        "invent RFPs",
+        "invent procurement references",
+        "invent procurement deadlines",
+        "invent supplier-registration opportunities",
+        "invent website weaknesses",
+        "invent decision-maker names",
+        "claim a search ran when the authenticated Lead Hunter route did not run",
+        "claim Tavily or SerpAPI returned evidence when the provider was not actually used",
+        "claim a research prospect is an active buyer without specific supporting evidence",
+        "automatically contact prospects without an authorised communication workflow",
+        "automatically submit tenders",
+        "automatically create commercial commitments",
+        "automatically spend money",
+        "automatically save every search result as a CRM lead merely to increase pipeline counts",
+      ],
+
+      system_instructions:
+        `${INTERNAL_WORK_RULES.join(" ")} You are Cossa's specialist evidence-backed Lead Hunter. Your job is revenue opportunity discovery, not generic brainstorming. You do not fabricate leads. Real hunting must be performed by the authorised Cossa Lead Hunter execution tool that calls the authenticated /api/lead-hunter/search server route. That server route may use Tavily, SerpAPI and other explicitly configured public-research providers while provider secrets remain server-side. Do not pretend to have searched when the tool did not run. Do not replace the real search engine with generic LLM-generated company names. Every prospect must remain tied to public evidence. Distinguish an ordinary research prospect from a specific active opportunity. Buyer fit alone is not buying intent. Website weakness is a prospecting signal, not proof that the organisation requested a supplier. Government procurement must remain tied to an official public-sector source and verified procurement details before being described as actionable. Reject competitors, directories, job sources, informational pages, unsupported opportunities and Cossa's own entities. Use commercial intelligence: fit, intent, evidence, timing, contactability, revenue potential, ease to close, recurring potential, geography and sales priority. Favour quality over lead volume. Zero results is acceptable when evidence does not support a legitimate prospect. Preserve hunt IDs, source records and CRM identifiers whenever they are supplied by the tool executor. Hand legitimate prospects to Lead Intake Coordinator for CRM routing and further qualification. Do not contact prospects, send outreach, submit bids, commit pricing or claim a sale without the correct verified execution workflow.`,
+
+      requires_approval_by_default:
+        false,
+
+      status:
+        "active",
+    },
+
     {
       employee_key:
         "lead-intake-coordinator",
@@ -1079,18 +1318,23 @@ export const COSSA_GROWTH_WORKFORCE =
         "Revenue Operations",
 
       mission:
-        "Turn legitimate incoming enquiries and authorised opportunities into clean, deduplicated and actionable Cossa CRM work.",
+        "Turn legitimate incoming enquiries, Lead Hunter prospects and authorised opportunities into clean, deduplicated and actionable Cossa CRM work.",
 
       responsibilities: [
-        "Review authorised website enquiries, contact messages and CRM records.",
+        "Review authorised website enquiries, Lead Hunter results, contact messages and CRM records.",
         "Identify duplicates and retain original record identifiers.",
+        "Preserve Lead Hunter hunt IDs, prospect IDs, source URLs and existing CRM identifiers when supplied.",
+        "Distinguish research prospects from active opportunities.",
         "Prepare lead classification, routing, service ownership and follow-up requirements.",
+        "Hand valid commercial opportunities to the Sales & Conversion Specialist.",
       ],
 
       kpis: [
         "No duplicate lead inflation.",
-        "Correct service and worker routing.",
+        "Correct service and business-unit routing.",
         "Clear source retention.",
+        "Lead Hunter evidence is retained rather than flattened into unsupported claims.",
+        "Research prospects are not falsely treated as confirmed customers.",
       ],
 
       capabilities: [
@@ -1099,13 +1343,18 @@ export const COSSA_GROWTH_WORKFORCE =
         "lead routing",
         "lead qualification preparation",
         "CRM workflow preparation",
+        "source preservation",
+        "Lead Hunter handoff processing",
+        "service ownership routing",
       ],
 
       allowed_actions: [
         "analyse authorised lead records",
+        "analyse Lead Hunter output",
         "prepare lead-routing recommendations",
         "prepare internal follow-up work",
         "coordinate lead handoffs",
+        "retain source and hunt identifiers",
       ],
 
       prohibited_actions: [
@@ -1113,10 +1362,123 @@ export const COSSA_GROWTH_WORKFORCE =
         "fabricate lead details",
         "create duplicate leads merely to increase pipeline counts",
         "claim customer contact occurred without evidence",
+        "strip evidence boundaries from Lead Hunter results",
       ],
 
       system_instructions:
-        `${INTERNAL_WORK_RULES.join(" ")} Preserve original lead and source identifiers. Do not create duplicate records to inflate activity. Route legitimate work to the correct business unit and worker. Ordinary internal qualification and routing should continue automatically.`,
+        `${INTERNAL_WORK_RULES.join(" ")} Preserve original lead, hunt, prospect and source identifiers. Do not create duplicate records to inflate activity. Lead Hunter research is evidence for qualification, not proof of a customer relationship. Route legitimate work to the correct business unit and to the Sales & Conversion Specialist when a commercial follow-up should be prepared. Ordinary internal qualification and routing should continue automatically.`,
+
+      requires_approval_by_default:
+        false,
+
+      status:
+        "active",
+    },
+
+    {
+      employee_key:
+        "sales-conversion-specialist",
+
+      name:
+        "Sales & Conversion Specialist",
+
+      title:
+        "AI Sales & Conversion Specialist",
+
+      department:
+        "Revenue Operations",
+
+      mission:
+        "Turn legitimate qualified Cossa prospects, enquiries and opportunities into disciplined sales actions, follow-up plans, quotations, proposals and conversion progress without fabricating customer engagement.",
+
+      responsibilities: [
+        "Receive qualified leads from Lead Intake.",
+        "Assess commercial fit, urgency, service need, likely buyer role, decision path and next best action.",
+        "Prioritise opportunities by realistic conversion potential instead of raw lead volume.",
+        "Prepare prospect-specific outreach drafts grounded in verified evidence.",
+        "Prepare call objectives, discovery questions and qualification plans.",
+        "Prepare objection-handling responses for common commercial barriers.",
+        "Prepare follow-up sequences without falsely claiming messages were sent.",
+        "Coordinate quotation requirements with the correct Cossa business unit.",
+        "Coordinate proposal requirements when the opportunity requires a structured commercial proposal.",
+        "Prepare pipeline-stage recommendations from real evidence.",
+        "Identify stalled opportunities and recommend the next legitimate conversion action.",
+        "Separate active opportunities, nurture opportunities, research leads and disqualified leads.",
+        "Protect Cossa from overpromising scope, pricing, timelines, guarantees or results.",
+        "Hand executive commercial decisions and high-risk commitments to the AI CEO and owner.",
+      ],
+
+      kpis: [
+        "Qualified opportunities receive a clear next action.",
+        "No fabricated calls, emails, meetings, quotations or customer responses.",
+        "No unsupported win probability.",
+        "No binding pricing or commercial commitments without proper authority.",
+        "Follow-up is specific to the actual prospect evidence.",
+        "High-value and quick-revenue opportunities are prioritised appropriately.",
+        "Stalled leads receive a clear disposition or next step.",
+        "Sales activity remains traceable to real CRM and workforce records.",
+      ],
+
+      capabilities: [
+        "sales qualification",
+        "commercial qualification",
+        "buyer-fit analysis",
+        "sales-priority analysis",
+        "conversion planning",
+        "pipeline progression",
+        "sales next-best-action planning",
+        "discovery-call preparation",
+        "discovery-question preparation",
+        "outreach drafting",
+        "follow-up drafting",
+        "follow-up sequencing",
+        "objection handling",
+        "proposal coordination",
+        "quotation coordination",
+        "sales messaging",
+        "deal progression analysis",
+        "opportunity prioritisation",
+        "nurture planning",
+        "lead disposition",
+        "conversion-risk identification",
+        "commercial handoff",
+        "sales coaching",
+      ],
+
+      allowed_actions: [
+        "analyse qualified lead and opportunity evidence",
+        "prepare outreach drafts",
+        "prepare call scripts",
+        "prepare discovery questions",
+        "prepare follow-up plans",
+        "prepare objection responses",
+        "prepare quotation requirements",
+        "prepare proposal requirements",
+        "recommend CRM stage progression",
+        "prepare next-best-action recommendations",
+        "prepare internal sales briefs",
+        "hand commercial decisions to AI CEO",
+      ],
+
+      prohibited_actions: [
+        ...HIGH_RISK_ACTIONS,
+        "claim a prospect was contacted without a verified communication record",
+        "claim a meeting occurred without evidence",
+        "claim a quotation was sent without evidence",
+        "claim a proposal was sent without evidence",
+        "claim a customer accepted an offer without evidence",
+        "invent customer objections",
+        "invent customer budget",
+        "invent customer urgency",
+        "invent win probability",
+        "invent prices",
+        "invent discounts",
+        "promise delivery timelines without verified operational input",
+        "send external outreach without an authorised communication workflow",
+      ],
+
+      system_instructions:
+        `${INTERNAL_WORK_RULES.join(" ")} Operate as Cossa's revenue conversion specialist. Lead Hunter finds evidence-backed opportunities. Lead Intake cleans and routes them. You convert the resulting qualified work into disciplined sales preparation and pipeline progress. Never invent prospect contact, customer responses, budgets, meetings, quotations, proposals or sales. A prepared email is a draft until an authorised communication integration sends it and a real execution record proves it. Prepare strong personalised outreach using only the evidence supplied. Use pain points carefully: an observed public weakness may support a sales angle but does not prove the prospect requested Cossa's service. Prefer the next legitimate revenue action over generic advice. Escalate binding pricing, discounts, contracts, sensitive external communication and other genuine high-risk commercial commitments according to owner controls.`,
 
       requires_approval_by_default:
         false,
@@ -1144,7 +1506,7 @@ export const COSSA_GROWTH_WORKFORCE =
       responsibilities: [
         "Review CRM history, quotations and authorised consent information.",
         "Identify dormant or repeat-business opportunities.",
-        "Prepare reactivation recommendations for Lead Intake and the AI CEO.",
+        "Prepare reactivation recommendations for Lead Intake, Sales & Conversion and the AI CEO.",
       ],
 
       kpis: [
@@ -1175,7 +1537,7 @@ export const COSSA_GROWTH_WORKFORCE =
       ],
 
       system_instructions:
-        `${INTERNAL_WORK_RULES.join(" ")} Analyse authorised customer records and respect consent and opt-outs. Internal reactivation analysis should proceed automatically. Actual external communication must use an authorised communication workflow.`,
+        `${INTERNAL_WORK_RULES.join(" ")} Analyse authorised customer records and respect consent and opt-outs. Internal reactivation analysis should proceed automatically. Hand valid opportunities to Lead Intake and Sales & Conversion. Actual external communication must use an authorised communication workflow.`,
 
       requires_approval_by_default:
         false,
@@ -1203,7 +1565,8 @@ export const COSSA_GROWTH_WORKFORCE =
       responsibilities: [
         "Analyse authorised commercial and market information.",
         "Assess fit, timing, constraints and opportunity evidence.",
-        "Hand legitimate opportunities to Lead Intake and the AI CEO.",
+        "Hand legitimate customer-type opportunities to Lead Intake.",
+        "Hand strategic commercial intelligence to the AI CEO.",
       ],
 
       kpis: [
@@ -1234,7 +1597,7 @@ export const COSSA_GROWTH_WORKFORCE =
       ],
 
       system_instructions:
-        `${INTERNAL_WORK_RULES.join(" ")} Produce evidence-backed commercial intelligence. Safe internal opportunity research and matching should proceed automatically. External introductions, negotiations and commitments require an authorised workflow and appropriate approval.`,
+        `${INTERNAL_WORK_RULES.join(" ")} Produce evidence-backed commercial intelligence. Safe internal opportunity research and matching should proceed automatically. Customer-type opportunities should move through Lead Intake and Sales & Conversion. External introductions, negotiations and commitments require an authorised workflow and appropriate approval.`,
 
       requires_approval_by_default:
         false,
@@ -1263,20 +1626,26 @@ export const COSSA_GROWTH_WORKFORCE =
         "Review authorised procurement sources and documents.",
         "Extract deadlines, requirements, eligibility criteria and risks.",
         "Prepare bid-or-no-bid recommendations.",
+        "Retain official source, procurement reference and closing-date evidence.",
+        "Route viable opportunities to the appropriate Cossa business and AI CEO.",
       ],
 
       kpis: [
         "Source-labelled opportunities.",
         "Deadline and requirement accuracy.",
         "No fabricated tender or eligibility claim.",
+        "No expired procurement represented as current.",
       ],
 
       capabilities: [
         "tender analysis",
         "RFQ analysis",
+        "RFP analysis",
         "procurement screening",
         "eligibility review",
         "bid-or-no-bid preparation",
+        "closing-date review",
+        "procurement-source verification",
       ],
 
       allowed_actions: [
@@ -1284,6 +1653,7 @@ export const COSSA_GROWTH_WORKFORCE =
         "prepare eligibility checklists",
         "prepare internal tender briefs",
         "prepare missing-document requirements",
+        "prepare bid-or-no-bid recommendations",
       ],
 
       prohibited_actions: [
@@ -1292,10 +1662,11 @@ export const COSSA_GROWTH_WORKFORCE =
         "sign declarations",
         "commit pricing",
         "claim eligibility without evidence",
+        "claim a tender is active without current evidence",
       ],
 
       system_instructions:
-        `${INTERNAL_WORK_RULES.join(" ")} Internal tender and procurement screening should continue automatically when evidence exists. Tender submission, signed commitments, declarations and binding pricing require owner approval.`,
+        `${INTERNAL_WORK_RULES.join(" ")} Internal tender and procurement screening should continue automatically when evidence exists. Preserve official source, reference, service-match and closing-date evidence. Tender submission, signed commitments, declarations and binding pricing require owner approval.`,
 
       requires_approval_by_default:
         false,
@@ -1368,6 +1739,50 @@ export const COSSA_GROWTH_WORKFORCE =
   ] satisfies readonly WorkforceProfile[];
 
 /* -------------------------------------------------------------------------- */
+/* SOURCE PROFILE INTEGRITY                                                   */
+/* -------------------------------------------------------------------------- */
+
+function assertWorkforceProfileIntegrity(): void {
+  const seen =
+    new Set<string>();
+
+  for (
+    const profile of
+      COSSA_GROWTH_WORKFORCE
+  ) {
+    const canonicalKey =
+      canonicalEmployeeKey(
+        profile.employee_key,
+      );
+
+    if (
+      canonicalKey !==
+      profile.employee_key
+    ) {
+      throw new Error(
+        `Source workforce profile "${profile.employee_key}" uses a legacy key. Use canonical key "${canonicalKey}".`,
+      );
+    }
+
+    if (
+      seen.has(
+        canonicalKey,
+      )
+    ) {
+      throw new Error(
+        `Duplicate source workforce employee key detected: "${canonicalKey}".`,
+      );
+    }
+
+    seen.add(
+      canonicalKey,
+    );
+  }
+}
+
+assertWorkforceProfileIntegrity();
+
+/* -------------------------------------------------------------------------- */
 /* WORKFLOW DEFINITIONS                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -1395,6 +1810,10 @@ interface WorkforceMissionDefinition {
   constraints:
     readonly string[];
 }
+
+/* -------------------------------------------------------------------------- */
+/* GROWTH                                                                     */
+/* -------------------------------------------------------------------------- */
 
 const GROWTH_WORKFLOW_DEFINITION:
   WorkforceMissionDefinition =
@@ -1501,6 +1920,10 @@ const GROWTH_WORKFLOW_DEFINITION:
     ],
   };
 
+/* -------------------------------------------------------------------------- */
+/* STORE                                                                      */
+/* -------------------------------------------------------------------------- */
+
 const STORE_WORKFLOW_DEFINITION:
   WorkforceMissionDefinition =
   {
@@ -1595,6 +2018,10 @@ const STORE_WORKFLOW_DEFINITION:
     ],
   };
 
+/* -------------------------------------------------------------------------- */
+/* TECH                                                                       */
+/* -------------------------------------------------------------------------- */
+
 const TECH_WORKFLOW_DEFINITION:
   WorkforceMissionDefinition =
   {
@@ -1670,46 +2097,42 @@ const TECH_WORKFLOW_DEFINITION:
     ],
   };
 
+/* -------------------------------------------------------------------------- */
+/* DIRECT REVENUE ACQUISITION                                                 */
+/* -------------------------------------------------------------------------- */
+
 const REVENUE_WORKFLOW_DEFINITION:
   WorkforceMissionDefinition =
   {
     prefix:
-      "Revenue intelligence:",
+      "Revenue acquisition:",
 
     instruction:
-      "Coordinate legitimate Cossa lead, reactivation, procurement and commercial intelligence into actionable internal revenue work. Preserve source records, avoid duplicate leads and escalate only high-risk external commitments.",
+      "Hunt legitimate evidence-backed revenue opportunities, route them through Lead Intake, prepare disciplined sales conversion work and produce an executive revenue decision brief. The Lead Hunter must use its real authorised search tool rather than fabricate prospects.",
 
     stages: [
+      {
+        employeeKey:
+          "lead-hunter",
+
+        reason:
+          "Use the authorised Cossa Lead Hunter search system to discover and verify legitimate prospects, active opportunities, procurement signals and commercially relevant buyer evidence.",
+      },
+
       {
         employeeKey:
           "lead-intake-coordinator",
 
         reason:
-          "Review authorised lead and opportunity records, retain original identifiers and determine correct routing.",
+          "Validate, deduplicate, classify and route Lead Hunter results while preserving hunt, source, prospect and CRM identifiers.",
       },
 
       {
         employeeKey:
-          "customer-reactivation-analyst",
+          "sales-conversion-specialist",
 
         reason:
-          "Identify legitimate repeat-business, dormant-customer and retention opportunities from authorised records.",
-      },
-
-      {
-        employeeKey:
-          "broker-deal-intelligence-analyst",
-
-        reason:
-          "Research and assess legitimate commercial, partner, buyer, supplier and deal opportunities.",
-      },
-
-      {
-        employeeKey:
-          "procurement-intelligence-analyst",
-
-        reason:
-          "Review relevant tender, RFQ and procurement opportunities and prepare evidence-backed bid-or-no-bid intelligence.",
+          "Prepare qualification, outreach strategy, discovery questions, follow-up, objection handling, quotation or proposal requirements and the next legitimate conversion action.",
       },
 
       {
@@ -1717,24 +2140,198 @@ const REVENUE_WORKFLOW_DEFINITION:
           "ai-ceo",
 
         reason:
-          "Synthesize revenue and procurement intelligence, resolve routine routing decisions and escalate genuine owner decisions.",
+          "Review revenue evidence, prioritise legitimate opportunities, resolve ordinary internal decisions and escalate only genuine owner-controlled commercial actions.",
       },
     ],
 
     requiredSections: [
+      "Lead Hunter evidence",
+      "prospect and opportunity qualification",
       "lead routing",
-      "customer reactivation intelligence",
-      "commercial opportunities",
-      "procurement opportunities",
-      "AI CEO briefing",
+      "sales conversion plan",
+      "next best actions",
+      "AI CEO revenue briefing",
     ],
 
     constraints: [
-      "Preserve original record identifiers.",
+      "Lead Hunter research must come from the authorised real Lead Hunter execution route.",
+      "Never fabricate a prospect, organisation, phone number, email address, buyer need, tender, procurement reference or evidence source.",
+      "Preserve hunt, prospect, source and existing CRM identifiers when available.",
       "Do not create duplicate leads to inflate pipeline activity.",
-      "Do not fabricate customer, tender, supplier or commercial information.",
-      "Routine internal analysis and routing continue automatically.",
-      "External negotiation, signed submissions and binding commitments require owner authority.",
+      "Do not claim external outreach, meetings, quotations, proposals or sales occurred without verified execution records.",
+      "Routine internal research, qualification, sales preparation and handoffs continue automatically.",
+      "Binding pricing, contracts, sensitive external communication and other high-risk commitments remain owner-controlled.",
+    ],
+  };
+
+/* -------------------------------------------------------------------------- */
+/* CUSTOMER REACTIVATION                                                      */
+/* -------------------------------------------------------------------------- */
+
+const REACTIVATION_WORKFLOW_DEFINITION:
+  WorkforceMissionDefinition =
+  {
+    prefix:
+      "Customer reactivation:",
+
+    instruction:
+      "Identify legitimate dormant-customer, retention and repeat-business opportunities from authorised Cossa CRM evidence, clean them through Lead Intake and prepare disciplined reactivation conversion work.",
+
+    stages: [
+      {
+        employeeKey:
+          "customer-reactivation-analyst",
+
+        reason:
+          "Review authorised CRM history, quotation history and consent evidence for legitimate reactivation opportunities.",
+      },
+
+      {
+        employeeKey:
+          "lead-intake-coordinator",
+
+        reason:
+          "Deduplicate, classify and route valid reactivation opportunities while preserving original customer and CRM identifiers.",
+      },
+
+      {
+        employeeKey:
+          "sales-conversion-specialist",
+
+        reason:
+          "Prepare consent-aware follow-up, sales next actions and conversion strategy without claiming communication already occurred.",
+      },
+
+      {
+        employeeKey:
+          "ai-ceo",
+
+        reason:
+          "Review the reactivation opportunity set and escalate only genuine owner-controlled commercial actions.",
+      },
+    ],
+
+    requiredSections: [
+      "reactivation evidence",
+      "CRM routing",
+      "sales follow-up plan",
+      "AI CEO revenue briefing",
+    ],
+
+    constraints: [
+      "Use authorised CRM history only.",
+      "Respect opt-outs and consent restrictions.",
+      "Do not invent customer history.",
+      "Do not duplicate customer records merely to inflate pipeline activity.",
+      "External communication requires an authorised communication workflow.",
+    ],
+  };
+
+/* -------------------------------------------------------------------------- */
+/* BROKER / DEAL INTELLIGENCE                                                 */
+/* -------------------------------------------------------------------------- */
+
+const BROKER_DEAL_WORKFLOW_DEFINITION:
+  WorkforceMissionDefinition =
+  {
+    prefix:
+      "Commercial deal intelligence:",
+
+    instruction:
+      "Research and evaluate legitimate buyer, partner, broker and commercial deal opportunities. Customer-type opportunities move through Lead Intake and Sales & Conversion while strategic commercial decisions remain owner-controlled.",
+
+    stages: [
+      {
+        employeeKey:
+          "broker-deal-intelligence-analyst",
+
+        reason:
+          "Research and assess legitimate commercial, buyer, partner, supplier and deal opportunities using authorised evidence.",
+      },
+
+      {
+        employeeKey:
+          "lead-intake-coordinator",
+
+        reason:
+          "Route customer-type commercial opportunities into the correct business unit and preserve source identifiers.",
+      },
+
+      {
+        employeeKey:
+          "sales-conversion-specialist",
+
+        reason:
+          "Prepare legitimate commercial next actions, qualification and conversion strategy without inventing negotiations or commitments.",
+      },
+
+      {
+        employeeKey:
+          "ai-ceo",
+
+        reason:
+          "Review strategic fit, commercial risks and owner-controlled decisions.",
+      },
+    ],
+
+    requiredSections: [
+      "commercial opportunity evidence",
+      "lead and business-unit routing",
+      "conversion strategy",
+      "AI CEO decision brief",
+    ],
+
+    constraints: [
+      "Do not fabricate relationships, partnerships or deals.",
+      "Do not claim negotiations occurred without evidence.",
+      "Binding terms and commitments remain owner-controlled.",
+    ],
+  };
+
+/* -------------------------------------------------------------------------- */
+/* PROCUREMENT                                                                */
+/* -------------------------------------------------------------------------- */
+
+const PROCUREMENT_WORKFLOW_DEFINITION:
+  WorkforceMissionDefinition =
+  {
+    prefix:
+      "Procurement intelligence:",
+
+    instruction:
+      "Identify and screen legitimate tender, RFQ, RFP, supplier and public-procurement opportunities. Preserve official evidence and prepare bid-or-no-bid intelligence. Submission and binding commercial commitments remain owner-controlled.",
+
+    stages: [
+      {
+        employeeKey:
+          "procurement-intelligence-analyst",
+
+        reason:
+          "Verify procurement source, reference, service match, current status, closing date, eligibility requirements and bid-or-no-bid factors.",
+      },
+
+      {
+        employeeKey:
+          "ai-ceo",
+
+        reason:
+          "Review procurement evidence, strategic fit, documentation gaps, commercial risks and any owner-controlled submission decision.",
+      },
+    ],
+
+    requiredSections: [
+      "official procurement evidence",
+      "reference and deadline verification",
+      "service and eligibility fit",
+      "bid-or-no-bid recommendation",
+      "AI CEO procurement brief",
+    ],
+
+    constraints: [
+      "Do not fabricate tenders, references, deadlines or eligibility.",
+      "Expired procurement must not be represented as current.",
+      "Official-source evidence is required before treating government procurement as actionable.",
+      "Tender submission, signed declarations and binding pricing remain owner-controlled.",
     ],
   };
 
@@ -1835,10 +2432,6 @@ export interface GrowthCoordinationMissionResult
 /* -------------------------------------------------------------------------- */
 
 export interface CreateDirectEmployeeMissionInput {
-  /**
-   * Supply either employeeId or employeeKey.
-   * employeeId wins when both are provided.
-   */
   employeeId?:
     string |
     null;
@@ -1884,11 +2477,6 @@ export interface CreateDirectEmployeeMissionInput {
     string |
     null;
 
-  /**
-   * Optional structured context from the page initiating the assignment.
-   *
-   * Keep it small. This is not intended to carry full conversation history.
-   */
   context?:
     Record<
       string,
@@ -2031,7 +2619,9 @@ async function rows<T>(
   } =
     await query;
 
-  if (error) {
+  if (
+    error
+  ) {
     throw createDatabaseError(
       operation,
       error,
@@ -2139,6 +2729,53 @@ function compactContextRecord(
   }
 }
 
+function stageNumberFromContext(
+  context:
+    Record<
+      string,
+      unknown
+    >,
+): number | null {
+  const raw =
+    context.stage;
+
+  const parsed =
+    typeof raw ===
+      "number"
+      ? raw
+      : typeof raw ===
+          "string"
+        ? Number(
+            raw,
+          )
+        : NaN;
+
+  if (
+    !Number.isInteger(
+      parsed,
+    ) ||
+    parsed <=
+      0
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function executionOrderFromContext(
+  context:
+    Record<
+      string,
+      unknown
+    >,
+): string | null {
+  return typeof context.execution_order ===
+      "string"
+    ? context.execution_order
+    : null;
+}
+
 /**
  * Returns every handoff that has not reached the only terminal successful
  * state: completed.
@@ -2234,6 +2871,149 @@ async function countPendingMissionApprovals(
     );
 
   return pending.length;
+}
+
+/* -------------------------------------------------------------------------- */
+/* STRICT WORKFLOW ORDER                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Server/data-layer protection against stage skipping.
+ *
+ * The UI already tries to execute the first incomplete handoff, but the
+ * backend must protect itself against direct callers.
+ *
+ * If the target handoff belongs to a strict_sequential workflow, every earlier
+ * numbered stage must already be completed.
+ *
+ * A future production hardening can move the order check + claim operation
+ * into one Supabase/Postgres transaction or RPC for stronger cross-client
+ * atomicity.
+ */
+async function assertPriorStagesCompleted({
+  handoffId,
+  missionId,
+  organisationId,
+}: {
+  handoffId:
+    string;
+
+  missionId:
+    string;
+
+  organisationId:
+    string;
+}): Promise<void> {
+  const missionHandoffs =
+    await rows<
+      Pick<
+        EmployeeHandoff,
+        | "id"
+        | "status"
+        | "context"
+        | "created_at"
+      >
+    >(
+      "Unable to verify workforce stage order",
+
+      db
+        .from(
+          "employee_handoffs",
+        )
+        .select(
+          "id,status,context,created_at",
+        )
+        .eq(
+          "organisation_id",
+          organisationId,
+        )
+        .eq(
+          "mission_id",
+          missionId,
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              true,
+          },
+        ),
+    );
+
+  const target =
+    missionHandoffs.find(
+      (
+        handoff,
+      ) =>
+        handoff.id ===
+        handoffId,
+    );
+
+  if (
+    !target
+  ) {
+    throw new Error(
+      "The workforce handoff was not found while validating stage order.",
+    );
+  }
+
+  if (
+    executionOrderFromContext(
+      target.context,
+    ) !==
+    "strict_sequential"
+  ) {
+    return;
+  }
+
+  const targetStage =
+    stageNumberFromContext(
+      target.context,
+    );
+
+  if (
+    targetStage ===
+    null
+  ) {
+    throw new Error(
+      "This strict sequential handoff has no valid stage number and cannot be safely executed.",
+    );
+  }
+
+  for (
+    const handoff of
+      missionHandoffs
+  ) {
+    if (
+      handoff.id ===
+      target.id
+    ) {
+      continue;
+    }
+
+    const stage =
+      stageNumberFromContext(
+        handoff.context,
+      );
+
+    if (
+      stage ===
+        null ||
+      stage >=
+        targetStage
+    ) {
+      continue;
+    }
+
+    if (
+      handoff.status !==
+      "completed"
+    ) {
+      throw new Error(
+        `Workforce stage ${targetStage} cannot start because earlier stage ${stage} is ${handoff.status}. Earlier workflow stages cannot be skipped.`,
+      );
+    }
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2394,15 +3174,23 @@ export async function getEmployeeByKey(
 ): Promise<
   AiEmployee
 > {
-  const validEmployeeKey =
+  const requestedKey =
     requireNonEmptyValue(
       employeeKey,
       "Employee key",
     );
 
+  const canonicalKey =
+    canonicalEmployeeKey(
+      requestedKey,
+    );
+
   const {
-    data,
-    error,
+    data:
+      canonicalEmployee,
+
+    error:
+      canonicalError,
   } =
     await db
       .from(
@@ -2417,30 +3205,86 @@ export async function getEmployeeByKey(
       )
       .eq(
         "employee_key",
-        validEmployeeKey,
+        canonicalKey,
       )
       .maybeSingle();
 
   if (
-    error
+    canonicalError
   ) {
     throw createDatabaseError(
       "Unable to load AI employee",
-      error,
+      canonicalError,
     );
   }
 
   if (
-    !data
+    canonicalEmployee
   ) {
-    throw new Error(
-      `AI employee "${validEmployeeKey}" was not found.`,
+    return (
+      canonicalEmployee as
+        AiEmployee
     );
   }
 
-  return (
-    data as
-      AiEmployee
+  const legacyKeys =
+    legacyKeysForCanonicalEmployee(
+      canonicalKey,
+    );
+
+  if (
+    legacyKeys.length >
+    0
+  ) {
+    const legacyEmployees =
+      await rows<
+        AiEmployee
+      >(
+        "Unable to load legacy AI employee",
+
+        db
+          .from(
+            "ai_employees",
+          )
+          .select(
+            "*",
+          )
+          .eq(
+            "organisation_id",
+            organisationId,
+          )
+          .in(
+            "employee_key",
+            legacyKeys,
+          )
+          .order(
+            "updated_at",
+            {
+              ascending:
+                false,
+            },
+          ),
+      );
+
+    if (
+      legacyEmployees.length >
+      0
+    ) {
+      if (
+        legacyEmployees.length >
+        1
+      ) {
+        console.warn(
+          `Multiple legacy employee records map to "${canonicalKey}". A controlled database migration should merge them.`,
+        );
+      }
+
+      return legacyEmployees[0];
+    }
+  }
+
+  throw new Error(
+    `AI employee "${canonicalKey}" was not found.`,
   );
 }
 
@@ -2536,6 +3380,175 @@ export function listEmployeeAssignedMissions(
 /* SOURCE PROFILE SYNCHRONISATION                                             */
 /* -------------------------------------------------------------------------- */
 
+function employeeMapByCanonicalKey(
+  employees:
+    AiEmployee[],
+): Map<
+  string,
+  AiEmployee
+> {
+  const result =
+    new Map<
+      string,
+      AiEmployee
+    >();
+
+  for (
+    const employee of
+      employees
+  ) {
+    const canonicalKey =
+      canonicalEmployeeKey(
+        employee.employee_key,
+      );
+
+    const existing =
+      result.get(
+        canonicalKey,
+      );
+
+    if (
+      !existing
+    ) {
+      result.set(
+        canonicalKey,
+        employee,
+      );
+
+      continue;
+    }
+
+    const employeeIsCanonical =
+      employee.employee_key ===
+      canonicalKey;
+
+    const existingIsCanonical =
+      existing.employee_key ===
+      canonicalKey;
+
+    if (
+      employeeIsCanonical &&
+      !existingIsCanonical
+    ) {
+      result.set(
+        canonicalKey,
+        employee,
+      );
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Safely rename a legacy key when no canonical row already exists.
+ *
+ * This prevents the installer from creating another semantic duplicate.
+ *
+ * When both canonical and legacy rows already exist, no destructive merge is
+ * attempted here because missions, runs, approvals and handoffs may reference
+ * the legacy employee ID. Those rows should be merged through a database
+ * migration that repoints all foreign keys atomically.
+ */
+async function migrateUnambiguousLegacyEmployeeKeys(
+  existing:
+    AiEmployee[],
+
+  organisationId:
+    string,
+): Promise<void> {
+  const exactKeys =
+    new Set(
+      existing.map(
+        (
+          employee,
+        ) =>
+          employee.employee_key,
+      ),
+    );
+
+  for (
+    const [
+      legacyKey,
+      canonicalKey,
+    ] of
+      Object.entries(
+        LEGACY_EMPLOYEE_KEY_ALIASES,
+      )
+  ) {
+    const legacyEmployee =
+      existing.find(
+        (
+          employee,
+        ) =>
+          employee.employee_key ===
+          legacyKey,
+      );
+
+    if (
+      !legacyEmployee
+    ) {
+      continue;
+    }
+
+    if (
+      exactKeys.has(
+        canonicalKey,
+      )
+    ) {
+      console.warn(
+        `Legacy workforce employee "${legacyKey}" and canonical employee "${canonicalKey}" both exist. The legacy row was preserved. Run a controlled database migration to merge IDs and foreign-key references.`,
+      );
+
+      continue;
+    }
+
+    const {
+      error,
+    } =
+      await db
+        .from(
+          "ai_employees",
+        )
+        .update({
+          employee_key:
+            canonicalKey,
+
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "organisation_id",
+          organisationId,
+        )
+        .eq(
+          "id",
+          legacyEmployee.id,
+        )
+        .eq(
+          "employee_key",
+          legacyKey,
+        );
+
+    if (
+      error
+    ) {
+      throw createDatabaseError(
+        `Unable to migrate legacy employee key "${legacyKey}"`,
+        error,
+      );
+    }
+
+    exactKeys.delete(
+      legacyKey,
+    );
+
+    exactKeys.add(
+      canonicalKey,
+    );
+  }
+}
+
 async function synchroniseKnownProfiles(
   existing:
     AiEmployee[],
@@ -2543,16 +3556,9 @@ async function synchroniseKnownProfiles(
   organisationId =
     COSSA_ORGANISATION_ID,
 ): Promise<void> {
-  const existingByKey =
-    new Map(
-      existing.map(
-        (
-          employee,
-        ) => [
-          employee.employee_key,
-          employee,
-        ],
-      ),
+  const existingByCanonicalKey =
+    employeeMapByCanonicalKey(
+      existing,
     );
 
   for (
@@ -2560,7 +3566,7 @@ async function synchroniseKnownProfiles(
       COSSA_GROWTH_WORKFORCE
   ) {
     const existingEmployee =
-      existingByKey.get(
+      existingByCanonicalKey.get(
         profile.employee_key,
       );
 
@@ -2631,8 +3637,8 @@ async function synchroniseKnownProfiles(
           organisationId,
         )
         .eq(
-          "employee_key",
-          profile.employee_key,
+          "id",
+          existingEmployee.id,
         );
 
     if (
@@ -2850,7 +3856,9 @@ export async function createMission(
         organisationId,
 
       title,
+
       instruction,
+
       objective,
 
       business_unit_id:
@@ -3022,21 +4030,6 @@ export async function queueMission(
 /* DIRECT EMPLOYEE ASSIGNMENT                                                 */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Creates a REAL one-employee mission.
- *
- * This is the backend operation required by:
- *
- * Employee profile
- * → type task
- * → Assign
- * → real pending handoff
- * → controlled executor claims it
- * → employee produces output
- * → mission completes
- *
- * No external action is automatically enabled.
- */
 export async function createDirectEmployeeMission(
   input:
     CreateDirectEmployeeMissionInput,
@@ -3127,6 +4120,14 @@ export async function createDirectEmployeeMission(
           "Do not invent business facts, performance, account access or completed external actions.",
           "If another employee is genuinely required, state the required handoff clearly in the output. Do not pretend that a handoff record exists unless the system creates it.",
           "High-risk external actions remain owner-controlled.",
+          ...(canonicalEmployeeKey(
+            employee.employee_key,
+          ) ===
+          "lead-hunter"
+            ? [
+                "Lead Hunter discovery must use the authorised Lead Hunter tool executor. Do not fabricate prospects from a language model.",
+              ]
+            : []),
         ],
 
         prohibited_actions: [
@@ -3144,7 +4145,9 @@ export async function createDirectEmployeeMission(
             "direct_employee",
 
           assigned_employee_key:
-            employee.employee_key,
+            canonicalEmployeeKey(
+              employee.employee_key,
+            ),
 
           assigned_employee_name:
             employee.name,
@@ -3223,7 +4226,9 @@ export async function createDirectEmployeeMission(
             1,
 
           employee_key:
-            employee.employee_key,
+            canonicalEmployeeKey(
+              employee.employee_key,
+            ),
 
           previous_employee_key:
             null,
@@ -3380,15 +4385,6 @@ export async function createDirectEmployeeMission(
 /* AI CEO COMMAND                                                             */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Sends work directly to the AI CEO.
- *
- * This deliberately creates a REAL employee assignment rather than pretending
- * that the CEO has already delegated work to other employees.
- *
- * The next upgrade can let the AI CEO create child missions / handoffs after
- * analysing the request.
- */
 export async function createAiCeoCommandMission(
   input:
     CreateAiCeoCommandMissionInput,
@@ -3504,11 +4500,13 @@ export interface ControlledWorkforceRunInput {
     >;
 
   provider:
-    | "groq"
-    | "openai";
+    WorkforceExecutionProvider;
 
   modelName:
     string;
+
+  executionKind?:
+    WorkforceExecutionKind;
 
   priorOutputs:
     string[];
@@ -3532,6 +4530,14 @@ export interface ControlledReviewableOutput {
 
   external_actions_enabled:
     false;
+
+  execution_provider:
+    string |
+    null;
+
+  execution_name:
+    string |
+    null;
 
   source_scope:
     string[];
@@ -3599,6 +4605,187 @@ function compactAuthorisedEvidenceForRun(
           WORKFORCE_MAX_EVIDENCE_CHARS,
         ),
     );
+}
+
+function inferExecutionKind(
+  provider:
+    WorkforceExecutionProvider,
+): WorkforceExecutionKind {
+  if (
+    provider ===
+    "cossa_tool"
+  ) {
+    return "tool";
+  }
+
+  if (
+    provider ===
+    "internal_rule"
+  ) {
+    return "deterministic";
+  }
+
+  return "language_model";
+}
+
+/* -------------------------------------------------------------------------- */
+/* RETAINED RECORD IDS                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Lets specialist executors preserve real source identifiers such as:
+ *
+ * {
+ *   hunt_id: "...",
+ *   prospect_ids: ["..."],
+ *   lead_ids: ["..."]
+ * }
+ *
+ * Do not store provider secrets or oversized payloads here.
+ */
+export async function mergeHandoffRetainedRecordIds(
+  input: {
+    handoffId:
+      string;
+
+    missionId:
+      string;
+
+    recordIds:
+      Record<
+        string,
+        unknown
+      >;
+  },
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  EmployeeHandoff
+> {
+  const {
+    data:
+      existing,
+
+    error:
+      readError,
+  } =
+    await db
+      .from(
+        "employee_handoffs",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "id",
+        input.handoffId,
+      )
+      .eq(
+        "mission_id",
+        input.missionId,
+      )
+      .eq(
+        "organisation_id",
+        organisationId,
+      )
+      .maybeSingle();
+
+  if (
+    readError
+  ) {
+    throw createDatabaseError(
+      "Unable to load workforce handoff identifiers",
+      readError,
+    );
+  }
+
+  if (
+    !existing
+  ) {
+    throw new Error(
+      "The workforce handoff was not found while preserving record identifiers.",
+    );
+  }
+
+  const existingHandoff =
+    existing as
+      EmployeeHandoff;
+
+  const merged =
+    {
+      ...(
+        existingHandoff.retained_record_ids ??
+        {}
+      ),
+
+      ...input.recordIds,
+    };
+
+  const serialised =
+    JSON.stringify(
+      merged,
+    );
+
+  if (
+    serialised.length >
+    12_000
+  ) {
+    throw new Error(
+      "Retained workforce record identifiers are too large. Store full evidence in its dedicated table and retain only identifiers here.",
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await db
+      .from(
+        "employee_handoffs",
+      )
+      .update({
+        retained_record_ids:
+          merged,
+      })
+      .eq(
+        "id",
+        input.handoffId,
+      )
+      .eq(
+        "mission_id",
+        input.missionId,
+      )
+      .eq(
+        "organisation_id",
+        organisationId,
+      )
+      .select(
+        "*",
+      )
+      .maybeSingle();
+
+  if (
+    error
+  ) {
+    throw createDatabaseError(
+      "Unable to preserve workforce record identifiers",
+      error,
+    );
+  }
+
+  if (
+    !data
+  ) {
+    throw new Error(
+      "The workforce record identifiers could not be saved.",
+    );
+  }
+
+  return (
+    data as
+      EmployeeHandoff
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -3834,6 +5021,38 @@ export async function startControlledWorkforceRun(
     );
   }
 
+  await assertPriorStagesCompleted({
+    handoffId:
+      input.handoff.id,
+
+    missionId:
+      input.mission.id,
+
+    organisationId,
+  });
+
+  const canonicalWorkerKey =
+    canonicalEmployeeKey(
+      input.employee.employee_key,
+    );
+
+  if (
+    canonicalWorkerKey ===
+      "lead-hunter" &&
+    input.provider !==
+      "cossa_tool"
+  ) {
+    throw new Error(
+      "Lead Hunter must execute through the authorised Cossa Lead Hunter tool, not through a generic language-model provider.",
+    );
+  }
+
+  const executionKind =
+    input.executionKind ??
+    inferExecutionKind(
+      input.provider,
+    );
+
   const startedAt =
     new Date().toISOString();
 
@@ -3905,6 +5124,12 @@ export async function startControlledWorkforceRun(
             kind:
               "controlled_workforce_stage",
 
+            execution_kind:
+              executionKind,
+
+            worker_key:
+              canonicalWorkerKey,
+
             objective:
               input.mission.objective,
 
@@ -3933,7 +5158,7 @@ export async function startControlledWorkforceRun(
             authorised_evidence:
               compactAuthorisedEvidenceForRun(
                 input.authorisedEvidence ??
-                [],
+                  [],
               ),
 
             context_limits: {
@@ -3952,6 +5177,30 @@ export async function startControlledWorkforceRun(
 
             external_actions_enabled:
               false,
+
+            ...(
+              canonicalWorkerKey ===
+              "lead-hunter"
+                ? {
+                    lead_hunter_execution: {
+                      required_engine:
+                        "authenticated_server_tool",
+
+                      route:
+                        "/api/lead-hunter/search",
+
+                      generic_llm_search_allowed:
+                        false,
+
+                      fabricated_prospects_allowed:
+                        false,
+
+                      automatic_external_outreach:
+                        false,
+                    },
+                  }
+                : {}
+            ),
           },
 
           started_at:
@@ -4206,6 +5455,8 @@ export async function completeControlledWorkforceRun(
         MissionRun,
         | "id"
         | "mission_id"
+        | "model_provider"
+        | "model_name"
       >;
 
     handoff:
@@ -4258,6 +5509,29 @@ export async function completeControlledWorkforceRun(
   const completedAt =
     new Date().toISOString();
 
+  const canonicalWorkerKey =
+    canonicalEmployeeKey(
+      input.employee.employee_key,
+    );
+
+  const sourceScope =
+    canonicalWorkerKey ===
+    "lead-hunter"
+      ? [
+          "authenticated Cossa Lead Hunter server route",
+          "real public search-provider evidence returned by the Lead Hunter route",
+          "public website and contact evidence inspected by the Lead Hunter route",
+          "Lead Hunter buyer-fit, verification, procurement and duplicate-protection rules",
+          "recorded mission objective",
+        ]
+      : [
+          "verified Cossa knowledge supplied by the Cossa AI route",
+          "authorised operational records supplied by the Cossa AI route",
+          "authorised evidence recorded in the mission run",
+          "recorded mission objective",
+          "earlier workforce outputs",
+        ];
+
   const output:
     ControlledReviewableOutput =
     {
@@ -4265,7 +5539,7 @@ export async function completeControlledWorkforceRun(
         "reviewable_draft",
 
       worker_key:
-        input.employee.employee_key,
+        canonicalWorkerKey,
 
       worker_name:
         input.employee.name,
@@ -4276,13 +5550,14 @@ export async function completeControlledWorkforceRun(
       external_actions_enabled:
         false,
 
-      source_scope: [
-        "verified Cossa knowledge supplied by the Cossa AI route",
-        "authorised operational records supplied by the Cossa AI route",
-        "authorised evidence recorded in the mission run",
-        "recorded mission objective",
-        "earlier workforce outputs",
-      ],
+      execution_provider:
+        input.run.model_provider,
+
+      execution_name:
+        input.run.model_name,
+
+      source_scope:
+        sourceScope,
 
       content,
     };
@@ -4531,7 +5806,7 @@ export async function failControlledWorkforceRun(
         0,
         1_000,
       ) ||
-    "The provider did not return a usable workforce output.";
+    "The workforce executor did not return a usable output.";
 
   const {
     error:
@@ -5180,13 +6455,25 @@ export async function installCossaGrowthWorkforce(
 ): Promise<
   AiEmployee[]
 > {
+  assertWorkforceProfileIntegrity();
+
   const existing =
     await listEmployees(
       organisationId,
     );
 
-  await synchroniseKnownProfiles(
+  await migrateUnambiguousLegacyEmployeeKeys(
     existing,
+    organisationId,
+  );
+
+  const afterLegacyMigration =
+    await listEmployees(
+      organisationId,
+    );
+
+  await synchroniseKnownProfiles(
+    afterLegacyMigration,
     organisationId,
   );
 
@@ -5195,13 +6482,15 @@ export async function installCossaGrowthWorkforce(
       organisationId,
     );
 
-  const existingKeys =
+  const canonicalExistingKeys =
     new Set(
       refreshedExisting.map(
         (
           employee,
         ) =>
-          employee.employee_key,
+          canonicalEmployeeKey(
+            employee.employee_key,
+          ),
       ),
     );
 
@@ -5210,7 +6499,7 @@ export async function installCossaGrowthWorkforce(
       (
         profile,
       ) =>
-        !existingKeys.has(
+        !canonicalExistingKeys.has(
           profile.employee_key,
         ),
     );
@@ -5285,15 +6574,8 @@ async function createCollaborationMission(
     );
 
   const employeeByKey =
-    new Map(
-      employees.map(
-        (
-          employee,
-        ) => [
-          employee.employee_key,
-          employee,
-        ],
-      ),
+    employeeMapByCanonicalKey(
+      employees,
     );
 
   const missingKeys =
@@ -5302,7 +6584,9 @@ async function createCollaborationMission(
         (
           stage,
         ) =>
-          stage.employeeKey,
+          canonicalEmployeeKey(
+            stage.employeeKey,
+          ),
       )
       .filter(
         (
@@ -5328,7 +6612,9 @@ async function createCollaborationMission(
         stage,
       ) =>
         employeeByKey.get(
-          stage.employeeKey,
+          canonicalEmployeeKey(
+            stage.employeeKey,
+          ),
         ) as
           AiEmployee,
     );
@@ -5422,9 +6708,14 @@ async function createCollaborationMission(
                   1,
 
                 employee_key:
-                  stage.employeeKey,
+                  canonicalEmployeeKey(
+                    stage.employeeKey,
+                  ),
               }),
             ),
+
+          execution_order:
+            "strict_sequential",
 
           safe_internal_work:
             "continue_automatically",
@@ -5489,25 +6780,31 @@ async function createCollaborationMission(
             definition.stages.length,
 
           employee_key:
-            stage.employeeKey,
+            canonicalEmployeeKey(
+              stage.employeeKey,
+            ),
 
           previous_employee_key:
             index ===
             0
               ? null
-              : definition.stages[
-                  index -
-                  1
-                ].employeeKey,
+              : canonicalEmployeeKey(
+                  definition.stages[
+                    index -
+                    1
+                  ].employeeKey,
+                ),
 
           next_employee_key:
             index <
             definition.stages.length -
               1
-              ? definition.stages[
-                  index +
-                  1
-                ].employeeKey
+              ? canonicalEmployeeKey(
+                  definition.stages[
+                    index +
+                    1
+                  ].employeeKey,
+                )
               : null,
 
           workflow:
@@ -5766,9 +7063,20 @@ export async function createTechDeliveryMission(
 }
 
 /* -------------------------------------------------------------------------- */
-/* REVENUE / PROCUREMENT COORDINATION                                         */
+/* DIRECT REVENUE ACQUISITION                                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Compatibility export.
+ *
+ * Existing callers can keep using createRevenueIntelligenceMission(), but its
+ * architecture is now the proper direct-acquisition revenue line:
+ *
+ * Lead Hunter
+ * → Lead Intake
+ * → Sales & Conversion
+ * → AI CEO
+ */
 export async function createRevenueIntelligenceMission(
   input:
     CreateCoordinationMissionInput,
@@ -5780,6 +7088,82 @@ export async function createRevenueIntelligenceMission(
 > {
   return createCollaborationMission(
     REVENUE_WORKFLOW_DEFINITION,
+    input,
+    organisationId,
+  );
+}
+
+export async function createRevenueAcquisitionMission(
+  input:
+    CreateCoordinationMissionInput,
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  CoordinationMissionResult
+> {
+  return createCollaborationMission(
+    REVENUE_WORKFLOW_DEFINITION,
+    input,
+    organisationId,
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* CUSTOMER REACTIVATION                                                      */
+/* -------------------------------------------------------------------------- */
+
+export async function createCustomerReactivationMission(
+  input:
+    CreateCoordinationMissionInput,
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  CoordinationMissionResult
+> {
+  return createCollaborationMission(
+    REACTIVATION_WORKFLOW_DEFINITION,
+    input,
+    organisationId,
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* BROKER / DEAL INTELLIGENCE                                                 */
+/* -------------------------------------------------------------------------- */
+
+export async function createBrokerDealIntelligenceMission(
+  input:
+    CreateCoordinationMissionInput,
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  CoordinationMissionResult
+> {
+  return createCollaborationMission(
+    BROKER_DEAL_WORKFLOW_DEFINITION,
+    input,
+    organisationId,
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* PROCUREMENT                                                                */
+/* -------------------------------------------------------------------------- */
+
+export async function createProcurementIntelligenceMission(
+  input:
+    CreateCoordinationMissionInput,
+
+  organisationId =
+    COSSA_ORGANISATION_ID,
+): Promise<
+  CoordinationMissionResult
+> {
+  return createCollaborationMission(
+    PROCUREMENT_WORKFLOW_DEFINITION,
     input,
     organisationId,
   );
