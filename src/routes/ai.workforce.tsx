@@ -31,7 +31,6 @@ import {
   Command,
   FileCheck2,
   FilePenLine,
-  Filter,
   Globe2,
   ImageIcon,
   KeyRound,
@@ -55,9 +54,11 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 
 import {
+  canonicalEmployeeKey,
   COSSA_GROWTH_WORKFORCE,
   completeControlledWorkforceRun,
   createGrowthCoordinationMission,
+  createRevenueAcquisitionMission,
   failControlledWorkforceRun,
   installCossaGrowthWorkforce,
   listEmployeeHandoffs,
@@ -65,6 +66,7 @@ import {
   listMissions,
   listPendingApprovals,
   listWorkforceRuns,
+  mergeHandoffRetainedRecordIds,
   startControlledWorkforceRun,
   type AiEmployee,
   type Approval,
@@ -72,6 +74,20 @@ import {
   type Mission,
   type MissionRun,
 } from "@/lib/workforce-data";
+
+import {
+  DEFAULT_LEAD_HUNTER_REQUEST,
+  huntProspects,
+  minimumDepthForServiceCount,
+  saveProspectsToCrm,
+  validateSearchRequest,
+  type LeadHunterCompany,
+  type LeadHunterObjective,
+  type LeadHunterProspect,
+  type LeadHunterRevenueMode,
+  type LeadHunterSearchRequest,
+  type LeadHunterServiceCategory,
+} from "@/lib/lead-hunter-data";
 
 import { streamChat } from "@/lib/ai-stream";
 
@@ -100,6 +116,10 @@ type WorkforceDepartment =
   | "growth"
   | "store"
   | "tech"
+  | "revenue";
+
+type WorkforceKind =
+  | "growth"
   | "revenue";
 
 interface WorkforceSearch {
@@ -154,6 +174,18 @@ interface EmployeeDirectoryItem {
   departmentKeys: string[];
   responsibilityLabels: string[];
   searchText: string;
+}
+
+interface ExecutableWorkflowStep {
+  key: string;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+}
+
+interface LeadHunterExecutionResult {
+  content: string;
+  retainedRecordIds: Record<string, unknown>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -229,7 +261,7 @@ export const Route = createFileRoute("/ai/workforce")({
       {
         name: "description",
         content:
-          "Cossa Nexus Holdings AI company command centre for departments, employees, coordinated missions, operational execution and owner-controlled actions.",
+          "Cossa Nexus Holdings AI company command centre for departments, employees, coordinated missions, real Lead Hunter execution and owner-controlled actions.",
       },
     ],
   }),
@@ -242,107 +274,158 @@ export const Route = createFileRoute("/ai/workforce")({
 const GROWTH_MISSION_PREFIX =
   "Growth coordination:";
 
+const REVENUE_MISSION_PREFIX =
+  "Revenue acquisition:";
+
 const DEFAULT_WORKFORCE_PROVIDER =
   "groq" as const;
 
 const DEFAULT_WORKFORCE_MODEL =
   "llama-3.3-70b-versatile";
 
-/**
- * Keep workforce calls significantly below historical provider ceilings.
- *
- * The page should pass concise operating context, not a book.
- */
-const MAX_STAGE_PROMPT_CHARS = 6_000;
+const LEAD_HUNTER_TOOL_PROVIDER =
+  "cossa_tool" as const;
 
-const MAX_PRIOR_OUTPUTS = 2;
+const LEAD_HUNTER_TOOL_NAME =
+  "lead-hunter-evidence-engine-v1";
 
-const MAX_PRIOR_OUTPUT_CHARS = 900;
+const MAX_STAGE_PROMPT_CHARS =
+  6_000;
 
-const MAX_AUTHORISEDEVIDENCE_ITEMS = 2;
+const MAX_PRIOR_OUTPUTS =
+  2;
 
-const MAX_AUTHORISEDEVIDENCE_CHARS = 1_200;
+const MAX_PRIOR_OUTPUT_CHARS =
+  900;
 
-const MAX_HANDOFF_CONTEXT_CHARS = 700;
+const MAX_AUTHORISED_EVIDENCE_ITEMS =
+  2;
 
-const PROVIDER_MAX_ATTEMPTS = 3;
+const MAX_AUTHORISED_EVIDENCE_CHARS =
+  1_200;
+
+const MAX_HANDOFF_CONTEXT_CHARS =
+  700;
+
+const MAX_RETAINED_RECORD_CONTEXT_CHARS =
+  1_200;
+
+const PROVIDER_MAX_ATTEMPTS =
+  3;
 
 const PROVIDER_RETRY_DELAYS_MS = [
   2_000,
   5_000,
 ] as const;
 
-const WORKFORCE_STAGE_DELAY_MS = 2_000;
+const WORKFORCE_STAGE_DELAY_MS =
+  2_000;
+
+const DEFAULT_WORKFORCE_HUNT_RESULTS =
+  10;
 
 /* -------------------------------------------------------------------------- */
-/* EXECUTABLE GROWTH WORKFLOW                                                 */
+/* EXECUTABLE WORKFLOWS                                                       */
 /* -------------------------------------------------------------------------- */
 
-const EXECUTABLE_GROWTH_WORKFLOW = [
-  {
-    key: "website-seo-monitor",
-    label: "Website intelligence",
-    description:
-      "Checks authorised Cossa web properties and passes verified website, SEO and content observations into the Growth system.",
-    icon: Globe2,
-  },
-  {
-    key: "social-strategy-planner",
-    label: "Social strategy",
-    description:
-      "Builds channel strategy, audience direction, campaign angles, positioning and marketing priorities.",
-    icon: Megaphone,
-  },
-  {
-    key: "content-writer",
-    label: "Content production",
-    description:
-      "Produces marketing, educational, awareness and conversion-focused written content.",
-    icon: FilePenLine,
-  },
-  {
-    key: "creative-media-producer",
-    label: "Creative media",
-    description:
-      "Creates production-ready visual requirements for graphics, campaigns, banners and media.",
-    icon: ImageIcon,
-  },
-  {
-    key: "social-schedule-coordinator",
-    label: "Content coordination",
-    description:
-      "Organises approved copy and creative packages into channel schedules and publishing queues.",
-    icon: PanelTop,
-  },
-  {
-    key: "social-media-manager",
-    label: "Social management",
-    description:
-      "Owns channel readiness, publishing preparation and authorised social execution.",
-    icon: Megaphone,
-  },
-  {
-    key: "account-growth-analyst",
-    label: "Growth analysis",
-    description:
-      "Analyses authorised account and campaign evidence for growth and conversion improvements.",
-    icon: BarChart3,
-  },
-  {
-    key: "paid-media-specialist",
-    label: "Paid media",
-    description:
-      "Prepares advertising strategy and optimisation recommendations without unauthorised spend.",
-    icon: KeyRound,
-  },
-  {
-    key: "ai-ceo",
-    label: "AI CEO",
-    description:
-      "Synthesises workforce outputs and escalates only genuine owner decisions.",
-    icon: BrainCircuit,
-  },
-] as const;
+const EXECUTABLE_GROWTH_WORKFLOW:
+  readonly ExecutableWorkflowStep[] = [
+    {
+      key: "website-seo-monitor",
+      label: "Website intelligence",
+      description:
+        "Checks authorised Cossa web properties and passes verified website, SEO and content observations into the Growth system.",
+      icon: Globe2,
+    },
+    {
+      key: "social-strategy-planner",
+      label: "Social strategy",
+      description:
+        "Builds channel strategy, audience direction, campaign angles, positioning and marketing priorities.",
+      icon: Megaphone,
+    },
+    {
+      key: "content-writer",
+      label: "Content production",
+      description:
+        "Produces marketing, educational, awareness and conversion-focused written content.",
+      icon: FilePenLine,
+    },
+    {
+      key: "creative-media-producer",
+      label: "Creative media",
+      description:
+        "Creates production-ready visual requirements for graphics, campaigns, banners and media.",
+      icon: ImageIcon,
+    },
+    {
+      key: "social-schedule-coordinator",
+      label: "Content coordination",
+      description:
+        "Organises approved copy and creative packages into channel schedules and publishing queues.",
+      icon: PanelTop,
+    },
+    {
+      key: "social-media-manager",
+      label: "Social management",
+      description:
+        "Owns channel readiness, publishing preparation and authorised social execution.",
+      icon: Megaphone,
+    },
+    {
+      key: "account-growth-analyst",
+      label: "Growth analysis",
+      description:
+        "Analyses authorised account and campaign evidence for growth and conversion improvements.",
+      icon: BarChart3,
+    },
+    {
+      key: "paid-media-specialist",
+      label: "Paid media",
+      description:
+        "Prepares advertising strategy and optimisation recommendations without unauthorised spend.",
+      icon: KeyRound,
+    },
+    {
+      key: "ai-ceo",
+      label: "AI CEO",
+      description:
+        "Synthesises workforce outputs and escalates only genuine owner decisions.",
+      icon: BrainCircuit,
+    },
+  ];
+
+const EXECUTABLE_REVENUE_WORKFLOW:
+  readonly ExecutableWorkflowStep[] = [
+    {
+      key: "lead-hunter",
+      label: "Lead Hunter",
+      description:
+        "Uses Cossa's authenticated evidence-backed search system to discover real commercial opportunities without fabricating prospects.",
+      icon: Search,
+    },
+    {
+      key: "lead-intake-coordinator",
+      label: "Lead Intake",
+      description:
+        "Preserves source records, checks routing and prepares verified Hunter results for sales work.",
+      icon: ClipboardList,
+    },
+    {
+      key: "sales-conversion-specialist",
+      label: "Sales & Conversion",
+      description:
+        "Turns verified leads into qualification, outreach, discovery, quotation and conversion next actions.",
+      icon: BarChart3,
+    },
+    {
+      key: "ai-ceo",
+      label: "AI CEO",
+      description:
+        "Reviews revenue evidence, prioritises opportunities and escalates only genuine owner-controlled actions.",
+      icon: BrainCircuit,
+    },
+  ];
 
 /* -------------------------------------------------------------------------- */
 /* DEPARTMENT MODEL                                                           */
@@ -419,10 +502,12 @@ const DEPARTMENTS: DepartmentDefinition[] = [
     name: "Revenue & Procurement",
     shortName: "Revenue",
     description:
-      "Lead handling, customer reactivation, commercial opportunities, sourcing, procurement and deal intelligence.",
+      "Lead hunting, lead intake, sales conversion, customer reactivation, commercial opportunities and procurement intelligence.",
     icon: Search,
     employeeKeys: [
+      "lead-hunter",
       "lead-intake-coordinator",
+      "sales-conversion-specialist",
       "customer-reactivation-analyst",
       "broker-deal-intelligence-analyst",
       "procurement-intelligence-analyst",
@@ -434,8 +519,8 @@ const DEPARTMENTS: DepartmentDefinition[] = [
 /* RESPONSIBILITY / SEARCH MATRIX                                             */
 /* -------------------------------------------------------------------------- */
 
-const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
-  [
+const RESPONSIBILITY_MATRIX:
+  ResponsibilityDefinition[] = [
     {
       employeeKey: "ai-ceo",
       label: "Executive coordination",
@@ -451,6 +536,56 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
         "strategy",
         "manage team",
         "who should do this",
+      ],
+    },
+
+    {
+      employeeKey: "lead-hunter",
+      label: "Revenue hunting",
+      keywords: [
+        "hunter",
+        "lead hunter",
+        "find customers",
+        "find clients",
+        "prospects",
+        "prospecting",
+        "customer acquisition",
+        "find buyers",
+        "buyer intent",
+        "sales prospects",
+        "new customers",
+        "find opportunities",
+        "quick revenue",
+        "cash flow",
+        "commercial opportunity",
+        "tender search",
+        "rfq search",
+        "website prospects",
+        "maintenance prospects",
+        "cleaning prospects",
+        "construction prospects",
+      ],
+    },
+
+    {
+      employeeKey:
+        "sales-conversion-specialist",
+      label: "Sales & conversion",
+      keywords: [
+        "sales",
+        "conversion",
+        "close lead",
+        "close customer",
+        "qualify lead",
+        "follow up",
+        "sales follow up",
+        "discovery questions",
+        "objection handling",
+        "quotation",
+        "proposal",
+        "sales strategy",
+        "outreach",
+        "convert prospect",
       ],
     },
 
@@ -472,8 +607,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "social-strategy-planner",
+      employeeKey: "social-strategy-planner",
       label: "Social strategy",
       keywords: [
         "social strategy",
@@ -511,8 +645,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "creative-media-producer",
+      employeeKey: "creative-media-producer",
       label: "Creative & design production",
       keywords: [
         "flyer",
@@ -534,8 +667,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "social-schedule-coordinator",
+      employeeKey: "social-schedule-coordinator",
       label: "Content scheduling",
       keywords: [
         "schedule",
@@ -567,8 +699,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "account-growth-analyst",
+      employeeKey: "account-growth-analyst",
       label: "Growth analytics",
       keywords: [
         "analytics",
@@ -585,8 +716,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "paid-media-specialist",
+      employeeKey: "paid-media-specialist",
       label: "Paid advertising",
       keywords: [
         "ads",
@@ -604,8 +734,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "store-operations-manager",
+      employeeKey: "store-operations-manager",
       label: "Store operations",
       keywords: [
         "store",
@@ -619,8 +748,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "product-intelligence-analyst",
+      employeeKey: "product-intelligence-analyst",
       label: "Product intelligence",
       keywords: [
         "product",
@@ -636,8 +764,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "supplier-sourcing-analyst",
+      employeeKey: "supplier-sourcing-analyst",
       label: "Supplier sourcing",
       keywords: [
         "supplier",
@@ -652,8 +779,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "broker-deal-intelligence-analyst",
+      employeeKey: "broker-deal-intelligence-analyst",
       label: "Deals & partnerships",
       keywords: [
         "deal",
@@ -668,8 +794,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "procurement-intelligence-analyst",
+      employeeKey: "procurement-intelligence-analyst",
       label: "Procurement intelligence",
       keywords: [
         "tender",
@@ -683,8 +808,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "customer-reactivation-analyst",
+      employeeKey: "customer-reactivation-analyst",
       label: "Customer reactivation",
       keywords: [
         "reactivate customer",
@@ -698,8 +822,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "lead-intake-coordinator",
+      employeeKey: "lead-intake-coordinator",
       label: "Lead intake",
       keywords: [
         "lead",
@@ -710,12 +833,12 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
         "customer enquiry",
         "sales lead",
         "lead intake",
+        "route lead",
       ],
     },
 
     {
-      employeeKey:
-        "tech-solutions-specialist",
+      employeeKey: "tech-solutions-specialist",
       label: "Technology solutions",
       keywords: [
         "tech",
@@ -730,8 +853,7 @@ const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] =
     },
 
     {
-      employeeKey:
-        "website-delivery-specialist",
+      employeeKey: "website-delivery-specialist",
       label: "Website delivery",
       keywords: [
         "website",
@@ -829,10 +951,8 @@ function formatDateTime(
   return date.toLocaleString(
     "en-ZA",
     {
-      dateStyle:
-        "medium",
-      timeStyle:
-        "short",
+      dateStyle: "medium",
+      timeStyle: "short",
     },
   );
 }
@@ -881,7 +1001,7 @@ function normaliseErrorMessage(
     return error;
   }
 
-  return "Unknown workforce provider error.";
+  return "Unknown workforce execution error.";
 }
 
 function isRetryableProviderError(
@@ -918,6 +1038,86 @@ function isRetryableProviderError(
   );
 }
 
+function uniqueStrings(
+  values: string[],
+): string[] {
+  return [
+    ...new Set(
+      values
+        .map(
+          (value) =>
+            value.trim(),
+        )
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/* -------------------------------------------------------------------------- */
+/* MISSION / WORKFLOW HELPERS                                                 */
+/* -------------------------------------------------------------------------- */
+
+function missionWorkforceKind(
+  mission: Mission | null,
+): WorkforceKind {
+  if (
+    mission?.title.startsWith(
+      REVENUE_MISSION_PREFIX,
+    )
+  ) {
+    return "revenue";
+  }
+
+  return "growth";
+}
+
+function workflowForMission(
+  mission: Mission | null,
+): readonly ExecutableWorkflowStep[] {
+  return missionWorkforceKind(
+    mission,
+  ) === "revenue"
+    ? EXECUTABLE_REVENUE_WORKFLOW
+    : EXECUTABLE_GROWTH_WORKFLOW;
+}
+
+function commandLooksLikeRevenueWork(
+  command: string,
+): boolean {
+  const value =
+    command.toLowerCase();
+
+  return [
+    "find customer",
+    "find customers",
+    "find client",
+    "find clients",
+    "find lead",
+    "find leads",
+    "lead hunter",
+    "prospect",
+    "prospects",
+    "new customers",
+    "new clients",
+    "sales opportunity",
+    "revenue opportunity",
+    "quick revenue",
+    "cash flow",
+    "cashflow",
+    "tender",
+    "rfq",
+    "request for quotation",
+    "customer acquisition",
+    "buyer",
+    "buyers",
+  ].some(
+    (marker) =>
+      value.includes(
+        marker,
+      ),
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* SEARCH HELPERS                                                             */
 /* -------------------------------------------------------------------------- */
@@ -925,10 +1125,15 @@ function isRetryableProviderError(
 function departmentKeysForEmployee(
   employeeKey: string,
 ): string[] {
+  const canonicalKey =
+    canonicalEmployeeKey(
+      employeeKey,
+    );
+
   return DEPARTMENTS.filter(
     (department) =>
       department.employeeKeys.includes(
-        employeeKey,
+        canonicalKey,
       ),
   ).map(
     (department) =>
@@ -939,10 +1144,15 @@ function departmentKeysForEmployee(
 function responsibilityLabelsForEmployee(
   employeeKey: string,
 ): string[] {
+  const canonicalKey =
+    canonicalEmployeeKey(
+      employeeKey,
+    );
+
   return RESPONSIBILITY_MATRIX.filter(
     (item) =>
       item.employeeKey ===
-      employeeKey,
+      canonicalKey,
   ).map(
     (item) =>
       item.label,
@@ -952,11 +1162,16 @@ function responsibilityLabelsForEmployee(
 function searchTermsForEmployee(
   employee: AiEmployee,
 ): string {
+  const canonicalKey =
+    canonicalEmployeeKey(
+      employee.employee_key,
+    );
+
   const responsibilityTerms =
     RESPONSIBILITY_MATRIX.filter(
       (item) =>
         item.employeeKey ===
-        employee.employee_key,
+        canonicalKey,
     ).flatMap(
       (item) => [
         item.label,
@@ -968,7 +1183,7 @@ function searchTermsForEmployee(
     DEPARTMENTS.filter(
       (department) =>
         department.employeeKeys.includes(
-          employee.employee_key,
+          canonicalKey,
         ),
     ).flatMap(
       (department) => [
@@ -981,7 +1196,7 @@ function searchTermsForEmployee(
   return [
     employee.name,
     employee.title,
-    employee.employee_key,
+    canonicalKey,
     employee.department ?? "",
     employee.mission ?? "",
     ...responsibilityTerms,
@@ -1013,7 +1228,9 @@ function searchScore(
     employee.employee.title.toLowerCase();
 
   const employeeKey =
-    employee.employee.employee_key.toLowerCase();
+    canonicalEmployeeKey(
+      employee.employee.employee_key,
+    ).toLowerCase();
 
   if (
     employeeName === q ||
@@ -1046,7 +1263,7 @@ function searchScore(
   ) {
     if (
       responsibility.employeeKey !==
-      employee.employee.employee_key
+      employeeKey
     ) {
       continue;
     }
@@ -1128,13 +1345,13 @@ function compactAuthorisedEvidence(
     .filter(Boolean)
     .slice(
       0,
-      MAX_AUTHORISEDEVIDENCE_ITEMS,
+      MAX_AUTHORISED_EVIDENCE_ITEMS,
     )
     .map(
       (item) =>
         clampText(
           item,
-          MAX_AUTHORISEDEVIDENCE_CHARS,
+          MAX_AUTHORISED_EVIDENCE_CHARS,
         ),
     );
 }
@@ -1149,13 +1366,27 @@ function handoffStageNumber(
   const stage =
     handoff.context?.stage;
 
-  return (
-    typeof stage ===
-      "number" &&
+  if (
+    typeof stage === "number" &&
     Number.isFinite(stage)
-  )
-    ? stage
-    : null;
+  ) {
+    return stage;
+  }
+
+  if (
+    typeof stage === "string"
+  ) {
+    const parsed =
+      Number(stage);
+
+    if (
+      Number.isFinite(parsed)
+    ) {
+      return parsed;
+    }
+  }
+
+  return null;
 }
 
 function sortWorkflowHandoffs(
@@ -1197,15 +1428,13 @@ function sortWorkflowHandoffs(
   );
 }
 
-function nextWorkflowEmployeeForHandoff({
+function nextWorkflowHandoffForHandoff({
   currentHandoff,
   workflowHandoffs,
-  employees,
 }: {
   currentHandoff: EmployeeHandoff;
   workflowHandoffs: EmployeeHandoff[];
-  employees: AiEmployee[];
-}): AiEmployee | null {
+}): EmployeeHandoff | null {
   const ordered =
     sortWorkflowHandoffs(
       workflowHandoffs,
@@ -1226,10 +1455,33 @@ function nextWorkflowEmployeeForHandoff({
     return null;
   }
 
-  const nextHandoff =
+  return (
     ordered[
       currentIndex + 1
-    ];
+    ] ?? null
+  );
+}
+
+function nextWorkflowEmployeeForHandoff({
+  currentHandoff,
+  workflowHandoffs,
+  employees,
+}: {
+  currentHandoff: EmployeeHandoff;
+  workflowHandoffs: EmployeeHandoff[];
+  employees: AiEmployee[];
+}): AiEmployee | null {
+  const nextHandoff =
+    nextWorkflowHandoffForHandoff({
+      currentHandoff,
+      workflowHandoffs,
+    });
+
+  if (
+    !nextHandoff
+  ) {
+    return null;
+  }
 
   return (
     employees.find(
@@ -1374,14 +1626,11 @@ function employeeOperationalView({
             latestRun,
           )
         : "",
-      latestHandoff
-        ?.completed_at ??
+      latestHandoff?.completed_at ??
         "",
-      latestHandoff
-        ?.accepted_at ??
+      latestHandoff?.accepted_at ??
         "",
-      latestHandoff
-        ?.created_at ??
+      latestHandoff?.created_at ??
         "",
     ].filter(Boolean);
 
@@ -1599,6 +1848,1003 @@ function websiteReportEvidence(
 }
 
 /* -------------------------------------------------------------------------- */
+/* LEAD HUNTER INTELLIGENCE                                                   */
+/* -------------------------------------------------------------------------- */
+
+const LEAD_HUNTER_SERVICE_RULES:
+  Array<{
+    service: LeadHunterServiceCategory;
+    pattern: RegExp;
+  }> = [
+    {
+      service:
+        "construction",
+      pattern:
+        /\bconstruction\b|\bbuilding\b|\bcontractor\b/i,
+    },
+    {
+      service:
+        "renovation",
+      pattern:
+        /\brenovation\b|\brenovations\b|\brefurbish/i,
+    },
+    {
+      service:
+        "property_maintenance",
+      pattern:
+        /\bproperty maintenance\b|\bmaintenance\b|\brepairs?\b/i,
+    },
+    {
+      service:
+        "painting",
+      pattern:
+        /\bpainting\b|\brepainting\b/i,
+    },
+    {
+      service:
+        "tiling",
+      pattern:
+        /\btiling\b|\btiles?\b/i,
+    },
+    {
+      service:
+        "ceilings",
+      pattern:
+        /\bceilings?\b|\bdrywall\b/i,
+    },
+    {
+      service:
+        "roofing",
+      pattern:
+        /\broofing\b|\broof repair/i,
+    },
+    {
+      service:
+        "plumbing",
+      pattern:
+        /\bplumbing\b|\bplumber\b/i,
+    },
+    {
+      service:
+        "facility_management",
+      pattern:
+        /\bfacility management\b|\bfacilities management\b/i,
+    },
+    {
+      service:
+        "commercial_cleaning",
+      pattern:
+        /\bcommercial cleaning\b|\boffice cleaning\b|\bcleaning contract\b/i,
+    },
+    {
+      service:
+        "deep_cleaning",
+      pattern:
+        /\bdeep cleaning\b/i,
+    },
+    {
+      service:
+        "hygiene",
+      pattern:
+        /\bhygiene\b|\bsanitation\b/i,
+    },
+    {
+      service:
+        "landscaping",
+      pattern:
+        /\blandscap/i,
+    },
+    {
+      service:
+        "waste_management",
+      pattern:
+        /\bwaste management\b|\bwaste removal\b/i,
+    },
+    {
+      service:
+        "website_design",
+      pattern:
+        /\bwebsite\b|\bweb design\b|\bweb development\b|\bsite redesign\b/i,
+    },
+    {
+      service:
+        "logo_design",
+      pattern:
+        /\blogo\b|\blogo design\b/i,
+    },
+    {
+      service:
+        "branding",
+      pattern:
+        /\bbranding\b|\bbrand identity\b/i,
+    },
+    {
+      service:
+        "seo",
+      pattern:
+        /\bseo\b|\bsearch engine optimisation\b|\bsearch engine optimization\b/i,
+    },
+    {
+      service:
+        "digital_marketing",
+      pattern:
+        /\bdigital marketing\b|\bonline marketing\b/i,
+    },
+    {
+      service:
+        "social_media_management",
+      pattern:
+        /\bsocial media\b|\bfacebook management\b|\binstagram management\b/i,
+    },
+    {
+      service:
+        "google_business_profile",
+      pattern:
+        /\bgoogle business\b|\bgoogle profile\b|\bgoogle maps\b/i,
+    },
+    {
+      service:
+        "lead_generation",
+      pattern:
+        /\blead generation\b|\bget leads\b|\bprospecting\b/i,
+    },
+    {
+      service:
+        "crm",
+      pattern:
+        /\bcrm\b|\bcustomer relationship management\b/i,
+    },
+    {
+      service:
+        "ai_automation",
+      pattern:
+        /\bai automation\b|\bautomation\b|\bai assistant\b|\bchatbot\b/i,
+    },
+    {
+      service:
+        "business_documents",
+      pattern:
+        /\bbusiness documents?\b|\bnexdocs\b/i,
+    },
+    {
+      service:
+        "quotations",
+      pattern:
+        /\bquotations?\b|\bquote document\b/i,
+    },
+    {
+      service:
+        "proposals",
+      pattern:
+        /\bbusiness proposals?\b|\bproposal document\b/i,
+    },
+    {
+      service:
+        "contracts",
+      pattern:
+        /\bcontracts?\b|\bagreement document\b/i,
+    },
+    {
+      service:
+        "ecommerce",
+      pattern:
+        /\becommerce\b|\be-commerce\b|\bonline store\b/i,
+    },
+  ];
+
+function inferHunterServices(
+  text: string,
+): LeadHunterServiceCategory[] {
+  const matches =
+    LEAD_HUNTER_SERVICE_RULES
+      .filter(
+        ({ pattern }) =>
+          pattern.test(
+            text,
+          ),
+      )
+      .map(
+        ({ service }) =>
+          service,
+      );
+
+  if (
+    matches.length >
+    0
+  ) {
+    return uniqueStrings(
+      matches,
+    ) as LeadHunterServiceCategory[];
+  }
+
+  return [
+    ...DEFAULT_LEAD_HUNTER_REQUEST.services,
+  ];
+}
+
+function inferHunterCompanies(
+  services: LeadHunterServiceCategory[],
+): LeadHunterCompany[] {
+  const result:
+    LeadHunterCompany[] = [];
+
+  const constructionServices =
+    new Set<LeadHunterServiceCategory>([
+      "construction",
+      "renovation",
+      "property_maintenance",
+      "painting",
+      "tiling",
+      "ceilings",
+      "roofing",
+      "plumbing",
+    ]);
+
+  const facilityServices =
+    new Set<LeadHunterServiceCategory>([
+      "property_maintenance",
+      "facility_management",
+      "commercial_cleaning",
+      "deep_cleaning",
+      "hygiene",
+      "landscaping",
+      "waste_management",
+    ]);
+
+  const techServices =
+    new Set<LeadHunterServiceCategory>([
+      "website_design",
+      "logo_design",
+      "branding",
+      "seo",
+      "digital_marketing",
+      "social_media_management",
+      "google_business_profile",
+      "lead_generation",
+      "crm",
+      "ai_automation",
+      "ecommerce",
+    ]);
+
+  const documentServices =
+    new Set<LeadHunterServiceCategory>([
+      "business_documents",
+      "quotations",
+      "proposals",
+      "contracts",
+    ]);
+
+  if (
+    services.some(
+      (service) =>
+        constructionServices.has(
+          service,
+        ),
+    )
+  ) {
+    result.push(
+      "cossa_nexus_construction",
+    );
+  }
+
+  if (
+    services.some(
+      (service) =>
+        facilityServices.has(
+          service,
+        ),
+    )
+  ) {
+    result.push(
+      "cossa_facility_services",
+    );
+  }
+
+  if (
+    services.some(
+      (service) =>
+        techServices.has(
+          service,
+        ),
+    )
+  ) {
+    result.push(
+      "cossa_tech",
+    );
+  }
+
+  if (
+    services.some(
+      (service) =>
+        documentServices.has(
+          service,
+        ),
+    )
+  ) {
+    result.push(
+      "nexdocs",
+    );
+  }
+
+  if (
+    result.length ===
+    0
+  ) {
+    return [
+      ...DEFAULT_LEAD_HUNTER_REQUEST.companies,
+    ];
+  }
+
+  return uniqueStrings(
+    result,
+  ) as LeadHunterCompany[];
+}
+
+function inferHunterObjectives(
+  text: string,
+): LeadHunterObjective[] {
+  const value =
+    text.toLowerCase();
+
+  const objectives:
+    LeadHunterObjective[] = [
+      "find_customers",
+    ];
+
+  if (
+    /\btender\b|\brfq\b|\brfp\b|\bprocurement\b/.test(
+      value,
+    )
+  ) {
+    objectives.push(
+      "find_active_tenders",
+      "find_rfqs",
+    );
+  }
+
+  if (
+    /\bsupplier registration\b|\bsupplier database\b/.test(
+      value,
+    )
+  ) {
+    objectives.push(
+      "find_supplier_registrations",
+    );
+  }
+
+  if (
+    /\bsubcontract\b|\bsubcontractor\b/.test(
+      value,
+    )
+  ) {
+    objectives.push(
+      "find_subcontracting",
+    );
+  }
+
+  if (
+    /\bpartner\b|\bpartnership\b/.test(
+      value,
+    )
+  ) {
+    objectives.push(
+      "find_partners",
+    );
+  }
+
+  if (
+    /\bwebsite\b|\bweb design\b|\boutdated site\b/.test(
+      value,
+    )
+  ) {
+    objectives.push(
+      "find_weak_websites",
+    );
+  }
+
+  if (
+    /\bbranding\b|\blogo\b/.test(
+      value,
+    )
+  ) {
+    objectives.push(
+      "find_branding_gaps",
+    );
+  }
+
+  if (
+    /\bmarketing\b|\bsocial media\b|\bseo\b/.test(
+      value,
+    )
+  ) {
+    objectives.push(
+      "find_marketing_gaps",
+    );
+  }
+
+  if (
+    /\bmaintenance\b|\brepair\b|\brenovation\b/.test(
+      value,
+    )
+  ) {
+    objectives.push(
+      "find_maintenance_needs",
+      "find_projects",
+    );
+  }
+
+  if (
+    /\bcleaning\b|\bhygiene\b/.test(
+      value,
+    )
+  ) {
+    objectives.push(
+      "find_cleaning_contracts",
+    );
+  }
+
+  if (
+    /\brecurring\b|\bretainer\b|\bcontract\b/.test(
+      value,
+    )
+  ) {
+    objectives.push(
+      "find_recurring_contracts",
+    );
+  }
+
+  if (
+    /\bquick revenue\b|\bcash flow\b|\bcashflow\b|\bimmediate\b|\burgent\b/.test(
+      value,
+    )
+  ) {
+    objectives.push(
+      "find_immediate_cashflow",
+    );
+  }
+
+  return [
+    ...new Set(
+      objectives,
+    ),
+  ];
+}
+
+function inferHunterRevenueMode(
+  text: string,
+): LeadHunterRevenueMode {
+  const value =
+    text.toLowerCase();
+
+  if (
+    /\bquick revenue\b|\bcash flow\b|\bcashflow\b|\bfast\b|\bimmediate\b|\bsmall project\b/.test(
+      value,
+    )
+  ) {
+    return "quick_revenue";
+  }
+
+  if (
+    /\beasy win\b|\beasy wins\b|\blow effort\b/.test(
+      value,
+    )
+  ) {
+    return "easy_wins";
+  }
+
+  if (
+    /\brecurring\b|\bretainer\b|\bmaintenance contract\b|\bcleaning contract\b/.test(
+      value,
+    )
+  ) {
+    return "recurring_revenue";
+  }
+
+  if (
+    /\bhigh value\b|\blarge project\b|\bbig contract\b/.test(
+      value,
+    )
+  ) {
+    return "high_value";
+  }
+
+  if (
+    /\bstrategic\b|\bframework\b|\blong term\b|\blong-term\b/.test(
+      value,
+    )
+  ) {
+    return "strategic";
+  }
+
+  return "balanced";
+}
+
+function locationTokens(
+  value:
+    | string
+    | null,
+): string[] {
+  if (!value) {
+    return [];
+  }
+
+  return uniqueStrings(
+    value
+      .split(
+        /[,;/|]+/g,
+      )
+      .map(
+        (item) =>
+          item.trim(),
+      ),
+  );
+}
+
+function buildLeadHunterRequest(
+  mission: Mission,
+  handoff: EmployeeHandoff,
+): LeadHunterSearchRequest {
+  const combinedText = [
+    mission.objective,
+    mission.instruction,
+    mission.target_service ??
+      "",
+    mission.target_market ??
+      "",
+    mission.target_location ??
+      "",
+    handoff.reason,
+  ].join(
+    "\n",
+  );
+
+  const services =
+    inferHunterServices(
+      combinedText,
+    );
+
+  const companies =
+    inferHunterCompanies(
+      services,
+    );
+
+  const objectives =
+    inferHunterObjectives(
+      combinedText,
+    );
+
+  const revenueMode =
+    inferHunterRevenueMode(
+      combinedText,
+    );
+
+  const tenderFocused =
+    objectives.includes(
+      "find_active_tenders",
+    ) ||
+    objectives.includes(
+      "find_rfqs",
+    );
+
+  const minimumDepth =
+    minimumDepthForServiceCount(
+      services.length,
+    );
+
+  const searchDepth =
+    tenderFocused
+      ? "deep"
+      : minimumDepth;
+
+  const locations =
+    locationTokens(
+      mission.target_location,
+    );
+
+  const resultCount =
+    Math.max(
+      1,
+      Math.min(
+        20,
+        mission.required_result_count ??
+          DEFAULT_WORKFORCE_HUNT_RESULTS,
+      ),
+    );
+
+  const searchInstruction = [
+    mission.objective,
+    mission.target_market
+      ? `Target market: ${mission.target_market}.`
+      : null,
+    mission.target_location
+      ? `Target location: ${mission.target_location}.`
+      : null,
+    mission.target_service
+      ? `Target service: ${mission.target_service}.`
+      : null,
+    "Find legitimate organisations and opportunities that Cossa can realistically serve.",
+    "Prioritise buyer intent, current pain signals, urgency, public contactability, revenue potential, ease to close, recurring value and geographic fit.",
+    "Reject competitors, directories, duplicate CRM leads, unsupported assumptions and unverifiable prospects.",
+    "Do not invent organisations, contacts, needs, budgets, tenders, deadlines, evidence or completed actions.",
+    "Prefer recent and independently corroborated public evidence.",
+    "Return only prospects that survive the Lead Hunter verification rules.",
+  ]
+    .filter(Boolean)
+    .join(
+      " ",
+    );
+
+  return validateSearchRequest({
+    ...DEFAULT_LEAD_HUNTER_REQUEST,
+
+    companies,
+
+    services,
+
+    locations:
+      locations.length >
+      0
+        ? locations
+        : DEFAULT_LEAD_HUNTER_REQUEST.locations,
+
+    result_count:
+      resultCount,
+
+    minimum_score:
+      tenderFocused
+        ? 70
+        : 60,
+
+    minimum_evidence_sources:
+      2,
+
+    require_public_phone_or_email:
+      true,
+
+    require_opportunity_signal:
+      true,
+
+    verified_sources_only:
+      true,
+
+    exclude_existing_crm_leads:
+      true,
+
+    search_instruction:
+      searchInstruction,
+
+    revenue_mode:
+      revenueMode,
+
+    objectives,
+
+    search_depth:
+      searchDepth,
+
+    search_scope:
+      locations.length >
+      0
+        ? "custom"
+        : DEFAULT_LEAD_HUNTER_REQUEST.search_scope,
+
+    revenue_first:
+      true,
+
+    easy_wins_only:
+      revenueMode ===
+        "easy_wins" ||
+      revenueMode ===
+        "quick_revenue",
+
+    exclude_competitors:
+      true,
+
+    exclude_directories:
+      true,
+
+    exclude_expired_procurement:
+      true,
+
+    use_cached_results:
+      true,
+
+    notes:
+      `Cossa AI workforce mission ${mission.id}.`,
+  });
+}
+
+function formatHunterProspect(
+  prospect: LeadHunterProspect,
+  index: number,
+): string {
+  const contact =
+    prospect.public_phone ||
+    prospect.public_email ||
+    prospect.contact_page_url ||
+    "No public direct contact retained";
+
+  const location = [
+    prospect.suburb,
+    prospect.city,
+    prospect.province,
+    prospect.country,
+  ]
+    .filter(Boolean)
+    .join(
+      ", ",
+    );
+
+  const independentSources =
+    prospect.verification_meta
+      ?.independent_source_count ??
+    0;
+
+  return [
+    `${index + 1}. ${prospect.organisation_name}`,
+    `Priority: ${prospect.sales_priority.toUpperCase()} | Score: ${prospect.total_score}/100`,
+    `Recommended service: ${prospect.recommended_service}`,
+    `Cossa business: ${prospect.recommended_company}`,
+    `Location: ${location || "Not confirmed"}`,
+    `Contact route: ${contact}`,
+    `Opportunity: ${prospect.opportunity_summary}`,
+    `Why contact: ${
+      prospect.why_contact.length >
+      0
+        ? prospect.why_contact.join(
+            " ",
+          )
+        : prospect.service_fit_reason
+    }`,
+    `Independent sources: ${independentSources}`,
+    `Primary evidence: ${prospect.primary_source_url}`,
+    `Next action: ${prospect.next_action}`,
+  ].join(
+    "\n",
+  );
+}
+
+async function executeLeadHunterTool({
+  mission,
+  handoff,
+  workflowHandoffs,
+}: {
+  mission: Mission;
+  handoff: EmployeeHandoff;
+  workflowHandoffs: EmployeeHandoff[];
+}): Promise<LeadHunterExecutionResult> {
+  const request =
+    buildLeadHunterRequest(
+      mission,
+      handoff,
+    );
+
+  const response =
+    await huntProspects(
+      request,
+    );
+
+  const crmResult =
+    await saveProspectsToCrm(
+      response.prospects,
+    );
+
+  const createdLeadIds =
+    crmResult.created.map(
+      (item) =>
+        item.lead_id,
+    );
+
+  const duplicateLeadIds =
+    crmResult.duplicates.map(
+      (item) =>
+        item.lead_id,
+    );
+
+  const leadIds =
+    uniqueStrings([
+      ...createdLeadIds,
+      ...duplicateLeadIds,
+    ]);
+
+  const prospectIds =
+    uniqueStrings(
+      response.prospects.map(
+        (prospect) =>
+          prospect.id,
+      ),
+    );
+
+  const retainedRecordIds:
+    Record<string, unknown> = {
+      hunt_id:
+        response.hunt_id,
+
+      prospect_ids:
+        prospectIds,
+
+      lead_ids:
+        leadIds,
+
+      crm_created_lead_ids:
+        createdLeadIds,
+
+      crm_existing_lead_ids:
+        duplicateLeadIds,
+    };
+
+  await mergeHandoffRetainedRecordIds({
+    handoffId:
+      handoff.id,
+
+    missionId:
+      mission.id,
+
+    recordIds:
+      retainedRecordIds,
+  });
+
+  handoff.retained_record_ids = {
+    ...(handoff.retained_record_ids ??
+      {}),
+    ...retainedRecordIds,
+  };
+
+  const nextHandoff =
+    nextWorkflowHandoffForHandoff({
+      currentHandoff:
+        handoff,
+      workflowHandoffs,
+    });
+
+  if (
+    nextHandoff
+  ) {
+    await mergeHandoffRetainedRecordIds({
+      handoffId:
+        nextHandoff.id,
+
+      missionId:
+        mission.id,
+
+      recordIds:
+        retainedRecordIds,
+    });
+
+    nextHandoff.retained_record_ids = {
+      ...(nextHandoff.retained_record_ids ??
+        {}),
+      ...retainedRecordIds,
+    };
+  }
+
+  const prospectSummary =
+    response.prospects.length >
+    0
+      ? response.prospects
+          .slice(
+            0,
+            10,
+          )
+          .map(
+            (
+              prospect,
+              index,
+            ) =>
+              formatHunterProspect(
+                prospect,
+                index,
+              ),
+          )
+          .join(
+            "\n\n",
+          )
+      : "No prospect passed the current verification and qualification rules.";
+
+  const content = [
+    "LEAD HUNTER EXECUTION",
+    "",
+    "Verified inputs",
+    `Hunt ID: ${response.hunt_id}`,
+    `Execution engine: ${LEAD_HUNTER_TOOL_NAME}`,
+    `Providers used: ${
+      response.providers_used.length >
+      0
+        ? response.providers_used.join(
+            ", ",
+          )
+        : "Server route did not report provider names"
+    }`,
+    `Public evidence sources processed: ${response.source_count}`,
+    "",
+    "Work completed",
+    `Verified prospects accepted: ${response.accepted_count}`,
+    `Prospects rejected by search/verification rules: ${response.rejected_count}`,
+    `CRM records created: ${crmResult.created.length}`,
+    `Existing CRM matches retained instead of duplicated: ${crmResult.duplicates.length}`,
+    `CRM save failures: ${crmResult.failed.length}`,
+    "",
+    "Verified prospect intelligence",
+    prospectSummary,
+    "",
+    "Retained record identifiers",
+    `Lead Hunter hunt ID: ${response.hunt_id}`,
+    `Prospect IDs: ${
+      prospectIds.length >
+      0
+        ? prospectIds.join(
+            ", ",
+          )
+        : "None"
+    }`,
+    `CRM lead IDs: ${
+      leadIds.length >
+      0
+        ? leadIds.join(
+            ", ",
+          )
+        : "None"
+    }`,
+    "",
+    "Warnings",
+    response.warnings.length >
+    0
+      ? response.warnings
+          .map(
+            (warning) =>
+              `- ${warning}`,
+          )
+          .join(
+            "\n",
+          )
+      : "No server warnings returned.",
+    crmResult.failed.length >
+    0
+      ? [
+          "",
+          "CRM save issues",
+          ...crmResult.failed
+            .slice(
+              0,
+              5,
+            )
+            .map(
+              (failure) =>
+                `- ${failure.prospect.organisation_name}: ${failure.error}`,
+            ),
+        ].join(
+          "\n",
+        )
+      : "",
+    "",
+    "Handoff to next employee",
+    nextHandoff
+      ? "The verified Hunt ID, prospect IDs and CRM lead IDs were retained on the next recorded handoff. Lead Intake must use these real records rather than inventing replacement leads."
+      : "This is the final recorded workforce stage.",
+    "",
+    "High-risk owner decisions required",
+    "None for internal research and CRM preparation.",
+    "",
+    "External actions status",
+    "No prospect was contacted. No email, WhatsApp message, phone call, quotation, proposal, tender submission, contract, payment or external commitment was performed.",
+  ]
+    .filter(
+      (
+        value,
+      ) =>
+        value !==
+        "",
+    )
+    .join(
+      "\n",
+    );
+
+  return {
+    content,
+    retainedRecordIds,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
 /* COMPACT CONTROLLED STAGE PROMPT                                            */
 /* -------------------------------------------------------------------------- */
 
@@ -1648,9 +2894,20 @@ function controlledStagePrompt({
       MAX_HANDOFF_CONTEXT_CHARS,
     );
 
+  const retainedRecordContext =
+    clampText(
+      JSON.stringify(
+        handoff.retained_record_ids ??
+          {},
+      ),
+      MAX_RETAINED_RECORD_CONTEXT_CHARS,
+    );
+
   const nextInstruction =
     nextEmployee
-      ? `Next recorded worker: ${nextEmployee.name} (${nextEmployee.employee_key}). Hand work only to that worker.`
+      ? `Next recorded worker: ${nextEmployee.name} (${canonicalEmployeeKey(
+          nextEmployee.employee_key,
+        )}). Hand work only to that worker.`
       : "This is the final recorded stage. Do not invent another worker.";
 
   const evidence =
@@ -1677,8 +2934,32 @@ function controlledStagePrompt({
           )
       : "No prior output required.";
 
+  const employeeKey =
+    canonicalEmployeeKey(
+      employee.employee_key,
+    );
+
+  const specialistInstructions =
+    employeeKey ===
+    "lead-intake-coordinator"
+      ? [
+          "Use retained Hunt, prospect and CRM lead IDs as authoritative record references.",
+          "Do not create replacement fictional leads.",
+          "Separate newly created CRM records from existing duplicate CRM records.",
+          "Classify and route only what is supported by the Lead Hunter evidence.",
+        ]
+      : employeeKey ===
+          "sales-conversion-specialist"
+        ? [
+            "Use only verified prospect and CRM information supplied by prior stages.",
+            "Prioritise HOT and WARM opportunities using evidence, value, urgency and contactability.",
+            "Prepare outreach strategy, discovery questions, objections, follow-up and quotation/proposal requirements.",
+            "Do not claim outreach was sent or a customer agreed unless a verified external execution record exists.",
+          ]
+        : [];
+
   const prompt = [
-    `Role: ${employee.title} (${employee.employee_key}).`,
+    `Role: ${employee.title} (${employeeKey}).`,
     `Department: ${employee.department}.`,
     stage !== null
       ? `Workflow stage: ${stage}${
@@ -1708,6 +2989,8 @@ function controlledStagePrompt({
     "For visual-dependent work, provide format, subject, headline, key text, brand treatment, channel/dimensions and CTA.",
     "Never claim publishing or asset generation unless verified execution exists.",
 
+    ...specialistInstructions,
+
     "Return these short sections:",
     "Verified inputs",
     "Work completed",
@@ -1718,11 +3001,14 @@ function controlledStagePrompt({
     "External actions status",
 
     `Context: ${safeHandoffContext}`,
+    `Retained source and CRM record IDs: ${retainedRecordContext}`,
     `Evidence:\n${evidence}`,
     previous,
   ]
     .filter(Boolean)
-    .join("\n\n");
+    .join(
+      "\n\n",
+    );
 
   return clampText(
     prompt,
@@ -1987,7 +3273,7 @@ function AiWorkforce() {
           toast.success(
             "Cossa workforce synchronised",
             {
-              description: `${result.length} source employee profiles are recorded and ${activeCount} are active. Existing custom employees were preserved.`,
+              description: `${result.length} employee records are available and ${activeCount} are active. Existing custom employees were preserved.`,
             },
           );
         },
@@ -2007,7 +3293,7 @@ function AiWorkforce() {
     });
 
   /* ------------------------------------------------------------------------ */
-  /* COORDINATION                                                             */
+  /* WORKFLOW CREATION                                                        */
   /* ------------------------------------------------------------------------ */
 
   const coordinationMutation =
@@ -2028,9 +3314,9 @@ function AiWorkforce() {
           await refreshWorkforce();
 
           toast.success(
-            "CEO mission created",
+            "Growth mission created",
             {
-              description: `${createdHandoffs.length} real workforce handoff stages were created.`,
+              description: `${createdHandoffs.length} real Growth workforce stages were created.`,
             },
           );
 
@@ -2042,7 +3328,50 @@ function AiWorkforce() {
       onError:
         (error) => {
           toast.error(
-            "Mission could not be created",
+            "Growth mission could not be created",
+            {
+              description:
+                normaliseErrorMessage(
+                  error,
+                ),
+            },
+          );
+        },
+    });
+
+  const revenueMutation =
+    useMutation({
+      mutationFn:
+        createRevenueAcquisitionMission,
+
+      onSuccess:
+        async ({
+          mission,
+          handoffs:
+            createdHandoffs,
+        }) => {
+          setSelectedMissionId(
+            mission.id,
+          );
+
+          await refreshWorkforce();
+
+          toast.success(
+            "Revenue hunt created",
+            {
+              description: `${createdHandoffs.length} real revenue stages were created: Lead Hunter → Lead Intake → Sales & Conversion → AI CEO.`,
+            },
+          );
+
+          setView(
+            "workflows",
+          );
+        },
+
+      onError:
+        (error) => {
+          toast.error(
+            "Revenue hunt could not be created",
             {
               description:
                 normaliseErrorMessage(
@@ -2079,17 +3408,41 @@ function AiWorkforce() {
 
   const employeesByKey =
     useMemo(
-      () =>
-        new Map(
-          employees.map(
-            (
-              employee,
-            ) => [
+      () => {
+        const map =
+          new Map<
+            string,
+            AiEmployee
+          >();
+
+        for (
+          const employee
+          of employees
+        ) {
+          const key =
+            canonicalEmployeeKey(
               employee.employee_key,
+            );
+
+          const existing =
+            map.get(
+              key,
+            );
+
+          if (
+            !existing ||
+            employee.employee_key ===
+              key
+          ) {
+            map.set(
+              key,
               employee,
-            ],
-          ),
-        ),
+            );
+          }
+        }
+
+        return map;
+      },
       [
         employees,
       ],
@@ -2353,8 +3706,19 @@ function AiWorkforce() {
         "active",
     );
 
-  const activeExecutableWorkflowEmployees =
+  const activeExecutableGrowthEmployees =
     EXECUTABLE_GROWTH_WORKFLOW.filter(
+      (
+        step,
+      ) =>
+        employeesByKey.get(
+          step.key,
+        )?.status ===
+        "active",
+    );
+
+  const activeExecutableRevenueEmployees =
+    EXECUTABLE_REVENUE_WORKFLOW.filter(
       (
         step,
       ) =>
@@ -2375,6 +3739,9 @@ function AiWorkforce() {
       ) =>
         mission.title.startsWith(
           GROWTH_MISSION_PREFIX,
+        ) ||
+        mission.title.startsWith(
+          REVENUE_MISSION_PREFIX,
         ),
     );
 
@@ -2388,6 +3755,16 @@ function AiWorkforce() {
     ) ??
     coordinationMissions[0] ??
     null;
+
+  const selectedWorkflowKind =
+    missionWorkforceKind(
+      selectedMission,
+    );
+
+  const selectedWorkflowSteps =
+    workflowForMission(
+      selectedMission,
+    );
 
   const selectedMissionHandoffs =
     selectedMission
@@ -2517,11 +3894,21 @@ function AiWorkforce() {
     runsQuery.isLoading ||
     approvalsQuery.isLoading;
 
-  const canCreateCoordination =
-    activeExecutableWorkflowEmployees.length ===
+  const canCreateGrowth =
+    activeExecutableGrowthEmployees.length ===
       EXECUTABLE_GROWTH_WORKFLOW.length &&
     objective.trim().length >
       0;
+
+  const canCreateRevenue =
+    activeExecutableRevenueEmployees.length ===
+      EXECUTABLE_REVENUE_WORKFLOW.length &&
+    objective.trim().length >
+      0;
+
+  const workflowCreationPending =
+    coordinationMutation.isPending ||
+    revenueMutation.isPending;
 
   /* ------------------------------------------------------------------------ */
   /* CEO COMMAND                                                              */
@@ -2535,14 +3922,54 @@ function AiWorkforce() {
       return;
     }
 
+    const revenueRequest =
+      commandLooksLikeRevenueWork(
+        command,
+      );
+
     if (
-      activeExecutableWorkflowEmployees.length !==
+      revenueRequest
+    ) {
+      if (
+        activeExecutableRevenueEmployees.length !==
+        EXECUTABLE_REVENUE_WORKFLOW.length
+      ) {
+        toast.error(
+          "Revenue workforce is not fully active",
+          {
+            description: `${activeExecutableRevenueEmployees.length} of ${EXECUTABLE_REVENUE_WORKFLOW.length} revenue employees are active.`,
+          },
+        );
+
+        return;
+      }
+
+      setObjective(
+        command,
+      );
+
+      revenueMutation.mutate({
+        objective:
+          command,
+
+        target_market:
+          targetMarket,
+
+        target_location:
+          targetLocation,
+      });
+
+      return;
+    }
+
+    if (
+      activeExecutableGrowthEmployees.length !==
       EXECUTABLE_GROWTH_WORKFLOW.length
     ) {
       toast.error(
         "Growth workforce is not fully active",
         {
-          description: `${activeExecutableWorkflowEmployees.length} of ${EXECUTABLE_GROWTH_WORKFLOW.length} executable employees are active.`,
+          description: `${activeExecutableGrowthEmployees.length} of ${EXECUTABLE_GROWTH_WORKFLOW.length} Growth employees are active.`,
         },
       );
 
@@ -2566,7 +3993,7 @@ function AiWorkforce() {
   }
 
   /* ------------------------------------------------------------------------ */
-  /* PROVIDER EXECUTION                                                       */
+  /* LANGUAGE MODEL EXECUTION                                                 */
   /* ------------------------------------------------------------------------ */
 
   async function executeProviderWithRetry({
@@ -2659,7 +4086,7 @@ function AiWorkforce() {
     Error
       ? lastError
       : new Error(
-          "The workforce provider failed after all retry attempts.",
+          "The workforce language-model provider failed after all retry attempts.",
         );
   }
 
@@ -2699,6 +4126,15 @@ function AiWorkforce() {
       );
     }
 
+    const employeeKey =
+      canonicalEmployeeKey(
+        employee.employee_key,
+      );
+
+    const leadHunterStage =
+      employeeKey ===
+      "lead-hunter";
+
     const actualNextEmployee =
       nextWorkflowEmployeeForHandoff({
         currentHandoff:
@@ -2711,7 +4147,7 @@ function AiWorkforce() {
       });
 
     const authorisedEvidence =
-      employee.employee_key ===
+      employeeKey ===
       "website-seo-monitor"
         ? [
             websiteReportEvidence(
@@ -2720,7 +4156,7 @@ function AiWorkforce() {
           ]
         : [];
 
-    const compactPriorOutputs =
+    const compactPrevious =
       compactPriorOutputsForPrompt(
         priorOutputs,
       );
@@ -2737,49 +4173,76 @@ function AiWorkforce() {
         employee,
 
         provider:
-          DEFAULT_WORKFORCE_PROVIDER,
+          leadHunterStage
+            ? LEAD_HUNTER_TOOL_PROVIDER
+            : DEFAULT_WORKFORCE_PROVIDER,
 
         modelName:
-          DEFAULT_WORKFORCE_MODEL,
+          leadHunterStage
+            ? LEAD_HUNTER_TOOL_NAME
+            : DEFAULT_WORKFORCE_MODEL,
+
+        executionKind:
+          leadHunterStage
+            ? "tool"
+            : "language_model",
 
         priorOutputs:
-          compactPriorOutputs,
+          compactPrevious,
 
         authorisedEvidence:
           compactEvidence,
       });
 
     try {
-      const prompt =
-        controlledStagePrompt({
-          mission,
-          handoff,
-          employee,
-
-          nextEmployee:
-            actualNextEmployee,
-
-          priorOutputs:
-            compactPriorOutputs,
-
-          authorisedEvidence:
-            compactEvidence,
-        });
+      let content:
+        string;
 
       if (
-        prompt.length >
-        MAX_STAGE_PROMPT_CHARS
+        leadHunterStage
       ) {
-        throw new Error(
-          `Cossa AI prompt safety check failed. Prompt length ${prompt.length} exceeds ${MAX_STAGE_PROMPT_CHARS}.`,
-        );
-      }
+        const hunterResult =
+          await executeLeadHunterTool({
+            mission,
+            handoff,
+            workflowHandoffs:
+              selectedMissionHandoffs,
+          });
 
-      const content =
-        await executeProviderWithRetry({
-          prompt,
-          employee,
-        });
+        content =
+          hunterResult.content;
+      } else {
+        const prompt =
+          controlledStagePrompt({
+            mission,
+            handoff,
+            employee,
+
+            nextEmployee:
+              actualNextEmployee,
+
+            priorOutputs:
+              compactPrevious,
+
+            authorisedEvidence:
+              compactEvidence,
+          });
+
+        if (
+          prompt.length >
+          MAX_STAGE_PROMPT_CHARS
+        ) {
+          throw new Error(
+            `Cossa AI prompt safety check failed. Prompt length ${prompt.length} exceeds ${MAX_STAGE_PROMPT_CHARS}.`,
+          );
+        }
+
+        content =
+          await executeProviderWithRetry({
+            prompt,
+            employee,
+          });
+      }
 
       const result =
         await completeControlledWorkforceRun({
@@ -2834,7 +4297,7 @@ function AiWorkforce() {
             !selectedMission
           ) {
             throw new Error(
-              "Select a Growth coordination mission first.",
+              "Select a workforce mission first.",
             );
           }
 
@@ -2887,7 +4350,7 @@ function AiWorkforce() {
 
           toast.success(
             finalStage
-              ? "Growth workflow completed"
+              ? "Workforce workflow completed"
               : "Employee stage completed",
             {
               description:
@@ -2924,7 +4387,7 @@ function AiWorkforce() {
             !selectedMission
           ) {
             throw new Error(
-              "Select a Growth coordination mission first.",
+              "Select a workforce mission first.",
             );
           }
 
@@ -3196,9 +4659,10 @@ function AiWorkforce() {
 
               <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
                 Find the right department or employee,
-                delegate work to the AI CEO, and monitor
-                company execution without digging through
-                technical records.
+                delegate work to the AI CEO, run the real
+                Lead Hunter revenue system and monitor
+                company execution without pretending that
+                missing integrations exist.
               </p>
             </div>
 
@@ -3228,8 +4692,6 @@ function AiWorkforce() {
             </div>
           </div>
 
-          {/* UNIVERSAL SEARCH */}
-
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
 
@@ -3251,7 +4713,7 @@ function AiWorkforce() {
                   );
                 }
               }}
-              placeholder='Find anyone by name or responsibility — try "flyer", "SEO", "Facebook", "supplier", "website", "lead"...'
+              placeholder='Find anyone by name or responsibility — try "Lead Hunter", "customers", "sales", "SEO", "supplier", "website"...'
               className="h-14 w-full rounded-2xl border border-primary/30 bg-background/60 pl-12 pr-12 text-sm outline-none transition focus:border-primary/70 focus:ring-2 focus:ring-primary/10"
             />
 
@@ -3363,7 +4825,7 @@ function AiWorkforce() {
         </div>
       </section>
 
-      {/* TOP COMPANY METRICS */}
+      {/* COMPANY METRICS */}
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Metric
@@ -3421,9 +4883,7 @@ function AiWorkforce() {
         />
       </section>
 
-      {/* -------------------------------------------------------------------- */}
-      {/* COMMAND CENTRE                                                       */}
-      {/* -------------------------------------------------------------------- */}
+      {/* COMMAND CENTRE */}
 
       {view ===
       "command" ? (
@@ -3444,10 +4904,10 @@ function AiWorkforce() {
                 </h2>
 
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  You should not have to decide which
-                  employee comes first. Give the objective;
-                  the recorded Growth workforce can coordinate
-                  the work through the correct internal stages.
+                  Customer and lead-hunting commands are
+                  automatically routed to the real Revenue
+                  workflow. Marketing and campaign work stays
+                  in the Growth workflow.
                 </p>
               </div>
             </div>
@@ -3461,7 +4921,7 @@ function AiWorkforce() {
                   )
                 }
                 rows={4}
-                placeholder="Example: Create a professional Facebook campaign for Cossa Facility Services in Gauteng, including copy, visual requirements and a posting plan. Do not publish or spend money."
+                placeholder="Example: Find 10 verified businesses in Pretoria and Centurion that are likely to need construction, commercial cleaning or website services. Prioritise quick revenue and do not contact anyone."
                 className="w-full resize-y bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
               />
 
@@ -3484,21 +4944,69 @@ function AiWorkforce() {
                   }
                   disabled={
                     !ceoCommand.trim() ||
-                    coordinationMutation.isPending
+                    workflowCreationPending
                   }
                   className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
                 >
-                  {coordinationMutation.isPending ? (
+                  {workflowCreationPending ? (
                     <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="mr-1.5 h-4 w-4" />
                   )}
 
-                  {coordinationMutation.isPending
+                  {workflowCreationPending
                     ? "CEO is organising the team…"
                     : "Delegate to AI CEO"}
                 </Button>
               </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-primary/30 bg-background/40 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                  <Search className="h-5 w-5" />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-primary">
+                    Revenue Hunter
+                  </p>
+
+                  <h3 className="mt-1 text-sm font-semibold">
+                    Real prospect research — not Groq-generated leads
+                  </h3>
+
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    The Lead Hunter uses the authenticated
+                    Cossa search and verification engine,
+                    applies buyer-fit and evidence rules,
+                    protects CRM duplicates and carries real
+                    lead IDs into Sales.
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4 w-full border-primary/40 text-primary"
+                onClick={() => {
+                  setCeoCommand(
+                    "Find 10 verified businesses in Pretoria, Centurion, Midrand and Johannesburg that Cossa Nexus Construction, Cossa Facility Services or Cossa Tech can realistically serve. Prioritise current pain signals, public contactability, quick revenue, recurring revenue and strong evidence. Do not contact anyone.",
+                  );
+
+                  setTargetMarket(
+                    "South Africa",
+                  );
+
+                  setTargetLocation(
+                    "Pretoria, Centurion, Midrand, Johannesburg",
+                  );
+                }}
+              >
+                <Search className="mr-1.5 h-4 w-4" />
+                Prepare first real revenue hunt
+              </Button>
             </div>
 
             <div className="mt-5">
@@ -3508,12 +5016,12 @@ function AiWorkforce() {
 
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {[
+                  "Find 10 verified construction, cleaning or website prospects in Gauteng.",
+                  "Find quick-revenue customers in Pretoria and Centurion.",
                   "Create a Facebook post and visual brief for Cossa.",
-                  "Prepare a professional flyer campaign for Cossa Facility Services.",
                   "Audit our website and prepare SEO improvements.",
                   "Build a 7-day social-media content plan.",
                   "Prepare a paid-media recommendation without spending money.",
-                  "Create a campaign for Cossa Store products.",
                 ].map(
                   (
                     request,
@@ -3622,9 +5130,7 @@ function AiWorkforce() {
                           {
                             activeCount
                           }{" "}
-                          active
-                          team
-                          member
+                          active team member
                           {activeCount ===
                           1
                             ? ""
@@ -3639,8 +5145,6 @@ function AiWorkforce() {
               )}
             </div>
           </section>
-
-          {/* CURRENT WORK */}
 
           <section className="glass-card p-5 xl:col-span-2">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -3665,7 +5169,6 @@ function AiWorkforce() {
                 className="border-primary/30 text-primary"
               >
                 <Activity className="mr-1.5 h-4 w-4" />
-
                 Open activity
               </Button>
             </div>
@@ -3708,9 +5211,7 @@ function AiWorkforce() {
         </div>
       ) : null}
 
-      {/* -------------------------------------------------------------------- */}
-      {/* DEPARTMENTS                                                          */}
-      {/* -------------------------------------------------------------------- */}
+      {/* DEPARTMENTS */}
 
       {view ===
       "departments" ? (
@@ -3727,8 +5228,8 @@ function AiWorkforce() {
 
               <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
                 Choose the business function first.
-                Every department opens directly to the
-                employees responsible for that work.
+                Revenue now includes the real Lead Hunter,
+                Lead Intake and Sales & Conversion chain.
               </p>
             </div>
 
@@ -3736,8 +5237,7 @@ function AiWorkforce() {
               {
                 DEPARTMENTS.length
               }{" "}
-              operating
-              groups
+              operating groups
             </span>
           </div>
 
@@ -3755,7 +5255,9 @@ function AiWorkforce() {
                       item,
                     ) =>
                       department.employeeKeys.includes(
-                        item.employee.employee_key,
+                        canonicalEmployeeKey(
+                          item.employee.employee_key,
+                        ),
                       ),
                   );
 
@@ -3855,9 +5357,7 @@ function AiWorkforce() {
         </section>
       ) : null}
 
-      {/* -------------------------------------------------------------------- */}
-      {/* EMPLOYEE DIRECTORY                                                   */}
-      {/* -------------------------------------------------------------------- */}
+      {/* EMPLOYEES */}
 
       {view ===
       "employees" ? (
@@ -3875,9 +5375,9 @@ function AiWorkforce() {
 
                 <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
                   Search by employee, responsibility or
-                  normal business language. For example:
-                  flyer, SEO, Facebook, supplier, website,
-                  lead or advertising.
+                  normal business language. Try Lead Hunter,
+                  customers, sales, flyer, SEO, supplier,
+                  website or tender.
                 </p>
               </div>
 
@@ -3885,16 +5385,13 @@ function AiWorkforce() {
                 {
                   searchedEmployees.length
                 }{" "}
-                matching
-                employee
+                matching employee
                 {searchedEmployees.length ===
                 1
                   ? ""
                   : "s"}
               </span>
             </div>
-
-            {/* DEPARTMENT FILTERS */}
 
             <div className="flex gap-2 overflow-x-auto pb-1">
               <FilterChip
@@ -3945,8 +5442,6 @@ function AiWorkforce() {
               )}
             </div>
 
-            {/* LOCAL SEARCH */}
-
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
@@ -3993,8 +5488,8 @@ function AiWorkforce() {
                 </p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Try a responsibility such as flyer,
-                  website, SEO, content, supplier, tender,
+                  Try Lead Hunter, customers, sales,
+                  flyer, website, SEO, supplier, tender,
                   Facebook or leads.
                 </p>
               </div>
@@ -4025,15 +5520,11 @@ function AiWorkforce() {
         </section>
       ) : null}
 
-      {/* -------------------------------------------------------------------- */}
-      {/* WORKFLOWS                                                            */}
-      {/* -------------------------------------------------------------------- */}
+      {/* WORKFLOWS */}
 
       {view ===
       "workflows" ? (
         <div className="grid gap-5">
-          {/* CURRENT WORKFLOW */}
-
           <section className="glass-card p-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
@@ -4042,13 +5533,17 @@ function AiWorkforce() {
                 </p>
 
                 <h2 className="mt-1 font-display text-2xl font-semibold">
-                  Growth workforce execution
+                  {selectedWorkflowKind ===
+                  "revenue"
+                    ? "Revenue acquisition execution"
+                    : "Growth workforce execution"}
                 </h2>
 
                 <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                  This is the operational workflow view.
-                  Use it when you want to inspect or manually
-                  progress a coordinated mission.
+                  {selectedWorkflowKind ===
+                  "revenue"
+                    ? "Revenue missions run through the real Lead Hunter tool first, then Lead Intake, Sales & Conversion and the AI CEO."
+                    : "Growth missions coordinate website intelligence, strategy, content, creative, social operations and growth analysis."}
                 </p>
               </div>
 
@@ -4082,9 +5577,14 @@ function AiWorkforce() {
                             mission.id
                           }
                         >
+                          {mission.title.startsWith(
+                            REVENUE_MISSION_PREFIX,
+                          )
+                            ? "[Revenue] "
+                            : "[Growth] "}
                           {mission.objective.slice(
                             0,
-                            100,
+                            90,
                           )}
                         </option>
                       ),
@@ -4094,10 +5594,15 @@ function AiWorkforce() {
               ) : null}
             </div>
 
-            {/* PIPELINE */}
-
-            <div className="mt-5 grid gap-2 md:grid-cols-3 xl:grid-cols-9">
-              {EXECUTABLE_GROWTH_WORKFLOW.map(
+            <div
+              className={
+                selectedWorkflowSteps.length <=
+                4
+                  ? "mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-4"
+                  : "mt-5 grid gap-2 md:grid-cols-3 xl:grid-cols-9"
+              }
+            >
+              {selectedWorkflowSteps.map(
                 (
                   step,
                   index,
@@ -4122,7 +5627,7 @@ function AiWorkforce() {
                       className="relative rounded-xl border border-border/60 bg-card/40 p-3"
                     >
                       {index <
-                      EXECUTABLE_GROWTH_WORKFLOW.length -
+                      selectedWorkflowSteps.length -
                         1 ? (
                         <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 rounded-full bg-background p-1 text-primary xl:block" />
                       ) : null}
@@ -4137,18 +5642,24 @@ function AiWorkforce() {
                         }
                       </p>
 
+                      <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">
+                        {
+                          step.description
+                        }
+                      </p>
+
                       <p
                         className={
                           status ===
                           "completed"
-                            ? "mt-1 text-[9px] uppercase tracking-widest text-success"
+                            ? "mt-2 text-[9px] uppercase tracking-widest text-success"
                             : status ===
                                 "accepted"
-                              ? "mt-1 text-[9px] uppercase tracking-widest text-warning"
+                              ? "mt-2 text-[9px] uppercase tracking-widest text-warning"
                               : status ===
                                   "pending"
-                                ? "mt-1 text-[9px] uppercase tracking-widest text-primary"
-                                : "mt-1 text-[9px] uppercase tracking-widest text-muted-foreground"
+                                ? "mt-2 text-[9px] uppercase tracking-widest text-primary"
+                                : "mt-2 text-[9px] uppercase tracking-widest text-muted-foreground"
                         }
                       >
                         {formatStatus(
@@ -4163,7 +5674,7 @@ function AiWorkforce() {
 
             {!selectedMission ? (
               <div className="mt-5 rounded-xl border border-dashed border-border/60 p-5 text-sm text-muted-foreground">
-                No Growth coordination mission is selected.
+                No Growth or Revenue coordination mission is selected.
               </div>
             ) : (
               <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
@@ -4184,6 +5695,25 @@ function AiWorkforce() {
                     {firstIncompleteHandoff?.reason ??
                       "No incomplete handoff remains."}
                   </p>
+
+                  {nextEmployee &&
+                  canonicalEmployeeKey(
+                    nextEmployee.employee_key,
+                  ) ===
+                    "lead-hunter" ? (
+                    <div className="mt-4 rounded-lg border border-primary/30 bg-primary/10 p-3">
+                      <p className="text-xs font-medium text-primary">
+                        Real Lead Hunter tool stage
+                      </p>
+
+                      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                        This employee will execute the
+                        authenticated Lead Hunter engine.
+                        It will not use Groq to invent
+                        prospects.
+                      </p>
+                    </div>
+                  ) : null}
 
                   {blockedHandoff ? (
                     <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3">
@@ -4275,8 +5805,7 @@ function AiWorkforce() {
                         {
                           reviewableOutputs.length
                         }{" "}
-                        saved employee
-                        output
+                        saved employee output
                         {reviewableOutputs.length ===
                         1
                           ? ""
@@ -4345,10 +5874,21 @@ function AiWorkforce() {
                               className="rounded-lg border border-border/60 bg-background/40 p-3"
                             >
                               <div className="flex items-center justify-between gap-3">
-                                <span className="text-xs font-medium">
-                                  {worker?.name ??
-                                    "Recorded worker"}
-                                </span>
+                                <div>
+                                  <span className="text-xs font-medium">
+                                    {worker?.name ??
+                                      "Recorded worker"}
+                                  </span>
+
+                                  {run.model_provider ? (
+                                    <p className="mt-0.5 text-[9px] text-muted-foreground">
+                                      {run.model_provider}
+                                      {run.model_name
+                                        ? ` · ${run.model_name}`
+                                        : ""}
+                                    </p>
+                                  ) : null}
+                                </div>
 
                                 <span className="text-[9px] uppercase tracking-widest text-success">
                                   completed
@@ -4375,7 +5915,7 @@ function AiWorkforce() {
             )}
           </section>
 
-          {/* CREATE MISSION */}
+          {/* CREATE WORKFLOW */}
 
           <section className="glass-card p-5">
             <div className="flex items-start gap-3">
@@ -4387,7 +5927,7 @@ function AiWorkforce() {
                 </p>
 
                 <h2 className="mt-1 font-display text-xl font-semibold">
-                  Create Growth coordination mission
+                  Create Growth or Revenue mission
                 </h2>
               </div>
             </div>
@@ -4440,41 +5980,70 @@ function AiWorkforce() {
                 </label>
               </div>
 
-              <Button
-                type="button"
-                onClick={() =>
-                  coordinationMutation.mutate(
-                    {
-                      objective,
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  onClick={() =>
+                    coordinationMutation.mutate(
+                      {
+                        objective,
 
-                      target_market:
-                        targetMarket,
+                        target_market:
+                          targetMarket,
 
-                      target_location:
-                        targetLocation,
-                    },
-                  )
-                }
-                disabled={
-                  !canCreateCoordination ||
-                  coordinationMutation.isPending
-                }
-                className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-              >
-                <Workflow className="mr-1.5 h-4 w-4" />
+                        target_location:
+                          targetLocation,
+                      },
+                    )
+                  }
+                  disabled={
+                    !canCreateGrowth ||
+                    workflowCreationPending
+                  }
+                  variant="outline"
+                  className="border-primary/40 text-primary hover:bg-primary/10"
+                >
+                  <Megaphone className="mr-1.5 h-4 w-4" />
 
-                {coordinationMutation.isPending
-                  ? "Creating workflow…"
-                  : "Create workflow"}
-              </Button>
+                  {coordinationMutation.isPending
+                    ? "Creating Growth workflow…"
+                    : "Create Growth workflow"}
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={() =>
+                    revenueMutation.mutate(
+                      {
+                        objective,
+
+                        target_market:
+                          targetMarket,
+
+                        target_location:
+                          targetLocation,
+                      },
+                    )
+                  }
+                  disabled={
+                    !canCreateRevenue ||
+                    workflowCreationPending
+                  }
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+                >
+                  <Search className="mr-1.5 h-4 w-4" />
+
+                  {revenueMutation.isPending
+                    ? "Creating revenue hunt…"
+                    : "Create Revenue Hunt"}
+                </Button>
+              </div>
             </div>
           </section>
         </div>
       ) : null}
 
-      {/* -------------------------------------------------------------------- */}
-      {/* ACTIVITY                                                             */}
-      {/* -------------------------------------------------------------------- */}
+      {/* ACTIVITY */}
 
       {view ===
       "activity" ? (
@@ -4490,8 +6059,9 @@ function AiWorkforce() {
 
             <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
               Current state is based on recorded handoffs,
-              runs and approvals. Historical failures remain
-              visible without overriding later success.
+              runs and approvals. Lead Hunter tool runs appear
+              as cossa_tool instead of being falsely reported
+              as Groq model execution.
             </p>
           </div>
 
@@ -4554,9 +6124,7 @@ function AiWorkforce() {
         </section>
       ) : null}
 
-      {/* -------------------------------------------------------------------- */}
-      {/* CONTROL ROOM                                                         */}
-      {/* -------------------------------------------------------------------- */}
+      {/* CONTROL ROOM */}
 
       {view ===
       "control" ? (
@@ -4574,8 +6142,8 @@ function AiWorkforce() {
 
                 <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
                   Technical controls remain available,
-                  but they no longer block ordinary daily
-                  business work.
+                  but they do not block ordinary safe
+                  internal business work.
                 </p>
               </div>
 
@@ -4629,6 +6197,46 @@ function AiWorkforce() {
                 }
                 description="Recorded employee departments."
               />
+            </div>
+          </section>
+
+          <section className="glass-card p-5">
+            <div className="flex items-start gap-3">
+              <Search className="mt-0.5 h-5 w-5 text-primary" />
+
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+                  Lead Hunter execution
+                </p>
+
+                <h2 className="mt-1 font-display text-xl font-semibold">
+                  Specialised revenue tool
+                </h2>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <OwnerRule>
+                Lead Hunter uses the authenticated Cossa
+                Hunter route instead of generic LLM
+                prospect generation.
+              </OwnerRule>
+
+              <OwnerRule>
+                Verified Hunter prospects are passed forward
+                using Hunt IDs, prospect IDs and CRM lead IDs.
+              </OwnerRule>
+
+              <OwnerRule>
+                Existing CRM matches are retained rather
+                than duplicated to inflate pipeline counts.
+              </OwnerRule>
+
+              <OwnerRule>
+                External prospect contact remains disabled
+                until a verified communication workflow and
+                approval boundary permits it.
+              </OwnerRule>
             </div>
           </section>
 
@@ -4719,7 +6327,7 @@ function AiWorkforce() {
                 value={
                   MAX_STAGE_PROMPT_CHARS
                 }
-                description="Maximum characters per stage prompt."
+                description="Maximum characters per language-model stage."
               />
 
               <ControlMetric
@@ -4735,7 +6343,7 @@ function AiWorkforce() {
                 value={
                   PROVIDER_MAX_ATTEMPTS
                 }
-                description="Maximum temporary retry attempts."
+                description="Maximum temporary LLM retry attempts."
               />
 
               <ControlMetric
@@ -4758,7 +6366,7 @@ function AiWorkforce() {
                 </p>
 
                 <h2 className="mt-1 font-display text-xl font-semibold">
-                  Growth mission records
+                  Growth & Revenue mission records
                 </h2>
               </div>
 
@@ -4835,6 +6443,12 @@ function AiWorkforce() {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-[10px] uppercase tracking-widest text-primary">
+                            {mission.title.startsWith(
+                              REVENUE_MISSION_PREFIX,
+                            )
+                              ? "Revenue"
+                              : "Growth"}
+                            {" · "}
                             {formatStatus(
                               mission.status,
                             )}
@@ -5006,13 +6620,23 @@ function EmployeeCard({
   } =
     item;
 
+  const isHunter =
+    canonicalEmployeeKey(
+      employee.employee_key,
+    ) ===
+    "lead-hunter";
+
   return (
     <button
       type="button"
       onClick={
         onOpen
       }
-      className="group rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
+      className={
+        isHunter
+          ? "group rounded-xl border border-primary/40 bg-primary/5 p-4 text-left transition hover:border-primary/70 hover:bg-primary/10"
+          : "group rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
+      }
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -5027,6 +6651,12 @@ function EmployeeCard({
               employee.title
             }
           </p>
+
+          {isHunter ? (
+            <p className="mt-1 text-[9px] font-medium uppercase tracking-widest text-primary">
+              Specialised tool worker
+            </p>
+          ) : null}
         </div>
 
         <OperationalBadge
@@ -5118,6 +6748,18 @@ function EmployeeActivityCard({
               item.employee.title
             }
           </p>
+
+          {item.operational.latestProvider ? (
+            <p className="mt-1 text-[9px] text-muted-foreground">
+              Latest executor:{" "}
+              {
+                item.operational.latestProvider
+              }
+              {item.operational.latestModel
+                ? ` · ${item.operational.latestModel}`
+                : ""}
+            </p>
+          ) : null}
         </div>
 
         <OperationalBadge
@@ -5181,6 +6823,15 @@ function EmployeeDrawer({
   } =
     item;
 
+  const employeeKey =
+    canonicalEmployeeKey(
+      employee.employee_key,
+    );
+
+  const isHunter =
+    employeeKey ===
+    "lead-hunter";
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
       <button
@@ -5220,7 +6871,11 @@ function EmployeeDrawer({
 
         <div className="mt-6">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary gold-glow">
-            <UsersRound className="h-6 w-6" />
+            {isHunter ? (
+              <Search className="h-6 w-6" />
+            ) : (
+              <UsersRound className="h-6 w-6" />
+            )}
           </div>
 
           <h2 className="mt-4 font-display text-2xl font-semibold">
@@ -5235,6 +6890,12 @@ function EmployeeDrawer({
             }
           </p>
 
+          {isHunter ? (
+            <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.18em] text-primary">
+              Authenticated specialised revenue tool
+            </p>
+          ) : null}
+
           <div className="mt-3">
             <OperationalBadge
               state={
@@ -5247,7 +6908,47 @@ function EmployeeDrawer({
           </div>
         </div>
 
-        <section className="mt-6 rounded-xl border border-border/60 bg-card/40 p-4">
+        {isHunter ? (
+          <section className="mt-6 rounded-xl border border-primary/30 bg-primary/5 p-4">
+            <p className="text-[10px] uppercase tracking-widest text-primary">
+              Lead Hunter intelligence
+            </p>
+
+            <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+              <p>
+                • Searches through the authenticated Cossa
+                Lead Hunter server route.
+              </p>
+
+              <p>
+                • Prioritises evidence, buyer intent,
+                urgency, contactability, revenue potential,
+                recurring value and geographic fit.
+              </p>
+
+              <p>
+                • Rejects unsupported prospects,
+                competitors, directories and existing CRM
+                duplicates according to Hunter rules.
+              </p>
+
+              <p>
+                • Carries Hunt IDs, prospect IDs and CRM
+                lead IDs into Lead Intake and Sales.
+              </p>
+
+              <p>
+                • Does not use Groq to manufacture leads.
+              </p>
+
+              <p>
+                • Does not automatically contact prospects.
+              </p>
+            </div>
+          </section>
+        ) : null}
+
+        <section className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
             What this employee owns
           </p>
@@ -5306,6 +7007,13 @@ function EmployeeDrawer({
         <section className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4">
           <div className="grid gap-3 text-xs">
             <EmployeeDetail
+              label="Employee key"
+              value={
+                employeeKey
+              }
+            />
+
+            <EmployeeDetail
               label="Department"
               value={employeeDepartment(
                 employee,
@@ -5339,15 +7047,15 @@ function EmployeeDrawer({
               label="Latest provider"
               value={
                 operational.latestProvider ??
-                "No provider run recorded"
+                "No execution recorded"
               }
             />
 
             <EmployeeDetail
-              label="Latest model"
+              label="Latest model / tool"
               value={
                 operational.latestModel ??
-                "No model run recorded"
+                "No execution recorded"
               }
             />
 
@@ -5442,11 +7150,12 @@ function EmployeeDrawer({
           </p>
 
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            This profile is ready for a direct employee-assignment control,
-            but the current imported workforce API does not expose a safe
-            standalone handoff-creation function. We will connect this when
-            workforce-data.ts is upgraded rather than pretending the task was
-            assigned.
+            The backend now supports real direct employee
+            missions. This drawer does not yet expose a
+            standalone execution control, so it does not
+            pretend a direct task has run. Use the AI CEO or
+            a recorded workflow until the direct-execution UI
+            is connected.
           </p>
         </div>
       </aside>
