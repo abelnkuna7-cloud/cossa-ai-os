@@ -22,6 +22,7 @@ import {
   ArrowRight,
   Bot,
   CheckCircle2,
+  CircleStop,
   ExternalLink,
   Loader2,
   MessageSquare,
@@ -37,12 +38,21 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { toast } from "sonner";
+import {
+  toast,
+} from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/status-badge";
+import {
+  Button,
+} from "@/components/ui/button";
 
-import { cn } from "@/lib/utils";
+import {
+  StatusBadge,
+} from "@/components/status-badge";
+
+import {
+  cn,
+} from "@/lib/utils";
 
 import {
   createConversation,
@@ -55,7 +65,12 @@ import {
   type AiMessage,
 } from "@/lib/ai-data";
 
-import { streamChat } from "@/lib/ai-stream";
+import {
+  streamChatWithMetadata,
+  type AiExecutionMetadata,
+  type CossaAiProvider,
+  type ProviderAttemptEvent,
+} from "@/lib/ai-stream";
 
 import {
   capabilityForRoute,
@@ -113,6 +128,27 @@ interface CreatedMissionState {
 }
 
 /* -------------------------------------------------------------------------- */
+/* CONFIGURATION                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The browser should normally delegate provider selection to /api/chat.
+ *
+ * The server gateway owns:
+ *
+ * - provider ordering;
+ * - provider availability checks;
+ * - provider fallback;
+ * - provider/model truth.
+ *
+ * This prevents browser fallback + server fallback from producing duplicate
+ * provider requests.
+ */
+const DEFAULT_CHAT_PROVIDER:
+  CossaAiProvider =
+  "auto";
+
+/* -------------------------------------------------------------------------- */
 /* WORKFORCE MISSION DEFINITIONS                                              */
 /* -------------------------------------------------------------------------- */
 
@@ -123,6 +159,7 @@ interface CreatedMissionState {
  * owner-facing specialist.
  *
  * They do not prove that the employee exists or is active.
+ *
  * workforce-data.ts remains the execution/source-of-truth layer.
  */
 
@@ -235,10 +272,12 @@ const WORKFORCE_MISSIONS:
 /* -------------------------------------------------------------------------- */
 
 function normaliseErrorMessage(
-  error: unknown,
+  error:
+    unknown,
 ): string {
   if (
-    error instanceof Error
+    error instanceof
+    Error
   ) {
     return error.message;
   }
@@ -253,8 +292,21 @@ function normaliseErrorMessage(
   return "Unknown Cossa AI error.";
 }
 
+function isAbortError(
+  error:
+    unknown,
+): boolean {
+  return (
+    error instanceof
+      DOMException &&
+    error.name ===
+      "AbortError"
+  );
+}
+
 function workflowDefinitionForKind(
-  kind: WorkforceMissionKind,
+  kind:
+    WorkforceMissionKind,
 ): WorkforceMissionDefinition {
   const definition =
     WORKFORCE_MISSIONS.find(
@@ -265,13 +317,74 @@ function workflowDefinitionForKind(
         kind,
     );
 
-  if (!definition) {
+  if (
+    !definition
+  ) {
     throw new Error(
       `Unsupported workforce mission type: ${kind}`,
     );
   }
 
   return definition;
+}
+
+/* -------------------------------------------------------------------------- */
+/* PROVIDER DISPLAY HELPERS                                                   */
+/* -------------------------------------------------------------------------- */
+
+function providerDisplayName(
+  provider:
+    AiExecutionMetadata["provider"],
+): string {
+  switch (
+    provider
+  ) {
+    case "groq":
+      return "Groq";
+
+    case "gemini":
+      return "Gemini";
+
+    case "openai":
+      return "OpenAI";
+
+    default:
+      return provider;
+  }
+}
+
+function providerAttemptStatusLabel(
+  attempt:
+    ProviderAttemptEvent |
+    null,
+): string | null {
+  if (
+    !attempt
+  ) {
+    return null;
+  }
+
+  switch (
+    attempt.status
+  ) {
+    case "starting":
+      return "starting";
+
+    case "streaming":
+      return "reasoning";
+
+    case "completed":
+      return "completed";
+
+    case "failed":
+      return "failed";
+
+    case "fallback":
+      return "fallback selected";
+
+    default:
+      return null;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -303,6 +416,7 @@ function workflowDefinitionForKind(
  * For broad executive specialists such as AI CEO, several workflows may tie.
  * The UI then allows the owner to explicitly select the desired workflow.
  */
+
 function missionKindsForSpecialist(
   specialist:
     Specialist |
@@ -532,6 +646,10 @@ export function SpecialistChat({
       "",
     );
 
+  /**
+   * Current response text that has reached the browser but has not necessarily
+   * been persisted as a completed assistant message yet.
+   */
   const [
     streaming,
     setStreaming,
@@ -543,12 +661,57 @@ export function SpecialistChat({
       null,
     );
 
+  /**
+   * Streaming text and "request currently active" are intentionally separated.
+   *
+   * This means an interrupted or unsaved response can remain visible without
+   * falsely displaying the animated "still generating" cursor.
+   */
+  const [
+    streamingActive,
+    setStreamingActive,
+  ] =
+    useState(
+      false,
+    );
+
   const [
     sending,
     setSending,
   ] =
     useState(
       false,
+    );
+
+  /* ------------------------------------------------------------------------ */
+  /* PROVIDER EXECUTION STATE                                                 */
+  /* ------------------------------------------------------------------------ */
+
+  /**
+   * Provider/model truth is populated from /api/chat response metadata.
+   *
+   * It is not inferred from the provider requested by this component.
+   */
+  const [
+    executionMetadata,
+    setExecutionMetadata,
+  ] =
+    useState<
+      AiExecutionMetadata |
+      null
+    >(
+      null,
+    );
+
+  const [
+    providerAttempt,
+    setProviderAttempt,
+  ] =
+    useState<
+      ProviderAttemptEvent |
+      null
+    >(
+      null,
     );
 
   /* ------------------------------------------------------------------------ */
@@ -700,6 +863,58 @@ export function SpecialistChat({
       : null;
 
   /* ------------------------------------------------------------------------ */
+  /* PROVIDER DISPLAY                                                         */
+  /* ------------------------------------------------------------------------ */
+
+  const providerStatusText =
+    useMemo(
+      () => {
+        if (
+          executionMetadata
+        ) {
+          const providerName =
+            providerDisplayName(
+              executionMetadata.provider,
+            );
+
+          const model =
+            executionMetadata.model
+              ? ` • ${executionMetadata.model}`
+              : "";
+
+          const fallback =
+            executionMetadata.fallback
+              ? " • fallback used"
+              : "";
+
+          return `${providerName}${model}${fallback}`;
+        }
+
+        if (
+          providerAttempt
+        ) {
+          const providerName =
+            providerDisplayName(
+              providerAttempt.provider,
+            );
+
+          const status =
+            providerAttemptStatusLabel(
+              providerAttempt,
+            );
+
+          return `${providerName}${status ? ` • ${status}` : ""}`;
+        }
+
+        return "Automatic provider routing";
+      },
+      [
+        executionMetadata,
+        providerAttempt,
+      ],
+    );
+
+  /* ------------------------------------------------------------------------ */
   /* EFFECTS                                                                  */
   /* ------------------------------------------------------------------------ */
 
@@ -776,12 +991,30 @@ export function SpecialistChat({
   );
 
   /**
-   * Do not carry a completed mission banner into a different specialist route.
+   * Do not carry route-specific execution state into another specialist.
    */
   useEffect(
     () => {
+      abortRef.current?.abort();
+
       setLastCreatedMission(
         null,
+      );
+
+      setExecutionMetadata(
+        null,
+      );
+
+      setProviderAttempt(
+        null,
+      );
+
+      setStreaming(
+        null,
+      );
+
+      setStreamingActive(
+        false,
       );
     },
     [
@@ -801,7 +1034,9 @@ export function SpecialistChat({
             .trim()
             .toLowerCase();
 
-        if (!q) {
+        if (
+          !q
+        ) {
           return (
             convos.data ??
             []
@@ -889,6 +1124,16 @@ export function SpecialistChat({
   /* ------------------------------------------------------------------------ */
 
   async function handleNew() {
+    if (
+      sending
+    ) {
+      toast.error(
+        "Finish or stop the current response first.",
+      );
+
+      return;
+    }
+
     try {
       const conversation =
         await createConversation(
@@ -902,6 +1147,22 @@ export function SpecialistChat({
           category,
         ],
       });
+
+      setExecutionMetadata(
+        null,
+      );
+
+      setProviderAttempt(
+        null,
+      );
+
+      setStreaming(
+        null,
+      );
+
+      setStreamingActive(
+        false,
+      );
 
       setActiveId(
         conversation.id,
@@ -930,6 +1191,18 @@ export function SpecialistChat({
       string,
   ) {
     if (
+      sending &&
+      id ===
+        activeId
+    ) {
+      toast.error(
+        "Stop the active AI response before deleting this conversation.",
+      );
+
+      return;
+    }
+
+    if (
       !window.confirm(
         "Delete this conversation?",
       )
@@ -955,6 +1228,22 @@ export function SpecialistChat({
       ) {
         setActiveId(
           null,
+        );
+
+        setExecutionMetadata(
+          null,
+        );
+
+        setProviderAttempt(
+          null,
+        );
+
+        setStreaming(
+          null,
+        );
+
+        setStreamingActive(
+          false,
         );
       }
     } catch (
@@ -1011,6 +1300,20 @@ export function SpecialistChat({
   }
 
   /* ------------------------------------------------------------------------ */
+  /* STOP AI                                                                  */
+  /* ------------------------------------------------------------------------ */
+
+  function handleStop() {
+    if (
+      !abortRef.current
+    ) {
+      return;
+    }
+
+    abortRef.current.abort();
+  }
+
+  /* ------------------------------------------------------------------------ */
   /* SEND CHAT                                                                */
   /* ------------------------------------------------------------------------ */
 
@@ -1035,14 +1338,46 @@ export function SpecialistChat({
       true,
     );
 
+    setStreaming(
+      "",
+    );
+
+    setStreamingActive(
+      true,
+    );
+
+    setExecutionMetadata(
+      null,
+    );
+
+    setProviderAttempt(
+      null,
+    );
+
     setInput(
       "",
     );
 
-    try {
-      let convoId =
-        activeId;
+    /**
+     * Kept outside React state so that we always know exactly how much text
+     * reached the browser even if React state updates are still batching.
+     */
+    let responseBuffer =
+      "";
 
+    /**
+     * Prevents a completed provider answer from being incorrectly labelled as
+     * partial when the later database insert fails.
+     */
+    let aiCompleted =
+      false;
+
+    let convoId:
+      string |
+      null =
+      activeId;
+
+    try {
       if (
         !convoId
       ) {
@@ -1142,37 +1477,66 @@ export function SpecialistChat({
       abortRef.current =
         new AbortController();
 
-      setStreaming(
-        "",
-      );
-
-      const final =
-        await streamChat(
+      const result =
+        await streamChatWithMetadata(
           prior,
 
           (
             chunk,
-          ) =>
+          ) => {
+            responseBuffer +=
+              chunk;
+
             setStreaming(
+              responseBuffer,
+            );
+          },
+
+          {
+            signal:
+              abortRef.current.signal,
+
+            system:
+              spec?.system,
+
+            provider:
+              DEFAULT_CHAT_PROVIDER,
+
+            onProviderAttempt:
               (
-                current,
-              ) =>
-                (
-                  current ??
-                  ""
-                ) +
-                chunk,
-            ),
+                event,
+              ) => {
+                setProviderAttempt(
+                  event,
+                );
+              },
 
-          abortRef.current.signal,
-
-          spec?.system,
+            onExecutionMetadata:
+              (
+                metadata,
+              ) => {
+                setExecutionMetadata(
+                  metadata,
+                );
+              },
+          },
         );
+
+      aiCompleted =
+        true;
+
+      setStreamingActive(
+        false,
+      );
+
+      setExecutionMetadata(
+        result.metadata,
+      );
 
       await insertMessage(
         convoId,
         "assistant",
-        final,
+        result.content,
       );
 
       setStreaming(
@@ -1195,14 +1559,198 @@ export function SpecialistChat({
     } catch (
       error
     ) {
-      setStreaming(
-        null,
+      setStreamingActive(
+        false,
       );
 
       const message =
         normaliseErrorMessage(
           error,
         );
+
+      const partialOutput =
+        responseBuffer.trim();
+
+      /* -------------------------------------------------------------------- */
+      /* USER-CANCELLED RESPONSE                                              */
+      /* -------------------------------------------------------------------- */
+
+      if (
+        isAbortError(
+          error,
+        )
+      ) {
+        if (
+          partialOutput &&
+          convoId
+        ) {
+          const stoppedContent =
+            [
+              responseBuffer.trimEnd(),
+
+              "",
+
+              "> **Response stopped:** Generation was stopped before the answer finished.",
+            ].join(
+              "\n",
+            );
+
+          try {
+            await insertMessage(
+              convoId,
+              "assistant",
+              stoppedContent,
+            );
+
+            setStreaming(
+              null,
+            );
+
+            await qc.invalidateQueries({
+              queryKey: [
+                "ai-messages",
+                convoId,
+              ],
+            });
+          } catch (
+            persistenceError
+          ) {
+            setStreaming(
+              stoppedContent,
+            );
+
+            console.error(
+              "Stopped AI response could not be persisted.",
+              persistenceError,
+            );
+          }
+        } else {
+          setStreaming(
+            null,
+          );
+        }
+
+        toast.message(
+          "AI response stopped",
+          {
+            description:
+              partialOutput
+                ? "The partial response was preserved."
+                : "No assistant response was generated.",
+          },
+        );
+
+        return;
+      }
+
+      /* -------------------------------------------------------------------- */
+      /* PROVIDER FAILED AFTER VISIBLE OUTPUT                                 */
+      /* -------------------------------------------------------------------- */
+
+      if (
+        !aiCompleted &&
+        partialOutput &&
+        convoId
+      ) {
+        const interruptedContent =
+          [
+            responseBuffer.trimEnd(),
+
+            "",
+
+            "> **Interrupted response:** The reasoning stream stopped before completion. This is a partial answer and should not be treated as complete.",
+          ].join(
+            "\n",
+          );
+
+        try {
+          await insertMessage(
+            convoId,
+            "assistant",
+            interruptedContent,
+          );
+
+          setStreaming(
+            null,
+          );
+
+          await qc.invalidateQueries({
+            queryKey: [
+              "ai-messages",
+              convoId,
+            ],
+          });
+
+          await qc.invalidateQueries({
+            queryKey: [
+              "ai-conversations",
+              category,
+            ],
+          });
+        } catch (
+          persistenceError
+        ) {
+          /**
+           * Even if persistence fails, do not erase output the owner already
+           * saw.
+           */
+          setStreaming(
+            interruptedContent,
+          );
+
+          console.error(
+            "Interrupted Cossa AI response could not be persisted.",
+            persistenceError,
+          );
+        }
+
+        toast.error(
+          "AI response interrupted",
+          {
+            description:
+              "Part of the answer was returned before the reasoning stream failed. The partial output was preserved and was not mixed with another provider.",
+          },
+        );
+
+        return;
+      }
+
+      /* -------------------------------------------------------------------- */
+      /* AI COMPLETED BUT DATABASE SAVE FAILED                                */
+      /* -------------------------------------------------------------------- */
+
+      if (
+        aiCompleted &&
+        partialOutput
+      ) {
+        /**
+         * The provider successfully completed reasoning.
+         *
+         * If inserting the assistant message failed afterwards, preserve the
+         * generated answer visibly rather than pretending the provider failed.
+         */
+        setStreaming(
+          responseBuffer,
+        );
+
+        toast.error(
+          "Answer generated but not saved",
+          {
+            description:
+              "The AI completed its response, but Cossa could not persist the assistant message. The generated answer remains visible in this session.",
+          },
+        );
+
+        return;
+      }
+
+      /* -------------------------------------------------------------------- */
+      /* REQUEST FAILED BEFORE OUTPUT                                         */
+      /* -------------------------------------------------------------------- */
+
+      setStreaming(
+        null,
+      );
 
       if (
         message.includes(
@@ -1213,19 +1761,24 @@ export function SpecialistChat({
           "AI service unavailable",
           {
             description:
-              "The inference service needs attention. Please try again later.",
+              "The selected reasoning route could not complete the request. The server may use another configured provider when available.",
           },
         );
       } else if (
         message.includes(
           "429",
-        )
+        ) ||
+        message
+          .toLowerCase()
+          .includes(
+            "rate",
+          )
       ) {
         toast.error(
-          "Rate limited",
+          "AI provider rate limited",
           {
             description:
-              "Please try again in a moment.",
+              message,
           },
         );
       } else {
@@ -1239,6 +1792,10 @@ export function SpecialistChat({
       }
     } finally {
       setSending(
+        false,
+      );
+
+      setStreamingActive(
         false,
       );
 
@@ -1478,6 +2035,26 @@ export function SpecialistChat({
                     Mission bridge not mapped
                   </span>
                 ) : null}
+
+                {executionMetadata ? (
+                  <span
+                    className={cn(
+                      "rounded-full border px-2 py-0.5 text-[10px] font-medium",
+
+                      executionMetadata.fallback
+                        ? "border-warning/30 bg-warning/10 text-warning"
+                        : "border-success/30 bg-success/10 text-success",
+                    )}
+                  >
+                    {providerDisplayName(
+                      executionMetadata.provider,
+                    )}
+
+                    {executionMetadata.fallback
+                      ? " fallback"
+                      : " active"}
+                  </span>
+                ) : null}
               </div>
 
               <p className="mt-1 text-xs text-muted-foreground">
@@ -1514,6 +2091,9 @@ export function SpecialistChat({
               type="button"
               onClick={
                 handleNew
+              }
+              disabled={
+                sending
               }
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow sm:w-auto"
             >
@@ -1769,6 +2349,7 @@ export function SpecialistChat({
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
                     <span>
                       Mission ID:{" "}
+
                       <strong className="text-foreground">
                         {
                           lastCreatedMission.result.mission.id
@@ -1778,6 +2359,7 @@ export function SpecialistChat({
 
                     <span>
                       Status:{" "}
+
                       <strong className="text-foreground">
                         {
                           lastCreatedMission.result.mission.status
@@ -1787,6 +2369,7 @@ export function SpecialistChat({
 
                     <span>
                       Handoffs:{" "}
+
                       <strong className="text-foreground">
                         {
                           lastCreatedMission.result.handoffs.length
@@ -1994,14 +2577,14 @@ export function SpecialistChat({
         {/* ------------------------------------------------------------------ */}
 
         <section className="glass-card flex min-h-0 flex-col">
-          <div className="flex items-center justify-between border-b border-border/40 px-5 py-3">
+          <div className="flex items-center justify-between gap-3 border-b border-border/40 px-5 py-3">
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold">
                 {activeConvo?.title ??
                   "New chat"}
               </div>
 
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-1 text-[10px] uppercase tracking-widest text-muted-foreground">
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-1 text-[10px] uppercase tracking-widest text-muted-foreground">
                 <span>
                   {
                     capability.label
@@ -2012,8 +2595,21 @@ export function SpecialistChat({
                   •
                 </span>
 
-                <span>
-                  Economy Groq route when configured
+                <span
+                  className={cn(
+                    providerAttempt?.status ===
+                      "failed"
+                      ? "text-destructive"
+                      : executionMetadata?.fallback
+                        ? "text-warning"
+                        : executionMetadata
+                          ? "text-success"
+                          : "",
+                  )}
+                >
+                  {
+                    providerStatusText
+                  }
                 </span>
 
                 <span>
@@ -2036,23 +2632,113 @@ export function SpecialistChat({
                   </>
                 ) : null}
               </div>
+
+              {executionMetadata?.providerRoute ? (
+                <div className="mt-1 text-[10px] text-muted-foreground">
+                  Provider route:{" "}
+                  <span className="font-medium text-foreground">
+                    {
+                      executionMetadata.providerRoute
+                    }
+                  </span>
+                </div>
+              ) : null}
             </div>
 
-            {lastCreatedMission ? (
-              <Button
-                asChild
-                size="sm"
-                variant="outline"
-                className="hidden border-primary/40 text-primary hover:bg-primary/10 sm:flex"
-              >
-                <Link to="/ai/workforce">
-                  Workforce
+            <div className="flex shrink-0 items-center gap-2">
+              {sending ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={
+                    handleStop
+                  }
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                >
+                  <CircleStop className="mr-1.5 h-3.5 w-3.5" />
 
-                  <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            ) : null}
+                  Stop
+                </Button>
+              ) : null}
+
+              {lastCreatedMission ? (
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="hidden border-primary/40 text-primary hover:bg-primary/10 sm:flex"
+                >
+                  <Link to="/ai/workforce">
+                    Workforce
+
+                    <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
           </div>
+
+          {/* ---------------------------------------------------------------- */}
+          {/* PROVIDER EXECUTION NOTICE                                        */}
+          {/* ---------------------------------------------------------------- */}
+
+          {sending &&
+          providerAttempt ? (
+            <div className="border-b border-border/40 bg-background/20 px-5 py-2">
+              <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+
+                <span>
+                  Cossa AI reasoning through{" "}
+
+                  <strong className="text-foreground">
+                    {providerDisplayName(
+                      providerAttempt.provider,
+                    )}
+                  </strong>
+                </span>
+
+                {providerAttempt.model ? (
+                  <>
+                    <span>
+                      •
+                    </span>
+
+                    <span>
+                      {
+                        providerAttempt.model
+                      }
+                    </span>
+                  </>
+                ) : null}
+
+                {providerAttempt.fallback ? (
+                  <>
+                    <span>
+                      •
+                    </span>
+
+                    <span className="text-warning">
+                      server fallback
+                    </span>
+                  </>
+                ) : null}
+
+                <span>
+                  •
+                </span>
+
+                <span>
+                  {
+                    providerAttemptStatusLabel(
+                      providerAttempt,
+                    )
+                  }
+                </span>
+              </div>
+            </div>
+          ) : null}
 
           {/* ---------------------------------------------------------------- */}
           {/* MESSAGES                                                         */}
@@ -2087,10 +2773,17 @@ export function SpecialistChat({
                     }
                   </p>
 
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    Cossa AI uses server-controlled provider routing. The
+                    provider shown after a request is the provider reported by
+                    the gateway as actually executing that response.
+                  </p>
+
                   {missionBridgeEnabled ? (
                     <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                       This specialist can also create a real recorded Cossa
                       workforce mission when you choose{" "}
+
                       <strong className="text-foreground">
                         Create workforce mission
                       </strong>
@@ -2109,12 +2802,15 @@ export function SpecialistChat({
                         key={
                           label
                         }
+                        disabled={
+                          sending
+                        }
                         onClick={() =>
                           void handleSend(
                             label,
                           )
                         }
-                        className="flex items-start gap-2 rounded-xl border border-border/60 bg-card/40 p-3 text-left text-xs transition-colors hover:border-primary/40 hover:bg-primary/5"
+                        className="flex items-start gap-2 rounded-xl border border-border/60 bg-card/40 p-3 text-left text-xs transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 
@@ -2177,7 +2873,9 @@ export function SpecialistChat({
                       streaming ||
                       "…"
                     }
-                    streaming
+                    streaming={
+                      streamingActive
+                    }
                     Icon={
                       Icon
                     }
@@ -2236,27 +2934,38 @@ export function SpecialistChat({
                 }
               />
 
-              <Button
-                type="submit"
-                size="sm"
-                disabled={
-                  sending ||
-                  !input.trim()
-                }
-                className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-                aria-label="Send"
-              >
-                {sending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
+              {sending ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={
+                    handleStop
+                  }
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                  aria-label="Stop response"
+                >
+                  <CircleStop className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={
+                    !input.trim()
+                  }
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+                  aria-label="Send"
+                >
                   <Send className="h-4 w-4" />
-                )}
-              </Button>
+                </Button>
+              )}
             </form>
 
             <div className="mx-auto mt-2 flex max-w-3xl flex-col items-center justify-between gap-2 sm:flex-row">
               <p className="text-center text-[10px] text-muted-foreground sm:text-left">
                 Cossa AI can make mistakes. Verify important information.
+                Provider identity is reported by the server gateway.
               </p>
 
               {missionBridgeEnabled ? (
