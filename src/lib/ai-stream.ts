@@ -4,9 +4,30 @@ import { supabase } from "@/integrations/supabase/client";
 /* TYPES                                                                      */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Providers the browser may request from the Cossa AI gateway.
+ *
+ * "auto"
+ * means:
+ *
+ * Let /api/chat select the best available reasoning provider.
+ */
 export type CossaAiProvider =
+  | "auto"
   | "groq"
+  | "gemini"
   | "openai";
+
+/**
+ * Providers that can actually execute a request.
+ *
+ * "auto" is a routing instruction, not an execution provider.
+ */
+export type CossaAiExecutionProvider =
+  Exclude<
+    CossaAiProvider,
+    "auto"
+  >;
 
 export type ChatMessageRole =
   | "system"
@@ -26,15 +47,91 @@ export type ProviderAttemptStatus =
   | "fallback";
 
 export interface ProviderAttemptEvent {
-  provider: CossaAiProvider;
+  /**
+   * Provider currently involved in execution.
+   */
+  provider:
+    CossaAiExecutionProvider;
 
-  status: ProviderAttemptStatus;
+  /**
+   * Requested route.
+   *
+   * Example:
+   *
+   * requestedProvider = "auto"
+   * provider = "gemini"
+   */
+  requestedProvider:
+    CossaAiProvider;
 
+  status:
+    ProviderAttemptStatus;
+
+  /**
+   * True when the server reports that the final provider was reached through
+   * fallback/provider failover rather than the original preferred route.
+   */
   fallback:
     boolean;
 
+  /**
+   * Provider model reported by the server.
+   */
+  model?:
+    string;
+
   error?:
     string;
+}
+
+export interface AiExecutionMetadata {
+  /**
+   * Route requested by the caller.
+   */
+  requestedProvider:
+    CossaAiProvider;
+
+  /**
+   * Actual provider that returned the response.
+   */
+  provider:
+    CossaAiExecutionProvider;
+
+  /**
+   * Actual provider model reported by /api/chat.
+   */
+  model:
+    string | null;
+
+  /**
+   * Whether the server reports provider fallback.
+   */
+  fallback:
+    boolean;
+
+  /**
+   * Optional server routing description.
+   *
+   * Example:
+   *
+   * groq>gemini
+   */
+  providerRoute:
+    string | null;
+
+  /**
+   * Optional request/run identifier returned by Cossa AI.
+   */
+  requestId:
+    string | null;
+}
+
+export interface StreamChatResult {
+  content:
+    string;
+
+  metadata:
+    AiExecutionMetadata;
 }
 
 export interface StreamChatOptions {
@@ -42,18 +139,30 @@ export interface StreamChatOptions {
 
   system?: string;
 
+  /**
+   * Provider routing request.
+   *
+   * Recommended default:
+   *
+   * "auto"
+   *
+   * The server gateway owns provider selection and fallback.
+   */
   provider?: CossaAiProvider;
 
   /**
-   * Optional fallback provider.
+   * Legacy compatibility field.
    *
-   * Used only when the primary provider fails before returning visible output.
+   * Browser-side fallback is intentionally disabled.
+   *
+   * If supplied, it is forwarded to /api/chat as a server routing preference
+   * only. The browser itself never sends a second AI request.
    */
   fallbackProvider?:
-    CossaAiProvider;
+    CossaAiExecutionProvider;
 
   /**
-   * Prevent a chat/workforce stage from hanging forever.
+   * Prevent a browser request from hanging forever.
    *
    * Default: 120 seconds.
    */
@@ -71,19 +180,32 @@ export interface StreamChatOptions {
   /**
    * Optional provider lifecycle callback.
    *
-   * This allows the CEO/workforce UI to show:
+   * Provider truth comes from /api/chat response headers.
    *
-   * - Groq starting
-   * - Groq failed
-   * - falling back to OpenAI
-   * - OpenAI completed
-   *
-   * without pretending provider health exists when it has not been observed.
+   * The client does not pretend that a requested provider necessarily executed
+   * the request.
    */
   onProviderAttempt?:
     (
       event:
         ProviderAttemptEvent,
+    ) => void;
+
+  /**
+   * Optional callback exposing the final provider/model metadata.
+   *
+   * Useful for:
+   *
+   * - mission_runs;
+   * - activity UI;
+   * - debugging;
+   * - provider monitoring;
+   * - CEO execution truth.
+   */
+  onExecutionMetadata?:
+    (
+      metadata:
+        AiExecutionMetadata,
     ) => void;
 }
 
@@ -91,11 +213,15 @@ export interface StreamChatOptions {
 /* INTERNAL TYPES                                                             */
 /* -------------------------------------------------------------------------- */
 
-interface ProviderExecutionInput {
-  messages: ChatMessage[];
+interface StreamGatewayInput {
+  messages:
+    ChatMessage[];
 
   onToken:
-    (chunk: string) => void;
+    (
+      chunk:
+        string,
+    ) => void;
 
   signal?:
     AbortSignal;
@@ -103,11 +229,11 @@ interface ProviderExecutionInput {
   system?:
     string;
 
-  primaryProvider:
+  provider:
     CossaAiProvider;
 
-  fallbackProvider:
-    CossaAiProvider;
+  fallbackProvider?:
+    CossaAiExecutionProvider;
 
   timeoutMs:
     number;
@@ -116,23 +242,48 @@ interface ProviderExecutionInput {
     boolean;
 
   onProviderAttempt?:
-    (
-      event:
-        ProviderAttemptEvent,
-    ) => void;
+    StreamChatOptions["onProviderAttempt"];
+
+  onExecutionMetadata?:
+    StreamChatOptions["onExecutionMetadata"];
+}
+
+interface StreamGatewayResult {
+  content:
+    string;
+
+  metadata:
+    AiExecutionMetadata;
 }
 
 class ChatHttpError extends Error {
   readonly status:
     number;
 
-  constructor(
+  readonly requestedProvider:
+    CossaAiProvider;
+
+  readonly actualProvider:
+    CossaAiExecutionProvider | null;
+
+  constructor({
+    status,
+    message,
+    requestedProvider,
+    actualProvider,
+  }: {
     status:
-      number,
+      number;
 
     message:
-      string,
-  ) {
+      string;
+
+    requestedProvider:
+      CossaAiProvider;
+
+    actualProvider:
+      CossaAiExecutionProvider | null;
+  }) {
     super(
       message,
     );
@@ -142,6 +293,12 @@ class ChatHttpError extends Error {
 
     this.status =
       status;
+
+    this.requestedProvider =
+      requestedProvider;
+
+    this.actualProvider =
+      actualProvider;
   }
 }
 
@@ -149,19 +306,45 @@ class ChatHttpError extends Error {
 /* CONSTANTS                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Cossa AI should normally let the server select the best available provider.
+ */
 const DEFAULT_PROVIDER:
   CossaAiProvider =
-  "groq";
-
-const DEFAULT_FALLBACK_PROVIDER:
-  CossaAiProvider =
-  "openai";
+  "auto";
 
 const DEFAULT_TIMEOUT_MS =
   120_000;
 
 const MIN_TIMEOUT_MS =
   5_000;
+
+/* -------------------------------------------------------------------------- */
+/* RESPONSE HEADERS                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Existing header from your current /api/chat implementation.
+ */
+const HEADER_PROVIDER =
+  "x-cossa-ai-provider";
+
+/**
+ * Recommended additional headers for the upgraded gateway.
+ *
+ * The client handles them safely even before all of them exist.
+ */
+const HEADER_MODEL =
+  "x-cossa-ai-model";
+
+const HEADER_FALLBACK =
+  "x-cossa-ai-fallback";
+
+const HEADER_PROVIDER_ROUTE =
+  "x-cossa-ai-provider-route";
+
+const HEADER_REQUEST_ID =
+  "x-cossa-ai-request-id";
 
 /* -------------------------------------------------------------------------- */
 /* MESSAGE VALIDATION                                                         */
@@ -229,6 +412,45 @@ function requireMessages(
       };
     },
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* PROVIDER VALIDATION                                                        */
+/* -------------------------------------------------------------------------- */
+
+function isExecutionProvider(
+  value:
+    unknown,
+): value is CossaAiExecutionProvider {
+  return (
+    value ===
+      "groq" ||
+    value ===
+      "gemini" ||
+    value ===
+      "openai"
+  );
+}
+
+function requireProvider(
+  value:
+    CossaAiProvider,
+): CossaAiProvider {
+  if (
+    value !==
+      "auto" &&
+    !isExecutionProvider(
+      value,
+    )
+  ) {
+    throw new Error(
+      `Unsupported Cossa AI provider: ${String(
+        value,
+      )}`,
+    );
+  }
+
+  return value;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -355,7 +577,7 @@ function errorMessage(
     return error;
   }
 
-  return "Unknown Cossa AI provider error.";
+  return "Unknown Cossa AI gateway error.";
 }
 
 async function readErrorResponse(
@@ -405,57 +627,9 @@ function isAbortError(
   );
 }
 
-/**
- * Decides whether another reasoning provider is worth trying.
- *
- * Do not switch providers when the problem is clearly:
- *
- * - invalid request;
- * - expired Cossa authentication;
- * - organisation permission;
- * - route validation.
- *
- * Another provider cannot fix those conditions.
- *
- * Provider availability, quota, rate limit, network and upstream failures may
- * safely fall back when no visible output has already been emitted.
- */
-function shouldAttemptFallback(
-  error:
-    unknown,
-): boolean {
-  if (
-    isAbortError(
-      error,
-    )
-  ) {
-    return false;
-  }
-
-  if (
-    error instanceof
-    ChatHttpError
-  ) {
-    if (
-      error.status ===
-        400 ||
-      error.status ===
-        401 ||
-      error.status ===
-        403
-    ) {
-      return false;
-    }
-
-    return true;
-  }
-
-  /*
-   * Network errors, timeouts and unexpected provider failures can generally
-   * attempt another configured provider.
-   */
-  return true;
-}
+/* -------------------------------------------------------------------------- */
+/* PROVIDER CALLBACK SAFETY                                                   */
+/* -------------------------------------------------------------------------- */
 
 function notifyProviderAttempt(
   callback:
@@ -475,11 +649,33 @@ function notifyProviderAttempt(
   } catch (
     error
   ) {
-    /*
-     * Provider status UI must never break AI execution.
-     */
     console.warn(
       "Cossa AI provider-status callback failed.",
+      error,
+    );
+  }
+}
+
+function notifyExecutionMetadata(
+  callback:
+    StreamChatOptions["onExecutionMetadata"],
+
+  metadata:
+    AiExecutionMetadata,
+): void {
+  if (!callback) {
+    return;
+  }
+
+  try {
+    callback(
+      metadata,
+    );
+  } catch (
+    error
+  ) {
+    console.warn(
+      "Cossa AI execution-metadata callback failed.",
       error,
     );
   }
@@ -658,14 +854,16 @@ function parseServerSentEventData(
           error?: unknown;
         };
 
-      const error =
+      const eventError =
         normaliseErrorMessage(
           event.error,
         );
 
-      if (error) {
+      if (
+        eventError
+      ) {
         throw new Error(
-          error,
+          eventError,
         );
       }
 
@@ -726,27 +924,21 @@ function parseServerSentEventData(
   } catch (
     error
   ) {
+    /*
+     * Plain-text SSE payloads remain valid.
+     */
     if (
-      error instanceof Error &&
-      error.message !==
-        "Unexpected end of JSON input"
+      !data.startsWith(
+        "{",
+      ) &&
+      !data.startsWith(
+        "[",
+      )
     ) {
-      /*
-       * A plain text SSE payload is still valid provider output.
-       */
-      if (
-        !data.startsWith(
-          "{",
-        ) &&
-        !data.startsWith(
-          "[",
-        )
-      ) {
-        return data;
-      }
-
-      throw error;
+      return data;
     }
+
+    throw error;
   }
 
   return null;
@@ -761,9 +953,14 @@ async function readPlainTextStream(
     Response,
 
   onToken:
-    (chunk: string) => void,
+    (
+      chunk:
+        string,
+    ) => void,
 ): Promise<string> {
-  if (!response.body) {
+  if (
+    !response.body
+  ) {
     throw new Error(
       "The AI response did not contain a readable stream.",
     );
@@ -779,14 +976,18 @@ async function readPlainTextStream(
     "";
 
   try {
-    while (true) {
+    while (
+      true
+    ) {
       const {
         value,
         done,
       } =
         await reader.read();
 
-      if (done) {
+      if (
+        done
+      ) {
         break;
       }
 
@@ -799,7 +1000,9 @@ async function readPlainTextStream(
           },
         );
 
-      if (!chunk) {
+      if (
+        !chunk
+      ) {
         continue;
       }
 
@@ -814,7 +1017,9 @@ async function readPlainTextStream(
     const finalChunk =
       decoder.decode();
 
-    if (finalChunk) {
+    if (
+      finalChunk
+    ) {
       full +=
         finalChunk;
 
@@ -834,9 +1039,14 @@ async function readEventStream(
     Response,
 
   onToken:
-    (chunk: string) => void,
+    (
+      chunk:
+        string,
+    ) => void,
 ): Promise<string> {
-  if (!response.body) {
+  if (
+    !response.body
+  ) {
     throw new Error(
       "The AI response did not contain a readable stream.",
     );
@@ -902,7 +1112,9 @@ async function readEventStream(
       } =
         await reader.read();
 
-      if (done) {
+      if (
+        done
+      ) {
         break;
       }
 
@@ -959,39 +1171,164 @@ async function readEventStream(
 }
 
 /* -------------------------------------------------------------------------- */
-/* PROVIDER REQUEST                                                           */
+/* RESPONSE METADATA                                                          */
 /* -------------------------------------------------------------------------- */
 
-async function streamFromProvider({
+function headerBoolean(
+  value:
+    string | null,
+): boolean {
+  if (
+    !value
+  ) {
+    return false;
+  }
+
+  return [
+    "1",
+    "true",
+    "yes",
+    "fallback",
+  ].includes(
+    value
+      .trim()
+      .toLowerCase(),
+  );
+}
+
+function extractExecutionMetadata({
+  response,
+  requestedProvider,
+}: {
+  response:
+    Response;
+
+  requestedProvider:
+    CossaAiProvider;
+}): AiExecutionMetadata {
+  const rawProvider =
+    response.headers
+      .get(
+        HEADER_PROVIDER,
+      )
+      ?.trim()
+      .toLowerCase();
+
+  let provider:
+    CossaAiExecutionProvider;
+
+  if (
+    isExecutionProvider(
+      rawProvider,
+    )
+  ) {
+    provider =
+      rawProvider;
+  } else if (
+    requestedProvider !==
+      "auto"
+  ) {
+    provider =
+      requestedProvider;
+  } else {
+    /*
+     * The gateway should always report the actual execution provider.
+     *
+     * Falling back to Groq here is only for backwards compatibility with an
+     * older /api/chat response that does not yet expose the provider header.
+     *
+     * Once the upgraded server gateway is installed, this branch should no
+     * longer be reached.
+     */
+    provider =
+      "groq";
+  }
+
+  const model =
+    response.headers
+      .get(
+        HEADER_MODEL,
+      )
+      ?.trim() ||
+    null;
+
+  const providerRoute =
+    response.headers
+      .get(
+        HEADER_PROVIDER_ROUTE,
+      )
+      ?.trim() ||
+    null;
+
+  const requestId =
+    response.headers
+      .get(
+        HEADER_REQUEST_ID,
+      )
+      ?.trim() ||
+    null;
+
+  const explicitFallback =
+    headerBoolean(
+      response.headers.get(
+        HEADER_FALLBACK,
+      ),
+    );
+
+  const providerChanged =
+    requestedProvider !==
+      "auto" &&
+    provider !==
+      requestedProvider;
+
+  return {
+    requestedProvider,
+
+    provider,
+
+    model,
+
+    fallback:
+      explicitFallback ||
+      providerChanged,
+
+    providerRoute,
+
+    requestId,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* GATEWAY EXECUTION                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Executes exactly ONE browser request.
+ *
+ * Provider fallback belongs to /api/chat.
+ *
+ * This prevents:
+ *
+ * browser request
+ * → server fallback
+ * → browser fallback
+ * → second server routing chain
+ *
+ * which can otherwise duplicate model work, increase API cost and make mission
+ * run provider records inaccurate.
+ */
+async function streamFromGateway({
   messages,
   onToken,
   signal,
   system,
   provider,
+  fallbackProvider,
   timeoutMs,
   requireContent,
-}: {
-  messages:
-    ChatMessage[];
-
-  onToken:
-    (chunk: string) => void;
-
-  signal?:
-    AbortSignal;
-
-  system?:
-    string;
-
-  provider:
-    CossaAiProvider;
-
-  timeoutMs:
-    number;
-
-  requireContent:
-    boolean;
-}): Promise<string> {
+  onProviderAttempt,
+  onExecutionMetadata,
+}: StreamGatewayInput): Promise<StreamGatewayResult> {
   const accessToken =
     await getAccessToken();
 
@@ -1007,6 +1344,16 @@ async function streamFromProvider({
       signal,
       timeoutMs,
     );
+
+  let visibleOutput =
+    "";
+
+  let streamingNotified =
+    false;
+
+  let executionMetadata:
+    AiExecutionMetadata | null =
+    null;
 
   try {
     const response =
@@ -1036,6 +1383,9 @@ async function streamFromProvider({
                 undefined,
 
               provider,
+
+              fallback_provider:
+                fallbackProvider,
             }),
 
           signal:
@@ -1046,22 +1396,127 @@ async function streamFromProvider({
     if (
       !response.ok
     ) {
-      throw new ChatHttpError(
-        response.status,
+      const rawProvider =
+        response.headers
+          .get(
+            HEADER_PROVIDER,
+          )
+          ?.trim()
+          .toLowerCase();
 
-        await readErrorResponse(
-          response,
-        ),
-      );
+      const actualProvider =
+        isExecutionProvider(
+          rawProvider,
+        )
+          ? rawProvider
+          : null;
+
+      throw new ChatHttpError({
+        status:
+          response.status,
+
+        message:
+          await readErrorResponse(
+            response,
+          ),
+
+        requestedProvider:
+          provider,
+
+        actualProvider,
+      });
     }
+
+    executionMetadata =
+      extractExecutionMetadata({
+        response,
+
+        requestedProvider:
+          provider,
+      });
+
+    notifyExecutionMetadata(
+      onExecutionMetadata,
+      executionMetadata,
+    );
+
+    notifyProviderAttempt(
+      onProviderAttempt,
+      {
+        provider:
+          executionMetadata.provider,
+
+        requestedProvider:
+          provider,
+
+        status:
+          executionMetadata.fallback
+            ? "fallback"
+            : "starting",
+
+        fallback:
+          executionMetadata.fallback,
+
+        model:
+          executionMetadata.model ??
+          undefined,
+      },
+    );
 
     if (
       !response.body
     ) {
       throw new Error(
-        "The AI provider returned no response stream.",
+        "The Cossa AI gateway returned no response stream.",
       );
     }
+
+    const tokenHandler =
+      (
+        chunk:
+          string,
+      ) => {
+        if (
+          !chunk
+        ) {
+          return;
+        }
+
+        visibleOutput +=
+          chunk;
+
+        if (
+          !streamingNotified
+        ) {
+          streamingNotified =
+            true;
+
+          notifyProviderAttempt(
+            onProviderAttempt,
+            {
+              provider:
+                executionMetadata!.provider,
+
+              requestedProvider:
+                provider,
+
+              status:
+                "streaming",
+
+              fallback:
+                executionMetadata!.fallback,
+
+              model:
+                executionMetadata!.model ??
+                undefined,
+            },
+          );
+        }
+
+        onToken(
+          chunk,
+        );
+      };
 
     const contentType =
       response.headers
@@ -1077,11 +1532,11 @@ async function streamFromProvider({
       )
         ? await readEventStream(
             response,
-            onToken,
+            tokenHandler,
           )
         : await readPlainTextStream(
             response,
-            onToken,
+            tokenHandler,
           );
 
     if (
@@ -1089,19 +1544,49 @@ async function streamFromProvider({
       !content.trim()
     ) {
       throw new Error(
-        `${provider} returned an empty AI response.`,
+        `${executionMetadata.provider} returned an empty AI response.`,
       );
     }
 
-    return content;
+    notifyProviderAttempt(
+      onProviderAttempt,
+      {
+        provider:
+          executionMetadata.provider,
+
+        requestedProvider:
+          provider,
+
+        status:
+          "completed",
+
+        fallback:
+          executionMetadata.fallback,
+
+        model:
+          executionMetadata.model ??
+          undefined,
+      },
+    );
+
+    return {
+      content,
+
+      metadata:
+        executionMetadata,
+    };
   } catch (
     error
   ) {
     if (
       didTimeout()
     ) {
+      const providerLabel =
+        executionMetadata?.provider ??
+        provider;
+
       throw new Error(
-        `${provider} AI request timed out after ${Math.round(
+        `${providerLabel} AI request timed out after ${Math.round(
           timeoutMs /
             1_000,
         )} seconds.`,
@@ -1117,376 +1602,71 @@ async function streamFromProvider({
       );
     }
 
-    throw error;
-  } finally {
-    cleanup();
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* SHARED PROVIDER EXECUTION                                                  */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Executes a primary provider and optionally a fallback provider.
- *
- * Critical safety rule:
- *
- * A fallback is permitted only when the primary provider failed before any
- * visible assistant content reached the caller.
- *
- * Once output has been displayed, switching providers would mix two model
- * responses into one answer and corrupt the CEO/workforce record.
- */
-async function executeProviderChain({
-  messages,
-  onToken,
-  signal,
-  system,
-  primaryProvider,
-  fallbackProvider,
-  timeoutMs,
-  requireContent,
-  onProviderAttempt,
-}: ProviderExecutionInput): Promise<string> {
-  let primaryVisibleOutput =
-    "";
-
-  let primaryStreamingNotified =
-    false;
-
-  const primaryTokenHandler =
-    (
-      chunk:
-        string,
-    ) => {
-      if (!chunk) {
-        return;
-      }
-
-      primaryVisibleOutput +=
-        chunk;
-
-      if (
-        !primaryStreamingNotified
-      ) {
-        primaryStreamingNotified =
-          true;
-
-        notifyProviderAttempt(
-          onProviderAttempt,
-          {
-            provider:
-              primaryProvider,
-
-            status:
-              "streaming",
-
-            fallback:
-              false,
-          },
-        );
-      }
-
-      onToken(
-        chunk,
-      );
-    };
-
-  notifyProviderAttempt(
-    onProviderAttempt,
-    {
-      provider:
-        primaryProvider,
-
-      status:
-        "starting",
-
-      fallback:
-        false,
-    },
-  );
-
-  try {
-    const content =
-      await streamFromProvider({
-        messages,
-
-        onToken:
-          primaryTokenHandler,
-
-        signal,
-
-        system,
-
-        provider:
-          primaryProvider,
-
-        timeoutMs,
-
-        requireContent,
-      });
-
-    notifyProviderAttempt(
-      onProviderAttempt,
-      {
-        provider:
-          primaryProvider,
-
-        status:
-          "completed",
-
-        fallback:
-          false,
-      },
-    );
-
-    return content;
-  } catch (
-    primaryError
-  ) {
     if (
       isAbortError(
-        primaryError,
+        error,
       )
     ) {
-      throw primaryError;
-    }
-
-    notifyProviderAttempt(
-      onProviderAttempt,
-      {
-        provider:
-          primaryProvider,
-
-        status:
-          "failed",
-
-        fallback:
-          false,
-
-        error:
-          errorMessage(
-            primaryError,
-          ),
-      },
-    );
-
-    /*
-     * CRITICAL:
-     *
-     * The previous implementation assigned primaryOutput only after the entire
-     * stream completed. If Groq emitted half an answer and then failed,
-     * primaryOutput remained empty and OpenAI could start writing into the same
-     * visible answer.
-     *
-     * Track chunks as they arrive instead.
-     */
-    if (
-      primaryVisibleOutput.trim()
-    ) {
-      throw new Error(
-        `${primaryProvider} stopped after already returning part of the response. Cossa AI did not switch providers because mixing two provider answers would corrupt the conversation. ${errorMessage(
-          primaryError,
-        )}`,
-      );
+      throw error;
     }
 
     if (
-      fallbackProvider ===
-      primaryProvider
+      executionMetadata
     ) {
-      throw primaryError;
-    }
-
-    if (
-      !shouldAttemptFallback(
-        primaryError,
-      )
-    ) {
-      throw primaryError;
-    }
-
-    console.warn(
-      `Primary AI provider ${primaryProvider} failed before visible output. Trying ${fallbackProvider}.`,
-      primaryError,
-    );
-
-    notifyProviderAttempt(
-      onProviderAttempt,
-      {
-        provider:
-          fallbackProvider,
-
-        status:
-          "fallback",
-
-        fallback:
-          true,
-
-        error:
-          errorMessage(
-            primaryError,
-          ),
-      },
-    );
-
-    let fallbackVisibleOutput =
-      "";
-
-    let fallbackStreamingNotified =
-      false;
-
-    const fallbackTokenHandler =
-      (
-        chunk:
-          string,
-      ) => {
-        if (!chunk) {
-          return;
-        }
-
-        fallbackVisibleOutput +=
-          chunk;
-
-        if (
-          !fallbackStreamingNotified
-        ) {
-          fallbackStreamingNotified =
-            true;
-
-          notifyProviderAttempt(
-            onProviderAttempt,
-            {
-              provider:
-                fallbackProvider,
-
-              status:
-                "streaming",
-
-              fallback:
-                true,
-            },
-          );
-        }
-
-        onToken(
-          chunk,
-        );
-      };
-
-    notifyProviderAttempt(
-      onProviderAttempt,
-      {
-        provider:
-          fallbackProvider,
-
-        status:
-          "starting",
-
-        fallback:
-          true,
-      },
-    );
-
-    try {
-      const content =
-        await streamFromProvider({
-          messages,
-
-          onToken:
-            fallbackTokenHandler,
-
-          signal,
-
-          system,
-
-          provider:
-            fallbackProvider,
-
-          timeoutMs,
-
-          requireContent,
-        });
-
       notifyProviderAttempt(
         onProviderAttempt,
         {
           provider:
-            fallbackProvider,
+            executionMetadata.provider,
 
-          status:
-            "completed",
-
-          fallback:
-            true,
-        },
-      );
-
-      return content;
-    } catch (
-      fallbackError
-    ) {
-      if (
-        isAbortError(
-          fallbackError,
-        )
-      ) {
-        throw fallbackError;
-      }
-
-      notifyProviderAttempt(
-        onProviderAttempt,
-        {
-          provider:
-            fallbackProvider,
+          requestedProvider:
+            provider,
 
           status:
             "failed",
 
           fallback:
-            true,
+            executionMetadata.fallback,
+
+          model:
+            executionMetadata.model ??
+            undefined,
 
           error:
             errorMessage(
-              fallbackError,
+              error,
             ),
         },
       );
+    }
 
-      /*
-       * If the fallback itself started producing visible content, preserve the
-       * truth that a partial response existed instead of pretending the entire
-       * request simply failed before output.
-       */
-      if (
-        fallbackVisibleOutput.trim()
-      ) {
-        throw new Error(
-          `${fallbackProvider} stopped after returning part of the fallback response. The partial response was not replaced. ${errorMessage(
-            fallbackError,
-          )}`,
-        );
-      }
-
+    /*
+     * If visible content already reached the user, preserve the truth that the
+     * response partially existed.
+     *
+     * No browser fallback occurs.
+     */
+    if (
+      visibleOutput.trim()
+    ) {
       throw new Error(
         [
-          "Cossa AI reasoning providers could not complete the request.",
+          "Cossa AI stopped after already returning part of the response.",
 
-          `${primaryProvider}: ${errorMessage(
-            primaryError,
-          )}`,
+          "The partial answer was not replaced or mixed with another provider.",
 
-          `${fallbackProvider}: ${errorMessage(
-            fallbackError,
-          )}`,
-
-          "No external Cossa action should be treated as completed from this failed reasoning request.",
+          errorMessage(
+            error,
+          ),
         ].join(
           " ",
         ),
       );
     }
+
+    throw error;
+  } finally {
+    cleanup();
   }
 }
 
@@ -1495,11 +1675,9 @@ async function executeProviderChain({
 /* -------------------------------------------------------------------------- */
 
 /**
- * Streams a Cossa AI response through `/api/chat`.
+ * Backward-compatible Cossa AI stream API.
  *
- * Backward compatibility:
- *
- * Existing callers can continue using:
+ * Existing callers may continue using:
  *
  * streamChat(
  *   messages,
@@ -1509,27 +1687,21 @@ async function executeProviderChain({
  *   provider,
  * )
  *
- * Current behaviour:
+ * Important architecture change:
  *
- * - validates messages;
- * - validates authenticated Supabase session;
- * - protects against hanging requests;
- * - supports SSE and plain-text streams;
- * - rejects empty output;
- * - safely falls back between Groq and OpenAI;
- * - never mixes a partial answer from one provider with another provider;
- * - does not waste fallback calls on authentication/permission/validation
- *   failures.
+ * The browser now performs exactly one /api/chat request.
  *
- * Provider routing will later move primarily into the server gateway when
- * Gemini and broader provider-health routing are added.
+ * Provider routing and fallback belong to the server gateway.
  */
 export async function streamChat(
   messages:
     ChatMessage[],
 
   onToken:
-    (chunk: string) => void,
+    (
+      chunk:
+        string,
+    ) => void,
 
   signal?:
     AbortSignal,
@@ -1541,83 +1713,62 @@ export async function streamChat(
     CossaAiProvider =
       DEFAULT_PROVIDER,
 ): Promise<string> {
-  const validMessages =
-    requireMessages(
+  const result =
+    await streamChatWithMetadata(
       messages,
+
+      onToken,
+
+      {
+        signal,
+
+        system,
+
+        provider,
+      },
     );
 
-  const fallbackProvider =
-    provider ===
-    "groq"
-      ? DEFAULT_FALLBACK_PROVIDER
-      : "groq";
-
-  return executeProviderChain({
-    messages:
-      validMessages,
-
-    onToken,
-
-    signal,
-
-    system,
-
-    primaryProvider:
-      provider,
-
-    fallbackProvider,
-
-    timeoutMs:
-      DEFAULT_TIMEOUT_MS,
-
-    requireContent:
-      true,
-  });
+  return result.content;
 }
 
 /* -------------------------------------------------------------------------- */
-/* ADVANCED STREAM API                                                        */
+/* STREAM API WITH EXECUTION METADATA                                         */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Advanced Cossa AI streaming API.
+ * Use this where provider/model truth matters.
  *
- * Use this API when the caller needs:
+ * Recommended for:
  *
- * - explicit timeout control;
- * - explicit primary/fallback provider choice;
- * - provider lifecycle information;
- * - optional empty-output behaviour.
- *
- * The legacy streamChat() interface remains fully supported.
+ * - mission_runs;
+ * - AI workforce execution;
+ * - provider diagnostics;
+ * - activity screens;
+ * - CEO audit records.
  */
-export async function streamChatWithOptions(
+export async function streamChatWithMetadata(
   messages:
     ChatMessage[],
 
   onToken:
-    (chunk: string) => void,
+    (
+      chunk:
+        string,
+    ) => void,
 
   options:
     StreamChatOptions =
       {},
-): Promise<string> {
+): Promise<StreamChatResult> {
   const validMessages =
     requireMessages(
       messages,
     );
 
   const provider =
-    options.provider ??
-    DEFAULT_PROVIDER;
-
-  const fallbackProvider =
-    options.fallbackProvider ??
-    (
-      provider ===
-      "groq"
-        ? DEFAULT_FALLBACK_PROVIDER
-        : "groq"
+    requireProvider(
+      options.provider ??
+        DEFAULT_PROVIDER,
     );
 
   const timeoutMs =
@@ -1632,28 +1783,76 @@ export async function streamChatWithOptions(
     options.requireContent ??
     true;
 
-  return executeProviderChain({
-    messages:
-      validMessages,
+  const result =
+    await streamFromGateway({
+      messages:
+        validMessages,
 
-    onToken,
+      onToken,
 
-    signal:
-      options.signal,
+      signal:
+        options.signal,
 
-    system:
-      options.system,
+      system:
+        options.system,
 
-    primaryProvider:
       provider,
 
-    fallbackProvider,
+      fallbackProvider:
+        options.fallbackProvider,
 
-    timeoutMs,
+      timeoutMs,
 
-    requireContent,
+      requireContent,
 
-    onProviderAttempt:
-      options.onProviderAttempt,
-  });
+      onProviderAttempt:
+        options.onProviderAttempt,
+
+      onExecutionMetadata:
+        options.onExecutionMetadata,
+    });
+
+  return {
+    content:
+      result.content,
+
+    metadata:
+      result.metadata,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* ADVANCED STREAM API                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Existing advanced API retained for compatibility.
+ *
+ * It now uses server-side provider routing rather than sending separate browser
+ * requests for primary and fallback providers.
+ */
+export async function streamChatWithOptions(
+  messages:
+    ChatMessage[],
+
+  onToken:
+    (
+      chunk:
+        string,
+    ) => void,
+
+  options:
+    StreamChatOptions =
+      {},
+): Promise<string> {
+  const result =
+    await streamChatWithMetadata(
+      messages,
+
+      onToken,
+
+      options,
+    );
+
+  return result.content;
 }
