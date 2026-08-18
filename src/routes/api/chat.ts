@@ -10,24 +10,69 @@ const DEFAULT_COSSA_ORGANISATION_ID =
 const DEFAULT_GROQ_MODEL =
   "llama-3.3-70b-versatile";
 
-const MAX_MESSAGES = 40;
-const MAX_MESSAGE_LENGTH = 12_000;
-const MAX_TOTAL_MESSAGE_LENGTH = 60_000;
+const DEFAULT_GEMINI_MODEL =
+  "gemini-3.7-flash";
 
-const MAX_RECENT_HISTORY_MESSAGES = 12;
-const MAX_RECENT_HISTORY_LENGTH = 16_000;
+const MAX_MESSAGES =
+  40;
 
-const MAX_KNOWLEDGE_CONTEXT_LENGTH = 8_000;
-const MAX_SELECTED_KNOWLEDGE_DOCUMENTS = 12;
+const MAX_MESSAGE_LENGTH =
+  12_000;
 
-const MAX_OPERATIONAL_CONTEXT_LENGTH = 8_000;
-const MAX_WORKFORCE_CONTEXT_LENGTH = 6_000;
-const MAX_EXTERNAL_NEWS_CONTEXT_LENGTH = 5_000;
+const MAX_TOTAL_MESSAGE_LENGTH =
+  60_000;
 
-const MAX_CUSTOM_SYSTEM_LENGTH = 8_000;
+const MAX_RECENT_HISTORY_MESSAGES =
+  12;
 
-const MAX_GROQ_COMPLETION_TOKENS = 900;
-const MAX_OPENAI_COMPLETION_TOKENS = 1_100;
+const MAX_RECENT_HISTORY_LENGTH =
+  16_000;
+
+const MAX_KNOWLEDGE_CONTEXT_LENGTH =
+  8_000;
+
+const MAX_SELECTED_KNOWLEDGE_DOCUMENTS =
+  12;
+
+const MAX_OPERATIONAL_CONTEXT_LENGTH =
+  8_000;
+
+const MAX_WORKFORCE_CONTEXT_LENGTH =
+  6_000;
+
+const MAX_EXTERNAL_NEWS_CONTEXT_LENGTH =
+  5_000;
+
+const MAX_CUSTOM_SYSTEM_LENGTH =
+  8_000;
+
+const MAX_GROQ_COMPLETION_TOKENS =
+  900;
+
+const MAX_GEMINI_COMPLETION_TOKENS =
+  1_000;
+
+const MAX_OPENAI_COMPLETION_TOKENS =
+  1_100;
+
+/**
+ * Cossa's default reasoning order.
+ *
+ * Groq:
+ *   fast / economy / default workforce reasoning
+ *
+ * Gemini:
+ *   secondary reasoning route
+ *
+ * OpenAI:
+ *   strategic fallback when configured and funded
+ */
+const DEFAULT_PROVIDER_ORDER:
+  readonly ChatProvider[] = [
+    "groq",
+    "gemini",
+    "openai",
+  ];
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
@@ -40,7 +85,12 @@ type ChatRole =
 
 type ChatProvider =
   | "groq"
+  | "gemini"
   | "openai";
+
+type ChatProviderPreference =
+  | ChatProvider
+  | "auto";
 
 interface ChatMessage {
   role: ChatRole;
@@ -49,8 +99,20 @@ interface ChatMessage {
 
 interface ChatPayload {
   messages?: ChatMessage[];
+
   system?: string;
-  provider?: ChatProvider;
+
+  /**
+   * A concrete provider means:
+   *
+   * "Try this provider first."
+   *
+   * It does not mean that Cossa must fail if that provider is temporarily
+   * unavailable.
+   *
+   * "auto" uses the normal Cossa provider order.
+   */
+  provider?: ChatProviderPreference;
 }
 
 interface SupabaseUser {
@@ -60,50 +122,184 @@ interface SupabaseUser {
 
 interface KnowledgeDocument {
   title: string;
+
   body: string;
+
   category: string | null;
+
   tags: string[];
+
   source: string | null;
+
   source_url: string | null;
+
   updated_at: string;
 }
 
 interface RestRequestOptions {
   table: string;
+
   query: string;
+
   token: string;
+
   supabaseUrl: string;
+
   supabaseKey: string;
 }
 
 interface NewsApiArticle {
   source?: {
     id?: string | null;
+
     name?: string | null;
   };
 
   author?: string | null;
+
   title?: string | null;
+
   description?: string | null;
+
   url?: string | null;
+
   publishedAt?: string | null;
+
   content?: string | null;
 }
 
 interface NewsApiResponse {
   status?: string;
+
   totalResults?: number;
+
   articles?: NewsApiArticle[];
+
   code?: string;
+
   message?: string;
 }
 
 interface ProviderErrorBody {
   error?: {
     code?: string | null;
+
     type?: string | null;
+
     message?: string | null;
+
+    status?: string | null;
   };
+}
+
+interface OpenAiResponsePayload {
+  output_text?: unknown;
+
+  output?: Array<{
+    content?: Array<{
+      type?: unknown;
+
+      text?: unknown;
+    }>;
+  }>;
+}
+
+interface OpenAiCompatibleCompletion {
+  choices?: Array<{
+    message?: {
+      content?: unknown;
+    };
+
+    delta?: {
+      content?: unknown;
+    };
+  }>;
+}
+
+interface ProviderEnvironment {
+  groqApiKey:
+    string | undefined;
+
+  geminiApiKey:
+    string | undefined;
+
+  openAiApiKey:
+    string | undefined;
+
+  newsApiKey:
+    string | undefined;
+
+  supabaseUrl:
+    string;
+
+  supabaseKey:
+    string;
+
+  organisationId:
+    string;
+
+  groqModel:
+    string;
+
+  geminiModel:
+    string;
+
+  openAiModel:
+    string | null;
+}
+
+interface ProviderSuccess {
+  ok: true;
+
+  provider:
+    ChatProvider;
+
+  model:
+    string;
+
+  stream:
+    ReadableStream<Uint8Array>;
+}
+
+interface ProviderFailure {
+  ok: false;
+
+  provider:
+    ChatProvider;
+
+  model:
+    string | null;
+
+  status:
+    number;
+
+  safeMessage:
+    string;
+
+  internalMessage:
+    string;
+
+  retryable:
+    boolean;
+}
+
+type ProviderResult =
+  | ProviderSuccess
+  | ProviderFailure;
+
+interface ProviderAttemptRecord {
+  provider: ChatProvider;
+
+  model: string | null;
+
+  status:
+    "success" |
+    "failed" |
+    "not_configured";
+
+  httpStatus?: number;
+
+  message?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -126,15 +322,19 @@ function resolveGroqModel(): string {
   );
 }
 
+function resolveGeminiModel(): string {
+  return (
+    process.env.GEMINI_MODEL?.trim() ||
+    DEFAULT_GEMINI_MODEL
+  );
+}
+
 /**
- * OpenAI remains intentionally optional.
+ * OpenAI remains intentionally environment-controlled.
  *
- * We do not hard-code an OpenAI model here because:
- * - the OpenAI route currently depends on available API credit;
- * - model access may differ by account/project;
- * - the server environment should control the approved model.
+ * Do not silently select a paid OpenAI model from frontend code.
  *
- * Example protected server setting:
+ * Example:
  *
  * OPENAI_MODEL=<owner-approved-model>
  */
@@ -145,9 +345,13 @@ function resolveOpenAiModel(): string | null {
   return configured || null;
 }
 
-function getEnvironment() {
+function getEnvironment(): ProviderEnvironment | null {
   const groqApiKey =
     process.env.GROQ_API_KEY?.trim();
+
+  const geminiApiKey =
+    process.env.GEMINI_API_KEY?.trim() ||
+    process.env.GOOGLE_AI_API_KEY?.trim();
 
   const openAiApiKey =
     process.env.OPENAI_API_KEY?.trim();
@@ -170,24 +374,28 @@ function getEnvironment() {
     process.env.VITE_COSSA_ORGANISATION_ID?.trim() ||
     DEFAULT_COSSA_ORGANISATION_ID;
 
-  /*
-   * At least one reasoning provider must exist.
-   *
-   * Groq remains the practical default while Cossa is building.
-   * OpenAI may be added later without changing this route.
-   */
   if (
-    (!groqApiKey &&
-      !openAiApiKey) ||
     !supabaseUrl ||
     !supabaseKey
   ) {
     return null;
   }
 
+  if (
+    !groqApiKey &&
+    !geminiApiKey &&
+    !openAiApiKey
+  ) {
+    return null;
+  }
+
   return {
     groqApiKey,
+
+    geminiApiKey,
+
     openAiApiKey,
+
     newsApiKey,
 
     supabaseUrl:
@@ -196,7 +404,17 @@ function getEnvironment() {
       ),
 
     supabaseKey,
+
     organisationId,
+
+    groqModel:
+      resolveGroqModel(),
+
+    geminiModel:
+      resolveGeminiModel(),
+
+    openAiModel:
+      resolveOpenAiModel(),
   };
 }
 
@@ -234,7 +452,9 @@ async function verifySupabaseUser({
   supabaseKey,
 }: {
   token: string;
+
   supabaseUrl: string;
+
   supabaseKey: string;
 }): Promise<SupabaseUser | null> {
   const response =
@@ -303,9 +523,9 @@ async function restSelect<T>({
     );
 
     /*
-     * Context reads should fail closed without making the entire AI route
-     * unusable. The system prompt will see an empty result rather than
-     * invented data.
+     * Context retrieval fails closed.
+     *
+     * Missing context becomes missing evidence instead of fabricated evidence.
      */
     return [];
   }
@@ -323,15 +543,21 @@ async function verifyOrganisationMembership({
   supabaseKey,
 }: {
   token: string;
+
   userId: string;
+
   organisationId: string;
+
   supabaseUrl: string;
+
   supabaseKey: string;
 }): Promise<boolean> {
   const rows =
     await restSelect<{
       user_id: string;
+
       status: string;
+
       role: string;
     }>({
       table:
@@ -356,11 +582,128 @@ async function verifyOrganisationMembership({
         }).toString(),
 
       token,
+
       supabaseUrl,
+
       supabaseKey,
     });
 
-  return rows.length === 1;
+  return (
+    rows.length ===
+    1
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* REQUEST AUTHENTICATION                                                     */
+/* -------------------------------------------------------------------------- */
+
+async function authenticateRequest(
+  request: Request,
+
+  environment: ProviderEnvironment,
+):
+  Promise<
+    | {
+        ok: true;
+
+        token: string;
+
+        user: SupabaseUser;
+      }
+    | {
+        ok: false;
+
+        response: Response;
+      }
+  > {
+  const token =
+    getBearerToken(
+      request,
+    );
+
+  if (!token) {
+    return {
+      ok: false,
+
+      response:
+        new Response(
+          "Unauthorized",
+          {
+            status:
+              401,
+          },
+        ),
+    };
+  }
+
+  const user =
+    await verifySupabaseUser({
+      token,
+
+      supabaseUrl:
+        environment.supabaseUrl,
+
+      supabaseKey:
+        environment.supabaseKey,
+    });
+
+  if (!user) {
+    return {
+      ok: false,
+
+      response:
+        new Response(
+          "Your Cossa AI session could not be verified. Sign out and sign in again.",
+          {
+            status:
+              401,
+          },
+        ),
+    };
+  }
+
+  const isOrganisationMember =
+    await verifyOrganisationMembership({
+      token,
+
+      userId:
+        user.id,
+
+      organisationId:
+        environment.organisationId,
+
+      supabaseUrl:
+        environment.supabaseUrl,
+
+      supabaseKey:
+        environment.supabaseKey,
+    });
+
+  if (
+    !isOrganisationMember
+  ) {
+    return {
+      ok: false,
+
+      response:
+        new Response(
+          "You are not authorised to use this Cossa AI workspace.",
+          {
+            status:
+              403,
+          },
+        ),
+    };
+  }
+
+  return {
+    ok: true,
+
+    token,
+
+    user,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -372,15 +715,20 @@ function validateMessages(
 ):
   | {
       valid: true;
+
       messages: ChatMessage[];
     }
   | {
       valid: false;
+
       error: string;
     } {
   if (
-    !Array.isArray(value) ||
-    value.length === 0
+    !Array.isArray(
+      value,
+    ) ||
+    value.length ===
+      0
   ) {
     return {
       valid: false,
@@ -403,19 +751,24 @@ function validateMessages(
   }
 
   const messages:
-    ChatMessage[] = [];
+    ChatMessage[] =
+    [];
 
-  let totalLength = 0;
+  let totalLength =
+    0;
 
   for (
-    const item of value
+    const item of
+      value
   ) {
     if (
       typeof item !==
         "object" ||
-      item === null ||
+      item ===
+        null ||
       !(
-        "role" in item
+        "role" in
+        item
       ) ||
       !(
         "content" in
@@ -433,6 +786,7 @@ function validateMessages(
     const candidate =
       item as {
         role?: unknown;
+
         content?: unknown;
       };
 
@@ -499,12 +853,14 @@ function validateMessages(
 
     messages.push({
       role,
+
       content,
     });
   }
 
   return {
     valid: true,
+
     messages,
   };
 }
@@ -532,16 +888,33 @@ function cleanCustomSystem(
   );
 }
 
+function isChatProviderPreference(
+  value: unknown,
+): value is ChatProviderPreference {
+  return (
+    value ===
+      "auto" ||
+    value ===
+      "groq" ||
+    value ===
+      "gemini" ||
+    value ===
+      "openai"
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* CHAT HISTORY                                                               */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Only conversation messages are carried forward.
+ * Browser-supplied system history is discarded.
  *
- * Browser/client supplied system-role history is intentionally excluded.
- * The trusted server-side Cossa operating prompt and the explicit bounded
- * worker instruction are the only system instruction layers.
+ * Trusted instruction layers are:
+ *
+ * 1. Cossa server operating prompt.
+ * 2. Optional bounded specialist / worker instruction.
+ * 3. Recent user/assistant conversation.
  */
 function selectRecentHistory(
   messages: ChatMessage[],
@@ -558,9 +931,11 @@ function selectRecentHistory(
     );
 
   const recent:
-    ChatMessage[] = [];
+    ChatMessage[] =
+    [];
 
-  let length = 0;
+  let length =
+    0;
 
   for (
     const message of [
@@ -579,7 +954,8 @@ function selectRecentHistory(
       length;
 
     if (
-      remaining <= 0
+      remaining <=
+      0
     ) {
       break;
     }
@@ -736,8 +1112,11 @@ function selectRelevantKnowledge(
 
         return {
           document,
+
           relevance,
+
           isCore,
+
           isCompanyWide,
         };
       },
@@ -762,12 +1141,10 @@ function selectRelevantKnowledge(
         b.relevance -
           a.relevance ||
         Date.parse(
-          b.document
-            .updated_at,
+          b.document.updated_at,
         ) -
           Date.parse(
-            a.document
-              .updated_at,
+            a.document.updated_at,
           ),
     )
     .slice(
@@ -819,8 +1196,12 @@ function formatKnowledgeContext(
 
           document.body,
         ]
-          .filter(Boolean)
-          .join("\n"),
+          .filter(
+            Boolean,
+          )
+          .join(
+            "\n",
+          ),
     )
     .join(
       "\n\n---\n\n",
@@ -947,7 +1328,9 @@ async function loadOperationalContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
 
@@ -973,7 +1356,9 @@ async function loadOperationalContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
 
@@ -1001,7 +1386,9 @@ async function loadOperationalContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
 
@@ -1030,7 +1417,9 @@ async function loadOperationalContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
 
@@ -1059,7 +1448,9 @@ async function loadOperationalContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
 
@@ -1090,7 +1481,9 @@ async function loadOperationalContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
 
@@ -1119,7 +1512,9 @@ async function loadOperationalContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
 
@@ -1148,7 +1543,9 @@ async function loadOperationalContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
     ]);
@@ -1220,7 +1617,9 @@ async function loadOperationalContext({
       2,
     ),
   ]
-    .join("\n")
+    .join(
+      "\n",
+    )
     .slice(
       0,
       MAX_OPERATIONAL_CONTEXT_LENGTH,
@@ -1294,7 +1693,9 @@ async function loadWorkforceContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
 
@@ -1323,7 +1724,9 @@ async function loadWorkforceContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
 
@@ -1352,7 +1755,9 @@ async function loadWorkforceContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
 
@@ -1381,7 +1786,9 @@ async function loadWorkforceContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
 
@@ -1410,7 +1817,9 @@ async function loadWorkforceContext({
           }).toString(),
 
         token,
+
         supabaseUrl,
+
         supabaseKey,
       }),
     ]);
@@ -1458,7 +1867,9 @@ async function loadWorkforceContext({
       2,
     ),
   ]
-    .join("\n")
+    .join(
+      "\n",
+    )
     .slice(
       0,
       MAX_WORKFORCE_CONTEXT_LENGTH,
@@ -1524,7 +1935,8 @@ function createNewsSearchQuery(
       .toLowerCase()
       .match(
         /[a-z0-9]{3,}/g,
-      ) ?? [];
+      ) ??
+    [];
 
   const selected =
     Array.from(
@@ -1677,8 +2089,12 @@ async function loadExternalNewsContext({
               ? `SOURCE URL: ${article.url}`
               : null,
           ]
-            .filter(Boolean)
-            .join("\n"),
+            .filter(
+              Boolean,
+            )
+            .join(
+              "\n",
+            ),
       ),
     ]
       .join(
@@ -1896,6 +2312,14 @@ OUTPUT QUALITY
 89. Do not confuse reasoning capability with execution capability.
 90. A reasoning provider can generate analysis and drafts. It cannot by itself prove that an external system action occurred.
 
+PROVIDER TRUTH RULES
+
+91. Groq, Gemini and OpenAI are reasoning providers, not evidence that an external business action occurred.
+92. A provider fallback means only that another AI reasoning provider completed the response.
+93. Provider fallback must never convert failed business execution into successful business execution.
+94. Never expose protected provider API keys.
+95. Never claim provider health unless actual configuration or request evidence supports the claim.
+
 VERIFIED COMPANY KNOWLEDGE
 
 ${verifiedContext}
@@ -1948,12 +2372,50 @@ function needsRecordSafeSupport(
 }
 
 /* -------------------------------------------------------------------------- */
-/* GROQ STREAM CONVERSION                                                     */
+/* GENERIC STREAM HELPERS                                                     */
 /* -------------------------------------------------------------------------- */
 
-function createPlainTextStream(
+function createTextResponseStream(
+  text: string,
+): ReadableStream<Uint8Array> {
+  const encoder =
+    new TextEncoder();
+
+  return new ReadableStream<
+    Uint8Array
+  >({
+    start(
+      controller,
+    ) {
+      controller.enqueue(
+        encoder.encode(
+          text,
+        ),
+      );
+
+      controller.close();
+    },
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* OPENAI-COMPATIBLE STREAM CONVERSION                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Groq and Gemini's compatibility endpoint both return OpenAI-style SSE chat
+ * completion chunks.
+ *
+ * Converting upstream SSE into plain text keeps the existing browser
+ * ai-stream.ts contract unchanged.
+ */
+function createOpenAiCompatibleTextStream(
   upstreamBody:
     ReadableStream<Uint8Array>,
+
+  provider:
+    "groq" |
+    "gemini",
 ): ReadableStream<Uint8Array> {
   const encoder =
     new TextEncoder();
@@ -1970,7 +2432,8 @@ function createPlainTextStream(
     start(
       controller,
     ) {
-      let buffer = "";
+      let buffer =
+        "";
 
       let streamClosed =
         false;
@@ -2021,13 +2484,7 @@ function createPlainTextStream(
           const parsed =
             JSON.parse(
               data,
-            ) as {
-              choices?: Array<{
-                delta?: {
-                  content?: string | null;
-                };
-              }>;
-            };
+            ) as OpenAiCompatibleCompletion;
 
           const token =
             parsed
@@ -2047,9 +2504,17 @@ function createPlainTextStream(
               ),
             );
           }
-        } catch {
+        } catch (
+          error
+        ) {
+          /*
+           * Do not leak malformed upstream provider data to the browser.
+           *
+           * A malformed isolated chunk may be skipped, but the server logs it.
+           */
           console.warn(
-            "Ignored malformed Groq streaming chunk.",
+            `Ignored malformed ${provider} streaming chunk.`,
+            error,
           );
         }
       }
@@ -2072,10 +2537,6 @@ function createPlainTextStream(
               if (
                 buffer.trim()
               ) {
-                /*
-                 * Process any remaining SSE lines independently instead of
-                 * treating the whole final buffer as one event.
-                 */
                 for (
                   const rawLine of
                     buffer.split(
@@ -2180,29 +2641,6 @@ function createPlainTextStream(
   });
 }
 
-function createTextResponseStream(
-  text: string,
-): ReadableStream<Uint8Array> {
-  const encoder =
-    new TextEncoder();
-
-  return new ReadableStream<
-    Uint8Array
-  >({
-    start(
-      controller,
-    ) {
-      controller.enqueue(
-        encoder.encode(
-          text,
-        ),
-      );
-
-      controller.close();
-    },
-  });
-}
-
 /* -------------------------------------------------------------------------- */
 /* OPENAI RESPONSE EXTRACTION                                                 */
 /* -------------------------------------------------------------------------- */
@@ -2219,20 +2657,11 @@ function extractOpenAiResponseText(
   }
 
   const payload =
-    response as {
-      output_text?: unknown;
-
-      output?: Array<{
-        content?: Array<{
-          type?: unknown;
-          text?: unknown;
-        }>;
-      }>;
-    };
+    response as OpenAiResponsePayload;
 
   if (
     typeof payload.output_text ===
-    "string"
+      "string"
   ) {
     return payload.output_text.trim();
   }
@@ -2263,13 +2692,54 @@ function extractOpenAiResponseText(
       ) =>
         item.text as string,
     )
-    .join("")
+    .join(
+      "",
+    )
     .trim();
 }
 
 /* -------------------------------------------------------------------------- */
 /* PROVIDER ERRORS                                                            */
 /* -------------------------------------------------------------------------- */
+
+function parseProviderError(
+  errorText: string,
+): ProviderErrorBody | null {
+  if (
+    !errorText.trim()
+  ) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(
+      errorText,
+    ) as ProviderErrorBody;
+  } catch {
+    return null;
+  }
+}
+
+function providerDisplayName(
+  provider:
+    ChatProvider,
+): string {
+  switch (
+    provider
+  ) {
+    case "groq":
+      return "Groq";
+
+    case "gemini":
+      return "Gemini";
+
+    case "openai":
+      return "OpenAI";
+
+    default:
+      return provider;
+  }
+}
 
 function safeProviderFailure(
   provider:
@@ -2281,20 +2751,10 @@ function safeProviderFailure(
   errorText:
     string,
 ): string {
-  let body:
-    ProviderErrorBody | null =
-    null;
-
-  try {
-    body =
-      JSON.parse(
-        errorText,
-      ) as ProviderErrorBody;
-  } catch {
-    /*
-     * Provider error details intentionally remain server-side.
-     */
-  }
+  const body =
+    parseProviderError(
+      errorText,
+    );
 
   const code =
     body?.error?.code
@@ -2305,6 +2765,11 @@ function safeProviderFailure(
     body?.error?.type
       ?.toLowerCase() ??
     "";
+
+  const name =
+    providerDisplayName(
+      provider,
+    );
 
   if (
     provider ===
@@ -2318,14 +2783,14 @@ function safeProviderFailure(
         "insufficient_quota"
     )
   ) {
-    return "Strategic OpenAI reasoning currently has no available API credit. No Cossa record was changed. Continue with Economy Groq or restore OpenAI API billing later.";
+    return "Strategic OpenAI reasoning currently has no available API credit.";
   }
 
   if (
     status ===
     429
   ) {
-    return `${provider === "openai" ? "OpenAI" : "Groq"} is temporarily rate-limiting this request. No Cossa record was changed. Wait briefly and retry.`;
+    return `${name} is temporarily rate-limiting Cossa AI.`;
   }
 
   if (
@@ -2334,16 +2799,184 @@ function safeProviderFailure(
     status ===
       403
   ) {
-    return `${provider === "openai" ? "OpenAI" : "Groq"} could not authorise this Cossa AI request. The protected server provider configuration needs review.`;
+    return `${name} could not authorise the protected Cossa AI provider request.`;
   }
 
-  return `${provider === "openai" ? "OpenAI" : "Groq"} could not complete this Cossa AI request. No Cossa record was changed.`;
+  if (
+    status ===
+      408 ||
+    status ===
+      504
+  ) {
+    return `${name} timed out while processing the Cossa AI request.`;
+  }
+
+  if (
+    status >=
+    500
+  ) {
+    return `${name} is temporarily unavailable.`;
+  }
+
+  return `${name} could not complete the Cossa AI request.`;
 }
 
-function chatResponseHeaders(
+function providerFailureIsRetryable(
+  status:
+    number,
+): boolean {
+  /*
+   * Provider-specific failures may fall through to another reasoning provider.
+   *
+   * Authentication here refers to the provider API key, not the authenticated
+   * Cossa user. User authentication has already been validated separately.
+   */
+  return (
+    status ===
+      401 ||
+    status ===
+      402 ||
+    status ===
+      403 ||
+    status ===
+      408 ||
+    status ===
+      409 ||
+    status ===
+      429 ||
+    status >=
+      500
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* PROVIDER CONFIGURATION                                                     */
+/* -------------------------------------------------------------------------- */
+
+function providerConfigured(
   provider:
     ChatProvider,
-): HeadersInit {
+
+  environment:
+    ProviderEnvironment,
+): boolean {
+  switch (
+    provider
+  ) {
+    case "groq":
+      return Boolean(
+        environment.groqApiKey,
+      );
+
+    case "gemini":
+      return Boolean(
+        environment.geminiApiKey,
+      );
+
+    case "openai":
+      return Boolean(
+        environment.openAiApiKey &&
+        environment.openAiModel,
+      );
+
+    default:
+      return false;
+  }
+}
+
+function providerModel(
+  provider:
+    ChatProvider,
+
+  environment:
+    ProviderEnvironment,
+): string | null {
+  switch (
+    provider
+  ) {
+    case "groq":
+      return environment.groqModel;
+
+    case "gemini":
+      return environment.geminiModel;
+
+    case "openai":
+      return environment.openAiModel;
+
+    default:
+      return null;
+  }
+}
+
+function buildProviderOrder(
+  preferred:
+    ChatProviderPreference,
+
+  environment:
+    ProviderEnvironment,
+): ChatProvider[] {
+  const requestedOrder:
+    ChatProvider[] =
+    preferred ===
+    "auto"
+      ? [
+          ...DEFAULT_PROVIDER_ORDER,
+        ]
+      : [
+          preferred,
+
+          ...DEFAULT_PROVIDER_ORDER.filter(
+            (
+              provider,
+            ) =>
+              provider !==
+              preferred,
+          ),
+        ];
+
+  return requestedOrder.filter(
+    (
+      provider,
+      index,
+      providers,
+    ) =>
+      providers.indexOf(
+        provider,
+      ) ===
+        index &&
+      providerConfigured(
+        provider,
+        environment,
+      ),
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* RESPONSE HEADERS                                                           */
+/* -------------------------------------------------------------------------- */
+
+function chatResponseHeaders({
+  requestedProvider,
+  actualProvider,
+  model,
+  attemptCount,
+  fallbackUsed,
+}: {
+  requestedProvider:
+    ChatProviderPreference;
+
+  actualProvider:
+    ChatProvider;
+
+  model:
+    string;
+
+  attemptCount:
+    number;
+
+  fallbackUsed:
+    boolean;
+}): HeadersInit {
   return {
     "Content-Type":
       "text/plain; charset=utf-8",
@@ -2357,8 +2990,1094 @@ function chatResponseHeaders(
     "X-Content-Type-Options":
       "nosniff",
 
+    "X-Cossa-AI-Requested-Provider":
+      requestedProvider,
+
     "X-Cossa-AI-Provider":
+      actualProvider,
+
+    "X-Cossa-AI-Model":
+      model,
+
+    "X-Cossa-AI-Fallback":
+      fallbackUsed
+        ? "true"
+        : "false",
+
+    "X-Cossa-AI-Attempts":
+      String(
+        attemptCount,
+      ),
+
+    /*
+     * Useful if Cossa is later served across a different frontend/API origin.
+     */
+    "Access-Control-Expose-Headers":
+      [
+        "X-Cossa-AI-Requested-Provider",
+        "X-Cossa-AI-Provider",
+        "X-Cossa-AI-Model",
+        "X-Cossa-AI-Fallback",
+        "X-Cossa-AI-Attempts",
+      ].join(
+        ", ",
+      ),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* GROQ PROVIDER                                                              */
+/* -------------------------------------------------------------------------- */
+
+async function executeGroq({
+  providerMessages,
+  environment,
+  signal,
+}: {
+  providerMessages:
+    ChatMessage[];
+
+  environment:
+    ProviderEnvironment;
+
+  signal:
+    AbortSignal;
+}): Promise<ProviderResult> {
+  const provider:
+    ChatProvider =
+    "groq";
+
+  const model =
+    environment.groqModel;
+
+  if (
+    !environment.groqApiKey
+  ) {
+    return {
+      ok: false,
+
       provider,
+
+      model,
+
+      status:
+        503,
+
+      safeMessage:
+        "Groq is not configured.",
+
+      internalMessage:
+        "GROQ_API_KEY is not configured.",
+
+      retryable:
+        true,
+    };
+  }
+
+  let response:
+    Response;
+
+  try {
+    response =
+      await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method:
+            "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${environment.groqApiKey}`,
+          },
+
+          body:
+            JSON.stringify({
+              model,
+
+              stream:
+                true,
+
+              temperature:
+                0.2,
+
+              max_tokens:
+                MAX_GROQ_COMPLETION_TOKENS,
+
+              messages:
+                providerMessages,
+            }),
+
+          signal,
+        },
+      );
+  } catch (
+    error
+  ) {
+    return {
+      ok: false,
+
+      provider,
+
+      model,
+
+      status:
+        503,
+
+      safeMessage:
+        "Groq could not be reached.",
+
+      internalMessage:
+        error instanceof
+        Error
+          ? error.message
+          : String(
+              error,
+            ),
+
+      retryable:
+        true,
+    };
+  }
+
+  if (
+    !response.ok ||
+    !response.body
+  ) {
+    const errorText =
+      await response
+        .text()
+        .catch(
+          () => "",
+        );
+
+    return {
+      ok: false,
+
+      provider,
+
+      model,
+
+      status:
+        response.status ||
+        502,
+
+      safeMessage:
+        safeProviderFailure(
+          provider,
+          response.status,
+          errorText,
+        ),
+
+      internalMessage:
+        errorText,
+
+      retryable:
+        providerFailureIsRetryable(
+          response.status,
+        ),
+    };
+  }
+
+  return {
+    ok: true,
+
+    provider,
+
+    model,
+
+    stream:
+      createOpenAiCompatibleTextStream(
+        response.body,
+        "groq",
+      ),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* GEMINI PROVIDER                                                            */
+/* -------------------------------------------------------------------------- */
+
+async function executeGemini({
+  providerMessages,
+  environment,
+  signal,
+}: {
+  providerMessages:
+    ChatMessage[];
+
+  environment:
+    ProviderEnvironment;
+
+  signal:
+    AbortSignal;
+}): Promise<ProviderResult> {
+  const provider:
+    ChatProvider =
+    "gemini";
+
+  const model =
+    environment.geminiModel;
+
+  if (
+    !environment.geminiApiKey
+  ) {
+    return {
+      ok: false,
+
+      provider,
+
+      model,
+
+      status:
+        503,
+
+      safeMessage:
+        "Gemini is not configured.",
+
+      internalMessage:
+        "GEMINI_API_KEY is not configured.",
+
+      retryable:
+        true,
+    };
+  }
+
+  let response:
+    Response;
+
+  try {
+    response =
+      await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        {
+          method:
+            "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${environment.geminiApiKey}`,
+          },
+
+          body:
+            JSON.stringify({
+              model,
+
+              messages:
+                providerMessages,
+
+              stream:
+                true,
+
+              temperature:
+                0.2,
+
+              max_tokens:
+                MAX_GEMINI_COMPLETION_TOKENS,
+            }),
+
+          signal,
+        },
+      );
+  } catch (
+    error
+  ) {
+    return {
+      ok: false,
+
+      provider,
+
+      model,
+
+      status:
+        503,
+
+      safeMessage:
+        "Gemini could not be reached.",
+
+      internalMessage:
+        error instanceof
+        Error
+          ? error.message
+          : String(
+              error,
+            ),
+
+      retryable:
+        true,
+    };
+  }
+
+  if (
+    !response.ok ||
+    !response.body
+  ) {
+    const errorText =
+      await response
+        .text()
+        .catch(
+          () => "",
+        );
+
+    return {
+      ok: false,
+
+      provider,
+
+      model,
+
+      status:
+        response.status ||
+        502,
+
+      safeMessage:
+        safeProviderFailure(
+          provider,
+          response.status,
+          errorText,
+        ),
+
+      internalMessage:
+        errorText,
+
+      retryable:
+        providerFailureIsRetryable(
+          response.status,
+        ),
+    };
+  }
+
+  return {
+    ok: true,
+
+    provider,
+
+    model,
+
+    stream:
+      createOpenAiCompatibleTextStream(
+        response.body,
+        "gemini",
+      ),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* OPENAI PROVIDER                                                            */
+/* -------------------------------------------------------------------------- */
+
+async function executeOpenAi({
+  providerMessages,
+  environment,
+  signal,
+}: {
+  providerMessages:
+    ChatMessage[];
+
+  environment:
+    ProviderEnvironment;
+
+  signal:
+    AbortSignal;
+}): Promise<ProviderResult> {
+  const provider:
+    ChatProvider =
+    "openai";
+
+  const model =
+    environment.openAiModel;
+
+  if (
+    !environment.openAiApiKey
+  ) {
+    return {
+      ok: false,
+
+      provider,
+
+      model,
+
+      status:
+        503,
+
+      safeMessage:
+        "OpenAI is not configured.",
+
+      internalMessage:
+        "OPENAI_API_KEY is not configured.",
+
+      retryable:
+        true,
+    };
+  }
+
+  if (!model) {
+    return {
+      ok: false,
+
+      provider,
+
+      model,
+
+      status:
+        503,
+
+      safeMessage:
+        "Strategic OpenAI reasoning is disabled because no approved OpenAI model is configured.",
+
+      internalMessage:
+        "OPENAI_MODEL is not configured.",
+
+      retryable:
+        true,
+    };
+  }
+
+  const instructions =
+    providerMessages
+      .filter(
+        (
+          message,
+        ) =>
+          message.role ===
+          "system",
+      )
+      .map(
+        (
+          message,
+        ) =>
+          message.content,
+      )
+      .join(
+        "\n\n",
+      );
+
+  const input =
+    providerMessages
+      .filter(
+        (
+          message,
+        ) =>
+          message.role !==
+          "system",
+      )
+      .map(
+        (
+          message,
+        ) => ({
+          role:
+            message.role,
+
+          content:
+            message.content,
+        }),
+      );
+
+  let response:
+    Response;
+
+  try {
+    response =
+      await fetch(
+        "https://api.openai.com/v1/responses",
+        {
+          method:
+            "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${environment.openAiApiKey}`,
+          },
+
+          body:
+            JSON.stringify({
+              model,
+
+              instructions,
+
+              input,
+
+              max_output_tokens:
+                MAX_OPENAI_COMPLETION_TOKENS,
+
+              store:
+                false,
+            }),
+
+          signal,
+        },
+      );
+  } catch (
+    error
+  ) {
+    return {
+      ok: false,
+
+      provider,
+
+      model,
+
+      status:
+        503,
+
+      safeMessage:
+        "OpenAI could not be reached.",
+
+      internalMessage:
+        error instanceof
+        Error
+          ? error.message
+          : String(
+              error,
+            ),
+
+      retryable:
+        true,
+    };
+  }
+
+  if (
+    !response.ok
+  ) {
+    const errorText =
+      await response
+        .text()
+        .catch(
+          () => "",
+        );
+
+    return {
+      ok: false,
+
+      provider,
+
+      model,
+
+      status:
+        response.status ||
+        502,
+
+      safeMessage:
+        safeProviderFailure(
+          provider,
+          response.status,
+          errorText,
+        ),
+
+      internalMessage:
+        errorText,
+
+      retryable:
+        providerFailureIsRetryable(
+          response.status,
+        ),
+    };
+  }
+
+  let payload:
+    unknown;
+
+  try {
+    payload =
+      await response.json();
+  } catch (
+    error
+  ) {
+    return {
+      ok: false,
+
+      provider,
+
+      model,
+
+      status:
+        502,
+
+      safeMessage:
+        "OpenAI returned an unreadable response.",
+
+      internalMessage:
+        error instanceof
+        Error
+          ? error.message
+          : String(
+              error,
+            ),
+
+      retryable:
+        true,
+    };
+  }
+
+  const responseText =
+    extractOpenAiResponseText(
+      payload,
+    );
+
+  if (
+    !responseText
+  ) {
+    return {
+      ok: false,
+
+      provider,
+
+      model,
+
+      status:
+        502,
+
+      safeMessage:
+        "OpenAI returned an empty Cossa AI response.",
+
+      internalMessage:
+        "OpenAI Responses API returned no usable output text.",
+
+      retryable:
+        true,
+    };
+  }
+
+  return {
+    ok: true,
+
+    provider,
+
+    model,
+
+    stream:
+      createTextResponseStream(
+        responseText,
+      ),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* PROVIDER EXECUTION                                                         */
+/* -------------------------------------------------------------------------- */
+
+async function executeProvider({
+  provider,
+  providerMessages,
+  environment,
+  signal,
+}: {
+  provider:
+    ChatProvider;
+
+  providerMessages:
+    ChatMessage[];
+
+  environment:
+    ProviderEnvironment;
+
+  signal:
+    AbortSignal;
+}): Promise<ProviderResult> {
+  switch (
+    provider
+  ) {
+    case "groq":
+      return executeGroq({
+        providerMessages,
+
+        environment,
+
+        signal,
+      });
+
+    case "gemini":
+      return executeGemini({
+        providerMessages,
+
+        environment,
+
+        signal,
+      });
+
+    case "openai":
+      return executeOpenAi({
+        providerMessages,
+
+        environment,
+
+        signal,
+      });
+
+    default: {
+      const exhaustiveCheck:
+        never =
+        provider;
+
+      throw new Error(
+        `Unsupported provider: ${String(
+          exhaustiveCheck,
+        )}`,
+      );
+    }
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* PROVIDER GATEWAY                                                           */
+/* -------------------------------------------------------------------------- */
+
+async function executeProviderGateway({
+  requestedProvider,
+  providerMessages,
+  environment,
+  signal,
+}: {
+  requestedProvider:
+    ChatProviderPreference;
+
+  providerMessages:
+    ChatMessage[];
+
+  environment:
+    ProviderEnvironment;
+
+  signal:
+    AbortSignal;
+}): Promise<{
+  result:
+    ProviderSuccess | null;
+
+  attempts:
+    ProviderAttemptRecord[];
+}> {
+  const providers =
+    buildProviderOrder(
+      requestedProvider,
+      environment,
+    );
+
+  const attempts:
+    ProviderAttemptRecord[] =
+    [];
+
+  if (
+    providers.length ===
+    0
+  ) {
+    return {
+      result:
+        null,
+
+      attempts,
+    };
+  }
+
+  for (
+    const provider of
+      providers
+  ) {
+    if (
+      signal.aborted
+    ) {
+      throw new DOMException(
+        "The Cossa AI request was cancelled.",
+        "AbortError",
+      );
+    }
+
+    const model =
+      providerModel(
+        provider,
+        environment,
+      );
+
+    if (
+      !providerConfigured(
+        provider,
+        environment,
+      )
+    ) {
+      attempts.push({
+        provider,
+
+        model,
+
+        status:
+          "not_configured",
+      });
+
+      continue;
+    }
+
+    const result =
+      await executeProvider({
+        provider,
+
+        providerMessages,
+
+        environment,
+
+        signal,
+      });
+
+    if (
+      result.ok
+    ) {
+      attempts.push({
+        provider,
+
+        model:
+          result.model,
+
+        status:
+          "success",
+
+        httpStatus:
+          200,
+      });
+
+      return {
+        result,
+
+        attempts,
+      };
+    }
+
+    attempts.push({
+      provider,
+
+      model:
+        result.model,
+
+      status:
+        "failed",
+
+      httpStatus:
+        result.status,
+
+      message:
+        result.safeMessage,
+    });
+
+    console.error(
+      `Cossa AI provider ${provider} failed.`,
+      {
+        provider,
+
+        model:
+          result.model,
+
+        status:
+          result.status,
+
+        retryable:
+          result.retryable,
+
+        detail:
+          result.internalMessage,
+      },
+    );
+
+    /*
+     * Provider-specific non-retryable request failures should stop the gateway.
+     *
+     * Most temporary, credential, quota and upstream failures can safely try
+     * another configured reasoning provider because no provider output has been
+     * returned to the browser yet.
+     */
+    if (
+      !result.retryable
+    ) {
+      break;
+    }
+  }
+
+  return {
+    result:
+      null,
+
+    attempts,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* PROVIDER FAILURE RESPONSE                                                  */
+/* -------------------------------------------------------------------------- */
+
+function createGatewayFailureResponse(
+  attempts:
+    ProviderAttemptRecord[],
+): Response {
+  if (
+    attempts.length ===
+    0
+  ) {
+    return new Response(
+      "No Cossa AI reasoning provider is currently configured.",
+      {
+        status:
+          503,
+      },
+    );
+  }
+
+  const messages =
+    attempts
+      .filter(
+        (
+          attempt,
+        ) =>
+          attempt.status ===
+          "failed" &&
+        attempt.message,
+      )
+      .map(
+        (
+          attempt,
+        ) =>
+          attempt.message as string,
+      );
+
+  const hasRateLimit =
+    attempts.some(
+      (
+        attempt,
+      ) =>
+        attempt.httpStatus ===
+        429,
+    );
+
+  const uniqueMessages =
+    [
+      ...new Set(
+        messages,
+      ),
+    ];
+
+  const message =
+    [
+      "Cossa AI could not complete this reasoning request using the currently available providers.",
+
+      ...uniqueMessages,
+
+      "No external Cossa action should be treated as completed from this failed reasoning request.",
+    ].join(
+      " ",
+    );
+
+  return new Response(
+    message,
+    {
+      status:
+        hasRateLimit
+          ? 429
+          : 503,
+
+      headers: {
+        "Content-Type":
+          "text/plain; charset=utf-8",
+
+        "Cache-Control":
+          "no-store",
+
+        "X-Content-Type-Options":
+          "nosniff",
+
+        "X-Cossa-AI-Provider":
+          "none",
+
+        "X-Cossa-AI-Attempts":
+          String(
+            attempts.length,
+          ),
+      },
+    },
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* PROVIDER CONFIGURATION STATUS                                              */
+/* -------------------------------------------------------------------------- */
+
+function providerConfigurationPayload(
+  environment:
+    ProviderEnvironment,
+) {
+  return {
+    status:
+      "configured",
+
+    checked_at:
+      new Date().toISOString(),
+
+    /**
+     * IMPORTANT:
+     *
+     * "configured" means server credentials/configuration exist.
+     *
+     * It does NOT mean:
+     * - the provider is currently healthy;
+     * - quota is available;
+     * - billing is available;
+     * - a test request succeeded.
+     */
+    providers: {
+      groq: {
+        configured:
+          Boolean(
+            environment.groqApiKey,
+          ),
+
+        model:
+          environment.groqModel,
+      },
+
+      gemini: {
+        configured:
+          Boolean(
+            environment.geminiApiKey,
+          ),
+
+        model:
+          environment.geminiModel,
+      },
+
+      openai: {
+        configured:
+          Boolean(
+            environment.openAiApiKey &&
+            environment.openAiModel,
+          ),
+
+        key_configured:
+          Boolean(
+            environment.openAiApiKey,
+          ),
+
+        model_configured:
+          Boolean(
+            environment.openAiModel,
+          ),
+
+        model:
+          environment.openAiModel,
+      },
+    },
+
+    default_provider_order: [
+      ...DEFAULT_PROVIDER_ORDER,
+    ],
+
+    external_news: {
+      configured:
+        Boolean(
+          environment.newsApiKey,
+        ),
+    },
   };
 }
 
@@ -2372,6 +4091,66 @@ export const Route =
   )({
     server: {
       handlers: {
+        /* ------------------------------------------------------------------ */
+        /* GET — SAFE CONFIGURATION STATUS                                    */
+        /* ------------------------------------------------------------------ */
+
+        GET: async ({
+          request,
+        }) => {
+          const environment =
+            getEnvironment();
+
+          if (
+            !environment
+          ) {
+            return Response.json(
+              {
+                status:
+                  "not_configured",
+
+                message:
+                  "Cossa AI server configuration is incomplete.",
+              },
+              {
+                status:
+                  503,
+              },
+            );
+          }
+
+          const auth =
+            await authenticateRequest(
+              request,
+              environment,
+            );
+
+          if (
+            !auth.ok
+          ) {
+            return auth.response;
+          }
+
+          return Response.json(
+            providerConfigurationPayload(
+              environment,
+            ),
+            {
+              headers: {
+                "Cache-Control":
+                  "no-store",
+
+                "X-Content-Type-Options":
+                  "nosniff",
+              },
+            },
+          );
+        },
+
+        /* ------------------------------------------------------------------ */
+        /* POST — COSSA AI REASONING                                          */
+        /* ------------------------------------------------------------------ */
+
         POST: async ({
           request,
         }) => {
@@ -2394,74 +4173,22 @@ export const Route =
           /* AUTH                                                             */
           /* ---------------------------------------------------------------- */
 
-          const token =
-            getBearerToken(
+          const auth =
+            await authenticateRequest(
               request,
-            );
-
-          if (!token) {
-            return new Response(
-              "Unauthorized",
-              {
-                status:
-                  401,
-              },
-            );
-          }
-
-          const user =
-            await verifySupabaseUser(
-              {
-                token,
-
-                supabaseUrl:
-                  environment.supabaseUrl,
-
-                supabaseKey:
-                  environment.supabaseKey,
-              },
-            );
-
-          if (!user) {
-            return new Response(
-              "Your Cossa AI session could not be verified. Sign out and sign in again.",
-              {
-                status:
-                  401,
-              },
-            );
-          }
-
-          const isOrganisationMember =
-            await verifyOrganisationMembership(
-              {
-                token,
-
-                userId:
-                  user.id,
-
-                organisationId:
-                  environment.organisationId,
-
-                supabaseUrl:
-                  environment.supabaseUrl,
-
-                supabaseKey:
-                  environment.supabaseKey,
-              },
+              environment,
             );
 
           if (
-            !isOrganisationMember
+            !auth.ok
           ) {
-            return new Response(
-              "You are not authorised to use this Cossa AI workspace.",
-              {
-                status:
-                  403,
-              },
-            );
+            return auth.response;
           }
+
+          const {
+            token,
+          } =
+            auth;
 
           /* ---------------------------------------------------------------- */
           /* BODY                                                             */
@@ -2510,54 +4237,21 @@ export const Route =
               payload.system,
             );
 
-          const provider:
-            ChatProvider =
+          const requestedProvider:
+            ChatProviderPreference =
             payload.provider ??
-            "groq";
+            "auto";
 
           if (
-            provider !==
-              "groq" &&
-            provider !==
-              "openai"
+            !isChatProviderPreference(
+              requestedProvider,
+            )
           ) {
             return new Response(
-              "Unsupported Cossa AI provider.",
+              "Unsupported Cossa AI provider preference.",
               {
                 status:
                   400,
-              },
-            );
-          }
-
-          /* ---------------------------------------------------------------- */
-          /* PROVIDER CONFIG                                                  */
-          /* ---------------------------------------------------------------- */
-
-          if (
-            provider ===
-              "groq" &&
-            !environment.groqApiKey
-          ) {
-            return new Response(
-              "Economy Groq is not configured in the protected server environment.",
-              {
-                status:
-                  503,
-              },
-            );
-          }
-
-          if (
-            provider ===
-              "openai" &&
-            !environment.openAiApiKey
-          ) {
-            return new Response(
-              "Strategic OpenAI reasoning is currently disabled. Economy Groq remains available when configured.",
-              {
-                status:
-                  503,
               },
             );
           }
@@ -2594,40 +4288,36 @@ export const Route =
           /* ---------------------------------------------------------------- */
 
           const knowledge =
-            await restSelect<KnowledgeDocument>(
-              {
-                table:
-                  "ai_knowledge_documents",
+            await restSelect<KnowledgeDocument>({
+              table:
+                "ai_knowledge_documents",
 
-                query:
-                  new URLSearchParams(
-                    {
-                      select:
-                        "title,body,category,tags,source,source_url,updated_at",
+              query:
+                new URLSearchParams({
+                  select:
+                    "title,body,category,tags,source,source_url,updated_at",
 
-                      organisation_id:
-                        `eq.${environment.organisationId}`,
+                  organisation_id:
+                    `eq.${environment.organisationId}`,
 
-                      verification_status:
-                        "eq.verified",
+                  verification_status:
+                    "eq.verified",
 
-                      order:
-                        "updated_at.desc",
+                  order:
+                    "updated_at.desc",
 
-                      limit:
-                        "100",
-                    },
-                  ).toString(),
+                  limit:
+                    "100",
+                }).toString(),
 
-                token,
+              token,
 
-                supabaseUrl:
-                  environment.supabaseUrl,
+              supabaseUrl:
+                environment.supabaseUrl,
 
-                supabaseKey:
-                  environment.supabaseKey,
-              },
-            );
+              supabaseKey:
+                environment.supabaseKey,
+            });
 
           const selectedKnowledge =
             selectRelevantKnowledge(
@@ -2649,52 +4339,44 @@ export const Route =
             workforceContext,
             externalNewsContext,
           ] =
-            await Promise.all(
-              [
-                loadOperationalContext(
-                  {
-                    latestUserMessage,
+            await Promise.all([
+              loadOperationalContext({
+                latestUserMessage,
 
-                    token,
+                token,
 
-                    organisationId:
-                      environment.organisationId,
+                organisationId:
+                  environment.organisationId,
 
-                    supabaseUrl:
-                      environment.supabaseUrl,
+                supabaseUrl:
+                  environment.supabaseUrl,
 
-                    supabaseKey:
-                      environment.supabaseKey,
-                  },
-                ),
+                supabaseKey:
+                  environment.supabaseKey,
+              }),
 
-                loadWorkforceContext(
-                  {
-                    latestUserMessage,
+              loadWorkforceContext({
+                latestUserMessage,
 
-                    token,
+                token,
 
-                    organisationId:
-                      environment.organisationId,
+                organisationId:
+                  environment.organisationId,
 
-                    supabaseUrl:
-                      environment.supabaseUrl,
+                supabaseUrl:
+                  environment.supabaseUrl,
 
-                    supabaseKey:
-                      environment.supabaseKey,
-                  },
-                ),
+                supabaseKey:
+                  environment.supabaseKey,
+              }),
 
-                loadExternalNewsContext(
-                  {
-                    latestUserMessage,
+              loadExternalNewsContext({
+                latestUserMessage,
 
-                    newsApiKey:
-                      environment.newsApiKey,
-                  },
-                ),
-              ],
-            );
+                newsApiKey:
+                  environment.newsApiKey,
+              }),
+            ]);
 
           /* ---------------------------------------------------------------- */
           /* SYSTEM PROMPT                                                    */
@@ -2707,19 +4389,17 @@ export const Route =
                 "system",
 
               content:
-                buildSystemPrompt(
-                  {
-                    verifiedContext,
+                buildSystemPrompt({
+                  verifiedContext,
 
-                    operationalContext,
+                  operationalContext,
 
-                    workforceContext,
+                  workforceContext,
 
-                    externalNewsContext,
+                  externalNewsContext,
 
-                    customSystem,
-                  },
-                ),
+                  customSystem,
+                }),
             };
 
           const safetyGuard:
@@ -2755,265 +4435,134 @@ export const Route =
             ];
 
           /* ---------------------------------------------------------------- */
-          /* OPENAI                                                           */
+          /* MULTI-PROVIDER GATEWAY                                           */
           /* ---------------------------------------------------------------- */
 
-          if (
-            provider ===
-            "openai"
-          ) {
-            const openAiModel =
-              resolveOpenAiModel();
+          let gatewayResult:
+            Awaited<
+              ReturnType<
+                typeof executeProviderGateway
+              >
+            >;
 
-            if (
-              !openAiModel
-            ) {
-              return new Response(
-                "Strategic OpenAI reasoning is disabled because OPENAI_MODEL is not configured. Economy Groq remains the default Cossa AI reasoning route.",
-                {
-                  status:
-                    503,
-                },
-              );
-            }
+          try {
+            gatewayResult =
+              await executeProviderGateway({
+                requestedProvider,
 
-            const openAiResponse =
-              await fetch(
-                "https://api.openai.com/v1/responses",
-                {
-                  method:
-                    "POST",
+                providerMessages,
 
-                  headers:
-                    {
-                      "Content-Type":
-                        "application/json",
-
-                      Authorization:
-                        `Bearer ${environment.openAiApiKey}`,
-                    },
-
-                  body:
-                    JSON.stringify(
-                      {
-                        model:
-                          openAiModel,
-
-                        instructions:
-                          providerMessages
-                            .filter(
-                              (
-                                message,
-                              ) =>
-                                message.role ===
-                                "system",
-                            )
-                            .map(
-                              (
-                                message,
-                              ) =>
-                                message.content,
-                            )
-                            .join(
-                              "\n\n",
-                            ),
-
-                        input:
-                          providerMessages
-                            .filter(
-                              (
-                                message,
-                              ) =>
-                                message.role !==
-                                "system",
-                            )
-                            .map(
-                              (
-                                message,
-                              ) => ({
-                                role:
-                                  message.role,
-
-                                content:
-                                  message.content,
-                              }),
-                            ),
-
-                        max_output_tokens:
-                          MAX_OPENAI_COMPLETION_TOKENS,
-
-                        store:
-                          false,
-                      },
-                    ),
-
-                  signal:
-                    request.signal,
-                },
-              );
-
-            if (
-              !openAiResponse.ok
-            ) {
-              const errorText =
-                await openAiResponse
-                  .text()
-                  .catch(
-                    () => "",
-                  );
-
-              console.error(
-                "OpenAI request failed:",
-                openAiResponse.status,
-                errorText,
-              );
-
-              const responseStatus =
-                openAiResponse.status ===
-                  402 ||
-                openAiResponse.status ===
-                  429
-                  ? openAiResponse.status
-                  : 502;
-
-              return new Response(
-                safeProviderFailure(
-                  "openai",
-                  openAiResponse.status,
-                  errorText,
-                ),
-                {
-                  status:
-                    responseStatus,
-                },
-              );
-            }
-
-            const responsePayload =
-              await openAiResponse.json();
-
-            const responseText =
-              extractOpenAiResponseText(
-                responsePayload,
-              );
-
-            if (
-              !responseText
-            ) {
-              return new Response(
-                "Cossa AI returned an empty OpenAI response.",
-                {
-                  status:
-                    502,
-                },
-              );
-            }
-
-            return new Response(
-              createTextResponseStream(
-                responseText,
-              ),
-              {
-                headers:
-                  chatResponseHeaders(
-                    provider,
-                  ),
-              },
-            );
-          }
-
-          /* ---------------------------------------------------------------- */
-          /* GROQ                                                             */
-          /* ---------------------------------------------------------------- */
-
-          const groqResponse =
-            await fetch(
-              "https://api.groq.com/openai/v1/chat/completions",
-              {
-                method:
-                  "POST",
-
-                headers:
-                  {
-                    "Content-Type":
-                      "application/json",
-
-                    Authorization:
-                      `Bearer ${environment.groqApiKey}`,
-                  },
-
-                body:
-                  JSON.stringify(
-                    {
-                      model:
-                        resolveGroqModel(),
-
-                      stream:
-                        true,
-
-                      temperature:
-                        0.2,
-
-                      max_tokens:
-                        MAX_GROQ_COMPLETION_TOKENS,
-
-                      messages:
-                        providerMessages,
-                    },
-                  ),
+                environment,
 
                 signal:
                   request.signal,
-              },
-            );
-
-          if (
-            !groqResponse.ok ||
-            !groqResponse.body
+              });
+          } catch (
+            error
           ) {
-            const errorText =
-              await groqResponse
-                .text()
-                .catch(
-                  () => "",
-                );
+            if (
+              error instanceof
+                DOMException &&
+              error.name ===
+                "AbortError"
+            ) {
+              return new Response(
+                "Cossa AI request was cancelled.",
+                {
+                  status:
+                    499,
+                },
+              );
+            }
 
             console.error(
-              "Groq request failed:",
-              groqResponse.status,
-              errorText,
+              "Cossa AI provider gateway failed unexpectedly.",
+              error,
             );
 
-            const responseStatus =
-              groqResponse.status ===
-                402 ||
-              groqResponse.status ===
-                429
-                ? groqResponse.status
-                : 502;
-
             return new Response(
-              safeProviderFailure(
-                "groq",
-                groqResponse.status,
-                errorText,
-              ),
+              "Cossa AI provider routing failed unexpectedly. No external Cossa action was completed.",
               {
                 status:
-                  responseStatus,
+                  503,
               },
             );
           }
 
+          const {
+            result,
+            attempts,
+          } =
+            gatewayResult;
+
+          if (!result) {
+            return createGatewayFailureResponse(
+              attempts,
+            );
+          }
+
+          const fallbackUsed =
+            attempts.length >
+            1 ||
+            (
+              requestedProvider !==
+                "auto" &&
+              requestedProvider !==
+                result.provider
+            );
+
+          console.info(
+            "Cossa AI provider execution completed.",
+            {
+              requestedProvider,
+
+              actualProvider:
+                result.provider,
+
+              model:
+                result.model,
+
+              fallbackUsed,
+
+              attempts:
+                attempts.map(
+                  (
+                    attempt,
+                  ) => ({
+                    provider:
+                      attempt.provider,
+
+                    model:
+                      attempt.model,
+
+                    status:
+                      attempt.status,
+
+                    httpStatus:
+                      attempt.httpStatus,
+                  }),
+                ),
+            },
+          );
+
           return new Response(
-            createPlainTextStream(
-              groqResponse.body,
-            ),
+            result.stream,
             {
               headers:
-                chatResponseHeaders(
-                  provider,
-                ),
+                chatResponseHeaders({
+                  requestedProvider,
+
+                  actualProvider:
+                    result.provider,
+
+                  model:
+                    result.model,
+
+                  attemptCount:
+                    attempts.length,
+
+                  fallbackUsed,
+                }),
             },
           );
         },
