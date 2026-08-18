@@ -7,8 +7,13 @@ import { createFileRoute } from "@tanstack/react-router";
 const DEFAULT_COSSA_ORGANISATION_ID =
   "00000000-0000-4000-8000-000000000001";
 
+/**
+ * Confirmed available in the current Groq project.
+ *
+ * GROQ_MODEL can still override this from the protected environment.
+ */
 const DEFAULT_GROQ_MODEL =
-  "llama-3.3-70b-versatile";
+  "openai/gpt-oss-120b";
 
 const DEFAULT_GEMINI_MODEL =
   "gemini-3.7-flash";
@@ -22,47 +27,104 @@ const MAX_MESSAGE_LENGTH =
 const MAX_TOTAL_MESSAGE_LENGTH =
   60_000;
 
+/**
+ * Browser history may contain much more than we should send to a provider.
+ *
+ * The server keeps only a short recent reasoning window.
+ */
 const MAX_RECENT_HISTORY_MESSAGES =
-  12;
+  6;
 
 const MAX_RECENT_HISTORY_LENGTH =
-  16_000;
-
-const MAX_KNOWLEDGE_CONTEXT_LENGTH =
-  8_000;
-
-const MAX_SELECTED_KNOWLEDGE_DOCUMENTS =
-  12;
-
-const MAX_OPERATIONAL_CONTEXT_LENGTH =
-  8_000;
-
-const MAX_WORKFORCE_CONTEXT_LENGTH =
   6_000;
 
-const MAX_EXTERNAL_NEWS_CONTEXT_LENGTH =
+/**
+ * Context budgets are intentionally conservative.
+ *
+ * Groq's current account tier rejected an 11,885-token request against an
+ * 8,000 TPM allowance.
+ *
+ * Cossa therefore aims to keep the reasoning request materially below that
+ * limit instead of depending on paid tier expansion.
+ */
+const MAX_KNOWLEDGE_CONTEXT_LENGTH =
+  4_200;
+
+const MAX_SELECTED_KNOWLEDGE_DOCUMENTS =
+  7;
+
+const MAX_OPERATIONAL_CONTEXT_LENGTH =
   5_000;
 
+const MAX_WORKFORCE_CONTEXT_LENGTH =
+  4_500;
+
+const MAX_EXTERNAL_NEWS_CONTEXT_LENGTH =
+  2_500;
+
 const MAX_CUSTOM_SYSTEM_LENGTH =
-  8_000;
-
-const MAX_GROQ_COMPLETION_TOKENS =
-  900;
-
-const MAX_GEMINI_COMPLETION_TOKENS =
-  1_000;
-
-const MAX_OPENAI_COMPLETION_TOKENS =
-  1_100;
+  2_500;
 
 /**
- * Cossa's default reasoning route.
+ * Final protection after all context assembly.
+ *
+ * Character count is only an approximation of tokens, but approximately
+ * 4 characters per token is a useful conservative operating heuristic for
+ * English business text.
+ *
+ * 22,000 characters is usually around 5,500 tokens before provider-specific
+ * tokenisation, leaving room for completion output under an 8,000-token
+ * request/TPM ceiling.
+ */
+const MAX_PROVIDER_INPUT_CHARACTERS =
+  22_000;
+
+const MAX_SYSTEM_PROMPT_CHARACTERS =
+  15_000;
+
+const MAX_GROQ_COMPLETION_TOKENS =
+  800;
+
+const MAX_GEMINI_COMPLETION_TOKENS =
+  900;
+
+const MAX_OPENAI_COMPLETION_TOKENS =
+  1_000;
+
+/**
+ * Limits raw records before prompt formatting.
+ *
+ * The CEO does not need 80 full handoff rows to answer:
+ *
+ * "Give me today's briefing."
+ *
+ * It needs enough current evidence to reason correctly.
+ */
+const MAX_CONTEXT_RECORDS = {
+  leads: 12,
+  quoteRequests: 8,
+  contactMessages: 8,
+  opportunities: 10,
+  quotations: 10,
+  customers: 10,
+  projects: 10,
+  appointments: 10,
+
+  employees: 30,
+  missions: 15,
+  runs: 18,
+  handoffs: 18,
+  approvals: 15,
+} as const;
+
+/**
+ * Cossa default reasoning route.
  *
  * Groq
- *   Fast/economy/default reasoning.
+ *   Fast / economy / primary reasoning.
  *
  * Gemini
- *   Secondary reasoning provider.
+ *   Secondary reasoning route.
  *
  * OpenAI
  *   Strategic fallback when configured and funded.
@@ -103,13 +165,6 @@ interface ChatPayload {
 
   system?: string;
 
-  /**
-   * "auto"
-   *   Use Cossa's normal provider order.
-   *
-   * Concrete provider:
-   *   Try that provider first, then safely fall through when appropriate.
-   */
   provider?: ChatProviderPreference;
 }
 
@@ -321,6 +376,23 @@ type PrimedStreamResult =
   | PrimedStreamSuccess
   | PrimedStreamFailure;
 
+interface ContextNeeds {
+  operational:
+    boolean;
+
+  workforce:
+    boolean;
+
+  externalNews:
+    boolean;
+
+  leadContacts:
+    boolean;
+
+  briefing:
+    boolean;
+}
+
 /* -------------------------------------------------------------------------- */
 /* REQUEST ID                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -367,13 +439,9 @@ function resolveGeminiModel(): string {
 }
 
 /**
- * OpenAI remains intentionally environment controlled.
+ * OpenAI remains intentionally environment-controlled.
  *
- * We do not silently select a paid OpenAI model.
- *
- * Example:
- *
- * OPENAI_MODEL=<owner-approved-model>
+ * Do not silently choose a paid OpenAI model.
  */
 function resolveOpenAiModel(): string | null {
   const configured =
@@ -593,11 +661,6 @@ async function restSelect<T>({
       errorText,
     );
 
-    /*
-     * Context reads fail closed.
-     *
-     * Missing data becomes missing evidence rather than invented evidence.
-     */
     return [];
   }
 
@@ -1026,18 +1089,184 @@ function isChatProviderPreference(
 }
 
 /* -------------------------------------------------------------------------- */
+/* TEXT / TOKEN BUDGET HELPERS                                                */
+/* -------------------------------------------------------------------------- */
+
+function truncateText(
+  value:
+    string,
+
+  maxLength:
+    number,
+): string {
+  if (
+    value.length <=
+    maxLength
+  ) {
+    return value;
+  }
+
+  return `${value.slice(
+    0,
+    Math.max(
+      0,
+      maxLength - 80,
+    ),
+  )}\n\n[Context truncated by Cossa AI input budget.]`;
+}
+
+function estimateTokens(
+  value:
+    string,
+): number {
+  return Math.ceil(
+    value.length /
+      4,
+  );
+}
+
+function estimateMessagesTokens(
+  messages:
+    ChatMessage[],
+): number {
+  return messages.reduce(
+    (
+      total,
+      message,
+    ) =>
+      total +
+      estimateTokens(
+        message.content,
+      ) +
+      6,
+
+    0,
+  );
+}
+
+/**
+ * Final server-side safety net.
+ *
+ * System instructions are preserved first.
+ * Recent conversation is then retained from newest backwards.
+ *
+ * The newest user message must always survive.
+ */
+function budgetProviderMessages(
+  messages:
+    ChatMessage[],
+): ChatMessage[] {
+  if (
+    messages.length ===
+    0
+  ) {
+    return [];
+  }
+
+  const systemMessages =
+    messages.filter(
+      (
+        message,
+      ) =>
+        message.role ===
+        "system",
+    );
+
+  const conversation =
+    messages.filter(
+      (
+        message,
+      ) =>
+        message.role !==
+        "system",
+    );
+
+  const boundedSystem =
+    systemMessages.map(
+      (
+        message,
+      ) => ({
+        ...message,
+
+        content:
+          truncateText(
+            message.content,
+            MAX_SYSTEM_PROMPT_CHARACTERS,
+          ),
+      }),
+    );
+
+  const systemLength =
+    boundedSystem.reduce(
+      (
+        total,
+        message,
+      ) =>
+        total +
+        message.content.length,
+
+      0,
+    );
+
+  const remainingBudget =
+    Math.max(
+      2_000,
+      MAX_PROVIDER_INPUT_CHARACTERS -
+        systemLength,
+    );
+
+  const selected:
+    ChatMessage[] =
+    [];
+
+  let used =
+    0;
+
+  for (
+    const message of [
+      ...conversation,
+    ].reverse()
+  ) {
+    const remaining =
+      remainingBudget -
+      used;
+
+    if (
+      remaining <=
+      0
+    ) {
+      break;
+    }
+
+    const content =
+      message.content.length >
+      remaining
+        ? message.content.slice(
+            -remaining,
+          )
+        : message.content;
+
+    selected.unshift({
+      role:
+        message.role,
+
+      content,
+    });
+
+    used +=
+      content.length;
+  }
+
+  return [
+    ...boundedSystem,
+    ...selected,
+  ];
+}
+
+/* -------------------------------------------------------------------------- */
 /* CHAT HISTORY                                                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Browser-supplied system-role history is intentionally ignored.
- *
- * Trusted layers:
- *
- * 1. Cossa server operating prompt.
- * 2. Optional bounded specialist/worker prompt.
- * 3. Recent user/assistant conversation.
- */
 function selectRecentHistory(
   messages:
     ChatMessage[],
@@ -1109,17 +1338,62 @@ function selectRecentHistory(
 /* KNOWLEDGE                                                                  */
 /* -------------------------------------------------------------------------- */
 
+const KNOWLEDGE_STOP_WORDS =
+  new Set([
+    "about",
+    "after",
+    "again",
+    "also",
+    "and",
+    "are",
+    "can",
+    "cossa",
+    "could",
+    "for",
+    "from",
+    "give",
+    "have",
+    "help",
+    "into",
+    "need",
+    "please",
+    "tell",
+    "that",
+    "the",
+    "their",
+    "this",
+    "today",
+    "want",
+    "what",
+    "when",
+    "where",
+    "which",
+    "with",
+    "would",
+    "you",
+    "your",
+  ]);
+
 function extractSearchTerms(
   message:
     string,
 ): Set<string> {
   return new Set(
-    message
-      .toLowerCase()
-      .match(
-        /[a-z0-9]{3,}/g,
-      ) ??
-      [],
+    (
+      message
+        .toLowerCase()
+        .match(
+          /[a-z0-9]{3,}/g,
+        ) ??
+      []
+    ).filter(
+      (
+        term,
+      ) =>
+        !KNOWLEDGE_STOP_WORDS.has(
+          term,
+        ),
+    ),
   );
 }
 
@@ -1135,25 +1409,32 @@ function selectRelevantKnowledge(
       latestUserMessage,
     );
 
+  const lowerMessage =
+    latestUserMessage.toLowerCase();
+
+  const asksIdentity =
+    /\b(who are you|who is the ceo|company overview|about cossa|what is cossa)\b/i.test(
+      latestUserMessage,
+    );
+
+  const asksApproval =
+    /\b(approval|approve|permission|spend|budget|contract|sign|publish|advert|payment|supplier order)\b/i.test(
+      latestUserMessage,
+    );
+
+  const asksBriefing =
+    /\b(briefing|today'?s feedback|todays feedback|ceo feedback|company status|what needs attention|what is happening)\b/i.test(
+      latestUserMessage,
+    );
+
   const coreKnowledgeTitles =
     [
       "constitution",
       "approval authority",
-      "memory and knowledge",
       "mission",
       "vision",
-      "answer precision",
       "company overview",
-    ];
-
-  const companyWideCategories =
-    [
-      "company facts",
-      "company",
-      "legal & compliance",
-      "services",
-      "brand",
-      "policies",
+      "verified company overview",
     ];
 
   return knowledge
@@ -1161,6 +1442,9 @@ function selectRelevantKnowledge(
       (
         document,
       ) => {
+        const title =
+          document.title.toLowerCase();
+
         const searchable =
           `${document.title} ${document.body}`.toLowerCase();
 
@@ -1176,18 +1460,8 @@ function selectRelevantKnowledge(
               (
                 searchable.includes(
                   term,
-                ) ||
-                (
-                  term.length >=
-                    6 &&
-                  searchable.includes(
-                    term.slice(
-                      0,
-                      5,
-                    ),
-                  )
                 )
-                  ? 1
+                  ? 2
                   : 0
               ),
 
@@ -1197,74 +1471,99 @@ function selectRelevantKnowledge(
         const isCore =
           coreKnowledgeTitles.some(
             (
-              title,
+              coreTitle,
             ) =>
-              document.title
-                .toLowerCase()
-                .includes(
-                  title,
-                ),
+              title.includes(
+                coreTitle,
+              ),
           );
 
-        const tags =
-          new Set(
-            (
-              document.tags ??
-              []
-            ).map(
+        const approvalBoost =
+          asksApproval &&
+          (
+            title.includes(
+              "approval",
+            ) ||
+            searchable.includes(
+              "approval authority",
+            )
+          )
+            ? 8
+            : 0;
+
+        const identityBoost =
+          asksIdentity &&
+          (
+            title.includes(
+              "company overview",
+            ) ||
+            title.includes(
+              "mission",
+            ) ||
+            title.includes(
+              "vision",
+            )
+          )
+            ? 8
+            : 0;
+
+        const briefingBoost =
+          asksBriefing &&
+          isCore
+            ? 3
+            : 0;
+
+        const directPhraseBoost =
+          lowerMessage
+            .split(
+              /\s+/,
+            )
+            .some(
               (
-                tag,
+                term,
               ) =>
-                tag
-                  .toLowerCase()
-                  .trim(),
-            ),
-          );
-
-        const isCompanyWide =
-          tags.has(
-            "company-wide",
-          ) ||
-          tags.has(
-            "always-include",
-          ) ||
-          companyWideCategories.includes(
-            document.category
-              ?.toLowerCase()
-              .trim() ??
-              "",
-          );
+                term.length >=
+                  5 &&
+                title.includes(
+                  term,
+                ),
+            )
+            ? 2
+            : 0;
 
         return {
           document,
 
-          relevance,
-
-          isCore,
-
-          isCompanyWide,
+          score:
+            relevance +
+            approvalBoost +
+            identityBoost +
+            briefingBoost +
+            directPhraseBoost +
+            (
+              isCore
+                ? 1
+                : 0
+            ),
         };
       },
+    )
+    .filter(
+      (
+        entry,
+      ) =>
+        entry.score >
+          0 ||
+        queryTerms.size ===
+          0,
     )
     .sort(
       (
         a,
         b,
       ) =>
-        Number(
-          b.isCompanyWide,
-        ) -
-          Number(
-            a.isCompanyWide,
-          ) ||
-        Number(
-          b.isCore,
-        ) -
-          Number(
-            a.isCore,
-          ) ||
-        b.relevance -
-          a.relevance ||
+        b.score -
+          a.score ||
         Date.parse(
           b.document.updated_at,
         ) -
@@ -1277,10 +1576,10 @@ function selectRelevantKnowledge(
       MAX_SELECTED_KNOWLEDGE_DOCUMENTS,
     )
     .map(
-      ({
-        document,
-      }) =>
-        document,
+      (
+        entry,
+      ) =>
+        entry.document,
     );
 }
 
@@ -1292,61 +1591,108 @@ function formatKnowledgeContext(
     knowledge.length ===
     0
   ) {
-    return "No verified company knowledge was retrieved.";
+    return "No verified company knowledge was retrieved for this request.";
   }
 
-  return knowledge
-    .map(
-      (
-        document,
-      ) =>
-        [
-          `DOCUMENT: ${document.title}`,
+  const chunks:
+    string[] =
+    [];
 
-          (
-            document.tags ??
-            []
-          ).length >
-          0
-            ? `TAGS: ${(document.tags ?? []).join(", ")}`
-            : null,
+  let used =
+    0;
 
-          document.source
-            ? `SOURCE: ${document.source}`
-            : null,
+  for (
+    const document of
+      knowledge
+  ) {
+    const remaining =
+      MAX_KNOWLEDGE_CONTEXT_LENGTH -
+      used;
 
-          document.source_url
-            ? `SOURCE URL: ${document.source_url}`
-            : null,
+    if (
+      remaining <=
+      0
+    ) {
+      break;
+    }
 
+    const metadata =
+      [
+        `DOCUMENT: ${document.title}`,
+
+        document.category
+          ? `CATEGORY: ${document.category}`
+          : null,
+
+        document.source
+          ? `SOURCE: ${document.source}`
+          : null,
+      ]
+        .filter(
+          Boolean,
+        )
+        .join(
+          "\n",
+        );
+
+    const availableBody =
+      Math.max(
+        250,
+        remaining -
+          metadata.length -
+          40,
+      );
+
+    const chunk =
+      [
+        metadata,
+
+        truncateText(
           document.body,
-        ]
-          .filter(
-            Boolean,
-          )
-          .join(
-            "\n",
-          ),
-    )
-    .join(
-      "\n\n---\n\n",
-    )
-    .slice(
-      0,
-      MAX_KNOWLEDGE_CONTEXT_LENGTH,
+          availableBody,
+        ),
+      ].join(
+        "\n",
+      );
+
+    chunks.push(
+      chunk,
     );
+
+    used +=
+      chunk.length +
+      10;
+  }
+
+  return chunks.join(
+    "\n\n---\n\n",
+  );
 }
 
 /* -------------------------------------------------------------------------- */
 /* CONTEXT DETECTION                                                          */
 /* -------------------------------------------------------------------------- */
 
+function isCeoBriefingRequest(
+  message:
+    string,
+): boolean {
+  return /\b(ceo briefing|owner briefing|today'?s briefing|todays briefing|today'?s feedback|todays feedback|company briefing|company status|what needs attention|what is working|what is blocked|what needs my attention|executive briefing)\b/i.test(
+    message,
+  );
+}
+
 function needsOperationalData(
   message:
     string,
 ): boolean {
-  return /\b(lead|leads|enquiry|enquiries|quote request|quote requests|customer|customers|pipeline|opportunity|opportunities|quotation|quotations|quote|quotes|project|projects|appointment|appointments|follow[- ]?up|crm|sales|revenue|website request|website requests|store|product|products|order|orders|inventory|catalogue|catalog|supplier|suppliers)\b/i.test(
-    message,
+  return (
+    isCeoBriefingRequest(
+      message,
+    ) ||
+    /\b(lead|leads|enquiry|enquiries|quote request|quote requests|customer|customers|pipeline|opportunity|opportunities|quotation|quotations|quote|quotes|project|projects|appointment|appointments|follow[- ]?up|crm|sales|revenue|website request|website requests|store|product|products|order|orders|inventory|catalogue|catalog|supplier|suppliers)\b/i.test(
+      message,
+    )
   );
 }
 
@@ -1363,8 +1709,13 @@ function needsWorkforceData(
   message:
     string,
 ): boolean {
-  return /\b(ai[- ]?ceo|workforce|worker|workers|employee|employees|handoff|handoffs|mission|missions|approval|approvals|owner briefing|briefing|working|idle|automatic|automation|task|tasks)\b/i.test(
-    message,
+  return (
+    isCeoBriefingRequest(
+      message,
+    ) ||
+    /\b(ai[- ]?ceo|workforce|worker|workers|employee|employees|handoff|handoffs|mission|missions|approval|approvals|owner briefing|briefing|working|idle|automatic|automation|task|tasks)\b/i.test(
+      message,
+    )
   );
 }
 
@@ -1374,6 +1725,119 @@ function needsExternalNewsData(
 ): boolean {
   return /\b(news|latest news|current news|market news|industry news|trend|trends|trending|current developments|current events|industry developments|market developments|business news|technology news|construction news|retail news|ecommerce news|e-commerce news)\b/i.test(
     message,
+  );
+}
+
+function detectContextNeeds(
+  message:
+    string,
+): ContextNeeds {
+  return {
+    operational:
+      needsOperationalData(
+        message,
+      ),
+
+    workforce:
+      needsWorkforceData(
+        message,
+      ),
+
+    externalNews:
+      needsExternalNewsData(
+        message,
+      ),
+
+    leadContacts:
+      needsLeadContactData(
+        message,
+      ),
+
+    briefing:
+      isCeoBriefingRequest(
+        message,
+      ),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* RECORD COMPACTION                                                          */
+/* -------------------------------------------------------------------------- */
+
+function compactRecord(
+  record:
+    Record<
+      string,
+      unknown
+    >,
+): Record<
+  string,
+  unknown
+> {
+  return Object.fromEntries(
+    Object.entries(
+      record,
+    ).filter(
+      (
+        [
+          ,
+          value,
+        ],
+      ) =>
+        value !==
+          null &&
+        value !==
+          undefined &&
+        value !==
+          "",
+    ),
+  );
+}
+
+function formatRecordSection(
+  title:
+    string,
+
+  records:
+    Record<
+      string,
+      unknown
+    >[],
+
+  maxRecords:
+    number,
+): string {
+  const selected =
+    records
+      .slice(
+        0,
+        maxRecords,
+      )
+      .map(
+        compactRecord,
+      );
+
+  return [
+    `${title} COUNT: ${records.length}`,
+
+    selected.length >
+      0
+      ? selected
+          .map(
+            (
+              record,
+              index,
+            ) =>
+              `${index + 1}. ${JSON.stringify(
+                record,
+              )}`,
+          )
+          .join(
+            "\n",
+          )
+      : "No records returned.",
+  ].join(
+    "\n",
   );
 }
 
@@ -1403,18 +1867,19 @@ async function loadOperationalContext({
   supabaseKey:
     string;
 }): Promise<string> {
-  if (
-    !needsOperationalData(
+  const needs =
+    detectContextNeeds(
       latestUserMessage,
-    )
+    );
+
+  if (
+    !needs.operational
   ) {
     return "Operational CRM records were not required for this request.";
   }
 
   const includeContactFields =
-    needsLeadContactData(
-      latestUserMessage,
-    );
+    needs.leadContacts;
 
   const leadSelect =
     includeContactFields
@@ -1453,7 +1918,9 @@ async function loadOperationalContext({
               "created_at.desc",
 
             limit:
-              "25",
+              String(
+                MAX_CONTEXT_RECORDS.leads,
+              ),
           }).toString(),
 
         token,
@@ -1463,17 +1930,6 @@ async function loadOperationalContext({
         supabaseKey,
       }),
 
-      /*
-       * NOTE:
-       *
-       * quote_requests is intentionally left with its current schema contract.
-       *
-       * If this table contains organisation_id, add the organisation filter.
-       * Do not blindly add a column that may not exist because that would make
-       * context retrieval fail completely.
-       *
-       * RLS should remain the authoritative tenant boundary.
-       */
       restSelect<
         Record<
           string,
@@ -1492,7 +1948,9 @@ async function loadOperationalContext({
               "created_at.desc",
 
             limit:
-              "20",
+              String(
+                MAX_CONTEXT_RECORDS.quoteRequests,
+              ),
           }).toString(),
 
         token,
@@ -1502,11 +1960,6 @@ async function loadOperationalContext({
         supabaseKey,
       }),
 
-      /*
-       * Same schema rule applies to contact_messages.
-       *
-       * If organisation_id exists, add an explicit filter in addition to RLS.
-       */
       restSelect<
         Record<
           string,
@@ -1527,7 +1980,9 @@ async function loadOperationalContext({
               "created_at.desc",
 
             limit:
-              "20",
+              String(
+                MAX_CONTEXT_RECORDS.contactMessages,
+              ),
           }).toString(),
 
         token,
@@ -1558,7 +2013,9 @@ async function loadOperationalContext({
               "created_at.desc",
 
             limit:
-              "25",
+              String(
+                MAX_CONTEXT_RECORDS.opportunities,
+              ),
           }).toString(),
 
         token,
@@ -1589,7 +2046,9 @@ async function loadOperationalContext({
               "created_at.desc",
 
             limit:
-              "25",
+              String(
+                MAX_CONTEXT_RECORDS.quotations,
+              ),
           }).toString(),
 
         token,
@@ -1622,7 +2081,9 @@ async function loadOperationalContext({
               "created_at.desc",
 
             limit:
-              "25",
+              String(
+                MAX_CONTEXT_RECORDS.customers,
+              ),
           }).toString(),
 
         token,
@@ -1653,7 +2114,9 @@ async function loadOperationalContext({
               "created_at.desc",
 
             limit:
-              "25",
+              String(
+                MAX_CONTEXT_RECORDS.projects,
+              ),
           }).toString(),
 
         token,
@@ -1684,7 +2147,9 @@ async function loadOperationalContext({
               "created_at.desc",
 
             limit:
-              "25",
+              String(
+                MAX_CONTEXT_RECORDS.appointments,
+              ),
           }).toString(),
 
         token,
@@ -1695,80 +2160,67 @@ async function loadOperationalContext({
       }),
     ]);
 
-  return [
-    `LIVE OPERATIONAL DATA CHECKED AT: ${new Date().toISOString()}`,
-    "",
+  const sections =
+    [
+      `LIVE OPERATIONAL DATA CHECKED AT: ${new Date().toISOString()}`,
 
-    `LEADS (${leads.length})`,
-    JSON.stringify(
-      leads,
-      null,
-      2,
-    ),
-    "",
+      "Use only these records as live operational evidence.",
 
-    `QUOTE REQUESTS (${quoteRequests.length})`,
-    JSON.stringify(
-      quoteRequests,
-      null,
-      2,
-    ),
-    "",
+      formatRecordSection(
+        "LEADS",
+        leads,
+        MAX_CONTEXT_RECORDS.leads,
+      ),
 
-    `CONTACT MESSAGES (${contactMessages.length})`,
-    JSON.stringify(
-      contactMessages,
-      null,
-      2,
-    ),
-    "",
+      formatRecordSection(
+        "QUOTE REQUESTS",
+        quoteRequests,
+        MAX_CONTEXT_RECORDS.quoteRequests,
+      ),
 
-    `OPPORTUNITIES (${opportunities.length})`,
-    JSON.stringify(
-      opportunities,
-      null,
-      2,
-    ),
-    "",
+      formatRecordSection(
+        "CONTACT MESSAGES",
+        contactMessages,
+        MAX_CONTEXT_RECORDS.contactMessages,
+      ),
 
-    `QUOTATIONS (${quotations.length})`,
-    JSON.stringify(
-      quotations,
-      null,
-      2,
-    ),
-    "",
+      formatRecordSection(
+        "OPPORTUNITIES",
+        opportunities,
+        MAX_CONTEXT_RECORDS.opportunities,
+      ),
 
-    `CUSTOMERS (${customers.length})`,
-    JSON.stringify(
-      customers,
-      null,
-      2,
-    ),
-    "",
+      formatRecordSection(
+        "QUOTATIONS",
+        quotations,
+        MAX_CONTEXT_RECORDS.quotations,
+      ),
 
-    `PROJECTS (${projects.length})`,
-    JSON.stringify(
-      projects,
-      null,
-      2,
-    ),
-    "",
+      formatRecordSection(
+        "CUSTOMERS",
+        customers,
+        MAX_CONTEXT_RECORDS.customers,
+      ),
 
-    `APPOINTMENTS (${appointments.length})`,
-    JSON.stringify(
-      appointments,
-      null,
-      2,
+      formatRecordSection(
+        "PROJECTS",
+        projects,
+        MAX_CONTEXT_RECORDS.projects,
+      ),
+
+      formatRecordSection(
+        "APPOINTMENTS",
+        appointments,
+        MAX_CONTEXT_RECORDS.appointments,
+      ),
+    ];
+
+  return truncateText(
+    sections.join(
+      "\n\n",
     ),
-  ]
-    .join(
-      "\n",
-    )
-    .slice(
-      0,
-      MAX_OPERATIONAL_CONTEXT_LENGTH,
-    );
+    MAX_OPERATIONAL_CONTEXT_LENGTH,
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1834,7 +2286,9 @@ async function loadWorkforceContext({
               "updated_at.desc",
 
             limit:
-              "50",
+              String(
+                MAX_CONTEXT_RECORDS.employees,
+              ),
           }).toString(),
 
         token,
@@ -1865,7 +2319,9 @@ async function loadWorkforceContext({
               "created_at.desc",
 
             limit:
-              "40",
+              String(
+                MAX_CONTEXT_RECORDS.missions,
+              ),
           }).toString(),
 
         token,
@@ -1896,7 +2352,9 @@ async function loadWorkforceContext({
               "created_at.desc",
 
             limit:
-              "60",
+              String(
+                MAX_CONTEXT_RECORDS.runs,
+              ),
           }).toString(),
 
         token,
@@ -1927,7 +2385,9 @@ async function loadWorkforceContext({
               "created_at.desc",
 
             limit:
-              "80",
+              String(
+                MAX_CONTEXT_RECORDS.handoffs,
+              ),
           }).toString(),
 
         token,
@@ -1958,7 +2418,9 @@ async function loadWorkforceContext({
               "requested_at.desc",
 
             limit:
-              "40",
+              String(
+                MAX_CONTEXT_RECORDS.approvals,
+              ),
           }).toString(),
 
         token,
@@ -1969,56 +2431,49 @@ async function loadWorkforceContext({
       }),
     ]);
 
-  return [
-    `LIVE AI WORKFORCE DATA CHECKED AT: ${new Date().toISOString()}`,
-    "",
+  const sections =
+    [
+      `LIVE AI WORKFORCE DATA CHECKED AT: ${new Date().toISOString()}`,
 
-    `EMPLOYEES (${employees.length})`,
-    JSON.stringify(
-      employees,
-      null,
-      2,
-    ),
-    "",
+      "Interpret status literally. Active does not mean currently working. Pending does not mean completed.",
 
-    `MISSIONS (${missions.length})`,
-    JSON.stringify(
-      missions,
-      null,
-      2,
-    ),
-    "",
+      formatRecordSection(
+        "EMPLOYEES",
+        employees,
+        MAX_CONTEXT_RECORDS.employees,
+      ),
 
-    `MISSION RUNS (${runs.length})`,
-    JSON.stringify(
-      runs,
-      null,
-      2,
-    ),
-    "",
+      formatRecordSection(
+        "MISSIONS",
+        missions,
+        MAX_CONTEXT_RECORDS.missions,
+      ),
 
-    `HANDOFFS (${handoffs.length})`,
-    JSON.stringify(
-      handoffs,
-      null,
-      2,
-    ),
-    "",
+      formatRecordSection(
+        "MISSION RUNS",
+        runs,
+        MAX_CONTEXT_RECORDS.runs,
+      ),
 
-    `APPROVALS (${approvals.length})`,
-    JSON.stringify(
-      approvals,
-      null,
-      2,
+      formatRecordSection(
+        "HANDOFFS",
+        handoffs,
+        MAX_CONTEXT_RECORDS.handoffs,
+      ),
+
+      formatRecordSection(
+        "APPROVALS",
+        approvals,
+        MAX_CONTEXT_RECORDS.approvals,
+      ),
+    ];
+
+  return truncateText(
+    sections.join(
+      "\n\n",
     ),
-  ]
-    .join(
-      "\n",
-    )
-    .slice(
-      0,
-      MAX_WORKFORCE_CONTEXT_LENGTH,
-    );
+    MAX_WORKFORCE_CONTEXT_LENGTH,
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2098,7 +2553,7 @@ function createNewsSearchQuery(
       ),
     ).slice(
       0,
-      8,
+      7,
     );
 
   if (
@@ -2160,7 +2615,7 @@ async function loadExternalNewsContext({
         "publishedAt",
 
       pageSize:
-        "8",
+        "5",
     });
 
   try {
@@ -2210,52 +2665,49 @@ async function loadExternalNewsContext({
       return `External news search returned no articles for query: ${searchQuery}`;
     }
 
-    return [
-      `EXTERNAL NEWS INTELLIGENCE CHECKED AT: ${new Date().toISOString()}`,
+    const context =
+      [
+        `EXTERNAL NEWS CHECKED AT: ${new Date().toISOString()}`,
 
-      `SEARCH QUERY: ${searchQuery}`,
+        `SEARCH QUERY: ${searchQuery}`,
 
-      "IMPORTANT: These are external news signals only. They are not verified Cossa company facts, supplier verification, customer verification or proof of a commercial opportunity.",
+        "External news is supplementary intelligence only. It does not prove Cossa company facts, supplier legitimacy, customer intent or commercial opportunity.",
 
-      "",
+        ...articles.map(
+          (
+            article,
+            index,
+          ) =>
+            [
+              `${index + 1}. ${article.title ?? "Untitled"}`,
 
-      ...articles.map(
-        (
-          article,
-          index,
-        ) =>
-          [
-            `ARTICLE ${index + 1}`,
+              `Source: ${article.source?.name ?? "Unknown"}`,
 
-            `TITLE: ${article.title ?? "Untitled"}`,
+              `Published: ${article.publishedAt ?? "Unknown"}`,
 
-            `SOURCE: ${article.source?.name ?? "Unknown source"}`,
+              article.description
+                ? `Summary: ${article.description}`
+                : null,
 
-            `PUBLISHED: ${article.publishedAt ?? "Unknown"}`,
-
-            article.description
-              ? `DESCRIPTION: ${article.description}`
-              : null,
-
-            article.url
-              ? `SOURCE URL: ${article.url}`
-              : null,
-          ]
-            .filter(
-              Boolean,
-            )
-            .join(
-              "\n",
-            ),
-      ),
-    ]
-      .join(
+              article.url
+                ? `URL: ${article.url}`
+                : null,
+            ]
+              .filter(
+                Boolean,
+              )
+              .join(
+                "\n",
+              ),
+        ),
+      ].join(
         "\n\n",
-      )
-      .slice(
-        0,
-        MAX_EXTERNAL_NEWS_CONTEXT_LENGTH,
       );
+
+    return truncateText(
+      context,
+      MAX_EXTERNAL_NEWS_CONTEXT_LENGTH,
+    );
   } catch (
     error
   ) {
@@ -2272,12 +2724,21 @@ async function loadExternalNewsContext({
 /* SYSTEM BRAIN                                                               */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The previous prompt contained nearly 100 repeated operational rules.
+ *
+ * Most were good rules, but sending every rule on every request materially
+ * inflated Groq input tokens.
+ *
+ * This version preserves the same operating doctrine in a shorter hierarchy.
+ */
 function buildSystemPrompt({
   verifiedContext,
   operationalContext,
   workforceContext,
   externalNewsContext,
   customSystem,
+  latestUserMessage,
 }: {
   verifiedContext:
     string;
@@ -2293,188 +2754,180 @@ function buildSystemPrompt({
 
   customSystem?:
     string;
+
+  latestUserMessage:
+    string;
 }): string {
-  return `
-You are Cossa AI, the internal AI business operating partner, executive reasoning layer and controlled workforce intelligence resource for Cossa Nexus Holdings.
+  const needs =
+    detectContextNeeds(
+      latestUserMessage,
+    );
 
-You support Cossa Nexus Holdings and its authorised business units across business strategy, sales, marketing, CRM, operations, procurement intelligence, supplier research preparation, commerce, product intelligence, customer reactivation, workforce coordination and executive decision support.
+  const domainRules:
+    string[] =
+    [];
 
-You are also the shared reasoning resource used by authorised Cossa AI employees when they require verified company knowledge, authorised operational context or higher-level business analysis.
+  if (
+    needs.operational
+  ) {
+    domainRules.push(`
+LIVE OPERATIONS
+- CRM, lead, quotation, opportunity, project, appointment and customer claims must come from supplied live records.
+- If a requested record is absent, say it was not found.
+- Use exact recorded counts where supplied.
+- Never claim contact, payment, booking, order, delivery, quotation or campaign execution without a verified system record.
+- Protect private phone/email information unless the authenticated owner specifically requests it.
+`);
+  }
 
-CORE OPERATING PRINCIPLES
+  if (
+    needs.workforce
+  ) {
+    domainRules.push(`
+WORKFORCE
+- Active means available to receive work, not currently working.
+- Pending handoff means assigned, not completed.
+- Accepted means claimed, not necessarily completed.
+- Running mission run proves work in progress.
+- Completed work requires completed run or completed handoff evidence.
+- Failed runs remain failed.
+- Employees without a current assignment/run/handoff should be described as active but unassigned or idle.
+- AI CEO may reason, coordinate and recommend, but cannot self-approve owner-controlled actions.
+`);
+  }
 
-1. Work from evidence.
-2. Never fabricate facts, records, results, suppliers, customers, opportunities, integrations or employee activity.
-3. Clearly separate verified facts, live operational data, external intelligence, assumptions and recommendations.
-4. Prefer useful action over generic commentary.
-5. Protect Cossa's reputation, money, customer information, legal position, credentials and commercial relationships.
-6. Employees should continue low-risk internal work without unnecessary owner interruption.
-7. Only genuinely high-risk, irreversible, financial, legal, credential, account-control or sensitive external actions require owner approval.
-8. Never pretend that an action happened merely because an employee was instructed to perform it.
-9. Never call a profile, placeholder, draft, recommendation or pending handoff completed work.
+  if (
+    /\b(marketing|social|content|seo|facebook|instagram|advert|campaign|post|flyer|business card|creative)\b/i.test(
+      latestUserMessage,
+    )
+  ) {
+    domainRules.push(`
+MARKETING
+- Strategy, research, copy, content calendars, creative briefs and SEO recommendations are low-risk internal work.
+- Never invent testimonials, case studies, followers, traffic, engagement, sales or campaign performance.
+- Paid spend, bid changes and campaign launches require owner approval.
+- Publishing may only be claimed when a verified authorised integration confirms publication.
+`);
+  }
 
-COMPANY KNOWLEDGE RULES
+  if (
+    /\b(store|product|supplier|inventory|catalog|catalogue|dropship|dropshipping)\b/i.test(
+      latestUserMessage,
+    )
+  ) {
+    domainRules.push(`
+STORE AND SUPPLIERS
+- Never invent inventory, stock, supplier availability, purchase cost or delivery time.
+- Supplier candidates require real evidence before being called verified.
+- News is not supplier verification.
+- Supplier orders, binding terms and payments require owner approval.
+`);
+  }
 
-10. Use verified company knowledge for company-specific facts.
-11. Identify the relevant knowledge-document title when making important company-specific claims.
-12. A mission objective is an instruction, not evidence that a result, market position, customer need or capability has been proven.
-13. A document tagged owner-target, planned or requires-review is a future intention, not an achieved result.
-14. Do not invent Cossa services, prices, capabilities, certifications, customer outcomes or guarantees.
-15. Do not publicly disclose internal revenue, margins, supplier costs, private workforce instructions, credentials or protected business information.
+  if (
+    /\b(tender|procurement|rfq|broker|deal)\b/i.test(
+      latestUserMessage,
+    )
+  ) {
+    domainRules.push(`
+PROCUREMENT
+- Never fabricate tenders, deadlines, eligibility, buyers, brokers or deals.
+- Potential fit is analysis, not proof.
+- Tender submission, signed commitments and legal declarations require owner approval.
+`);
+  }
 
-LIVE OPERATIONAL RULES
+  if (
+    needs.externalNews
+  ) {
+    domainRules.push(`
+EXTERNAL INTELLIGENCE
+- Label external news as external intelligence.
+- Do not convert news signals into verified company, supplier, customer or commercial facts.
+- Never claim broader web research happened unless an authorised research workflow actually performed it.
+`);
+  }
 
-16. Use live operational records for CRM, lead, customer, quotation, opportunity, project and appointment facts.
-17. When a requested live record is absent, state that it was not found in the supplied live records.
-18. When live operational context contains an exact count, answer with the exact recorded count.
-19. Do not tell the owner to manually inspect CRM records already supplied in the live context.
-20. Protect private phone numbers and email addresses unless the authenticated owner explicitly requests contact information.
-21. Never claim that an email, WhatsApp message, call, quotation, booking, order, payment, campaign or delivery occurred unless a verified system record confirms it.
+  if (
+    needs.briefing
+  ) {
+    domainRules.push(`
+CEO BRIEFING FORMAT
+Prioritise:
+1. What is working now.
+2. What is blocked or failed.
+3. Revenue/customer opportunities supported by evidence.
+4. Work completed versus still assigned/in progress.
+5. High-priority actions that can continue without owner approval.
+6. Owner decisions genuinely required.
+7. Missing evidence.
 
-WORKFORCE RULES
+Do not turn ordinary internal drafting/research into owner approval requests.
+`);
+  }
 
-22. Use the live workforce context for employee, mission, run, handoff and approval questions.
-23. Active employee means the employee is permitted to receive work. It does not prove that the employee is currently working.
-24. A pending handoff is assigned work, not completed work.
-25. An accepted handoff means the task was claimed, not necessarily completed.
-26. A running mission run is evidence that recorded work is in progress.
-27. Completed work requires a completed mission run or completed handoff.
-28. Failed runs must be reported as failed.
-29. Never silently convert a failed run into a success.
-30. Employees should hand useful internal work to the next appropriate employee rather than operating as isolated placeholders.
-31. Employees may use Cossa AI CEO for shared reasoning, knowledge synthesis and escalation support.
-32. Cossa AI CEO should resolve ordinary internal reasoning questions and escalate only genuine owner decisions.
-33. The AI CEO may recommend decisions but cannot approve itself.
-34. Never claim that every employee is working unless live workforce records actually prove it.
-35. If an employee has no assigned mission, handoff or run, describe that employee as active but currently unassigned or idle.
+  const prompt =
+    `
+You are Cossa AI, the internal executive reasoning and controlled workforce intelligence layer for Cossa Nexus Holdings.
 
-SOCIAL MEDIA AND MARKETING RULES
+You support authorised Cossa work across strategy, sales, CRM, marketing, operations, procurement, commerce, technology, customer development, workforce coordination and executive decision support.
 
-36. Social strategy, research, draft creation, content calendars, creative briefs, SEO recommendations, performance analysis and internal scheduling may proceed as low-risk internal work.
-37. Never invent customer testimonials, case studies, reviews, sales results, follower numbers, engagement numbers, traffic numbers or campaign performance.
-38. Social content must be accurate, professional and useful.
-39. Content may use education, awareness, product information, pain-point marketing, solution marketing, trust-building, offers, calls to action and business updates when supported by verified information.
-40. Do not publish internal Cossa revenue, confidential financial performance, supplier margins or private workforce information.
-41. Actual external publishing is permitted only when a verified authorised social integration supports publishing and the applicable workflow permits publishing.
-42. Never say a social account is connected merely because the workflow expects one.
-43. Paid advertising spend, campaign launch, budget changes and bid changes require owner approval.
-44. Routine drafts, research, scheduling proposals and content preparation should not require owner approval merely because they are marketing work.
+NON-NEGOTIABLE OPERATING RULES
 
-STORE AND COMMERCE RULES
+1. Work from evidence. Never fabricate facts, records, suppliers, customers, opportunities, results, integrations or employee activity.
+2. Separate verified company knowledge, live operational records, external intelligence, assumptions and recommendations.
+3. A mission objective, draft, profile, plan or handoff is not proof that work was executed.
+4. Never convert missing evidence into a fact.
+5. Reasoning providers generate analysis and drafts. Provider success is not proof of an external business action.
+6. Protect credentials, customer information, legal position, money, reputation and confidential commercial information.
+7. Prefer specific action over vague management language.
+8. Currency is South African Rand (R) unless evidence states otherwise.
+9. Do not expose provider API keys or protected credentials.
+10. When important company-specific claims depend on Knowledge Base records, identify the supporting document title where practical.
 
-45. Product intelligence work may analyse Cossa Store catalogue information, merchandising, pricing structure, content quality, category gaps and sourcing needs when records are available.
-46. Never invent inventory, supplier availability, delivery times, purchase prices, product ownership or stock levels.
-47. Supplier discovery must use legitimate evidence and real supplier sources.
-48. NewsAPI is not a supplier directory, supplier registry or supplier verification database.
-49. Never treat a news article as proof that a supplier is legitimate.
-50. Supplier verification should eventually include a real business source or official website, product relevance, operating location, contact source, commercial suitability and verification date.
-51. A supplier candidate is not a verified supplier until the required evidence has been checked.
-52. Do not place a real supplier order, accept binding supplier terms, pay money or make a commercial commitment without owner approval.
-53. Digital-product research, planning, drafting and development may proceed internally without waiting for physical-product supplier acquisition when no external supplier stock is required.
+OWNER APPROVAL
 
-PROCUREMENT AND DEAL INTELLIGENCE RULES
+Owner approval is required for:
+- spending money;
+- paid campaign launch or advertising budget/bid changes;
+- legal or financial commitments;
+- contracts/signatures;
+- supplier orders or binding supplier terms;
+- tender submission;
+- credential rotation;
+- DNS/domain changes;
+- deletion of important business records;
+- irreversible account changes;
+- sensitive/high-risk external communication.
 
-54. Procurement intelligence may analyse supplied tender, RFQ and public procurement information.
-55. Never fabricate a tender, deadline, eligibility requirement, supplier, buyer, broker or commercial deal.
-56. Never claim Cossa is eligible, compliant, shortlisted or awarded unless verified evidence supports it.
-57. Tender submission, signed commitments, pricing commitments and legal declarations require owner approval.
-58. Broker and deal intelligence may research and analyse legitimate opportunities but may not fabricate relationships, introductions or confirmed deals.
-59. Potential commercial fit is analysis, not proof of a deal.
+Owner approval is NOT automatically required for:
+- analysis;
+- authorised internal research;
+- drafting;
+- SEO recommendations;
+- content planning;
+- ordinary content creation;
+- lead scoring;
+- CRM analysis;
+- supplier candidate research;
+- procurement screening;
+- catalogue review;
+- digital-product development;
+- employee handoffs;
+- executive summaries.
 
-CUSTOMER AND SALES RULES
+TRUTH ABOUT EXECUTION
 
-60. Customer reactivation analysis may identify legitimate internal opportunities when authorised CRM and consent information are available.
-61. Do not create duplicate leads merely to make pipeline numbers appear larger.
-62. Customer communication must respect consent, opt-outs and applicable communication rules.
-63. High-risk or sensitive customer communications require owner review.
-64. Ordinary internal lead scoring, opportunity analysis, pipeline review and follow-up preparation should continue without unnecessary approval.
-65. Never describe a prospect as interested unless a verified record supports that conclusion.
+- Never say an action occurred merely because Cossa AI recommended or assigned it.
+- Never say all employees are working unless live records prove it.
+- Never hide failures.
+- Never describe simulated or placeholder data as live.
+- Never describe an expected integration as connected unless verified.
+- If a required integration or data source is missing, identify exactly what is missing.
 
-EXTERNAL INTELLIGENCE RULES
-
-66. External news intelligence is supplementary evidence only.
-67. Clearly label external news as external intelligence rather than verified Cossa knowledge.
-68. Never claim to have searched the internet unless supplied external intelligence or another authorised search workflow actually performed the search.
-69. Real-world supplier, prospect or procurement discovery requires an authorised research/search workflow capable of producing source evidence.
-70. Never fabricate businesses, suppliers, brokers, contact information, websites, addresses or commercial relationships.
-71. If the available external source cannot complete the requested research, say exactly which research capability is missing.
-
-APPROVAL RULES
-
-72. Owner approval is required for:
-   - spending money;
-   - changing advertising budgets or bids;
-   - paid campaign launches;
-   - legal or financial commitments;
-   - supplier orders or binding supplier agreements;
-   - tender submission;
-   - contracts or signatures;
-   - credential rotation;
-   - domain or DNS changes;
-   - deletion of important business records;
-   - irreversible account changes;
-   - sensitive or high-risk external customer communication;
-   - other clearly irreversible high-risk actions.
-
-73. Owner approval is not automatically required for:
-   - internal analysis;
-   - internal research using authorised sources;
-   - drafting;
-   - SEO recommendations;
-   - content planning;
-   - ordinary content creation;
-   - internal scheduling proposals;
-   - lead scoring;
-   - CRM analysis;
-   - supplier candidate research;
-   - procurement screening;
-   - catalogue review;
-   - digital-product development;
-   - employee-to-employee handoffs;
-   - executive summaries.
-
-CEO BRIEFING RULES
-
-74. An AI CEO briefing must distinguish:
-   - Verified facts;
-   - Live operational facts;
-   - External intelligence;
-   - Missing evidence;
-   - Work completed;
-   - Work still in progress;
-   - Recommendations;
-   - Owner decisions required.
-
-75. Do not place an item under Verified facts unless it is supported by verified knowledge or a supplied live record.
-76. Missing evidence must remain missing evidence rather than being converted into an assumption.
-77. The Cossa owner remains final authority for high-risk decisions.
-78. The CEO should identify which employees can continue immediately and which are genuinely blocked.
-
-OUTPUT QUALITY
-
-79. Currency is South African Rand (R) unless a source specifically states another currency.
-80. Be concise but sufficiently detailed for a CEO to act.
-81. Prefer specific next actions, owners, dependencies and evidence requirements.
-82. Avoid vague management language.
-83. If a worker can safely continue internal work, say what it can continue doing instead of simply saying it must wait.
-84. If something cannot be completed because a required integration is missing, identify the exact missing integration or data source.
-85. Never describe a placeholder as a functioning integration.
-86. Never describe simulated data as live data.
-87. Never hide a failure.
-88. Never convert a recommendation into a claim that an employee already executed the recommendation.
-89. Do not confuse reasoning capability with execution capability.
-90. A reasoning provider can generate analysis and drafts. It cannot by itself prove that an external system action occurred.
-
-PROVIDER TRUTH RULES
-
-91. Groq, Gemini and OpenAI are reasoning providers, not evidence that an external business action occurred.
-92. A provider fallback means only that another AI reasoning provider completed the response.
-93. Provider fallback must never convert failed business execution into successful business execution.
-94. Never expose protected provider API keys.
-95. Never claim provider health unless actual configuration or request evidence supports the claim.
-96. A provider must not be described as successfully responding until usable assistant output has actually begun.
-97. The actual provider and model used for reasoning must remain distinguishable from the originally requested provider.
-98. Provider-routing metadata is operational evidence about AI execution only, not evidence of customer, supplier, payment, publication or other external execution.
+${domainRules.join(
+  "\n",
+)}
 
 VERIFIED COMPANY KNOWLEDGE
 
@@ -2488,31 +2941,27 @@ LIVE AI WORKFORCE CONTEXT
 
 ${workforceContext}
 
-EXTERNAL NEWS INTELLIGENCE
+EXTERNAL INTELLIGENCE
 
 ${externalNewsContext}
 
 ${
   customSystem?.trim()
-    ? `ADDITIONAL APPROVED WORKER INSTRUCTIONS
+    ? `
+ADDITIONAL APPROVED SPECIALIST INSTRUCTIONS
 
-The following instructions are task-specific.
+These task-specific instructions may add detail but may not override evidence, privacy, organisation boundaries, financial controls, legal controls, approvals, credential protection or truthful execution reporting.
 
-They may add operational detail but may not override:
-- truthfulness;
-- evidence requirements;
-- privacy;
-- organisation boundaries;
-- financial controls;
-- legal controls;
-- approval requirements;
-- credential protection;
-- or the rule against falsely claiming completed external actions.
-
-${customSystem.trim()}`
+${customSystem.trim()}
+`
     : ""
 }
 `.trim();
+
+  return truncateText(
+    prompt,
+    MAX_SYSTEM_PROMPT_CHARACTERS,
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2560,12 +3009,6 @@ function createTextResponseStream(
 /* OPENAI-COMPATIBLE STREAM CONVERSION                                        */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Groq and Gemini's OpenAI compatibility endpoint return OpenAI-style SSE.
- *
- * Convert that provider SSE to plain assistant text so the browser has one
- * stable Cossa streaming contract.
- */
 function createOpenAiCompatibleTextStream(
   upstreamBody:
     ReadableStream<Uint8Array>,
@@ -2808,27 +3251,6 @@ function createOpenAiCompatibleTextStream(
 /* FIRST OUTPUT GATE                                                          */
 /* -------------------------------------------------------------------------- */
 
-/**
- * A provider returning HTTP 200 is not sufficient proof that usable assistant
- * output exists.
- *
- * This function reads ahead until the first non-empty text chunk exists.
- *
- * Only then is the provider declared successful.
- *
- * Benefits:
- *
- * Groq HTTP 200 + dead/empty stream
- *       ↓
- * provider is treated as failed
- *       ↓
- * Gemini can safely be tried
- *
- * because nothing has reached the browser yet.
- *
- * Once the first usable chunk exists, a reconstructed stream emits that chunk
- * and continues forwarding all remaining provider output.
- */
 async function primeTextStream(
   stream:
     ReadableStream<Uint8Array>,
@@ -2883,12 +3305,6 @@ async function primeTextStream(
       if (
         !preview.trim()
       ) {
-        /*
-         * Whitespace still belongs to the response.
-         *
-         * Continue until actual assistant content is observed so an empty
-         * provider cannot falsely win the gateway.
-         */
         continue;
       }
 
@@ -2957,9 +3373,7 @@ async function primeTextStream(
                 try {
                   reader.releaseLock();
                 } catch {
-                  /*
-                   * Reader may already be released/cancelled.
-                   */
+                  // Reader may already be released.
                 }
               }
             }
@@ -2981,9 +3395,7 @@ async function primeTextStream(
               try {
                 reader.releaseLock();
               } catch {
-                /*
-                 * Reader may already be released.
-                 */
+                // Reader may already be released.
               }
             }
           },
@@ -3003,9 +3415,7 @@ async function primeTextStream(
     try {
       reader.releaseLock();
     } catch {
-      /*
-       * Reader may already have failed.
-       */
+      // Reader may already have failed.
     }
 
     return {
@@ -3125,6 +3535,36 @@ function providerDisplayName(
   }
 }
 
+function isProviderCapacityError(
+  status:
+    number,
+
+  errorText:
+    string,
+): boolean {
+  const lower =
+    errorText.toLowerCase();
+
+  return (
+    status ===
+      413 &&
+    (
+      lower.includes(
+        "tokens per minute",
+      ) ||
+      lower.includes(
+        "request too large for model",
+      ) ||
+      lower.includes(
+        "rate_limit_exceeded",
+      ) ||
+      lower.includes(
+        "token",
+      )
+    )
+  );
+}
+
 function safeProviderFailure(
   provider:
     ChatProvider,
@@ -3154,6 +3594,15 @@ function safeProviderFailure(
     providerDisplayName(
       provider,
     );
+
+  if (
+    isProviderCapacityError(
+      status,
+      errorText,
+    )
+  ) {
+    return `${name} could not accept the current reasoning context within its token-capacity limit.`;
+  }
 
   if (
     provider ===
@@ -3196,6 +3645,13 @@ function safeProviderFailure(
   }
 
   if (
+    status ===
+    404
+  ) {
+    return `${name} could not access the configured reasoning model.`;
+  }
+
+  if (
     status >=
     500
   ) {
@@ -3208,13 +3664,29 @@ function safeProviderFailure(
 function providerFailureIsRetryable(
   status:
     number,
+
+  errorText:
+    string,
 ): boolean {
-  /*
-   * These are provider-side failures.
+  /**
+   * Important distinction:
    *
-   * Cossa user authentication and organisation authorisation have already
-   * happened before provider execution.
+   * Groq may use HTTP 413 for token-capacity/rate-limit failures.
+   *
+   * That is provider-specific and another provider may still complete the
+   * request.
+   *
+   * Therefore this kind of 413 is retryable.
    */
+  if (
+    isProviderCapacityError(
+      status,
+      errorText,
+    )
+  ) {
+    return true;
+  }
+
   return (
     status ===
       401 ||
@@ -3372,6 +3844,7 @@ function chatResponseHeaders({
   model,
   attempts,
   requestId,
+  estimatedInputTokens,
 }: {
   requestedProvider:
     ChatProviderPreference;
@@ -3387,6 +3860,9 @@ function chatResponseHeaders({
 
   requestId:
     string;
+
+  estimatedInputTokens:
+    number;
 }): HeadersInit {
   const providerRoute =
     providerAttemptRoute(
@@ -3441,6 +3917,11 @@ function chatResponseHeaders({
     "X-Cossa-AI-Provider-Route":
       providerRoute,
 
+    "X-Cossa-AI-Estimated-Input-Tokens":
+      String(
+        estimatedInputTokens,
+      ),
+
     "Access-Control-Expose-Headers":
       [
         "X-Cossa-AI-Request-ID",
@@ -3450,6 +3931,7 @@ function chatResponseHeaders({
         "X-Cossa-AI-Fallback",
         "X-Cossa-AI-Attempts",
         "X-Cossa-AI-Provider-Route",
+        "X-Cossa-AI-Estimated-Input-Tokens",
       ].join(
         ", ",
       ),
@@ -3611,6 +4093,7 @@ async function executeGroq({
       retryable:
         providerFailureIsRetryable(
           response.status,
+          errorText,
         ),
     };
   }
@@ -3819,6 +4302,7 @@ async function executeGemini({
       retryable:
         providerFailureIsRetryable(
           response.status,
+          errorText,
         ),
     };
   }
@@ -4089,6 +4573,7 @@ async function executeOpenAi({
       retryable:
         providerFailureIsRetryable(
           response.status,
+          errorText,
         ),
     };
   }
@@ -4244,25 +4729,6 @@ async function executeProvider({
 /* PROVIDER GATEWAY                                                           */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Server-side provider gateway.
- *
- * Important execution rule:
- *
- * No provider response reaches the browser until that provider has produced
- * its first usable assistant output.
- *
- * Therefore:
- *
- * Groq fails before output
- *   → Gemini may be tried.
- *
- * Gemini fails before output
- *   → OpenAI may be tried.
- *
- * Once a provider has been selected and its first content is returned to the
- * browser, another provider must not be mixed into that response.
- */
 async function executeProviderGateway({
   requestedProvider,
   providerMessages,
@@ -4328,24 +4794,6 @@ async function executeProviderGateway({
         provider,
         environment,
       );
-
-    if (
-      !providerConfigured(
-        provider,
-        environment,
-      )
-    ) {
-      attempts.push({
-        provider,
-
-        model,
-
-        status:
-          "not_configured",
-      });
-
-      continue;
-    }
 
     const result =
       await executeProvider({
@@ -4416,10 +4864,6 @@ async function executeProviderGateway({
       },
     );
 
-    /*
-     * Stop only when the provider reports a request condition that another
-     * provider should not attempt to solve.
-     */
     if (
       !result.retryable
     ) {
@@ -4495,18 +4939,6 @@ function createGatewayFailureResponse({
 
           "X-Cossa-AI-Provider-Route":
             "none",
-
-          "Access-Control-Expose-Headers":
-            [
-              "X-Cossa-AI-Request-ID",
-              "X-Cossa-AI-Requested-Provider",
-              "X-Cossa-AI-Provider",
-              "X-Cossa-AI-Fallback",
-              "X-Cossa-AI-Attempts",
-              "X-Cossa-AI-Provider-Route",
-            ].join(
-              ", ",
-            ),
         },
       },
     );
@@ -4535,7 +4967,9 @@ function createGatewayFailureResponse({
         attempt,
       ) =>
         attempt.httpStatus ===
-        429,
+          429 ||
+        attempt.httpStatus ===
+          413,
     );
 
   const uniqueMessages =
@@ -4628,16 +5062,6 @@ function providerConfigurationPayload(
     checked_at:
       new Date().toISOString(),
 
-    /**
-     * "configured" means credentials/configuration exist.
-     *
-     * It does not prove:
-     *
-     * - live provider health;
-     * - available quota;
-     * - available credit;
-     * - successful inference.
-     */
     providers: {
       groq: {
         configured:
@@ -4689,7 +5113,30 @@ function providerConfigurationPayload(
       configured:
         Boolean(
           environment.newsApiKey,
-        ),
+      ),
+    },
+
+    context_budget: {
+      max_provider_input_characters:
+        MAX_PROVIDER_INPUT_CHARACTERS,
+
+      max_recent_history_messages:
+        MAX_RECENT_HISTORY_MESSAGES,
+
+      max_recent_history_characters:
+        MAX_RECENT_HISTORY_LENGTH,
+
+      max_knowledge_characters:
+        MAX_KNOWLEDGE_CONTEXT_LENGTH,
+
+      max_operational_characters:
+        MAX_OPERATIONAL_CONTEXT_LENGTH,
+
+      max_workforce_characters:
+        MAX_WORKFORCE_CONTEXT_LENGTH,
+
+      max_news_characters:
+        MAX_EXTERNAL_NEWS_CONTEXT_LENGTH,
     },
   };
 }
@@ -4705,7 +5152,7 @@ export const Route =
     server: {
       handlers: {
         /* ------------------------------------------------------------------ */
-        /* GET — SAFE PROVIDER CONFIGURATION STATUS                           */
+        /* GET                                                                */
         /* ------------------------------------------------------------------ */
 
         GET: async ({
@@ -4789,7 +5236,7 @@ export const Route =
         },
 
         /* ------------------------------------------------------------------ */
-        /* POST — COSSA AI REASONING                                          */
+        /* POST                                                               */
         /* ------------------------------------------------------------------ */
 
         POST: async ({
@@ -4952,6 +5399,11 @@ export const Route =
             );
           }
 
+          const contextNeeds =
+            detectContextNeeds(
+              latestUserMessage,
+            );
+
           /* ---------------------------------------------------------------- */
           /* VERIFIED KNOWLEDGE                                               */
           /* ---------------------------------------------------------------- */
@@ -4976,7 +5428,7 @@ export const Route =
                     "updated_at.desc",
 
                   limit:
-                    "100",
+                    "80",
                 }).toString(),
 
               token,
@@ -5000,7 +5452,7 @@ export const Route =
             );
 
           /* ---------------------------------------------------------------- */
-          /* LIVE + EXTERNAL CONTEXT                                          */
+          /* LIVE / EXTERNAL CONTEXT                                          */
           /* ---------------------------------------------------------------- */
 
           const [
@@ -5009,42 +5461,54 @@ export const Route =
             externalNewsContext,
           ] =
             await Promise.all([
-              loadOperationalContext({
-                latestUserMessage,
+              contextNeeds.operational
+                ? loadOperationalContext({
+                    latestUserMessage,
 
-                token,
+                    token,
 
-                organisationId:
-                  environment.organisationId,
+                    organisationId:
+                      environment.organisationId,
 
-                supabaseUrl:
-                  environment.supabaseUrl,
+                    supabaseUrl:
+                      environment.supabaseUrl,
 
-                supabaseKey:
-                  environment.supabaseKey,
-              }),
+                    supabaseKey:
+                      environment.supabaseKey,
+                  })
+                : Promise.resolve(
+                    "Operational CRM records were not required for this request.",
+                  ),
 
-              loadWorkforceContext({
-                latestUserMessage,
+              contextNeeds.workforce
+                ? loadWorkforceContext({
+                    latestUserMessage,
 
-                token,
+                    token,
 
-                organisationId:
-                  environment.organisationId,
+                    organisationId:
+                      environment.organisationId,
 
-                supabaseUrl:
-                  environment.supabaseUrl,
+                    supabaseUrl:
+                      environment.supabaseUrl,
 
-                supabaseKey:
-                  environment.supabaseKey,
-              }),
+                    supabaseKey:
+                      environment.supabaseKey,
+                  })
+                : Promise.resolve(
+                    "Workforce records were not required for this request.",
+                  ),
 
-              loadExternalNewsContext({
-                latestUserMessage,
+              contextNeeds.externalNews
+                ? loadExternalNewsContext({
+                    latestUserMessage,
 
-                newsApiKey:
-                  environment.newsApiKey,
-              }),
+                    newsApiKey:
+                      environment.newsApiKey,
+                  })
+                : Promise.resolve(
+                    "External news intelligence was not required for this request.",
+                  ),
             ]);
 
           /* ---------------------------------------------------------------- */
@@ -5068,6 +5532,8 @@ export const Route =
                   externalNewsContext,
 
                   customSystem,
+
+                  latestUserMessage,
                 }),
             };
 
@@ -5082,11 +5548,11 @@ export const Route =
                     "system",
 
                   content:
-                    "No verified order, payment, courier, delivery or tracking record is available in the supplied context. Do not promise an investigation, follow-up, response, delivery date or future action as if it already exists. Identify the missing order reference or payment evidence required before preparing an internal review request.",
+                    "No verified order, payment, courier, delivery or tracking record is available in the supplied context. Do not promise investigation, follow-up, delivery date or future action as if it already exists. State which order reference or payment evidence is required.",
                 }
               : null;
 
-          const providerMessages:
+          const unbudgetedProviderMessages:
             ChatMessage[] =
             [
               systemPreamble,
@@ -5104,8 +5570,51 @@ export const Route =
               ),
             ];
 
+          const providerMessages =
+            budgetProviderMessages(
+              unbudgetedProviderMessages,
+            );
+
+          const estimatedInputTokens =
+            estimateMessagesTokens(
+              providerMessages,
+            );
+
+          const totalInputCharacters =
+            providerMessages.reduce(
+              (
+                total,
+                message,
+              ) =>
+                total +
+                message.content.length,
+
+              0,
+            );
+
+          console.info(
+            "Cossa AI request context prepared.",
+            {
+              requestId,
+
+              requestedProvider,
+
+              contextNeeds,
+
+              knowledgeDocumentsSelected:
+                selectedKnowledge.length,
+
+              providerMessages:
+                providerMessages.length,
+
+              totalInputCharacters,
+
+              estimatedInputTokens,
+            },
+          );
+
           /* ---------------------------------------------------------------- */
-          /* MULTI-PROVIDER GATEWAY                                           */
+          /* PROVIDER GATEWAY                                                 */
           /* ---------------------------------------------------------------- */
 
           let gatewayResult:
@@ -5197,6 +5706,10 @@ export const Route =
                     attempts,
                   ),
 
+                totalInputCharacters,
+
+                estimatedInputTokens,
+
                 attempts:
                   attempts.map(
                     (
@@ -5259,6 +5772,10 @@ export const Route =
 
               providerRoute,
 
+              totalInputCharacters,
+
+              estimatedInputTokens,
+
               attempts:
                 attempts.map(
                   (
@@ -5281,7 +5798,7 @@ export const Route =
           );
 
           /* ---------------------------------------------------------------- */
-          /* SUCCESS RESPONSE                                                 */
+          /* SUCCESS                                                          */
           /* ---------------------------------------------------------------- */
 
           return new Response(
@@ -5300,6 +5817,8 @@ export const Route =
                   attempts,
 
                   requestId,
+
+                  estimatedInputTokens,
                 }),
             },
           );
