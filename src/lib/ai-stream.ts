@@ -18,6 +18,25 @@ export interface ChatMessage {
   content: string;
 }
 
+export type ProviderAttemptStatus =
+  | "starting"
+  | "streaming"
+  | "completed"
+  | "failed"
+  | "fallback";
+
+export interface ProviderAttemptEvent {
+  provider: CossaAiProvider;
+
+  status: ProviderAttemptStatus;
+
+  fallback:
+    boolean;
+
+  error?:
+    string;
+}
+
 export interface StreamChatOptions {
   signal?: AbortSignal;
 
@@ -28,13 +47,13 @@ export interface StreamChatOptions {
   /**
    * Optional fallback provider.
    *
-   * Used only when the primary provider fails before returning usable output.
+   * Used only when the primary provider fails before returning visible output.
    */
   fallbackProvider?:
     CossaAiProvider;
 
   /**
-   * Prevent a workforce stage from hanging forever.
+   * Prevent a chat/workforce stage from hanging forever.
    *
    * Default: 120 seconds.
    */
@@ -48,6 +67,82 @@ export interface StreamChatOptions {
    */
   requireContent?:
     boolean;
+
+  /**
+   * Optional provider lifecycle callback.
+   *
+   * This allows the CEO/workforce UI to show:
+   *
+   * - Groq starting
+   * - Groq failed
+   * - falling back to OpenAI
+   * - OpenAI completed
+   *
+   * without pretending provider health exists when it has not been observed.
+   */
+  onProviderAttempt?:
+    (
+      event:
+        ProviderAttemptEvent,
+    ) => void;
+}
+
+/* -------------------------------------------------------------------------- */
+/* INTERNAL TYPES                                                             */
+/* -------------------------------------------------------------------------- */
+
+interface ProviderExecutionInput {
+  messages: ChatMessage[];
+
+  onToken:
+    (chunk: string) => void;
+
+  signal?:
+    AbortSignal;
+
+  system?:
+    string;
+
+  primaryProvider:
+    CossaAiProvider;
+
+  fallbackProvider:
+    CossaAiProvider;
+
+  timeoutMs:
+    number;
+
+  requireContent:
+    boolean;
+
+  onProviderAttempt?:
+    (
+      event:
+        ProviderAttemptEvent,
+    ) => void;
+}
+
+class ChatHttpError extends Error {
+  readonly status:
+    number;
+
+  constructor(
+    status:
+      number,
+
+    message:
+      string,
+  ) {
+    super(
+      message,
+    );
+
+    this.name =
+      "ChatHttpError";
+
+    this.status =
+      status;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -65,8 +160,11 @@ const DEFAULT_FALLBACK_PROVIDER:
 const DEFAULT_TIMEOUT_MS =
   120_000;
 
+const MIN_TIMEOUT_MS =
+  5_000;
+
 /* -------------------------------------------------------------------------- */
-/* HELPERS                                                                    */
+/* MESSAGE VALIDATION                                                         */
 /* -------------------------------------------------------------------------- */
 
 function requireMessages(
@@ -133,6 +231,10 @@ function requireMessages(
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* AUTH                                                                       */
+/* -------------------------------------------------------------------------- */
+
 async function getAccessToken(): Promise<string> {
   const {
     data,
@@ -157,6 +259,10 @@ async function getAccessToken(): Promise<string> {
 
   return accessToken;
 }
+
+/* -------------------------------------------------------------------------- */
+/* ERROR HELPERS                                                              */
+/* -------------------------------------------------------------------------- */
 
 function normaliseErrorMessage(
   value:
@@ -232,6 +338,26 @@ function normaliseErrorMessage(
   return null;
 }
 
+function errorMessage(
+  error:
+    unknown,
+): string {
+  if (
+    error instanceof Error
+  ) {
+    return error.message;
+  }
+
+  if (
+    typeof error ===
+      "string"
+  ) {
+    return error;
+  }
+
+  return "Unknown Cossa AI provider error.";
+}
+
 async function readErrorResponse(
   response:
     Response,
@@ -266,6 +392,102 @@ async function readErrorResponse(
     return fallback;
   }
 }
+
+function isAbortError(
+  error:
+    unknown,
+): boolean {
+  return (
+    error instanceof
+      DOMException &&
+    error.name ===
+      "AbortError"
+  );
+}
+
+/**
+ * Decides whether another reasoning provider is worth trying.
+ *
+ * Do not switch providers when the problem is clearly:
+ *
+ * - invalid request;
+ * - expired Cossa authentication;
+ * - organisation permission;
+ * - route validation.
+ *
+ * Another provider cannot fix those conditions.
+ *
+ * Provider availability, quota, rate limit, network and upstream failures may
+ * safely fall back when no visible output has already been emitted.
+ */
+function shouldAttemptFallback(
+  error:
+    unknown,
+): boolean {
+  if (
+    isAbortError(
+      error,
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    error instanceof
+    ChatHttpError
+  ) {
+    if (
+      error.status ===
+        400 ||
+      error.status ===
+        401 ||
+      error.status ===
+        403
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /*
+   * Network errors, timeouts and unexpected provider failures can generally
+   * attempt another configured provider.
+   */
+  return true;
+}
+
+function notifyProviderAttempt(
+  callback:
+    StreamChatOptions["onProviderAttempt"],
+
+  event:
+    ProviderAttemptEvent,
+): void {
+  if (!callback) {
+    return;
+  }
+
+  try {
+    callback(
+      event,
+    );
+  } catch (
+    error
+  ) {
+    /*
+     * Provider status UI must never break AI execution.
+     */
+    console.warn(
+      "Cossa AI provider-status callback failed.",
+      error,
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* ABORT / TIMEOUT                                                            */
+/* -------------------------------------------------------------------------- */
 
 function createCombinedAbortSignal(
   externalSignal:
@@ -357,6 +579,10 @@ function createCombinedAbortSignal(
       timedOut,
   };
 }
+
+/* -------------------------------------------------------------------------- */
+/* SSE PARSING                                                                */
+/* -------------------------------------------------------------------------- */
 
 function parseServerSentEventData(
   block:
@@ -506,8 +732,7 @@ function parseServerSentEventData(
         "Unexpected end of JSON input"
     ) {
       /*
-       * If it is valid stream text rather than JSON,
-       * return it as text.
+       * A plain text SSE payload is still valid provider output.
        */
       if (
         !data.startsWith(
@@ -821,7 +1046,9 @@ async function streamFromProvider({
     if (
       !response.ok
     ) {
-      throw new Error(
+      throw new ChatHttpError(
+        response.status,
+
         await readErrorResponse(
           response,
         ),
@@ -897,13 +1124,381 @@ async function streamFromProvider({
 }
 
 /* -------------------------------------------------------------------------- */
+/* SHARED PROVIDER EXECUTION                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Executes a primary provider and optionally a fallback provider.
+ *
+ * Critical safety rule:
+ *
+ * A fallback is permitted only when the primary provider failed before any
+ * visible assistant content reached the caller.
+ *
+ * Once output has been displayed, switching providers would mix two model
+ * responses into one answer and corrupt the CEO/workforce record.
+ */
+async function executeProviderChain({
+  messages,
+  onToken,
+  signal,
+  system,
+  primaryProvider,
+  fallbackProvider,
+  timeoutMs,
+  requireContent,
+  onProviderAttempt,
+}: ProviderExecutionInput): Promise<string> {
+  let primaryVisibleOutput =
+    "";
+
+  let primaryStreamingNotified =
+    false;
+
+  const primaryTokenHandler =
+    (
+      chunk:
+        string,
+    ) => {
+      if (!chunk) {
+        return;
+      }
+
+      primaryVisibleOutput +=
+        chunk;
+
+      if (
+        !primaryStreamingNotified
+      ) {
+        primaryStreamingNotified =
+          true;
+
+        notifyProviderAttempt(
+          onProviderAttempt,
+          {
+            provider:
+              primaryProvider,
+
+            status:
+              "streaming",
+
+            fallback:
+              false,
+          },
+        );
+      }
+
+      onToken(
+        chunk,
+      );
+    };
+
+  notifyProviderAttempt(
+    onProviderAttempt,
+    {
+      provider:
+        primaryProvider,
+
+      status:
+        "starting",
+
+      fallback:
+        false,
+    },
+  );
+
+  try {
+    const content =
+      await streamFromProvider({
+        messages,
+
+        onToken:
+          primaryTokenHandler,
+
+        signal,
+
+        system,
+
+        provider:
+          primaryProvider,
+
+        timeoutMs,
+
+        requireContent,
+      });
+
+    notifyProviderAttempt(
+      onProviderAttempt,
+      {
+        provider:
+          primaryProvider,
+
+        status:
+          "completed",
+
+        fallback:
+          false,
+      },
+    );
+
+    return content;
+  } catch (
+    primaryError
+  ) {
+    if (
+      isAbortError(
+        primaryError,
+      )
+    ) {
+      throw primaryError;
+    }
+
+    notifyProviderAttempt(
+      onProviderAttempt,
+      {
+        provider:
+          primaryProvider,
+
+        status:
+          "failed",
+
+        fallback:
+          false,
+
+        error:
+          errorMessage(
+            primaryError,
+          ),
+      },
+    );
+
+    /*
+     * CRITICAL:
+     *
+     * The previous implementation assigned primaryOutput only after the entire
+     * stream completed. If Groq emitted half an answer and then failed,
+     * primaryOutput remained empty and OpenAI could start writing into the same
+     * visible answer.
+     *
+     * Track chunks as they arrive instead.
+     */
+    if (
+      primaryVisibleOutput.trim()
+    ) {
+      throw new Error(
+        `${primaryProvider} stopped after already returning part of the response. Cossa AI did not switch providers because mixing two provider answers would corrupt the conversation. ${errorMessage(
+          primaryError,
+        )}`,
+      );
+    }
+
+    if (
+      fallbackProvider ===
+      primaryProvider
+    ) {
+      throw primaryError;
+    }
+
+    if (
+      !shouldAttemptFallback(
+        primaryError,
+      )
+    ) {
+      throw primaryError;
+    }
+
+    console.warn(
+      `Primary AI provider ${primaryProvider} failed before visible output. Trying ${fallbackProvider}.`,
+      primaryError,
+    );
+
+    notifyProviderAttempt(
+      onProviderAttempt,
+      {
+        provider:
+          fallbackProvider,
+
+        status:
+          "fallback",
+
+        fallback:
+          true,
+
+        error:
+          errorMessage(
+            primaryError,
+          ),
+      },
+    );
+
+    let fallbackVisibleOutput =
+      "";
+
+    let fallbackStreamingNotified =
+      false;
+
+    const fallbackTokenHandler =
+      (
+        chunk:
+          string,
+      ) => {
+        if (!chunk) {
+          return;
+        }
+
+        fallbackVisibleOutput +=
+          chunk;
+
+        if (
+          !fallbackStreamingNotified
+        ) {
+          fallbackStreamingNotified =
+            true;
+
+          notifyProviderAttempt(
+            onProviderAttempt,
+            {
+              provider:
+                fallbackProvider,
+
+              status:
+                "streaming",
+
+              fallback:
+                true,
+            },
+          );
+        }
+
+        onToken(
+          chunk,
+        );
+      };
+
+    notifyProviderAttempt(
+      onProviderAttempt,
+      {
+        provider:
+          fallbackProvider,
+
+        status:
+          "starting",
+
+        fallback:
+          true,
+      },
+    );
+
+    try {
+      const content =
+        await streamFromProvider({
+          messages,
+
+          onToken:
+            fallbackTokenHandler,
+
+          signal,
+
+          system,
+
+          provider:
+            fallbackProvider,
+
+          timeoutMs,
+
+          requireContent,
+        });
+
+      notifyProviderAttempt(
+        onProviderAttempt,
+        {
+          provider:
+            fallbackProvider,
+
+          status:
+            "completed",
+
+          fallback:
+            true,
+        },
+      );
+
+      return content;
+    } catch (
+      fallbackError
+    ) {
+      if (
+        isAbortError(
+          fallbackError,
+        )
+      ) {
+        throw fallbackError;
+      }
+
+      notifyProviderAttempt(
+        onProviderAttempt,
+        {
+          provider:
+            fallbackProvider,
+
+          status:
+            "failed",
+
+          fallback:
+            true,
+
+          error:
+            errorMessage(
+              fallbackError,
+            ),
+        },
+      );
+
+      /*
+       * If the fallback itself started producing visible content, preserve the
+       * truth that a partial response existed instead of pretending the entire
+       * request simply failed before output.
+       */
+      if (
+        fallbackVisibleOutput.trim()
+      ) {
+        throw new Error(
+          `${fallbackProvider} stopped after returning part of the fallback response. The partial response was not replaced. ${errorMessage(
+            fallbackError,
+          )}`,
+        );
+      }
+
+      throw new Error(
+        [
+          "Cossa AI reasoning providers could not complete the request.",
+
+          `${primaryProvider}: ${errorMessage(
+            primaryError,
+          )}`,
+
+          `${fallbackProvider}: ${errorMessage(
+            fallbackError,
+          )}`,
+
+          "No external Cossa action should be treated as completed from this failed reasoning request.",
+        ].join(
+          " ",
+        ),
+      );
+    }
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /* PUBLIC STREAM API                                                          */
 /* -------------------------------------------------------------------------- */
 
 /**
  * Streams a Cossa AI response through `/api/chat`.
  *
- * Compatibility:
+ * Backward compatibility:
+ *
  * Existing callers can continue using:
  *
  * streamChat(
@@ -914,13 +1509,20 @@ async function streamFromProvider({
  *   provider,
  * )
  *
- * The function now also provides:
- * - authentication validation;
- * - timeout protection;
- * - SSE and plain-text stream support;
- * - empty-output protection;
- * - Groq/OpenAI provider fallback;
- * - cleaner provider errors.
+ * Current behaviour:
+ *
+ * - validates messages;
+ * - validates authenticated Supabase session;
+ * - protects against hanging requests;
+ * - supports SSE and plain-text streams;
+ * - rejects empty output;
+ * - safely falls back between Groq and OpenAI;
+ * - never mixes a partial answer from one provider with another provider;
+ * - does not waste fallback calls on authentication/permission/validation
+ *   failures.
+ *
+ * Provider routing will later move primarily into the server gateway when
+ * Gemini and broader provider-health routing are added.
  */
 export async function streamChat(
   messages:
@@ -944,117 +1546,33 @@ export async function streamChat(
       messages,
     );
 
-  const primaryProvider =
-    provider;
-
   const fallbackProvider =
-    primaryProvider ===
+    provider ===
     "groq"
       ? DEFAULT_FALLBACK_PROVIDER
       : "groq";
 
-  let primaryOutput =
-    "";
+  return executeProviderChain({
+    messages:
+      validMessages,
 
-  try {
-    primaryOutput =
-      await streamFromProvider({
-        messages:
-          validMessages,
+    onToken,
 
-        onToken,
+    signal,
 
-        signal,
+    system,
 
-        system,
+    primaryProvider:
+      provider,
 
-        provider:
-          primaryProvider,
+    fallbackProvider,
 
-        timeoutMs:
-          DEFAULT_TIMEOUT_MS,
+    timeoutMs:
+      DEFAULT_TIMEOUT_MS,
 
-        requireContent:
-          true,
-      });
-
-    return primaryOutput;
-  } catch (
-    primaryError
-  ) {
-    /*
-     * Never retry an explicitly cancelled request.
-     */
-    if (
-      primaryError instanceof
-        DOMException &&
-      primaryError.name ===
-        "AbortError"
-    ) {
-      throw primaryError;
-    }
-
-    /*
-     * If the primary provider already streamed visible content,
-     * automatically switching providers would duplicate or mix answers.
-     *
-     * Stop instead and allow the workforce run to be marked failed/retried.
-     */
-    if (
-      primaryOutput.trim()
-    ) {
-      throw primaryError;
-    }
-
-    console.warn(
-      `Primary AI provider ${primaryProvider} failed. Trying ${fallbackProvider}.`,
-      primaryError,
-    );
-
-    try {
-      return await streamFromProvider({
-        messages:
-          validMessages,
-
-        onToken,
-
-        signal,
-
-        system,
-
-        provider:
-          fallbackProvider,
-
-        timeoutMs:
-          DEFAULT_TIMEOUT_MS,
-
-        requireContent:
-          true,
-      });
-    } catch (
-      fallbackError
-    ) {
-      const primaryMessage =
-        primaryError instanceof
-        Error
-          ? primaryError.message
-          : String(
-              primaryError,
-            );
-
-      const fallbackMessage =
-        fallbackError instanceof
-        Error
-          ? fallbackError.message
-          : String(
-              fallbackError,
-            );
-
-      throw new Error(
-        `AI workforce execution failed. ${primaryProvider}: ${primaryMessage} ${fallbackProvider}: ${fallbackMessage}`,
-      );
-    }
-  }
+    requireContent:
+      true,
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1062,8 +1580,16 @@ export async function streamChat(
 /* -------------------------------------------------------------------------- */
 
 /**
- * New API for callers that need explicit timeout/fallback behaviour without
- * breaking the existing streamChat() interface.
+ * Advanced Cossa AI streaming API.
+ *
+ * Use this API when the caller needs:
+ *
+ * - explicit timeout control;
+ * - explicit primary/fallback provider choice;
+ * - provider lifecycle information;
+ * - optional empty-output behaviour.
+ *
+ * The legacy streamChat() interface remains fully supported.
  */
 export async function streamChatWithOptions(
   messages:
@@ -1090,13 +1616,14 @@ export async function streamChatWithOptions(
     (
       provider ===
       "groq"
-        ? "openai"
+        ? DEFAULT_FALLBACK_PROVIDER
         : "groq"
     );
 
   const timeoutMs =
     Math.max(
-      5_000,
+      MIN_TIMEOUT_MS,
+
       options.timeoutMs ??
         DEFAULT_TIMEOUT_MS,
     );
@@ -1105,91 +1632,28 @@ export async function streamChatWithOptions(
     options.requireContent ??
     true;
 
-  try {
-    return await streamFromProvider({
-      messages:
-        validMessages,
+  return executeProviderChain({
+    messages:
+      validMessages,
 
-      onToken,
+    onToken,
 
-      signal:
-        options.signal,
+    signal:
+      options.signal,
 
-      system:
-        options.system,
+    system:
+      options.system,
 
+    primaryProvider:
       provider,
 
-      timeoutMs,
+    fallbackProvider,
 
-      requireContent,
-    });
-  } catch (
-    primaryError
-  ) {
-    if (
-      primaryError instanceof
-        DOMException &&
-      primaryError.name ===
-        "AbortError"
-    ) {
-      throw primaryError;
-    }
+    timeoutMs,
 
-    if (
-      fallbackProvider ===
-      provider
-    ) {
-      throw primaryError;
-    }
+    requireContent,
 
-    console.warn(
-      `Primary AI provider ${provider} failed. Trying ${fallbackProvider}.`,
-      primaryError,
-    );
-
-    try {
-      return await streamFromProvider({
-        messages:
-          validMessages,
-
-        onToken,
-
-        signal:
-          options.signal,
-
-        system:
-          options.system,
-
-        provider:
-          fallbackProvider,
-
-        timeoutMs,
-
-        requireContent,
-      });
-    } catch (
-      fallbackError
-    ) {
-      const primaryMessage =
-        primaryError instanceof
-        Error
-          ? primaryError.message
-          : String(
-              primaryError,
-            );
-
-      const fallbackMessage =
-        fallbackError instanceof
-        Error
-          ? fallbackError.message
-          : String(
-              fallbackError,
-            );
-
-      throw new Error(
-        `Both AI providers failed. ${provider}: ${primaryMessage} ${fallbackProvider}: ${fallbackMessage}`,
-      );
-    }
-  }
+    onProviderAttempt:
+      options.onProviderAttempt,
+  });
 }
