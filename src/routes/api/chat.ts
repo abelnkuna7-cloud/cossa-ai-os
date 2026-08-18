@@ -56,16 +56,16 @@ const MAX_OPENAI_COMPLETION_TOKENS =
   1_100;
 
 /**
- * Cossa's default reasoning order.
+ * Cossa's default reasoning route.
  *
- * Groq:
- *   fast / economy / default workforce reasoning
+ * Groq
+ *   Fast/economy/default reasoning.
  *
- * Gemini:
- *   secondary reasoning route
+ * Gemini
+ *   Secondary reasoning provider.
  *
- * OpenAI:
- *   strategic fallback when configured and funded
+ * OpenAI
+ *   Strategic fallback when configured and funded.
  */
 const DEFAULT_PROVIDER_ORDER:
   readonly ChatProvider[] = [
@@ -94,6 +94,7 @@ type ChatProviderPreference =
 
 interface ChatMessage {
   role: ChatRole;
+
   content: string;
 }
 
@@ -103,20 +104,18 @@ interface ChatPayload {
   system?: string;
 
   /**
-   * A concrete provider means:
+   * "auto"
+   *   Use Cossa's normal provider order.
    *
-   * "Try this provider first."
-   *
-   * It does not mean that Cossa must fail if that provider is temporarily
-   * unavailable.
-   *
-   * "auto" uses the normal Cossa provider order.
+   * Concrete provider:
+   *   Try that provider first, then safely fall through when appropriate.
    */
   provider?: ChatProviderPreference;
 }
 
 interface SupabaseUser {
   id: string;
+
   email?: string;
 }
 
@@ -288,18 +287,56 @@ type ProviderResult =
   | ProviderFailure;
 
 interface ProviderAttemptRecord {
-  provider: ChatProvider;
+  provider:
+    ChatProvider;
 
-  model: string | null;
+  model:
+    string | null;
 
   status:
-    "success" |
-    "failed" |
-    "not_configured";
+    | "success"
+    | "failed"
+    | "not_configured";
 
   httpStatus?: number;
 
   message?: string;
+}
+
+interface PrimedStreamSuccess {
+  ok: true;
+
+  stream:
+    ReadableStream<Uint8Array>;
+}
+
+interface PrimedStreamFailure {
+  ok: false;
+
+  error:
+    string;
+}
+
+type PrimedStreamResult =
+  | PrimedStreamSuccess
+  | PrimedStreamFailure;
+
+/* -------------------------------------------------------------------------- */
+/* REQUEST ID                                                                 */
+/* -------------------------------------------------------------------------- */
+
+function createRequestId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return [
+      "cossa",
+      Date.now().toString(36),
+      Math.random()
+        .toString(36)
+        .slice(2),
+    ].join("-");
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -330,9 +367,9 @@ function resolveGeminiModel(): string {
 }
 
 /**
- * OpenAI remains intentionally environment-controlled.
+ * OpenAI remains intentionally environment controlled.
  *
- * Do not silently select a paid OpenAI model from frontend code.
+ * We do not silently select a paid OpenAI model.
  *
  * Example:
  *
@@ -345,7 +382,9 @@ function resolveOpenAiModel(): string | null {
   return configured || null;
 }
 
-function getEnvironment(): ProviderEnvironment | null {
+function getEnvironment():
+  ProviderEnvironment |
+  null {
   const groqApiKey =
     process.env.GROQ_API_KEY?.trim();
 
@@ -451,33 +490,49 @@ async function verifySupabaseUser({
   supabaseUrl,
   supabaseKey,
 }: {
-  token: string;
+  token:
+    string;
 
-  supabaseUrl: string;
+  supabaseUrl:
+    string;
 
-  supabaseKey: string;
+  supabaseKey:
+    string;
 }): Promise<SupabaseUser | null> {
-  const response =
-    await fetch(
-      `${supabaseUrl}/auth/v1/user`,
-      {
-        headers: {
-          apikey:
-            supabaseKey,
+  try {
+    const response =
+      await fetch(
+        `${supabaseUrl}/auth/v1/user`,
+        {
+          headers: {
+            apikey:
+              supabaseKey,
 
-          Authorization:
-            `Bearer ${token}`,
+            Authorization:
+              `Bearer ${token}`,
+          },
         },
-      },
+      );
+
+    if (
+      !response.ok
+    ) {
+      return null;
+    }
+
+    return (
+      await response.json()
+    ) as SupabaseUser;
+  } catch (
+    error
+  ) {
+    console.error(
+      "Supabase user verification failed.",
+      error,
     );
 
-  if (!response.ok) {
     return null;
   }
-
-  return (
-    await response.json()
-  ) as SupabaseUser;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -491,24 +546,40 @@ async function restSelect<T>({
   supabaseUrl,
   supabaseKey,
 }: RestRequestOptions): Promise<T[]> {
-  const response =
-    await fetch(
-      `${supabaseUrl}/rest/v1/${table}?${query}`,
-      {
-        headers: {
-          apikey:
-            supabaseKey,
+  let response:
+    Response;
 
-          Authorization:
-            `Bearer ${token}`,
+  try {
+    response =
+      await fetch(
+        `${supabaseUrl}/rest/v1/${table}?${query}`,
+        {
+          headers: {
+            apikey:
+              supabaseKey,
 
-          Accept:
-            "application/json",
+            Authorization:
+              `Bearer ${token}`,
+
+            Accept:
+              "application/json",
+          },
         },
-      },
+      );
+  } catch (
+    error
+  ) {
+    console.error(
+      `Supabase connection failed for ${table}.`,
+      error,
     );
 
-  if (!response.ok) {
+    return [];
+  }
+
+  if (
+    !response.ok
+  ) {
     const errorText =
       await response
         .text()
@@ -523,16 +594,27 @@ async function restSelect<T>({
     );
 
     /*
-     * Context retrieval fails closed.
+     * Context reads fail closed.
      *
-     * Missing context becomes missing evidence instead of fabricated evidence.
+     * Missing data becomes missing evidence rather than invented evidence.
      */
     return [];
   }
 
-  return (
-    await response.json()
-  ) as T[];
+  try {
+    return (
+      await response.json()
+    ) as T[];
+  } catch (
+    error
+  ) {
+    console.error(
+      `Supabase response could not be decoded for ${table}.`,
+      error,
+    );
+
+    return [];
+  }
 }
 
 async function verifyOrganisationMembership({
@@ -542,23 +624,31 @@ async function verifyOrganisationMembership({
   supabaseUrl,
   supabaseKey,
 }: {
-  token: string;
+  token:
+    string;
 
-  userId: string;
+  userId:
+    string;
 
-  organisationId: string;
+  organisationId:
+    string;
 
-  supabaseUrl: string;
+  supabaseUrl:
+    string;
 
-  supabaseKey: string;
+  supabaseKey:
+    string;
 }): Promise<boolean> {
   const rows =
     await restSelect<{
-      user_id: string;
+      user_id:
+        string;
 
-      status: string;
+      status:
+        string;
 
-      role: string;
+      role:
+        string;
     }>({
       table:
         "organisation_members",
@@ -599,22 +689,29 @@ async function verifyOrganisationMembership({
 /* -------------------------------------------------------------------------- */
 
 async function authenticateRequest(
-  request: Request,
+  request:
+    Request,
 
-  environment: ProviderEnvironment,
+  environment:
+    ProviderEnvironment,
 ):
   Promise<
     | {
-        ok: true;
+        ok:
+          true;
 
-        token: string;
+        token:
+          string;
 
-        user: SupabaseUser;
+        user:
+          SupabaseUser;
       }
     | {
-        ok: false;
+        ok:
+          false;
 
-        response: Response;
+        response:
+          Response;
       }
   > {
   const token =
@@ -624,7 +721,8 @@ async function authenticateRequest(
 
   if (!token) {
     return {
-      ok: false,
+      ok:
+        false,
 
       response:
         new Response(
@@ -650,7 +748,8 @@ async function authenticateRequest(
 
   if (!user) {
     return {
-      ok: false,
+      ok:
+        false,
 
       response:
         new Response(
@@ -684,7 +783,8 @@ async function authenticateRequest(
     !isOrganisationMember
   ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       response:
         new Response(
@@ -698,7 +798,8 @@ async function authenticateRequest(
   }
 
   return {
-    ok: true,
+    ok:
+      true,
 
     token,
 
@@ -711,17 +812,22 @@ async function authenticateRequest(
 /* -------------------------------------------------------------------------- */
 
 function validateMessages(
-  value: unknown,
+  value:
+    unknown,
 ):
   | {
-      valid: true;
+      valid:
+        true;
 
-      messages: ChatMessage[];
+      messages:
+        ChatMessage[];
     }
   | {
-      valid: false;
+      valid:
+        false;
 
-      error: string;
+      error:
+        string;
     } {
   if (
     !Array.isArray(
@@ -731,7 +837,8 @@ function validateMessages(
       0
   ) {
     return {
-      valid: false,
+      valid:
+        false,
 
       error:
         "At least one chat message is required.",
@@ -743,7 +850,8 @@ function validateMessages(
     MAX_MESSAGES
   ) {
     return {
-      valid: false,
+      valid:
+        false,
 
       error:
         `A maximum of ${MAX_MESSAGES} messages is allowed per request.`,
@@ -776,7 +884,8 @@ function validateMessages(
       )
     ) {
       return {
-        valid: false,
+        valid:
+          false,
 
         error:
           "Invalid chat message format.",
@@ -785,9 +894,11 @@ function validateMessages(
 
     const candidate =
       item as {
-        role?: unknown;
+        role?:
+          unknown;
 
-        content?: unknown;
+        content?:
+          unknown;
       };
 
     const role =
@@ -808,16 +919,20 @@ function validateMessages(
         "assistant"
     ) {
       return {
-        valid: false,
+        valid:
+          false,
 
         error:
           "Unsupported chat message role.",
       };
     }
 
-    if (!content) {
+    if (
+      !content
+    ) {
       return {
-        valid: false,
+        valid:
+          false,
 
         error:
           "Chat messages cannot be empty.",
@@ -829,7 +944,8 @@ function validateMessages(
       MAX_MESSAGE_LENGTH
     ) {
       return {
-        valid: false,
+        valid:
+          false,
 
         error:
           `Individual messages cannot exceed ${MAX_MESSAGE_LENGTH} characters.`,
@@ -844,7 +960,8 @@ function validateMessages(
       MAX_TOTAL_MESSAGE_LENGTH
     ) {
       return {
-        valid: false,
+        valid:
+          false,
 
         error:
           "The conversation is too large. Start a new chat.",
@@ -859,14 +976,16 @@ function validateMessages(
   }
 
   return {
-    valid: true,
+    valid:
+      true,
 
     messages,
   };
 }
 
 function cleanCustomSystem(
-  value: unknown,
+  value:
+    unknown,
 ): string | undefined {
   if (
     typeof value !==
@@ -878,7 +997,9 @@ function cleanCustomSystem(
   const cleaned =
     value.trim();
 
-  if (!cleaned) {
+  if (
+    !cleaned
+  ) {
     return undefined;
   }
 
@@ -889,7 +1010,8 @@ function cleanCustomSystem(
 }
 
 function isChatProviderPreference(
-  value: unknown,
+  value:
+    unknown,
 ): value is ChatProviderPreference {
   return (
     value ===
@@ -908,16 +1030,17 @@ function isChatProviderPreference(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Browser-supplied system history is discarded.
+ * Browser-supplied system-role history is intentionally ignored.
  *
- * Trusted instruction layers are:
+ * Trusted layers:
  *
  * 1. Cossa server operating prompt.
- * 2. Optional bounded specialist / worker instruction.
+ * 2. Optional bounded specialist/worker prompt.
  * 3. Recent user/assistant conversation.
  */
 function selectRecentHistory(
-  messages: ChatMessage[],
+  messages:
+    ChatMessage[],
 ): ChatMessage[] {
   const conversationMessages =
     messages.filter(
@@ -987,14 +1110,16 @@ function selectRecentHistory(
 /* -------------------------------------------------------------------------- */
 
 function extractSearchTerms(
-  message: string,
+  message:
+    string,
 ): Set<string> {
   return new Set(
     message
       .toLowerCase()
       .match(
         /[a-z0-9]{3,}/g,
-      ) ?? [],
+      ) ??
+      [],
   );
 }
 
@@ -1217,7 +1342,8 @@ function formatKnowledgeContext(
 /* -------------------------------------------------------------------------- */
 
 function needsOperationalData(
-  message: string,
+  message:
+    string,
 ): boolean {
   return /\b(lead|leads|enquiry|enquiries|quote request|quote requests|customer|customers|pipeline|opportunity|opportunities|quotation|quotations|quote|quotes|project|projects|appointment|appointments|follow[- ]?up|crm|sales|revenue|website request|website requests|store|product|products|order|orders|inventory|catalogue|catalog|supplier|suppliers)\b/i.test(
     message,
@@ -1225,7 +1351,8 @@ function needsOperationalData(
 }
 
 function needsLeadContactData(
-  message: string,
+  message:
+    string,
 ): boolean {
   return /\b(phone|email|contact|call|whatsapp|outreach|follow[- ]?up|lead details|customer details|contact details)\b/i.test(
     message,
@@ -1233,7 +1360,8 @@ function needsLeadContactData(
 }
 
 function needsWorkforceData(
-  message: string,
+  message:
+    string,
 ): boolean {
   return /\b(ai[- ]?ceo|workforce|worker|workers|employee|employees|handoff|handoffs|mission|missions|approval|approvals|owner briefing|briefing|working|idle|automatic|automation|task|tasks)\b/i.test(
     message,
@@ -1241,7 +1369,8 @@ function needsWorkforceData(
 }
 
 function needsExternalNewsData(
-  message: string,
+  message:
+    string,
 ): boolean {
   return /\b(news|latest news|current news|market news|industry news|trend|trends|trending|current developments|current events|industry developments|market developments|business news|technology news|construction news|retail news|ecommerce news|e-commerce news)\b/i.test(
     message,
@@ -1334,6 +1463,17 @@ async function loadOperationalContext({
         supabaseKey,
       }),
 
+      /*
+       * NOTE:
+       *
+       * quote_requests is intentionally left with its current schema contract.
+       *
+       * If this table contains organisation_id, add the organisation filter.
+       * Do not blindly add a column that may not exist because that would make
+       * context retrieval fail completely.
+       *
+       * RLS should remain the authoritative tenant boundary.
+       */
       restSelect<
         Record<
           string,
@@ -1362,6 +1502,11 @@ async function loadOperationalContext({
         supabaseKey,
       }),
 
+      /*
+       * Same schema rule applies to contact_messages.
+       *
+       * If organisation_id exists, add an explicit filter in addition to RLS.
+       */
       restSelect<
         Record<
           string,
@@ -1928,7 +2073,8 @@ const NEWS_SEARCH_STOP_WORDS =
   ]);
 
 function createNewsSearchQuery(
-  message: string,
+  message:
+    string,
 ): string | null {
   const terms =
     message
@@ -1985,7 +2131,9 @@ async function loadExternalNewsContext({
     return "External news intelligence was not required for this request.";
   }
 
-  if (!newsApiKey) {
+  if (
+    !newsApiKey
+  ) {
     return "External news intelligence was requested, but NEWS_API_KEY is not configured in the protected server environment.";
   }
 
@@ -1994,7 +2142,9 @@ async function loadExternalNewsContext({
       latestUserMessage,
     );
 
-  if (!searchQuery) {
+  if (
+    !searchQuery
+  ) {
     return "External news intelligence was requested, but a useful search query could not be derived.";
   }
 
@@ -2025,7 +2175,9 @@ async function loadExternalNewsContext({
         },
       );
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       const errorText =
         await response
           .text()
@@ -2139,7 +2291,8 @@ function buildSystemPrompt({
   externalNewsContext:
     string;
 
-  customSystem?: string;
+  customSystem?:
+    string;
 }): string {
   return `
 You are Cossa AI, the internal AI business operating partner, executive reasoning layer and controlled workforce intelligence resource for Cossa Nexus Holdings.
@@ -2319,6 +2472,9 @@ PROVIDER TRUTH RULES
 93. Provider fallback must never convert failed business execution into successful business execution.
 94. Never expose protected provider API keys.
 95. Never claim provider health unless actual configuration or request evidence supports the claim.
+96. A provider must not be described as successfully responding until usable assistant output has actually begun.
+97. The actual provider and model used for reasoning must remain distinguishable from the originally requested provider.
+98. Provider-routing metadata is operational evidence about AI execution only, not evidence of customer, supplier, payment, publication or other external execution.
 
 VERIFIED COMPANY KNOWLEDGE
 
@@ -2364,7 +2520,8 @@ ${customSystem.trim()}`
 /* -------------------------------------------------------------------------- */
 
 function needsRecordSafeSupport(
-  message: string,
+  message:
+    string,
 ): boolean {
   return /\b(no|without|missing|cannot find|couldn['’]t find)\b[\s\S]{0,100}\b(order|payment|courier|delivery|tracking)\s+(record|details?|information)\b/i.test(
     message,
@@ -2376,7 +2533,8 @@ function needsRecordSafeSupport(
 /* -------------------------------------------------------------------------- */
 
 function createTextResponseStream(
-  text: string,
+  text:
+    string,
 ): ReadableStream<Uint8Array> {
   const encoder =
     new TextEncoder();
@@ -2403,11 +2561,10 @@ function createTextResponseStream(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Groq and Gemini's compatibility endpoint both return OpenAI-style SSE chat
- * completion chunks.
+ * Groq and Gemini's OpenAI compatibility endpoint return OpenAI-style SSE.
  *
- * Converting upstream SSE into plain text keeps the existing browser
- * ai-stream.ts contract unchanged.
+ * Convert that provider SSE to plain assistant text so the browser has one
+ * stable Cossa streaming contract.
  */
 function createOpenAiCompatibleTextStream(
   upstreamBody:
@@ -2452,7 +2609,8 @@ function createOpenAiCompatibleTextStream(
       }
 
       function processSseLine(
-        line: string,
+        line:
+          string,
       ) {
         if (
           !line.startsWith(
@@ -2464,10 +2622,14 @@ function createOpenAiCompatibleTextStream(
 
         const data =
           line
-            .slice(5)
+            .slice(
+              5,
+            )
             .trim();
 
-        if (!data) {
+        if (
+          !data
+        ) {
           return;
         }
 
@@ -2507,11 +2669,6 @@ function createOpenAiCompatibleTextStream(
         } catch (
           error
         ) {
-          /*
-           * Do not leak malformed upstream provider data to the browser.
-           *
-           * A malformed isolated chunk may be skipped, but the server logs it.
-           */
           console.warn(
             `Ignored malformed ${provider} streaming chunk.`,
             error,
@@ -2530,7 +2687,9 @@ function createOpenAiCompatibleTextStream(
             } =
               await reader.read();
 
-            if (done) {
+            if (
+              done
+            ) {
               buffer +=
                 decoder.decode();
 
@@ -2546,7 +2705,9 @@ function createOpenAiCompatibleTextStream(
                   const line =
                     rawLine.trim();
 
-                  if (line) {
+                  if (
+                    line
+                  ) {
                     processSseLine(
                       line,
                     );
@@ -2601,7 +2762,9 @@ function createOpenAiCompatibleTextStream(
                     1,
                 );
 
-              if (line) {
+              if (
+                line
+              ) {
                 processSseLine(
                   line,
                 );
@@ -2642,11 +2805,231 @@ function createOpenAiCompatibleTextStream(
 }
 
 /* -------------------------------------------------------------------------- */
+/* FIRST OUTPUT GATE                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A provider returning HTTP 200 is not sufficient proof that usable assistant
+ * output exists.
+ *
+ * This function reads ahead until the first non-empty text chunk exists.
+ *
+ * Only then is the provider declared successful.
+ *
+ * Benefits:
+ *
+ * Groq HTTP 200 + dead/empty stream
+ *       ↓
+ * provider is treated as failed
+ *       ↓
+ * Gemini can safely be tried
+ *
+ * because nothing has reached the browser yet.
+ *
+ * Once the first usable chunk exists, a reconstructed stream emits that chunk
+ * and continues forwarding all remaining provider output.
+ */
+async function primeTextStream(
+  stream:
+    ReadableStream<Uint8Array>,
+): Promise<PrimedStreamResult> {
+  const reader =
+    stream.getReader();
+
+  const decoder =
+    new TextDecoder();
+
+  try {
+    while (
+      true
+    ) {
+      const {
+        value,
+        done,
+      } =
+        await reader.read();
+
+      if (
+        done
+      ) {
+        reader.releaseLock();
+
+        return {
+          ok:
+            false,
+
+          error:
+            "The provider opened a response stream but returned no usable assistant output.",
+        };
+      }
+
+      if (
+        !value ||
+        value.byteLength ===
+          0
+      ) {
+        continue;
+      }
+
+      const preview =
+        decoder.decode(
+          value,
+          {
+            stream:
+              true,
+          },
+        );
+
+      if (
+        !preview.trim()
+      ) {
+        /*
+         * Whitespace still belongs to the response.
+         *
+         * Continue until actual assistant content is observed so an empty
+         * provider cannot falsely win the gateway.
+         */
+        continue;
+      }
+
+      const firstChunk =
+        value;
+
+      let completed =
+        false;
+
+      const reconstructedStream =
+        new ReadableStream<
+          Uint8Array
+        >({
+          start(
+            controller,
+          ) {
+            controller.enqueue(
+              firstChunk,
+            );
+
+            async function pump() {
+              try {
+                while (
+                  !completed
+                ) {
+                  const {
+                    value:
+                      nextValue,
+
+                    done:
+                      nextDone,
+                  } =
+                    await reader.read();
+
+                  if (
+                    nextDone
+                  ) {
+                    completed =
+                      true;
+
+                    controller.close();
+
+                    return;
+                  }
+
+                  if (
+                    nextValue &&
+                    nextValue.byteLength >
+                      0
+                  ) {
+                    controller.enqueue(
+                      nextValue,
+                    );
+                  }
+                }
+              } catch (
+                error
+              ) {
+                completed =
+                  true;
+
+                controller.error(
+                  error,
+                );
+              } finally {
+                try {
+                  reader.releaseLock();
+                } catch {
+                  /*
+                   * Reader may already be released/cancelled.
+                   */
+                }
+              }
+            }
+
+            void pump();
+          },
+
+          async cancel(
+            reason,
+          ) {
+            completed =
+              true;
+
+            try {
+              await reader.cancel(
+                reason,
+              );
+            } finally {
+              try {
+                reader.releaseLock();
+              } catch {
+                /*
+                 * Reader may already be released.
+                 */
+              }
+            }
+          },
+        });
+
+      return {
+        ok:
+          true,
+
+        stream:
+          reconstructedStream,
+      };
+    }
+  } catch (
+    error
+  ) {
+    try {
+      reader.releaseLock();
+    } catch {
+      /*
+       * Reader may already have failed.
+       */
+    }
+
+    return {
+      ok:
+        false,
+
+      error:
+        error instanceof
+        Error
+          ? error.message
+          : String(
+              error,
+            ),
+    };
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /* OPENAI RESPONSE EXTRACTION                                                 */
 /* -------------------------------------------------------------------------- */
 
 function extractOpenAiResponseText(
-  response: unknown,
+  response:
+    unknown,
 ): string {
   if (
     !response ||
@@ -2703,7 +3086,8 @@ function extractOpenAiResponseText(
 /* -------------------------------------------------------------------------- */
 
 function parseProviderError(
-  errorText: string,
+  errorText:
+    string,
 ): ProviderErrorBody | null {
   if (
     !errorText.trim()
@@ -2826,10 +3210,10 @@ function providerFailureIsRetryable(
     number,
 ): boolean {
   /*
-   * Provider-specific failures may fall through to another reasoning provider.
+   * These are provider-side failures.
    *
-   * Authentication here refers to the provider API key, not the authenticated
-   * Cossa user. User authentication has already been validated separately.
+   * Cossa user authentication and organisation authorisation have already
+   * happened before provider execution.
    */
   return (
     status ===
@@ -2952,6 +3336,33 @@ function buildProviderOrder(
 }
 
 /* -------------------------------------------------------------------------- */
+/* PROVIDER ROUTE                                                             */
+/* -------------------------------------------------------------------------- */
+
+function providerAttemptRoute(
+  attempts:
+    ProviderAttemptRecord[],
+): string {
+  if (
+    attempts.length ===
+    0
+  ) {
+    return "none";
+  }
+
+  return attempts
+    .map(
+      (
+        attempt,
+      ) =>
+        attempt.provider,
+    )
+    .join(
+      ">",
+    );
+}
+
+/* -------------------------------------------------------------------------- */
 /* RESPONSE HEADERS                                                           */
 /* -------------------------------------------------------------------------- */
 
@@ -2959,8 +3370,8 @@ function chatResponseHeaders({
   requestedProvider,
   actualProvider,
   model,
-  attemptCount,
-  fallbackUsed,
+  attempts,
+  requestId,
 }: {
   requestedProvider:
     ChatProviderPreference;
@@ -2971,12 +3382,27 @@ function chatResponseHeaders({
   model:
     string;
 
-  attemptCount:
-    number;
+  attempts:
+    ProviderAttemptRecord[];
 
-  fallbackUsed:
-    boolean;
+  requestId:
+    string;
 }): HeadersInit {
+  const providerRoute =
+    providerAttemptRoute(
+      attempts,
+    );
+
+  const fallbackUsed =
+    attempts.length >
+      1 ||
+    (
+      requestedProvider !==
+        "auto" &&
+      requestedProvider !==
+        actualProvider
+    );
+
   return {
     "Content-Type":
       "text/plain; charset=utf-8",
@@ -2989,6 +3415,9 @@ function chatResponseHeaders({
 
     "X-Content-Type-Options":
       "nosniff",
+
+    "X-Cossa-AI-Request-ID":
+      requestId,
 
     "X-Cossa-AI-Requested-Provider":
       requestedProvider,
@@ -3006,19 +3435,21 @@ function chatResponseHeaders({
 
     "X-Cossa-AI-Attempts":
       String(
-        attemptCount,
+        attempts.length,
       ),
 
-    /*
-     * Useful if Cossa is later served across a different frontend/API origin.
-     */
+    "X-Cossa-AI-Provider-Route":
+      providerRoute,
+
     "Access-Control-Expose-Headers":
       [
+        "X-Cossa-AI-Request-ID",
         "X-Cossa-AI-Requested-Provider",
         "X-Cossa-AI-Provider",
         "X-Cossa-AI-Model",
         "X-Cossa-AI-Fallback",
         "X-Cossa-AI-Attempts",
+        "X-Cossa-AI-Provider-Route",
       ].join(
         ", ",
       ),
@@ -3054,7 +3485,8 @@ async function executeGroq({
     !environment.groqApiKey
   ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3117,7 +3549,8 @@ async function executeGroq({
     error
   ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3154,7 +3587,8 @@ async function executeGroq({
         );
 
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3181,18 +3615,52 @@ async function executeGroq({
     };
   }
 
+  const convertedStream =
+    createOpenAiCompatibleTextStream(
+      response.body,
+      "groq",
+    );
+
+  const primed =
+    await primeTextStream(
+      convertedStream,
+    );
+
+  if (
+    !primed.ok
+  ) {
+    return {
+      ok:
+        false,
+
+      provider,
+
+      model,
+
+      status:
+        502,
+
+      safeMessage:
+        "Groq returned no usable Cossa AI response.",
+
+      internalMessage:
+        primed.error,
+
+      retryable:
+        true,
+    };
+  }
+
   return {
-    ok: true,
+    ok:
+      true,
 
     provider,
 
     model,
 
     stream:
-      createOpenAiCompatibleTextStream(
-        response.body,
-        "groq",
-      ),
+      primed.stream,
   };
 }
 
@@ -3225,7 +3693,8 @@ async function executeGemini({
     !environment.geminiApiKey
   ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3288,7 +3757,8 @@ async function executeGemini({
     error
   ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3325,7 +3795,8 @@ async function executeGemini({
         );
 
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3352,18 +3823,52 @@ async function executeGemini({
     };
   }
 
+  const convertedStream =
+    createOpenAiCompatibleTextStream(
+      response.body,
+      "gemini",
+    );
+
+  const primed =
+    await primeTextStream(
+      convertedStream,
+    );
+
+  if (
+    !primed.ok
+  ) {
+    return {
+      ok:
+        false,
+
+      provider,
+
+      model,
+
+      status:
+        502,
+
+      safeMessage:
+        "Gemini returned no usable Cossa AI response.",
+
+      internalMessage:
+        primed.error,
+
+      retryable:
+        true,
+    };
+  }
+
   return {
-    ok: true,
+    ok:
+      true,
 
     provider,
 
     model,
 
     stream:
-      createOpenAiCompatibleTextStream(
-        response.body,
-        "gemini",
-      ),
+      primed.stream,
   };
 }
 
@@ -3396,7 +3901,8 @@ async function executeOpenAi({
     !environment.openAiApiKey
   ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3416,9 +3922,12 @@ async function executeOpenAi({
     };
   }
 
-  if (!model) {
+  if (
+    !model
+  ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3519,7 +4028,8 @@ async function executeOpenAi({
     error
   ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3555,7 +4065,8 @@ async function executeOpenAi({
         );
 
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3592,7 +4103,8 @@ async function executeOpenAi({
     error
   ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3626,7 +4138,8 @@ async function executeOpenAi({
     !responseText
   ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       provider,
 
@@ -3647,7 +4160,8 @@ async function executeOpenAi({
   }
 
   return {
-    ok: true,
+    ok:
+      true,
 
     provider,
 
@@ -3730,6 +4244,25 @@ async function executeProvider({
 /* PROVIDER GATEWAY                                                           */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Server-side provider gateway.
+ *
+ * Important execution rule:
+ *
+ * No provider response reaches the browser until that provider has produced
+ * its first usable assistant output.
+ *
+ * Therefore:
+ *
+ * Groq fails before output
+ *   → Gemini may be tried.
+ *
+ * Gemini fails before output
+ *   → OpenAI may be tried.
+ *
+ * Once a provider has been selected and its first content is returned to the
+ * browser, another provider must not be mixed into that response.
+ */
 async function executeProviderGateway({
   requestedProvider,
   providerMessages,
@@ -3749,7 +4282,8 @@ async function executeProviderGateway({
     AbortSignal;
 }): Promise<{
   result:
-    ProviderSuccess | null;
+    ProviderSuccess |
+    null;
 
   attempts:
     ProviderAttemptRecord[];
@@ -3883,11 +4417,8 @@ async function executeProviderGateway({
     );
 
     /*
-     * Provider-specific non-retryable request failures should stop the gateway.
-     *
-     * Most temporary, credential, quota and upstream failures can safely try
-     * another configured reasoning provider because no provider output has been
-     * returned to the browser yet.
+     * Stop only when the provider reports a request condition that another
+     * provider should not attempt to solve.
      */
     if (
       !result.retryable
@@ -3908,10 +4439,25 @@ async function executeProviderGateway({
 /* PROVIDER FAILURE RESPONSE                                                  */
 /* -------------------------------------------------------------------------- */
 
-function createGatewayFailureResponse(
+function createGatewayFailureResponse({
+  attempts,
+  requestId,
+  requestedProvider,
+}: {
   attempts:
-    ProviderAttemptRecord[],
-): Response {
+    ProviderAttemptRecord[];
+
+  requestId:
+    string;
+
+  requestedProvider:
+    ChatProviderPreference;
+}): Response {
+  const providerRoute =
+    providerAttemptRoute(
+      attempts,
+    );
+
   if (
     attempts.length ===
     0
@@ -3921,6 +4467,47 @@ function createGatewayFailureResponse(
       {
         status:
           503,
+
+        headers: {
+          "Content-Type":
+            "text/plain; charset=utf-8",
+
+          "Cache-Control":
+            "no-store",
+
+          "X-Content-Type-Options":
+            "nosniff",
+
+          "X-Cossa-AI-Request-ID":
+            requestId,
+
+          "X-Cossa-AI-Requested-Provider":
+            requestedProvider,
+
+          "X-Cossa-AI-Provider":
+            "none",
+
+          "X-Cossa-AI-Fallback":
+            "false",
+
+          "X-Cossa-AI-Attempts":
+            "0",
+
+          "X-Cossa-AI-Provider-Route":
+            "none",
+
+          "Access-Control-Expose-Headers":
+            [
+              "X-Cossa-AI-Request-ID",
+              "X-Cossa-AI-Requested-Provider",
+              "X-Cossa-AI-Provider",
+              "X-Cossa-AI-Fallback",
+              "X-Cossa-AI-Attempts",
+              "X-Cossa-AI-Provider-Route",
+            ].join(
+              ", ",
+            ),
+        },
       },
     );
   }
@@ -3932,8 +4519,8 @@ function createGatewayFailureResponse(
           attempt,
         ) =>
           attempt.status ===
-          "failed" &&
-        attempt.message,
+            "failed" &&
+          attempt.message,
       )
       .map(
         (
@@ -3987,12 +4574,39 @@ function createGatewayFailureResponse(
         "X-Content-Type-Options":
           "nosniff",
 
+        "X-Cossa-AI-Request-ID":
+          requestId,
+
+        "X-Cossa-AI-Requested-Provider":
+          requestedProvider,
+
         "X-Cossa-AI-Provider":
           "none",
+
+        "X-Cossa-AI-Fallback":
+          attempts.length >
+          1
+            ? "true"
+            : "false",
 
         "X-Cossa-AI-Attempts":
           String(
             attempts.length,
+          ),
+
+        "X-Cossa-AI-Provider-Route":
+          providerRoute,
+
+        "Access-Control-Expose-Headers":
+          [
+            "X-Cossa-AI-Request-ID",
+            "X-Cossa-AI-Requested-Provider",
+            "X-Cossa-AI-Provider",
+            "X-Cossa-AI-Fallback",
+            "X-Cossa-AI-Attempts",
+            "X-Cossa-AI-Provider-Route",
+          ].join(
+            ", ",
           ),
       },
     },
@@ -4015,15 +4629,14 @@ function providerConfigurationPayload(
       new Date().toISOString(),
 
     /**
-     * IMPORTANT:
+     * "configured" means credentials/configuration exist.
      *
-     * "configured" means server credentials/configuration exist.
+     * It does not prove:
      *
-     * It does NOT mean:
-     * - the provider is currently healthy;
-     * - quota is available;
-     * - billing is available;
-     * - a test request succeeded.
+     * - live provider health;
+     * - available quota;
+     * - available credit;
+     * - successful inference.
      */
     providers: {
       groq: {
@@ -4092,12 +4705,15 @@ export const Route =
     server: {
       handlers: {
         /* ------------------------------------------------------------------ */
-        /* GET — SAFE CONFIGURATION STATUS                                    */
+        /* GET — SAFE PROVIDER CONFIGURATION STATUS                           */
         /* ------------------------------------------------------------------ */
 
         GET: async ({
           request,
         }) => {
+          const requestId =
+            createRequestId();
+
           const environment =
             getEnvironment();
 
@@ -4111,10 +4727,24 @@ export const Route =
 
                 message:
                   "Cossa AI server configuration is incomplete.",
+
+                request_id:
+                  requestId,
               },
               {
                 status:
                   503,
+
+                headers: {
+                  "Cache-Control":
+                    "no-store",
+
+                  "X-Content-Type-Options":
+                    "nosniff",
+
+                  "X-Cossa-AI-Request-ID":
+                    requestId,
+                },
               },
             );
           }
@@ -4132,9 +4762,14 @@ export const Route =
           }
 
           return Response.json(
-            providerConfigurationPayload(
-              environment,
-            ),
+            {
+              ...providerConfigurationPayload(
+                environment,
+              ),
+
+              request_id:
+                requestId,
+            },
             {
               headers: {
                 "Cache-Control":
@@ -4142,6 +4777,12 @@ export const Route =
 
                 "X-Content-Type-Options":
                   "nosniff",
+
+                "X-Cossa-AI-Request-ID":
+                  requestId,
+
+                "Access-Control-Expose-Headers":
+                  "X-Cossa-AI-Request-ID",
               },
             },
           );
@@ -4154,6 +4795,9 @@ export const Route =
         POST: async ({
           request,
         }) => {
+          const requestId =
+            createRequestId();
+
           const environment =
             getEnvironment();
 
@@ -4165,6 +4809,11 @@ export const Route =
               {
                 status:
                   503,
+
+                headers: {
+                  "X-Cossa-AI-Request-ID":
+                    requestId,
+                },
               },
             );
           }
@@ -4208,6 +4857,11 @@ export const Route =
               {
                 status:
                   400,
+
+                headers: {
+                  "X-Cossa-AI-Request-ID":
+                    requestId,
+                },
               },
             );
           }
@@ -4225,6 +4879,11 @@ export const Route =
               {
                 status:
                   400,
+
+                headers: {
+                  "X-Cossa-AI-Request-ID":
+                    requestId,
+                },
               },
             );
           }
@@ -4252,6 +4911,11 @@ export const Route =
               {
                 status:
                   400,
+
+                headers: {
+                  "X-Cossa-AI-Request-ID":
+                    requestId,
+                },
               },
             );
           }
@@ -4279,6 +4943,11 @@ export const Route =
               {
                 status:
                   400,
+
+                headers: {
+                  "X-Cossa-AI-Request-ID":
+                    requestId,
+                },
               },
             );
           }
@@ -4403,7 +5072,8 @@ export const Route =
             };
 
           const safetyGuard:
-            ChatMessage | null =
+            ChatMessage |
+            null =
             needsRecordSafeSupport(
               latestUserMessage,
             )
@@ -4471,13 +5141,22 @@ export const Route =
                 {
                   status:
                     499,
+
+                  headers: {
+                    "X-Cossa-AI-Request-ID":
+                      requestId,
+                  },
                 },
               );
             }
 
             console.error(
               "Cossa AI provider gateway failed unexpectedly.",
-              error,
+              {
+                requestId,
+
+                error,
+              },
             );
 
             return new Response(
@@ -4485,6 +5164,14 @@ export const Route =
               {
                 status:
                   503,
+
+                headers: {
+                  "X-Cossa-AI-Request-ID":
+                    requestId,
+
+                  "X-Cossa-AI-Provider":
+                    "none",
+                },
               },
             );
           }
@@ -4495,15 +5182,54 @@ export const Route =
           } =
             gatewayResult;
 
-          if (!result) {
-            return createGatewayFailureResponse(
-              attempts,
+          if (
+            !result
+          ) {
+            console.error(
+              "All available Cossa AI providers failed.",
+              {
+                requestId,
+
+                requestedProvider,
+
+                providerRoute:
+                  providerAttemptRoute(
+                    attempts,
+                  ),
+
+                attempts:
+                  attempts.map(
+                    (
+                      attempt,
+                    ) => ({
+                      provider:
+                        attempt.provider,
+
+                      model:
+                        attempt.model,
+
+                      status:
+                        attempt.status,
+
+                      httpStatus:
+                        attempt.httpStatus,
+                    }),
+                  ),
+              },
             );
+
+            return createGatewayFailureResponse({
+              attempts,
+
+              requestId,
+
+              requestedProvider,
+            });
           }
 
           const fallbackUsed =
             attempts.length >
-            1 ||
+              1 ||
             (
               requestedProvider !==
                 "auto" &&
@@ -4511,9 +5237,16 @@ export const Route =
                 result.provider
             );
 
+          const providerRoute =
+            providerAttemptRoute(
+              attempts,
+            );
+
           console.info(
-            "Cossa AI provider execution completed.",
+            "Cossa AI provider execution selected.",
             {
+              requestId,
+
               requestedProvider,
 
               actualProvider:
@@ -4523,6 +5256,8 @@ export const Route =
                 result.model,
 
               fallbackUsed,
+
+              providerRoute,
 
               attempts:
                 attempts.map(
@@ -4545,6 +5280,10 @@ export const Route =
             },
           );
 
+          /* ---------------------------------------------------------------- */
+          /* SUCCESS RESPONSE                                                 */
+          /* ---------------------------------------------------------------- */
+
           return new Response(
             result.stream,
             {
@@ -4558,10 +5297,9 @@ export const Route =
                   model:
                     result.model,
 
-                  attemptCount:
-                    attempts.length,
+                  attempts,
 
-                  fallbackUsed,
+                  requestId,
                 }),
             },
           );
