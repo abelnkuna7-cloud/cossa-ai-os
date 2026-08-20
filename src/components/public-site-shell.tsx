@@ -27,10 +27,11 @@ import {
 const phoneNumber = "067 801 1907";
 const phoneHref = "tel:+27678011907";
 const whatsappHref = "https://wa.me/27678011907";
+const demoWhatsappHref =
+  "https://wa.me/27678011907?text=Hi%20Cossa%2C%20I%20want%20a%2015-minute%20GROWTH%20demo.";
 const emailHref = "mailto:cossa@cossanexusholdings.co.za";
 
 const mainWebsiteHref = "https://cossanexusholdings.co.za";
-
 const nexDocsHref = "https://nexdocs.cossanexusholdings.co.za";
 
 interface PublicSiteShellProps {
@@ -40,6 +41,10 @@ interface PublicSiteShellProps {
 
 const publicNavigation = [
   {
+    label: "Pricing",
+    href: "/pricing",
+  },
+  {
     label: "For business owners",
     href: "/#contact",
   },
@@ -48,7 +53,7 @@ const publicNavigation = [
     href: emailHref,
   },
   {
-    label: "Start a conversation",
+    label: "Request a demo",
     href: "/#quote-request",
   },
 ];
@@ -181,9 +186,7 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
                 className="border-primary/40 text-primary hover:bg-primary/10"
               >
                 <LockKeyhole className="mr-1.5 h-3.5 w-3.5" />
-
                 <span className="hidden sm:inline">Workspace</span>
-
                 <span className="sm:hidden">Login</span>
               </Button>
             </Link>
@@ -213,7 +216,7 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
                   key={item.href}
                   href={item.href}
                   onClick={closeMobileMenu}
-                  className="rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+                  className="rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
                 >
                   {item.label}
                 </a>
@@ -226,13 +229,12 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
                 target="_blank"
                 rel="noreferrer"
                 onClick={closeMobileMenu}
-                className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+                className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
               >
                 <span className="inline-flex items-center gap-2">
                   <Building2 className="h-4 w-4" />
                   Cossa Nexus Holdings
                 </span>
-
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
 
@@ -241,13 +243,12 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
                 target="_blank"
                 rel="noreferrer"
                 onClick={closeMobileMenu}
-                className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+                className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
               >
                 <span className="inline-flex items-center gap-2">
                   <FileText className="h-4 w-4" />
                   NexDocs
                 </span>
-
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
             </div>
@@ -262,44 +263,31 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
           <div className="mx-auto grid max-w-7xl gap-6 rounded-2xl border border-primary/25 bg-primary/5 p-6 md:grid-cols-[1fr_auto] md:items-center">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-                Speak with a Cossa specialist
+                See GROWTH in action
               </p>
-
               <h2 className="mt-2 font-display text-2xl font-semibold">
-                Start with the problem you need solved.
+                Start with a focused 15-minute product conversation.
               </h2>
-
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                Tell us what you need, where it is needed and when it matters. Cossa will record
-                your enquiry for appropriate follow-up.
+                Tell us how your enquiries and follow-up work today. We will show you the relevant GROWTH workflow and discuss the right plan or custom setup.
               </p>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row">
-              <a href={phoneHref}>
+              <a href="/#quote-request">
                 <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                  <Phone className="mr-2 h-4 w-4" />
-                  Call {phoneNumber}
+                  Request a 15-minute demo
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </a>
 
-              <a href={whatsappHref} target="_blank" rel="noreferrer">
+              <a href={demoWhatsappHref} target="_blank" rel="noreferrer">
                 <Button
                   variant="outline"
                   className="w-full border-primary/40 text-primary hover:bg-primary/10"
                 >
                   <MessageCircle className="mr-2 h-4 w-4" />
-                  WhatsApp
-                </Button>
-              </a>
-
-              <a href="/#contact">
-                <Button
-                  variant="outline"
-                  className="w-full border-primary/40 text-primary hover:bg-primary/10"
-                >
-                  Request a quote
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  Prefer WhatsApp?
                 </Button>
               </a>
             </div>
@@ -313,11 +301,9 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
             <Link to="/" className="inline-flex items-center gap-2" aria-label="GROWTH home">
               <GrowthProductBrand />
             </Link>
-
             <p className="mt-4 max-w-xs text-sm leading-6">
               Business growth intelligence for business owners, teams and white-label partners.
             </p>
-
             <div className="mt-5">
               <ParentBrandEndorsement />
             </div>
@@ -327,18 +313,18 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
             <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">
               GROWTH for business
             </h2>
-
             <div className="mt-4 grid gap-3 text-sm">
+              <Link to="/pricing" className="w-fit hover:text-primary">
+                Pricing
+              </Link>
               <a href="/#contact" className="w-fit hover:text-primary">
                 For business owners
               </a>
-
               <a href={emailHref} className="w-fit hover:text-primary">
                 White-label partnerships
               </a>
-
               <a href="/#quote-request" className="w-fit hover:text-primary">
-                Start a conversation
+                Request a demo
               </a>
             </div>
           </nav>
@@ -347,7 +333,6 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
             <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">
               Cossa platforms
             </h2>
-
             <div className="mt-4 grid gap-3 text-sm">
               <a
                 href={mainWebsiteHref}
@@ -358,7 +343,6 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
                 Cossa Nexus Holdings
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
-
               <a
                 href={nexDocsHref}
                 target="_blank"
@@ -368,7 +352,6 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
                 NexDocs
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
-
               <Link
                 to="/login"
                 className="inline-flex w-fit items-center gap-1.5 hover:text-primary"
@@ -383,7 +366,6 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
             <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">
               Contact Cossa
             </h2>
-
             <div className="mt-4 grid gap-3 text-sm">
               <a
                 href={phoneHref}
@@ -392,7 +374,6 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
                 <Phone className="h-4 w-4" />
                 {phoneNumber}
               </a>
-
               <a
                 href={whatsappHref}
                 target="_blank"
@@ -402,7 +383,6 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
                 <MessageCircle className="h-4 w-4" />
                 WhatsApp Cossa
               </a>
-
               <a
                 href={emailHref}
                 className="inline-flex w-fit items-center gap-2 hover:text-primary"
@@ -418,9 +398,7 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
           <span>
             © {new Date().getFullYear()} Cossa Nexus Holdings (Pty) Ltd. All rights reserved.
           </span>
-
           <span>{GROWTH_BRAND.brandPromise}</span>
-
           <button
             type="button"
             onClick={openGrowthCookiePreferences}
