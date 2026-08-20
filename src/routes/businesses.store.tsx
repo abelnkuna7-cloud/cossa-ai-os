@@ -4,6 +4,7 @@ import {
   BarChart3,
   BrainCircuit,
   Megaphone,
+  PackagePlus,
   PackageSearch,
   Search,
   ShoppingCart,
@@ -32,6 +33,14 @@ export const Route = createFileRoute("/businesses/store")({
 });
 
 const STORE_TOOLS = [
+  {
+    title: "Product Manager",
+    description:
+      "Add real products, change prices, upload images and digital files, publish, archive and manage the live Store catalogue.",
+    to: "/businesses/store-products",
+    icon: PackagePlus,
+  },
+
   {
     title: "Store AI Team",
     description:
@@ -138,9 +147,9 @@ function CossaStoreWorkspace() {
               asChild
               className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
             >
-              <Link to="/ai/workforce">
-                <UsersRound className="mr-1.5 h-4 w-4" />
-                Open Store AI Team
+              <Link to="/businesses/store-products">
+                <PackagePlus className="mr-1.5 h-4 w-4" />
+                Manage Products
               </Link>
             </Button>
 
@@ -149,9 +158,9 @@ function CossaStoreWorkspace() {
               variant="outline"
               className="border-primary/40 text-primary"
             >
-              <Link to="/marketing/ai-director">
-                <Megaphone className="mr-1.5 h-4 w-4" />
-                Grow Cossa Store
+              <Link to="/ai/workforce">
+                <UsersRound className="mr-1.5 h-4 w-4" />
+                Open Store AI Team
               </Link>
             </Button>
           </div>
