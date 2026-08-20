@@ -7,9 +7,15 @@ export const Route = createFileRoute("/sitemap.xml")({
         const baseUrl = (process.env.PUBLIC_SITE_URL ?? "https://growth.cossanexusholdings.co.za")
           .replace(/^http:\/\//i, "https://")
           .replace(/\/$/, "");
-        const publicPages = ["/", "/construction-growth", "/facility-services-growth", "/sme-growth"];
+        const publicPages = [
+          "/",
+          "/pricing",
+          "/construction-growth",
+          "/facility-services-growth",
+          "/sme-growth",
+        ];
         const urls = publicPages.map((path) => {
-          const priority = path === "/" ? "1.0" : "0.8";
+          const priority = path === "/" ? "1.0" : path === "/pricing" ? "0.9" : "0.8";
           return `  <url>\n    <loc>${baseUrl}${path}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
         });
         const xml = [
