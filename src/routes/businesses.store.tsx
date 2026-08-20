@@ -42,6 +42,14 @@ const STORE_TOOLS = [
   },
 
   {
+    title: "EFT Payment Review",
+    description:
+      "Review customer proof of payment before digital delivery, store fulfilment or subscription activation.",
+    to: "/payments",
+    icon: ShoppingCart,
+  },
+
+  {
     title: "Store AI Team",
     description:
       "Open the AI employees responsible for Store operations, products, suppliers, creative work and growth.",

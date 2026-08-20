@@ -171,12 +171,12 @@ function PricingPage() {
                     </Button>
                   </a>
                 ) : (
-                  <a href="/#quote-request" className="mt-7 block">
+                  <Link to="/subscription" className="mt-7 block">
                     <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
                       {plan.cta}
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
-                  </a>
+                  </Link>
                 )}
               </article>
             ))}
