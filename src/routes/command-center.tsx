@@ -9,13 +9,16 @@ import {
   CalendarDays,
   CheckCircle2,
   DollarSign,
+  FileText,
   Gauge,
+  Globe2,
   Handshake,
   LineChart,
   Loader2,
   Rocket,
   Sparkles,
   ShieldCheck,
+  Store,
   TrendingUp,
   Users,
   UsersRound,
@@ -35,6 +38,11 @@ import {
   listMissions,
   listPendingApprovals,
 } from "@/lib/workforce-data";
+import {
+  getConnectedBusinessSummary,
+  listStoreQuoteRequests,
+  type StoreQuoteRequest,
+} from "@/lib/connected-business-data";
 
 export const Route = createFileRoute("/command-center")({
   component: Dashboard,
@@ -116,6 +124,63 @@ function normaliseStatus(value: unknown): string {
     .toLowerCase();
 }
 
+function formatQuoteDate(value: string | null): string {
+  if (!value) {
+    return "Not specified";
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("en-ZA", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(date);
+}
+
+function formatQuoteScope(value: string | null): string {
+  return value?.replaceAll("_", " ").trim() || "Store enquiry";
+}
+
+function quoteRequirements(request: StoreQuoteRequest): string {
+  return (
+    request.requirements?.trim() ||
+    request.project_details?.trim() ||
+    "No written requirement was supplied."
+  );
+}
+
+function quoteItemLabels(items: unknown): string[] {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.flatMap((item) => {
+    if (typeof item === "string" && item.trim()) {
+      return [item.trim()];
+    }
+
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return [];
+    }
+
+    const record = item as Record<string, unknown>;
+    const name = [record.name, record.title, record.product_name, record.sku].find(
+      (value): value is string => typeof value === "string" && value.trim().length > 0,
+    );
+    const quantity = [record.quantity, record.qty].find(
+      (value) => typeof value === "number" || (typeof value === "string" && value.trim()),
+    );
+
+    if (!name) {
+      return [];
+    }
+
+    return [quantity ? `${name.trim()} × ${quantity}` : name.trim()];
+  });
+}
+
 function Dashboard() {
   const statsQuery = useQuery({
     queryKey: ["dashboard-stats"],
@@ -134,6 +199,20 @@ function Dashboard() {
   const appointmentsQuery = useQuery({
     queryKey: ["sales-appointments"],
     queryFn: salesAppointments.list,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const storeQuotesQuery = useQuery({
+    queryKey: ["store-quote-requirements"],
+    queryFn: listStoreQuoteRequests,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const connectedBusinessQuery = useQuery({
+    queryKey: ["connected-business-summary"],
+    queryFn: getConnectedBusinessSummary,
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
@@ -167,6 +246,8 @@ function Dashboard() {
   });
 
   const stats = statsQuery.data;
+  const storeQuotes = storeQuotesQuery.data ?? [];
+  const connectedBusiness = connectedBusinessQuery.data;
 
   const kpis = [
     {
@@ -234,6 +315,8 @@ function Dashboard() {
     statsQuery.isError ||
     tasksQuery.isError ||
     appointmentsQuery.isError ||
+    storeQuotesQuery.isError ||
+    connectedBusinessQuery.isError ||
     workforceEmployeesQuery.isError ||
     workforceMissionsQuery.isError ||
     workforceHandoffsQuery.isError ||
@@ -311,6 +394,8 @@ function Dashboard() {
                 void statsQuery.refetch();
                 void tasksQuery.refetch();
                 void appointmentsQuery.refetch();
+                void storeQuotesQuery.refetch();
+                void connectedBusinessQuery.refetch();
                 void workforceEmployeesQuery.refetch();
                 void workforceMissionsQuery.refetch();
                 void workforceHandoffsQuery.refetch();
@@ -520,6 +605,234 @@ function Dashboard() {
               to="/sales/leads"
             />
           </div>
+        </section>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <section className="glass-card p-6 lg:col-span-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                <h2 className="font-display text-lg font-semibold">Store quote requirements</h2>
+              </div>
+
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                Every Cossa Store quote is recorded here with its reference, customer requirement,
+                product list and delivery information for management follow-up.
+              </p>
+            </div>
+
+            <Link
+              to="/sales/crm"
+              className="inline-flex shrink-0 items-center gap-1 text-xs text-primary hover:underline"
+            >
+              Open CRM
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+
+          {storeQuotesQuery.isLoading ? (
+            <div className="mt-5 flex items-center gap-2 py-4 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading Store quote requirements…
+            </div>
+          ) : storeQuotes.length === 0 ? (
+            <p className="mt-5 rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+              No Store quote requests have been submitted yet. New requests will appear here
+              automatically after the customer receives their quotation reference.
+            </p>
+          ) : (
+            <ol className="mt-5 space-y-3">
+              {storeQuotes.map((quote) => {
+                const itemLabels = quoteItemLabels(quote.items);
+                const requester = quote.contact_name?.trim() || quote.full_name?.trim() || "Store customer";
+
+                return (
+                  <li
+                    key={quote.id}
+                    className="rounded-xl border border-primary/25 bg-card/40 p-4"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{requester}</span>
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                            {formatQuoteScope(quote.scope)}
+                          </span>
+                        </div>
+
+                        {quote.company?.trim() ? (
+                          <p className="mt-0.5 text-xs text-muted-foreground">{quote.company.trim()}</p>
+                        ) : null}
+                      </div>
+
+                      <div className="text-left sm:text-right">
+                        <div className="font-mono text-xs font-semibold text-primary">
+                          {quote.reference || "Reference pending"}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-muted-foreground">
+                          {formatQuoteDate(quote.created_at)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-lg border border-border/60 bg-background/30 p-3">
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        Customer requirement
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-6">
+                        {quoteRequirements(quote)}
+                      </p>
+                    </div>
+
+                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                      <div>
+                        <dt className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                          Location
+                        </dt>
+                        <dd className="mt-1">{quote.location?.trim() || "Not specified"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                          Quantity
+                        </dt>
+                        <dd className="mt-1">{quote.estimated_quantity?.trim() || "Not specified"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                          Required date
+                        </dt>
+                        <dd className="mt-1">{quote.required_date?.trim() || "Not specified"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                          Budget
+                        </dt>
+                        <dd className="mt-1">{quote.budget?.trim() || "Not specified"}</dd>
+                      </div>
+                    </dl>
+
+                    {itemLabels.length > 0 ? (
+                      <div className="mt-4">
+                        <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                          Requested products
+                        </div>
+                        <ul className="mt-2 flex flex-wrap gap-2">
+                          {itemLabels.map((item) => (
+                            <li
+                              key={item}
+                              className="rounded-full border border-border/60 bg-background/30 px-2.5 py-1 text-xs"
+                            >
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {quote.additional_information?.trim() ? (
+                      <div className="mt-4 border-t border-border/60 pt-3 text-sm">
+                        <span className="font-medium">Additional information: </span>
+                        <span className="whitespace-pre-wrap text-muted-foreground">
+                          {quote.additional_information.trim()}
+                        </span>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </section>
+
+        <section className="glass-card p-6">
+          <div className="flex items-center gap-2">
+            <Globe2 className="h-4 w-4 text-primary" />
+            <h2 className="font-display text-lg font-semibold">Connected business systems</h2>
+          </div>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Verified reporting from the shared Cossa production database.
+          </p>
+
+          {connectedBusinessQuery.isLoading ? (
+            <div className="mt-5 flex items-center gap-2 py-4 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking connected systems…
+            </div>
+          ) : (
+            <div className="mt-5 space-y-3">
+              <Link
+                to="/sales/leads"
+                className="group block rounded-xl border border-border/60 bg-card/40 p-3 transition-colors hover:border-primary/40 hover:bg-primary/5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">Main website</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Enquiries sent to Growth CRM
+                    </div>
+                  </div>
+                  <Globe2 className="h-4 w-4 text-primary" />
+                </div>
+                <div className="mt-3 font-display text-2xl font-semibold">
+                  {connectedBusiness?.mainWebsiteLeadCount ?? 0}
+                </div>
+                <div className="text-xs text-muted-foreground">Recorded website leads</div>
+              </Link>
+
+              <Link
+                to="/businesses/store"
+                className="group block rounded-xl border border-border/60 bg-card/40 p-3 transition-colors hover:border-primary/40 hover:bg-primary/5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">Cossa Store</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Quotes, leads and buyable-product orders
+                    </div>
+                  </div>
+                  <Store className="h-4 w-4 text-primary" />
+                </div>
+                <div className="mt-3 font-display text-2xl font-semibold">
+                  {storeQuotes.length}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Quote requests · {connectedBusiness?.storeLeadCount ?? 0} Growth leads ·{" "}
+                  {connectedBusiness?.storeOrderCount ?? 0} orders
+                </div>
+              </Link>
+
+              <Link
+                to="/businesses/nexdocs"
+                className="group block rounded-xl border border-border/60 bg-card/40 p-3 transition-colors hover:border-primary/40 hover:bg-primary/5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">NexDocs</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Document activity and subscription reporting
+                    </div>
+                  </div>
+                  <FileText className="h-4 w-4 text-primary" />
+                </div>
+                <div className="mt-3 font-display text-2xl font-semibold">
+                  {connectedBusiness?.nexdocsDocumentCount ?? "—"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {connectedBusiness?.nexdocsDocumentCount === null
+                    ? "Document count is owner/admin protected"
+                    : "Managed document drafts"}
+                  {connectedBusiness?.nexdocsSubscription
+                    ? ` · ${connectedBusiness.nexdocsSubscription.planCode || "Plan"} ${
+                        connectedBusiness.nexdocsSubscription.status || "status pending"
+                      }`
+                    : ""}
+                </div>
+              </Link>
+            </div>
+          )}
         </section>
       </div>
 
