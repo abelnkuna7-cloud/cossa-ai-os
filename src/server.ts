@@ -37,11 +37,25 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 
 function addSearchProtection(request: Request, response: Response): Response {
   const pathname = new URL(request.url).pathname;
-  const publicPaths = new Set(["/", "/construction-growth", "/facility-services-growth", "/sme-growth", "/sitemap.xml", "/robots.txt"]);
+  const publicPaths = new Set([
+    "/",
+    "/pricing",
+    "/construction-growth",
+    "/facility-services-growth",
+    "/sme-growth",
+    "/sitemap.xml",
+    "/robots.txt",
+  ]);
+
   if (publicPaths.has(pathname) || pathname.startsWith("/api/")) return response;
+
   const headers = new Headers(response.headers);
   headers.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 function isH3SwallowedErrorBody(body: string): boolean {
