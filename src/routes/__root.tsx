@@ -21,6 +21,7 @@ import {
 
 const PUBLIC_ROUTES = new Set([
   "/",
+  "/pricing",
   "/construction-growth",
   "/facility-services-growth",
   "/sme-growth",
