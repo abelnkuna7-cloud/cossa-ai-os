@@ -9,6 +9,6 @@ export const GROWTH_BRAND = {
     growthFull: "/brand/growth/growth-full.jpg",
     parentMark: "/brand/cossa-nexus-holdings/parent-logo.png",
     parentLogo: "/brand/cossa-nexus-holdings/parent-logo.png",
-    eagle: "/brand/eagle/growth-eagle.jpg",
+    eagle: "/brand/eagle/cossa-eagle-hero.webp",
   },
 } as const;

@@ -105,8 +105,8 @@ export function GrowthEagleArtwork({
       src={GROWTH_BRAND.assets.eagle}
       alt=""
       aria-hidden="true"
-      width={474}
-      height={947}
+      width={1146}
+      height={1368}
       decoding="async"
       loading={eager ? "eager" : "lazy"}
       className={cn("object-cover", className)}
