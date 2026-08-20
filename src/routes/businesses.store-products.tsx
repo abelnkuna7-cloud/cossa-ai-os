@@ -24,7 +24,7 @@ export const Route = createFileRoute("/businesses/store-products")({
   component: StoreProductManager,
   head: () => ({
     meta: [
-      { title: "Store Products — GROWTH" },
+      { title: "Store Products â€” GROWTH" },
       {
         name: "description",
         content: "Manage Cossa Store products, pricing, stock, images and digital files.",
@@ -46,6 +46,14 @@ const db = supabase as unknown as {
 
 type ProductType = "physical" | "digital" | "affiliate" | "pod" | "dropshipping";
 type ProductStatus = "draft" | "active" | "archived";
+type FulfilmentModel =
+  | "cossa_stock"
+  | "local_supplier"
+  | "local_dropshipping"
+  | "international_dropshipping"
+  | "print_on_demand"
+  | "affiliate"
+  | "digital";
 
 type StoreProduct = {
   id: string;
@@ -53,6 +61,7 @@ type StoreProduct = {
   slug: string;
   sku: string | null;
   product_type: ProductType;
+  fulfilment_model: FulfilmentModel;
   status: ProductStatus;
   short_description: string | null;
   description: string | null;
@@ -87,6 +96,7 @@ type ProductForm = {
   slug: string;
   sku: string;
   product_type: ProductType;
+  fulfilment_model: FulfilmentModel;
   status: ProductStatus;
   short_description: string;
   description: string;
@@ -117,6 +127,7 @@ const EMPTY_FORM: ProductForm = {
   slug: "",
   sku: "",
   product_type: "digital",
+  fulfilment_model: "digital",
   status: "draft",
   short_description: "",
   description: "",
@@ -172,6 +183,43 @@ function safeFileName(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/-+/g, "-");
 }
 
+function defaultFulfilment(type: ProductType): FulfilmentModel {
+  switch (type) {
+    case "digital": return "digital";
+    case "affiliate": return "affiliate";
+    case "pod": return "print_on_demand";
+    case "dropshipping": return "local_dropshipping";
+    case "physical": return "cossa_stock";
+  }
+}
+
+function publicationIssues(form: ProductForm): string[] {
+  const issues: string[] = [];
+  if (!form.category.trim()) issues.push("category");
+  if (!form.description.trim()) issues.push("description");
+  if (form.image_urls.length === 0) issues.push("product image");
+  if (form.product_type !== "affiliate" && !form.sku.trim()) issues.push("SKU");
+  if (form.product_type !== "affiliate" && Number(form.price) <= 0) issues.push("selling price");
+
+  if (form.product_type === "digital" && !form.digital_file_path.trim()) issues.push("digital file");
+  if (form.product_type === "affiliate") {
+    if (!form.supplier_name.trim()) issues.push("partner or merchant name");
+    if (!/^https?:\/\//i.test(form.affiliate_url.trim())) issues.push("legitimate affiliate URL");
+  }
+  if (form.product_type === "pod") {
+    if (!form.supplier_name.trim()) issues.push("POD provider");
+    if (!form.supplier_product_ref.trim()) issues.push("provider product reference");
+  }
+  if (form.product_type === "dropshipping") {
+    if (!form.supplier_name.trim()) issues.push("supplier");
+    if (!form.supplier_product_ref.trim() && !form.supplier_url.trim()) issues.push("supplier reference or URL");
+  }
+  if (form.product_type === "physical" && form.fulfilment_model === "cossa_stock" && form.track_inventory && !form.unlimited_stock && Number(form.stock_quantity) <= 0) {
+    issues.push("available stock quantity");
+  }
+  return issues;
+}
+
 function rowToForm(row: StoreProduct): ProductForm {
   return {
     id: row.id,
@@ -179,6 +227,7 @@ function rowToForm(row: StoreProduct): ProductForm {
     slug: row.slug,
     sku: row.sku ?? "",
     product_type: row.product_type,
+    fulfilment_model: row.fulfilment_model ?? defaultFulfilment(row.product_type),
     status: row.status,
     short_description: row.short_description ?? "",
     description: row.description ?? "",
@@ -239,6 +288,9 @@ function StoreProductManager() {
     };
   }, [form.price, form.cost_price]);
 
+  const readinessIssues = useMemo(() => publicationIssues(form), [form]);
+  const tracksInventory = form.product_type === "physical" && form.fulfilment_model === "cossa_stock";
+
   async function loadProducts() {
     setLoading(true);
     const { data, error } = await db
@@ -267,6 +319,7 @@ function StoreProductManager() {
     setForm({
       ...EMPTY_FORM,
       product_type: type,
+      fulfilment_model: defaultFulfilment(type),
       category: type === "digital" ? "digital-products" : "",
       unlimited_stock: type !== "physical",
       track_inventory: type === "physical",
@@ -349,14 +402,8 @@ function StoreProductManager() {
     if (compareAt != null && compareAt < price) {
       return toast.error("Compare-at price must be equal to or higher than the selling price.");
     }
-    if (status === "active" && form.product_type === "digital" && !form.digital_file_path) {
-      return toast.error("Upload the digital file before publishing this product.");
-    }
-    if (status === "active" && form.image_urls.length === 0) {
-      return toast.error("Add at least one product image before publishing.");
-    }
-    if (form.product_type === "affiliate" && status === "active" && !form.affiliate_url.trim()) {
-      return toast.error("Affiliate products need a real affiliate URL before publishing.");
+    if (status === "active" && readinessIssues.length > 0) {
+      return toast.error(`Complete before publishing: ${readinessIssues.join(", ")}.`);
     }
 
     setSaving(true);
@@ -366,6 +413,7 @@ function StoreProductManager() {
       slug,
       sku: form.sku.trim() || null,
       product_type: form.product_type,
+      fulfilment_model: form.fulfilment_model,
       status,
       short_description: form.short_description.trim() || null,
       description: form.description.trim() || null,
@@ -379,9 +427,9 @@ function StoreProductManager() {
       cost_price: costPrice,
       price,
       compare_at_price: compareAt,
-      track_inventory: form.product_type === "physical" ? form.track_inventory : false,
-      stock_quantity: Math.max(0, Number(form.stock_quantity || 0)),
-      unlimited_stock: form.product_type === "physical" ? form.unlimited_stock : true,
+      track_inventory: tracksInventory ? form.track_inventory : false,
+      stock_quantity: tracksInventory ? Math.max(0, Number(form.stock_quantity || 0)) : 0,
+      unlimited_stock: tracksInventory ? form.unlimited_stock : form.product_type !== "physical",
       featured: form.featured,
       image_urls: form.image_urls,
       seo_title: form.seo_title.trim() || null,
@@ -429,7 +477,7 @@ function StoreProductManager() {
       toast.error("Archive an active product before deleting it.");
       return;
     }
-    if (!window.confirm(`Permanently delete “${product.name}”? This cannot be undone.`)) return;
+    if (!window.confirm(`Permanently delete â€œ${product.name}â€? This cannot be undone.`)) return;
 
     const { error } = await db.from("store_products").delete().eq("id", product.id);
     if (error) return toast.error(`Could not delete product: ${error.message}`);
@@ -505,6 +553,7 @@ function StoreProductManager() {
                   setForm((current) => ({
                     ...current,
                     product_type: productType,
+                    fulfilment_model: defaultFulfilment(productType),
                     category: productType === "digital" && !current.category ? "digital-products" : current.category,
                     unlimited_stock: productType === "physical" ? current.unlimited_stock : true,
                     track_inventory: productType === "physical" ? current.track_inventory : false,
@@ -516,6 +565,38 @@ function StoreProductManager() {
                 ))}
               </select>
             </Field>
+
+            {form.product_type === "physical" ? (
+              <Field label="Fulfilment">
+                <select
+                  className={inputClass}
+                  value={form.fulfilment_model}
+                  onChange={(event) => {
+                    const fulfilment = event.target.value as FulfilmentModel;
+                    setForm((current) => ({
+                      ...current,
+                      fulfilment_model: fulfilment,
+                      track_inventory: fulfilment === "cossa_stock" ? current.track_inventory : false,
+                      unlimited_stock: fulfilment === "cossa_stock" ? current.unlimited_stock : false,
+                    }));
+                  }}
+                >
+                  <option value="cossa_stock">Cossa-owned stock</option>
+                  <option value="local_supplier">Local supplier</option>
+                </select>
+              </Field>
+            ) : form.product_type === "dropshipping" ? (
+              <Field label="Dropshipping location">
+                <select className={inputClass} value={form.fulfilment_model} onChange={(event) => update("fulfilment_model", event.target.value as FulfilmentModel)}>
+                  <option value="local_dropshipping">South African / local supplier</option>
+                  <option value="international_dropshipping">International supplier</option>
+                </select>
+              </Field>
+            ) : (
+              <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground">
+                Fulfilment is set automatically for this product type.
+              </div>
+            )}
 
             <Field label="Status">
               <select className={inputClass} value={form.status} onChange={(event) => update("status", event.target.value as ProductStatus)}>
@@ -570,7 +651,7 @@ function StoreProductManager() {
             ) : null}
           </div>
 
-          {form.product_type === "physical" ? (
+          {tracksInventory ? (
             <div className="mt-7 border-t border-border/60 pt-6">
               <h3 className="font-semibold">Inventory</h3>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -593,7 +674,7 @@ function StoreProductManager() {
               </div>
               <label className="inline-flex cursor-pointer items-center rounded-lg border border-primary/30 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/5">
                 <ImagePlus className="mr-1.5 h-4 w-4" />
-                {uploadingImage ? "Uploading…" : "Upload image"}
+                {uploadingImage ? "Uploadingâ€¦" : "Upload image"}
                 <input
                   type="file"
                   accept="image/*"
@@ -639,7 +720,7 @@ function StoreProductManager() {
                 </div>
                 <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-primary/30 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/5">
                   <Upload className="mr-1.5 h-4 w-4" />
-                  {uploadingDigital ? "Uploading…" : form.digital_file_path ? "Replace file" : "Upload file"}
+                  {uploadingDigital ? "Uploadingâ€¦" : form.digital_file_path ? "Replace file" : "Upload file"}
                   <input
                     type="file"
                     className="hidden"
@@ -711,9 +792,23 @@ function StoreProductManager() {
             </div>
           </div>
 
+          <section className={`mt-7 rounded-xl border p-4 ${readinessIssues.length ? "border-warning/50 bg-warning/5" : "border-primary/40 bg-primary/5"}`}>
+            <h3 className="font-semibold">Publication readiness</h3>
+            {readinessIssues.length ? (
+              <>
+                <p className="mt-1 text-xs text-muted-foreground">Keep this product as a draft until every item is completed.</p>
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+                  {readinessIssues.map((issue) => <li key={issue}>Missing {issue}</li>)}
+                </ul>
+              </>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">This product is ready for the publication checks enforced by the database.</p>
+            )}
+          </section>
+
           <div className="mt-7 flex flex-wrap gap-2 border-t border-border/60 pt-6">
             <Button variant="outline" onClick={() => void saveProduct("draft")} disabled={saving}>
-              <Save className="mr-1.5 h-4 w-4" /> {saving ? "Saving…" : "Save draft"}
+              <Save className="mr-1.5 h-4 w-4" /> {saving ? "Savingâ€¦" : "Save draft"}
             </Button>
             <Button onClick={() => void saveProduct("active")} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
               <ExternalLink className="mr-1.5 h-4 w-4" /> Publish to Store
@@ -732,7 +827,7 @@ function StoreProductManager() {
           <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto] xl:grid-cols-1">
             <label className="relative block">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input className={`${inputClass} pl-9`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search products…" />
+              <input className={`${inputClass} pl-9`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search productsâ€¦" />
             </label>
             <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | ProductStatus)}>
               <option value="all">All statuses</option>
@@ -744,7 +839,7 @@ function StoreProductManager() {
 
           <div className="mt-4 space-y-3">
             {loading ? (
-              <div className="rounded-xl border border-border/60 p-5 text-sm text-muted-foreground">Loading catalogue…</div>
+              <div className="rounded-xl border border-border/60 p-5 text-sm text-muted-foreground">Loading catalogueâ€¦</div>
             ) : filtered.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No products match this view.</div>
             ) : (
@@ -758,7 +853,7 @@ function StoreProductManager() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <h3 className="line-clamp-2 text-sm font-semibold">{product.name}</h3>
-                          <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{product.product_type} · {product.status}</p>
+                          <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{product.product_type} Â· {product.status}</p>
                         </div>
                         <p className="shrink-0 text-sm font-semibold text-primary">R{Number(product.price).toFixed(2)}</p>
                       </div>
@@ -808,3 +903,4 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
     </label>
   );
 }
+
