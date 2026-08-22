@@ -5,6 +5,7 @@ const COSSA_INTERNAL_ORGANISATION_ID =
 
 type CanonicalPlanCode =
   | "internal"
+  | "free"
   | "trial"
   | "starter"
   | "professional"
@@ -51,6 +52,7 @@ const db = supabaseAdmin as unknown as {
 
 function normalizePlanCode(value: unknown): CanonicalPlanCode {
   switch (value) {
+    case "free":
     case "trial":
     case "starter":
     case "professional":

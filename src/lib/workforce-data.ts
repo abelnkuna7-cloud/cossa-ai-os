@@ -1,24 +1,15 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getActiveOrganisationId } from "@/lib/active-organisation";
 
 /* -------------------------------------------------------------------------- */
 /* ORGANISATION                                                               */
 /* -------------------------------------------------------------------------- */
 
-const DEFAULT_COSSA_ORGANISATION_ID =
-  "00000000-0000-4000-8000-000000000001";
-
-function resolveOrganisationId(): string {
-  const configuredOrganisationId =
-    import.meta.env.VITE_COSSA_ORGANISATION_ID?.trim();
-
-  return (
-    configuredOrganisationId ||
-    DEFAULT_COSSA_ORGANISATION_ID
-  );
-}
-
+// Kept as the existing export name so every current workforce and CRM module
+// resolves the selected GROWTH workspace without a broad, risky rewrite.
+// Membership RLS remains the authority for every query.
 export const COSSA_ORGANISATION_ID =
-  resolveOrganisationId();
+  getActiveOrganisationId();
 
 /**
  * Temporary compatibility wrapper.

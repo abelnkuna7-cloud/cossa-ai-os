@@ -44,7 +44,7 @@ function LoginPage() {
   }
 
   if (authenticated) {
-    return <Navigate to="/command-center" replace />;
+    return <Navigate to="/workspace" replace />;
   }
 
   return (
@@ -70,8 +70,8 @@ function LoginPage() {
 
           <div className="mt-6 flex gap-2 rounded-xl border border-border/60 bg-muted/30 p-3 text-xs leading-5 text-muted-foreground">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            Only authorised Cossa Nexus users can access company data, AI conversations and
-            operational tools.
+            Only authorised GROWTH workspace users can access their organisation's data,
+            AI conversations and operational tools.
           </div>
 
           <form className="mt-6 space-y-4" onSubmit={submit}>
