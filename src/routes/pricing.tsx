@@ -13,7 +13,24 @@ import { PublicSiteShell } from "@/components/public-site-shell";
 const whatsappHref =
   "https://wa.me/27678011907?text=Hi%20Cossa%2C%20I%20want%20to%20learn%20more%20about%20GROWTH.";
 
+const freeWorkspaceHref =
+  "https://wa.me/27678011907?text=Hi%20Cossa%2C%20I%20want%20to%20be%20provisioned%20for%20a%20Free%20GROWTH%20CRM%20workspace.";
+
 const plans = [
+  {
+    name: "Free",
+    price: "R0",
+    cadence: "/month",
+    description: "For a single business owner who needs a secure CRM foundation before adding automation or AI.",
+    features: [
+      "One secure GROWTH workspace user",
+      "CRM, contacts and lead management",
+      "Pipeline and follow-up visibility",
+      "No AI, marketing or workflow automation",
+      "Upgrade only when you need more capability",
+    ],
+    cta: "Request Free workspace",
+  },
   {
     name: "Starter",
     price: "R499",
@@ -124,7 +141,7 @@ function PricingPage() {
             </div>
           </div>
 
-          <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
             {plans.map((plan) => (
               <article
                 key={plan.name}
@@ -163,8 +180,8 @@ function PricingPage() {
                   ))}
                 </ul>
 
-                {plan.name === "Enterprise" ? (
-                  <a href={whatsappHref} target="_blank" rel="noreferrer" className="mt-7 block">
+                {plan.name === "Enterprise" || plan.name === "Free" ? (
+                  <a href={plan.name === "Free" ? freeWorkspaceHref : whatsappHref} target="_blank" rel="noreferrer" className="mt-7 block">
                     <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
                       {plan.cta}
                       <ArrowRight className="ml-2 h-4 w-4" />

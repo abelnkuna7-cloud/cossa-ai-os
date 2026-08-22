@@ -1,11 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { canUseSaasFeature } from "@/lib/saas-entitlements.server";
+
 /* -------------------------------------------------------------------------- */
 /* CONFIGURATION                                                              */
 /* -------------------------------------------------------------------------- */
 
 const DEFAULT_COSSA_ORGANISATION_ID =
   "00000000-0000-4000-8000-000000000001";
+
+const ORGANISATION_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * Confirmed available in the current Groq project.
@@ -523,6 +528,66 @@ function getEnvironment():
     openAiModel:
       resolveOpenAiModel(),
   };
+}
+
+function environmentForRequest(
+  request: Request,
+  environment: ProviderEnvironment,
+): ProviderEnvironment | null {
+  const requestedOrganisationId =
+    request.headers.get("X-Growth-Organisation-Id")?.trim();
+
+  if (!requestedOrganisationId) {
+    return environment;
+  }
+
+  if (!ORGANISATION_ID_PATTERN.test(requestedOrganisationId)) {
+    return null;
+  }
+
+  return {
+    ...environment,
+    organisationId: requestedOrganisationId,
+  };
+}
+
+async function aiAccessResponse(
+  organisationId: string,
+  requestId: string,
+): Promise<Response | null> {
+  try {
+    const decision =
+      await canUseSaasFeature(
+        organisationId,
+        "ai",
+      );
+
+    if (decision.allowed) {
+      return null;
+    }
+
+    return new Response(
+      decision.reason ?? "This workspace plan does not include GROWTH AI.",
+      {
+        status: 403,
+        headers: {
+          "X-Cossa-AI-Request-ID": requestId,
+        },
+      },
+    );
+  } catch (error) {
+    console.error("Could not verify GROWTH AI entitlement.", error);
+
+    return new Response(
+      "GROWTH AI access could not be verified. Please try again later.",
+      {
+        status: 503,
+        headers: {
+          "X-Cossa-AI-Request-ID": requestId,
+        },
+      },
+    );
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -5161,11 +5226,11 @@ export const Route =
           const requestId =
             createRequestId();
 
-          const environment =
+          const configuredEnvironment =
             getEnvironment();
 
           if (
-            !environment
+            !configuredEnvironment
           ) {
             return Response.json(
               {
@@ -5191,6 +5256,24 @@ export const Route =
 
                   "X-Cossa-AI-Request-ID":
                     requestId,
+                },
+              },
+            );
+          }
+
+          const environment =
+            environmentForRequest(
+              request,
+              configuredEnvironment,
+            );
+
+          if (!environment) {
+            return new Response(
+              "The selected GROWTH workspace is invalid.",
+              {
+                status: 400,
+                headers: {
+                  "X-Cossa-AI-Request-ID": requestId,
                 },
               },
             );
@@ -5245,11 +5328,11 @@ export const Route =
           const requestId =
             createRequestId();
 
-          const environment =
+          const configuredEnvironment =
             getEnvironment();
 
           if (
-            !environment
+            !configuredEnvironment
           ) {
             return new Response(
               "Cossa AI is not fully configured.",
@@ -5260,6 +5343,24 @@ export const Route =
                 headers: {
                   "X-Cossa-AI-Request-ID":
                     requestId,
+                },
+              },
+            );
+          }
+
+          const environment =
+            environmentForRequest(
+              request,
+              configuredEnvironment,
+            );
+
+          if (!environment) {
+            return new Response(
+              "The selected GROWTH workspace is invalid.",
+              {
+                status: 400,
+                headers: {
+                  "X-Cossa-AI-Request-ID": requestId,
                 },
               },
             );
@@ -5279,6 +5380,16 @@ export const Route =
             !auth.ok
           ) {
             return auth.response;
+          }
+
+          const accessResponse =
+            await aiAccessResponse(
+              environment.organisationId,
+              requestId,
+            );
+
+          if (accessResponse) {
+            return accessResponse;
           }
 
           const {

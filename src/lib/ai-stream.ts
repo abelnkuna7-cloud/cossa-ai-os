@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getActiveOrganisationId } from "@/lib/active-organisation";
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
@@ -1557,6 +1558,9 @@ async function streamFromGateway({
 
             Authorization:
               `Bearer ${accessToken}`,
+
+            "X-Growth-Organisation-Id":
+              getActiveOrganisationId(),
           },
 
           /*
