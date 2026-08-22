@@ -27,6 +27,10 @@ interface GoogleTokenResponse {
   access_token?: string;
 }
 
+interface GoogleImpersonatedTokenResponse {
+  accessToken?: string;
+}
+
 interface GoogleMetricValue {
   value?: string;
 }
@@ -248,14 +252,15 @@ async function impersonateAnalyticsReader(
     );
   }
 
-  const payload = (await response.json()) as GoogleTokenResponse;
-  if (!payload.access_token) {
+  const payload =
+    (await response.json()) as GoogleImpersonatedTokenResponse;
+  if (!payload.accessToken) {
     throw new PlatformAnalyticsConnectionError(
       "service_account_impersonation_token",
     );
   }
 
-  return payload.access_token;
+  return payload.accessToken;
 }
 
 async function runReport(
