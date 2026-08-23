@@ -16,6 +16,27 @@ customer conversations and templates.
 Every attempted delivery is recorded in `public.notification_deliveries`, with
 the source table, record ID, idempotency key, status and provider response.
 
+## Daily owner attention briefing
+
+The Worker is configured to run at **08:00 SAST every day** (`0 6 * * *` in
+Cloudflare's UTC-only cron format). It sends one audited CallMeBot WhatsApp
+briefing based only on real Cossa records:
+
+- leads created in the previous 24 hours;
+- workforce missions awaiting owner approval;
+- failed workforce runs in the previous 24 hours; and
+- failed owner-alert deliveries in the previous 24 hours.
+
+It also states plainly that social analytics and publishing have not been
+checked until an authorised platform integration exists. A date-scoped
+idempotency key prevents a second successful digest for the same South African
+day; a failed delivery remains retryable.
+
+After deployment, use Cloudflare's **Cron Triggers** view to confirm the
+schedule and run one controlled scheduled-event test. Confirm both the WhatsApp
+message and its `daily_attention_digest` row in `public.notification_deliveries`.
+Do not use a customer phone or a public number for this test.
+
 ## Deploy once Cloudflare is available
 
 From this directory, run:
