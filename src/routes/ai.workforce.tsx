@@ -4284,6 +4284,129 @@ function AiWorkforce() {
   }
 
   /* ------------------------------------------------------------------------ */
+  /* DIRECT EMPLOYEE ASSIGNMENT                                               */
+  /* ------------------------------------------------------------------------ */
+
+  const directAssignmentMutation =
+    useMutation({
+      mutationFn:
+        async ({
+          employee,
+          objective:
+            directObjective,
+        }: {
+          employee: AiEmployee;
+          objective: string;
+        }) => {
+          const assignment =
+            await createDirectEmployeeMission({
+              employeeId:
+                employee.id,
+
+              objective:
+                directObjective,
+
+              target_market:
+                targetMarket,
+
+              target_location:
+                targetLocation,
+
+              context: {
+                requested_from:
+                  "ai_workforce_employee_drawer",
+
+                source:
+                  "owner_direct_assignment",
+              },
+            });
+
+          const outcome =
+            await executeControlledHandoff({
+              mission:
+                assignment.mission,
+
+              handoff:
+                assignment.handoff,
+
+              employee:
+                assignment.employee,
+
+              priorOutputs:
+                [],
+            });
+
+          return {
+            employee:
+              assignment.employee,
+
+            mission:
+              assignment.mission,
+
+            content:
+              outcome.content,
+
+            metadata:
+              outcome.metadata,
+          };
+        },
+
+      onSuccess:
+        async ({
+          employee,
+          metadata,
+        }) => {
+          await refreshWorkforce();
+
+          toast.success(
+            "Employee task completed",
+            {
+              description:
+                metadata
+                  ? employee.name +
+                    " completed a recorded result through " +
+                    metadata.provider +
+                    (metadata.model
+                      ? " (" +
+                        metadata.model +
+                        ")."
+                      : ".")
+                  : employee.name +
+                    " completed a recorded Cossa tool result.",
+            },
+          );
+        },
+
+      onError:
+        (error) => {
+          toast.error(
+            "Employee task could not run",
+            {
+              description:
+                normaliseErrorMessage(
+                  error,
+                ),
+            },
+          );
+        },
+    });
+
+  async function runDirectEmployeeAssignment(
+    employee: AiEmployee,
+    directObjective: string,
+  ): Promise<string> {
+    const result =
+      await directAssignmentMutation.mutateAsync({
+        employee,
+
+        objective:
+          directObjective,
+      });
+
+    return result.content;
+  }
+
+  /* ------------------------------------------------------------------------ */
   /* RUN NEXT STAGE                                                           */
   /* ------------------------------------------------------------------------ */
 
@@ -6520,6 +6643,12 @@ function AiWorkforce() {
               null,
             )
           }
+          directAssignmentPending={
+            directAssignmentMutation.isPending
+          }
+          onRunDirectAssignment={
+            runDirectEmployeeAssignment
+          }
           onOpenDepartment={() => {
             const firstDepartment =
               selectedEmployee.departmentKeys[
@@ -6810,11 +6939,39 @@ function EmployeeDrawer({
   item,
   onClose,
   onOpenDepartment,
+  onRunDirectAssignment,
+  directAssignmentPending,
 }: {
   item: EmployeeDirectoryItem;
   onClose: () => void;
   onOpenDepartment: () => void;
+  onRunDirectAssignment: (
+    employee: AiEmployee,
+    objective: string,
+  ) => Promise<string>;
+  directAssignmentPending: boolean;
 }) {
+  const [
+    directObjective,
+    setDirectObjective,
+  ] =
+    useState("");
+
+  const [
+    directResult,
+    setDirectResult,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
+  const [
+    directError,
+    setDirectError,
+  ] =
+    useState<string | null>(
+      null,
+    );
   const {
     employee,
     operational,
@@ -7142,20 +7299,128 @@ function EmployeeDrawer({
           </Button>
         </div>
 
-        <div className="mt-4 rounded-xl border border-border/60 bg-background/30 p-3">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        <section className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <p className="text-[10px] uppercase tracking-widest text-primary">
             Direct assignment
           </p>
 
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            The backend now supports real direct employee
-            missions. This drawer does not yet expose a
-            standalone execution control, so it does not
-            pretend a direct task has run. Use the AI CEO or
-            a recorded workflow until the direct-execution UI
-            is connected.
+            Send a safe internal task directly to this employee. Cossa AI
+            records the mission, run, resolved provider/model and result.
+            High-risk external actions remain blocked for owner approval.
           </p>
-        </div>
+
+          {isHunter ? (
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Lead Hunter uses the authenticated Cossa research route and may
+              create deduplicated CRM lead records from verified public
+              evidence. It never contacts prospects automatically.
+            </p>
+          ) : null}
+
+          <textarea
+            value={
+              directObjective
+            }
+            onChange={(event) => {
+              setDirectObjective(
+                event.target.value,
+              );
+
+              setDirectResult(
+                null,
+              );
+
+              setDirectError(
+                null,
+              );
+            }}
+            maxLength={6_000}
+            placeholder={
+              isHunter
+                ? "Example: Find verified Gauteng facilities-management opportunities for Cossa Facility Services."
+                : "Describe the safe internal work you want this employee to complete."
+            }
+            className="mt-3 min-h-28 w-full rounded-xl border border-border/70 bg-background/70 p-3 text-sm outline-none transition focus:border-primary/70 focus:ring-2 focus:ring-primary/10"
+          />
+
+          <Button
+            type="button"
+            className="mt-3 w-full bg-primary text-primary-foreground hover:bg-primary/90"
+            disabled={
+              directAssignmentPending ||
+              employee.status !==
+                "active" ||
+              !directObjective.trim()
+            }
+            onClick={() => {
+              const objective =
+                directObjective.trim();
+
+              if (!objective) {
+                return;
+              }
+
+              void (async () => {
+                setDirectError(
+                  null,
+                );
+
+                setDirectResult(
+                  null,
+                );
+
+                try {
+                  const result =
+                    await onRunDirectAssignment(
+                      employee,
+                      objective,
+                    );
+
+                  setDirectResult(
+                    result,
+                  );
+                } catch (
+                  error
+                ) {
+                  setDirectError(
+                    normaliseErrorMessage(
+                      error,
+                    ),
+                  );
+                }
+              })();
+            }}
+          >
+            {directAssignmentPending ? (
+              <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="mr-1.5 h-4 w-4" />
+            )}
+
+            {directAssignmentPending
+              ? "Working…"
+              : "Run safe internal task"}
+          </Button>
+
+          {directError ? (
+            <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs leading-relaxed text-destructive">
+              {directError}
+            </p>
+          ) : null}
+
+          {directResult ? (
+            <div className="mt-3 rounded-lg border border-border/60 bg-background/60 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Recorded result
+              </p>
+
+              <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap font-sans text-xs leading-relaxed text-foreground">
+                {directResult}
+              </pre>
+            </div>
+          ) : null}
+        </section>
       </aside>
     </div>
   );
