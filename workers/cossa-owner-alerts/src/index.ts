@@ -141,6 +141,183 @@ async function writeDelivery(
   }
 }
 
+const DAILY_DIGEST_EVENT_TYPE = "daily_attention_digest";
+const DAILY_DIGEST_TIME_ZONE = "Africa/Johannesburg";
+const DAILY_DIGEST_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function supabaseHeaders(env: Env, extras: Record<string, string> = {}) {
+  return {
+    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    ...extras,
+  };
+}
+
+function localDateKey(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: DAILY_DIGEST_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+
+  const readPart = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "00";
+
+  return `${readPart("year")}-${readPart("month")}-${readPart("day")}`;
+}
+
+function localDateLabel(value: Date) {
+  return new Intl.DateTimeFormat("en-ZA", {
+    timeZone: DAILY_DIGEST_TIME_ZONE,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(value);
+}
+
+async function fetchExactCount(
+  env: Env,
+  table: string,
+  params: Record<string, string>,
+) {
+  const endpoint = new URL(
+    `${env.SUPABASE_URL.replace(/\\/$/, "")}/rest/v1/${table}`,
+  );
+
+  endpoint.search = new URLSearchParams({
+    select: "id",
+    ...params,
+  }).toString();
+
+  const response = await fetch(endpoint, {
+    headers: supabaseHeaders(env, {
+      Prefer: "count=exact",
+      Range: "0-0",
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Daily digest query failed for ${table} with ${response.status}`);
+  }
+
+  const contentRange = response.headers.get("content-range") ?? "";
+  const count = Number(contentRange.split("/").at(-1));
+
+  if (!Number.isFinite(count)) {
+    throw new Error(`Daily digest count was unavailable for ${table}`);
+  }
+
+  return count;
+}
+
+async function alreadyDeliveredDailyDigest(env: Env, idempotencyKey: string) {
+  const endpoint = new URL(
+    `${env.SUPABASE_URL.replace(/\\/$/, "")}/rest/v1/notification_deliveries`,
+  );
+
+  endpoint.search = new URLSearchParams({
+    select: "status",
+    organisation_id: `eq.${env.COSSA_ORGANISATION_ID}`,
+    channel: "eq.callmebot_whatsapp",
+    idempotency_key: `eq.${idempotencyKey}`,
+    limit: "1",
+  }).toString();
+
+  const response = await fetch(endpoint, {
+    headers: supabaseHeaders(env),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Daily digest delivery check failed with ${response.status}`);
+  }
+
+  const rows = await response.json<{ status?: unknown }[]>();
+  return rows[0]?.status === "sent" || rows[0]?.status === "skipped";
+}
+
+async function buildDailyAttentionEvent(
+  env: Env,
+  scheduledTime: number,
+): Promise<AlertEvent | null> {
+  const now = new Date(scheduledTime || Date.now());
+  const since = new Date(now.getTime() - DAILY_DIGEST_WINDOW_MS).toISOString();
+  const dateKey = localDateKey(now);
+  const idempotencyKey = `daily-attention:${dateKey}`;
+
+  if (await alreadyDeliveredDailyDigest(env, idempotencyKey)) {
+    return null;
+  }
+
+  const organisation = `eq.${env.COSSA_ORGANISATION_ID}`;
+  const createdSince = `gte.${since}`;
+
+  const [newLeads, awaitingApproval, failedRuns, failedNotifications] =
+    await Promise.all([
+      fetchExactCount(env, "leads", {
+        organisation_id: organisation,
+        created_at: createdSince,
+      }),
+      fetchExactCount(env, "missions", {
+        organisation_id: organisation,
+        status: "eq.awaiting_approval",
+      }),
+      fetchExactCount(env, "mission_runs", {
+        organisation_id: organisation,
+        status: "eq.failed",
+        completed_at: createdSince,
+      }),
+      fetchExactCount(env, "notification_deliveries", {
+        organisation_id: organisation,
+        status: "eq.failed",
+        created_at: createdSince,
+      }),
+    ]);
+
+  const attention = [
+    newLeads ? `${newLeads} new lead${newLeads === 1 ? "" : "s"} in the last 24 hours` : null,
+    awaitingApproval ? `${awaitingApproval} mission${awaitingApproval === 1 ? "" : "s"} awaiting owner approval` : null,
+    failedRuns ? `${failedRuns} workforce run failure${failedRuns === 1 ? "" : "s"} in the last 24 hours` : null,
+    failedNotifications ? `${failedNotifications} notification delivery failure${failedNotifications === 1 ? "" : "s"} in the last 24 hours` : null,
+  ].filter((item): item is string => Boolean(item));
+
+  return {
+    eventType: DAILY_DIGEST_EVENT_TYPE,
+    entityType: "daily_attention_digest",
+    entityId: dateKey,
+    source: "cloudflare_scheduled",
+    occurredAt: now.toISOString(),
+    requestId: null,
+    idempotencyKey,
+    message: [
+      "*COSSA NEXUS — DAILY ATTENTION BRIEFING*",
+      `Date: ${localDateLabel(now)} (SAST)`,
+      "",
+      ...(attention.length
+        ? attention.map((item) => `• ${item}`)
+        : ["• No new operational attention items were recorded in the last 24 hours."]),
+      "",
+      "Social media: No authorised social analytics or publishing connection is available, so this briefing cannot claim platform checks. Review the Growth social queue before manual posting.",
+      "Action: Open GROWTH to review recorded leads, approvals, failures and scheduled content.",
+    ].join("\n"),
+  };
+}
+
+async function runDailyAttentionDigest(env: Env, scheduledTime: number) {
+  const event = await buildDailyAttentionEvent(env, scheduledTime);
+  if (!event) {
+    console.log("Daily attention briefing already delivered.");
+    return;
+  }
+
+  await notifyOwner(env, event);
+  console.log("Daily attention briefing delivered.", {
+    date: event.entityId,
+    eventType: event.eventType,
+  });
+}
+
 async function notifyOwner(env: Env, event: AlertEvent) {
   const endpoint = new URL("https://api.callmebot.com/whatsapp.php");
   endpoint.searchParams.set("phone", env.CALLMEBOT_OWNER_PHONE);
