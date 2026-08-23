@@ -120,20 +120,25 @@ const MAX_CONTEXT_RECORDS = {
 /**
  * Cossa default reasoning route.
  *
- * Groq
- *   Fast / economy / primary reasoning.
- *
- * Gemini
- *   Secondary reasoning route.
+ * Every request is first grounded by the Cossa AI gateway with verified
+ * company knowledge, conversation memory and authorised operational context.
+ * It then uses configured reasoning providers in this order:
  *
  * OpenAI
- *   Strategic fallback when configured and funded.
+ *   Primary quality route when the protected project credential is usable.
+ *
+ * Gemini
+ *   Secondary route when configured.
+ *
+ * Groq
+ *   Final resilience fallback. Groq is never the browser default or the first
+ *   provider tried by Cossa AI.
  */
 const DEFAULT_PROVIDER_ORDER:
   readonly ChatProvider[] = [
-    "groq",
-    "gemini",
     "openai",
+    "gemini",
+    "groq",
   ];
 
 /* -------------------------------------------------------------------------- */
