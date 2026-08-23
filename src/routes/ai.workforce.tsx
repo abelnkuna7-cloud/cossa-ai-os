@@ -1015,7 +1015,7 @@ function normaliseErrorMessage(
   return "Unknown workforce execution error.";
 }
 
-function uniqueStrings(function uniqueStrings(
+function uniqueStrings(
   values: string[],
 ): string[] {
   return [
