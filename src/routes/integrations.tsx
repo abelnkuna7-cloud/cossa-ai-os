@@ -595,6 +595,9 @@ function Integrations() {
 
 function CapabilityMatrix() {
   const states = ["live-data", "draft-only", "controlled-plan", "not-connected"] as const;
+  const [stateFilter, setStateFilter] = useState<(typeof states)[number] | "all">("all");
+  const [query, setQuery] = useState("");
+
   const toneFor = (state: (typeof states)[number]) =>
     state === "live-data"
       ? "border-success/30 bg-success/10 text-success"
@@ -604,9 +607,44 @@ function CapabilityMatrix() {
           ? "border-primary/30 bg-primary/10 text-primary"
           : "border-warning/30 bg-warning/10 text-warning";
 
+  const entries = useMemo(() => {
+    const search = query.trim().toLowerCase();
+
+    const modules = CAPABILITY_MATRIX.map(({ group, module, capability }) => ({
+      kind: "workspace" as const,
+      key: module.to,
+      group,
+      title: module.title,
+      detail: capability.summary,
+      state: capability.state,
+      label: capability.label,
+      to: module.to,
+    }));
+
+    const external = EXTERNAL_CAPABILITY_GAPS.map((gap) => ({
+      kind: "external" as const,
+      key: gap.name,
+      group: "External capability",
+      title: gap.name,
+      detail: `${gap.scope} Needs: ${gap.requirement}`,
+      state: gap.state,
+      label: CAPABILITY_STATE_LABELS[gap.state],
+      to: "/integrations" as const,
+    }));
+
+    return [...modules, ...external].filter((entry) => {
+      const stateMatches = stateFilter === "all" || entry.state === stateFilter;
+      const searchMatches =
+        !search ||
+        `${entry.group} ${entry.title} ${entry.detail}`.toLowerCase().includes(search);
+
+      return stateMatches && searchMatches;
+    });
+  }, [query, stateFilter]);
+
   return (
     <section className="glass-card p-5">
-      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
             Capability matrix
@@ -616,8 +654,9 @@ function CapabilityMatrix() {
           </h2>
         </div>
         <p className="max-w-xl text-sm text-muted-foreground">
-          This is a factual operating view, not a product promise. A chat screen can prepare a
-          draft; it cannot publish, message customers, spend money or change an external account.
+          Open a workspace card to update its underlying records, or open an external capability
+          to review its activation checklist. Statuses remain evidence-based and cannot be relabelled
+          as live without a real authorised connection.
         </p>
       </div>
 
@@ -627,7 +666,16 @@ function CapabilityMatrix() {
             CAPABILITY_MATRIX.filter((entry) => entry.capability.state === state).length +
             EXTERNAL_CAPABILITY_GAPS.filter((entry) => entry.state === state).length;
           return (
-            <div key={state} className="rounded-xl border border-border/60 bg-card/40 p-4">
+            <button
+              key={state}
+              type="button"
+              onClick={() => setStateFilter((current) => (current === state ? "all" : state))}
+              className={cn(
+                "rounded-xl border bg-card/40 p-4 text-left transition-colors hover:border-primary/50",
+                stateFilter === state ? "border-primary/60 ring-1 ring-primary/30" : "border-border/60",
+              )}
+              aria-pressed={stateFilter === state}
+            >
               <span
                 className={cn(
                   "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium",
@@ -637,61 +685,75 @@ function CapabilityMatrix() {
                 {CAPABILITY_STATE_LABELS[state]}
               </span>
               <p className="mt-2 text-2xl font-display font-semibold">{count}</p>
-              <p className="text-xs text-muted-foreground">listed capabilities</p>
-            </div>
+              <p className="text-xs text-muted-foreground">click to filter</p>
+            </button>
           );
         })}
       </div>
 
-      <div className="mt-5 grid gap-3 lg:grid-cols-2">
-        {CAPABILITY_MATRIX.map(({ group, module, capability }) => (
-          <Link
-            key={module.to}
-            to={module.to}
-            className="rounded-xl border border-border/60 bg-card/40 p-4 transition-colors hover:border-primary/40"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  {group}
-                </p>
-                <h3 className="mt-1 text-sm font-semibold">{module.title}</h3>
-              </div>
-              <span
-                className={cn(
-                  "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                  toneFor(capability.state),
-                )}
-              >
-                {capability.label}
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">{capability.summary}</p>
-          </Link>
-        ))}
-        {EXTERNAL_CAPABILITY_GAPS.map((gap) => (
-          <article key={gap.name} className="rounded-xl border border-warning/30 bg-warning/5 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  External capability
-                </p>
-                <h3 className="mt-1 text-sm font-semibold">{gap.name}</h3>
-              </div>
-              <span
-                className={cn(
-                  "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                  toneFor(gap.state),
-                )}
-              >
-                {CAPABILITY_STATE_LABELS[gap.state]}
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">{gap.scope}</p>
-            <p className="mt-2 text-xs text-warning">Needs: {gap.requirement}</p>
-          </article>
-        ))}
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+        <label className="flex flex-1 items-center gap-2 rounded-lg border border-border/60 bg-card/40 px-3 py-2 text-sm text-muted-foreground">
+          <Search className="h-4 w-4" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent outline-none"
+            placeholder="Find a workspace or capability"
+          />
+        </label>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setStateFilter("all");
+            setQuery("");
+          }}
+          disabled={stateFilter === "all" && !query}
+        >
+          Show all
+        </Button>
       </div>
+
+      {entries.length ? (
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {entries.map((entry) => (
+            <Link
+              key={entry.key}
+              to={entry.to}
+              className={cn(
+                "rounded-xl border bg-card/40 p-4 transition-colors hover:border-primary/40",
+                entry.kind === "external" && "border-warning/30 bg-warning/5",
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    {entry.group}
+                  </p>
+                  <h3 className="mt-1 text-sm font-semibold">{entry.title}</h3>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                    toneFor(entry.state),
+                  )}
+                >
+                  {entry.label}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">{entry.detail}</p>
+              <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                {entry.kind === "workspace" ? "Open workspace" : "Open activation checklist"}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </span>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-border/60 bg-card/40 p-5 text-sm text-muted-foreground">
+          No workspace or capability matches this filter.
+        </div>
+      )}
     </section>
   );
 }
