@@ -278,6 +278,21 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
     items: [
       {
+        title: "Workspace",
+
+        description:
+          "Choose the organisation and plan context for this GROWTH session.",
+
+        to: "/workspace",
+
+        icon: Building2,
+
+        matchPrefixes: [
+          "/workspace",
+        ],
+      },
+
+      {
         title: "Integrations",
 
         description:

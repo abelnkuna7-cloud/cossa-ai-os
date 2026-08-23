@@ -9,12 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WorkspaceRouteImport } from './routes/workspace'
+import { Route as SubscriptionRouteImport } from './routes/subscription'
 import { Route as SmeGrowthRouteImport } from './routes/sme-growth'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as QuickActionsRouteImport } from './routes/quick-actions'
+import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PlaybooksRouteImport } from './routes/playbooks'
+import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as OpportunityRadarRouteImport } from './routes/opportunity-radar'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as MissionControlRouteImport } from './routes/mission-control'
@@ -22,6 +26,7 @@ import { Route as MarketplaceRouteImport } from './routes/marketplace'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as IndustriesRouteImport } from './routes/industries'
+import { Route as HelpRouteImport } from './routes/help'
 import { Route as FacilityServicesGrowthRouteImport } from './routes/facility-services-growth'
 import { Route as ConstructionGrowthRouteImport } from './routes/construction-growth'
 import { Route as CommandCenterRouteImport } from './routes/command-center'
@@ -67,8 +72,17 @@ import { Route as MarketingCompetitorsRouteImport } from './routes/marketing.com
 import { Route as MarketingCampaignsRouteImport } from './routes/marketing.campaigns'
 import { Route as MarketingBrandRouteImport } from './routes/marketing.brand'
 import { Route as MarketingAiDirectorRouteImport } from './routes/marketing.ai-director'
+import { Route as BusinessesTechRouteImport } from './routes/businesses.tech'
+import { Route as BusinessesStoreProductsRouteImport } from './routes/businesses.store-products'
+import { Route as BusinessesStoreRouteImport } from './routes/businesses.store'
+import { Route as BusinessesNexdocsRouteImport } from './routes/businesses.nexdocs'
+import { Route as BusinessesFacilityServicesRouteImport } from './routes/businesses.facility-services'
+import { Route as BusinessesConstructionRouteImport } from './routes/businesses.construction'
 import { Route as ApiWebsiteHealthRouteImport } from './routes/api/website-health'
+import { Route as ApiPlatformAnalyticsRouteImport } from './routes/api/platform-analytics'
 import { Route as ApiGrowthAnalyticsRouteImport } from './routes/api/growth-analytics'
+import { Route as ApiFathomWebhookRouteImport } from './routes/api/fathom-webhook'
+import { Route as ApiFathomHealthRouteImport } from './routes/api/fathom-health'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiAiProviderStatusRouteImport } from './routes/api/ai-provider-status'
 import { Route as AiWorkforceRouteImport } from './routes/ai.workforce'
@@ -94,6 +108,16 @@ import { Route as ApiLeadHunterSearchRouteImport } from './routes/api.lead-hunte
 import { Route as ApiGrowthAnalyticsOauthStartRouteImport } from './routes/api/growth-analytics.oauth.start'
 import { Route as ApiGrowthAnalyticsOauthCallbackRouteImport } from './routes/api/growth-analytics.oauth.callback'
 
+const WorkspaceRoute = WorkspaceRouteImport.update({
+  id: '/workspace',
+  path: '/workspace',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubscriptionRoute = SubscriptionRouteImport.update({
+  id: '/subscription',
+  path: '/subscription',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SmeGrowthRoute = SmeGrowthRouteImport.update({
   id: '/sme-growth',
   path: '/sme-growth',
@@ -119,9 +143,19 @@ const QuickActionsRoute = QuickActionsRouteImport.update({
   path: '/quick-actions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlaybooksRoute = PlaybooksRouteImport.update({
   id: '/playbooks',
   path: '/playbooks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaymentsRoute = PaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OpportunityRadarRoute = OpportunityRadarRouteImport.update({
@@ -157,6 +191,11 @@ const IntegrationsRoute = IntegrationsRouteImport.update({
 const IndustriesRoute = IndustriesRouteImport.update({
   id: '/industries',
   path: '/industries',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FacilityServicesGrowthRoute = FacilityServicesGrowthRouteImport.update({
@@ -385,14 +424,60 @@ const MarketingAiDirectorRoute = MarketingAiDirectorRouteImport.update({
   path: '/marketing/ai-director',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BusinessesTechRoute = BusinessesTechRouteImport.update({
+  id: '/businesses/tech',
+  path: '/businesses/tech',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessesStoreProductsRoute = BusinessesStoreProductsRouteImport.update({
+  id: '/businesses/store-products',
+  path: '/businesses/store-products',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessesStoreRoute = BusinessesStoreRouteImport.update({
+  id: '/businesses/store',
+  path: '/businesses/store',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessesNexdocsRoute = BusinessesNexdocsRouteImport.update({
+  id: '/businesses/nexdocs',
+  path: '/businesses/nexdocs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessesFacilityServicesRoute =
+  BusinessesFacilityServicesRouteImport.update({
+    id: '/businesses/facility-services',
+    path: '/businesses/facility-services',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const BusinessesConstructionRoute = BusinessesConstructionRouteImport.update({
+  id: '/businesses/construction',
+  path: '/businesses/construction',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiWebsiteHealthRoute = ApiWebsiteHealthRouteImport.update({
   id: '/api/website-health',
   path: '/api/website-health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPlatformAnalyticsRoute = ApiPlatformAnalyticsRouteImport.update({
+  id: '/api/platform-analytics',
+  path: '/api/platform-analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiGrowthAnalyticsRoute = ApiGrowthAnalyticsRouteImport.update({
   id: '/api/growth-analytics',
   path: '/api/growth-analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFathomWebhookRoute = ApiFathomWebhookRouteImport.update({
+  id: '/api/fathom-webhook',
+  path: '/api/fathom-webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFathomHealthRoute = ApiFathomHealthRouteImport.update({
+  id: '/api/fathom-health',
+  path: '/api/fathom-health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
@@ -525,6 +610,7 @@ export interface FileRoutesByFullPath {
   '/command-center': typeof CommandCenterRoute
   '/construction-growth': typeof ConstructionGrowthRoute
   '/facility-services-growth': typeof FacilityServicesGrowthRoute
+  '/help': typeof HelpRoute
   '/industries': typeof IndustriesRoute
   '/integrations': typeof IntegrationsRoute
   '/login': typeof LoginRoute
@@ -532,12 +618,16 @@ export interface FileRoutesByFullPath {
   '/mission-control': typeof MissionControlRoute
   '/notifications': typeof NotificationsRoute
   '/opportunity-radar': typeof OpportunityRadarRoute
+  '/payments': typeof PaymentsRoute
   '/playbooks': typeof PlaybooksRoute
+  '/pricing': typeof PricingRoute
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sme-growth': typeof SmeGrowthRoute
+  '/subscription': typeof SubscriptionRoute
+  '/workspace': typeof WorkspaceRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/coach': typeof AiCoachRoute
@@ -559,8 +649,17 @@ export interface FileRoutesByFullPath {
   '/ai/workforce': typeof AiWorkforceRoute
   '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/fathom-health': typeof ApiFathomHealthRoute
+  '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
+  '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
+  '/businesses/construction': typeof BusinessesConstructionRoute
+  '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
+  '/businesses/nexdocs': typeof BusinessesNexdocsRoute
+  '/businesses/store': typeof BusinessesStoreRoute
+  '/businesses/store-products': typeof BusinessesStoreProductsRoute
+  '/businesses/tech': typeof BusinessesTechRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
@@ -611,6 +710,7 @@ export interface FileRoutesByTo {
   '/command-center': typeof CommandCenterRoute
   '/construction-growth': typeof ConstructionGrowthRoute
   '/facility-services-growth': typeof FacilityServicesGrowthRoute
+  '/help': typeof HelpRoute
   '/industries': typeof IndustriesRoute
   '/integrations': typeof IntegrationsRoute
   '/login': typeof LoginRoute
@@ -618,12 +718,16 @@ export interface FileRoutesByTo {
   '/mission-control': typeof MissionControlRoute
   '/notifications': typeof NotificationsRoute
   '/opportunity-radar': typeof OpportunityRadarRoute
+  '/payments': typeof PaymentsRoute
   '/playbooks': typeof PlaybooksRoute
+  '/pricing': typeof PricingRoute
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sme-growth': typeof SmeGrowthRoute
+  '/subscription': typeof SubscriptionRoute
+  '/workspace': typeof WorkspaceRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/coach': typeof AiCoachRoute
@@ -645,8 +749,17 @@ export interface FileRoutesByTo {
   '/ai/workforce': typeof AiWorkforceRoute
   '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/fathom-health': typeof ApiFathomHealthRoute
+  '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
+  '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
+  '/businesses/construction': typeof BusinessesConstructionRoute
+  '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
+  '/businesses/nexdocs': typeof BusinessesNexdocsRoute
+  '/businesses/store': typeof BusinessesStoreRoute
+  '/businesses/store-products': typeof BusinessesStoreProductsRoute
+  '/businesses/tech': typeof BusinessesTechRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
@@ -698,6 +811,7 @@ export interface FileRoutesById {
   '/command-center': typeof CommandCenterRoute
   '/construction-growth': typeof ConstructionGrowthRoute
   '/facility-services-growth': typeof FacilityServicesGrowthRoute
+  '/help': typeof HelpRoute
   '/industries': typeof IndustriesRoute
   '/integrations': typeof IntegrationsRoute
   '/login': typeof LoginRoute
@@ -705,12 +819,16 @@ export interface FileRoutesById {
   '/mission-control': typeof MissionControlRoute
   '/notifications': typeof NotificationsRoute
   '/opportunity-radar': typeof OpportunityRadarRoute
+  '/payments': typeof PaymentsRoute
   '/playbooks': typeof PlaybooksRoute
+  '/pricing': typeof PricingRoute
   '/quick-actions': typeof QuickActionsRoute
   '/roadmap': typeof RoadmapRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sme-growth': typeof SmeGrowthRoute
+  '/subscription': typeof SubscriptionRoute
+  '/workspace': typeof WorkspaceRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/coach': typeof AiCoachRoute
@@ -732,8 +850,17 @@ export interface FileRoutesById {
   '/ai/workforce': typeof AiWorkforceRoute
   '/api/ai-provider-status': typeof ApiAiProviderStatusRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/fathom-health': typeof ApiFathomHealthRoute
+  '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
+  '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
+  '/businesses/construction': typeof BusinessesConstructionRoute
+  '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
+  '/businesses/nexdocs': typeof BusinessesNexdocsRoute
+  '/businesses/store': typeof BusinessesStoreRoute
+  '/businesses/store-products': typeof BusinessesStoreProductsRoute
+  '/businesses/tech': typeof BusinessesTechRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
@@ -786,6 +913,7 @@ export interface FileRouteTypes {
     | '/command-center'
     | '/construction-growth'
     | '/facility-services-growth'
+    | '/help'
     | '/industries'
     | '/integrations'
     | '/login'
@@ -793,12 +921,16 @@ export interface FileRouteTypes {
     | '/mission-control'
     | '/notifications'
     | '/opportunity-radar'
+    | '/payments'
     | '/playbooks'
+    | '/pricing'
     | '/quick-actions'
     | '/roadmap'
     | '/settings'
     | '/sitemap.xml'
     | '/sme-growth'
+    | '/subscription'
+    | '/workspace'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/coach'
@@ -820,8 +952,17 @@ export interface FileRouteTypes {
     | '/ai/workforce'
     | '/api/ai-provider-status'
     | '/api/chat'
+    | '/api/fathom-health'
+    | '/api/fathom-webhook'
     | '/api/growth-analytics'
+    | '/api/platform-analytics'
     | '/api/website-health'
+    | '/businesses/construction'
+    | '/businesses/facility-services'
+    | '/businesses/nexdocs'
+    | '/businesses/store'
+    | '/businesses/store-products'
+    | '/businesses/tech'
     | '/marketing/ai-director'
     | '/marketing/brand'
     | '/marketing/campaigns'
@@ -872,6 +1013,7 @@ export interface FileRouteTypes {
     | '/command-center'
     | '/construction-growth'
     | '/facility-services-growth'
+    | '/help'
     | '/industries'
     | '/integrations'
     | '/login'
@@ -879,12 +1021,16 @@ export interface FileRouteTypes {
     | '/mission-control'
     | '/notifications'
     | '/opportunity-radar'
+    | '/payments'
     | '/playbooks'
+    | '/pricing'
     | '/quick-actions'
     | '/roadmap'
     | '/settings'
     | '/sitemap.xml'
     | '/sme-growth'
+    | '/subscription'
+    | '/workspace'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/coach'
@@ -906,8 +1052,17 @@ export interface FileRouteTypes {
     | '/ai/workforce'
     | '/api/ai-provider-status'
     | '/api/chat'
+    | '/api/fathom-health'
+    | '/api/fathom-webhook'
     | '/api/growth-analytics'
+    | '/api/platform-analytics'
     | '/api/website-health'
+    | '/businesses/construction'
+    | '/businesses/facility-services'
+    | '/businesses/nexdocs'
+    | '/businesses/store'
+    | '/businesses/store-products'
+    | '/businesses/tech'
     | '/marketing/ai-director'
     | '/marketing/brand'
     | '/marketing/campaigns'
@@ -958,6 +1113,7 @@ export interface FileRouteTypes {
     | '/command-center'
     | '/construction-growth'
     | '/facility-services-growth'
+    | '/help'
     | '/industries'
     | '/integrations'
     | '/login'
@@ -965,12 +1121,16 @@ export interface FileRouteTypes {
     | '/mission-control'
     | '/notifications'
     | '/opportunity-radar'
+    | '/payments'
     | '/playbooks'
+    | '/pricing'
     | '/quick-actions'
     | '/roadmap'
     | '/settings'
     | '/sitemap.xml'
     | '/sme-growth'
+    | '/subscription'
+    | '/workspace'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/coach'
@@ -992,8 +1152,17 @@ export interface FileRouteTypes {
     | '/ai/workforce'
     | '/api/ai-provider-status'
     | '/api/chat'
+    | '/api/fathom-health'
+    | '/api/fathom-webhook'
     | '/api/growth-analytics'
+    | '/api/platform-analytics'
     | '/api/website-health'
+    | '/businesses/construction'
+    | '/businesses/facility-services'
+    | '/businesses/nexdocs'
+    | '/businesses/store'
+    | '/businesses/store-products'
+    | '/businesses/tech'
     | '/marketing/ai-director'
     | '/marketing/brand'
     | '/marketing/campaigns'
@@ -1045,6 +1214,7 @@ export interface RootRouteChildren {
   CommandCenterRoute: typeof CommandCenterRoute
   ConstructionGrowthRoute: typeof ConstructionGrowthRoute
   FacilityServicesGrowthRoute: typeof FacilityServicesGrowthRoute
+  HelpRoute: typeof HelpRoute
   IndustriesRoute: typeof IndustriesRoute
   IntegrationsRoute: typeof IntegrationsRoute
   LoginRoute: typeof LoginRoute
@@ -1052,12 +1222,16 @@ export interface RootRouteChildren {
   MissionControlRoute: typeof MissionControlRoute
   NotificationsRoute: typeof NotificationsRoute
   OpportunityRadarRoute: typeof OpportunityRadarRoute
+  PaymentsRoute: typeof PaymentsRoute
   PlaybooksRoute: typeof PlaybooksRoute
+  PricingRoute: typeof PricingRoute
   QuickActionsRoute: typeof QuickActionsRoute
   RoadmapRoute: typeof RoadmapRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SmeGrowthRoute: typeof SmeGrowthRoute
+  SubscriptionRoute: typeof SubscriptionRoute
+  WorkspaceRoute: typeof WorkspaceRoute
   AiAutomationRoute: typeof AiAutomationRoute
   AiCeoRoute: typeof AiCeoRoute
   AiCoachRoute: typeof AiCoachRoute
@@ -1079,8 +1253,17 @@ export interface RootRouteChildren {
   AiWorkforceRoute: typeof AiWorkforceRoute
   ApiAiProviderStatusRoute: typeof ApiAiProviderStatusRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiFathomHealthRoute: typeof ApiFathomHealthRoute
+  ApiFathomWebhookRoute: typeof ApiFathomWebhookRoute
   ApiGrowthAnalyticsRoute: typeof ApiGrowthAnalyticsRouteWithChildren
+  ApiPlatformAnalyticsRoute: typeof ApiPlatformAnalyticsRoute
   ApiWebsiteHealthRoute: typeof ApiWebsiteHealthRoute
+  BusinessesConstructionRoute: typeof BusinessesConstructionRoute
+  BusinessesFacilityServicesRoute: typeof BusinessesFacilityServicesRoute
+  BusinessesNexdocsRoute: typeof BusinessesNexdocsRoute
+  BusinessesStoreRoute: typeof BusinessesStoreRoute
+  BusinessesStoreProductsRoute: typeof BusinessesStoreProductsRoute
+  BusinessesTechRoute: typeof BusinessesTechRoute
   MarketingAiDirectorRoute: typeof MarketingAiDirectorRoute
   MarketingBrandRoute: typeof MarketingBrandRoute
   MarketingCampaignsRoute: typeof MarketingCampaignsRoute
@@ -1125,6 +1308,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/workspace': {
+      id: '/workspace'
+      path: '/workspace'
+      fullPath: '/workspace'
+      preLoaderRoute: typeof WorkspaceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/subscription': {
+      id: '/subscription'
+      path: '/subscription'
+      fullPath: '/subscription'
+      preLoaderRoute: typeof SubscriptionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sme-growth': {
       id: '/sme-growth'
       path: '/sme-growth'
@@ -1160,11 +1357,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QuickActionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/playbooks': {
       id: '/playbooks'
       path: '/playbooks'
       fullPath: '/playbooks'
       preLoaderRoute: typeof PlaybooksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/payments': {
+      id: '/payments'
+      path: '/payments'
+      fullPath: '/payments'
+      preLoaderRoute: typeof PaymentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/opportunity-radar': {
@@ -1214,6 +1425,13 @@ declare module '@tanstack/react-router' {
       path: '/industries'
       fullPath: '/industries'
       preLoaderRoute: typeof IndustriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/facility-services-growth': {
@@ -1531,6 +1749,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketingAiDirectorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/businesses/tech': {
+      id: '/businesses/tech'
+      path: '/businesses/tech'
+      fullPath: '/businesses/tech'
+      preLoaderRoute: typeof BusinessesTechRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/businesses/store-products': {
+      id: '/businesses/store-products'
+      path: '/businesses/store-products'
+      fullPath: '/businesses/store-products'
+      preLoaderRoute: typeof BusinessesStoreProductsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/businesses/store': {
+      id: '/businesses/store'
+      path: '/businesses/store'
+      fullPath: '/businesses/store'
+      preLoaderRoute: typeof BusinessesStoreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/businesses/nexdocs': {
+      id: '/businesses/nexdocs'
+      path: '/businesses/nexdocs'
+      fullPath: '/businesses/nexdocs'
+      preLoaderRoute: typeof BusinessesNexdocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/businesses/facility-services': {
+      id: '/businesses/facility-services'
+      path: '/businesses/facility-services'
+      fullPath: '/businesses/facility-services'
+      preLoaderRoute: typeof BusinessesFacilityServicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/businesses/construction': {
+      id: '/businesses/construction'
+      path: '/businesses/construction'
+      fullPath: '/businesses/construction'
+      preLoaderRoute: typeof BusinessesConstructionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/website-health': {
       id: '/api/website-health'
       path: '/api/website-health'
@@ -1538,11 +1798,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebsiteHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/platform-analytics': {
+      id: '/api/platform-analytics'
+      path: '/api/platform-analytics'
+      fullPath: '/api/platform-analytics'
+      preLoaderRoute: typeof ApiPlatformAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/growth-analytics': {
       id: '/api/growth-analytics'
       path: '/api/growth-analytics'
       fullPath: '/api/growth-analytics'
       preLoaderRoute: typeof ApiGrowthAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/fathom-webhook': {
+      id: '/api/fathom-webhook'
+      path: '/api/fathom-webhook'
+      fullPath: '/api/fathom-webhook'
+      preLoaderRoute: typeof ApiFathomWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/fathom-health': {
+      id: '/api/fathom-health'
+      path: '/api/fathom-health'
+      fullPath: '/api/fathom-health'
+      preLoaderRoute: typeof ApiFathomHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/chat': {
@@ -1736,6 +2017,7 @@ const rootRouteChildren: RootRouteChildren = {
   CommandCenterRoute: CommandCenterRoute,
   ConstructionGrowthRoute: ConstructionGrowthRoute,
   FacilityServicesGrowthRoute: FacilityServicesGrowthRoute,
+  HelpRoute: HelpRoute,
   IndustriesRoute: IndustriesRoute,
   IntegrationsRoute: IntegrationsRoute,
   LoginRoute: LoginRoute,
@@ -1743,12 +2025,16 @@ const rootRouteChildren: RootRouteChildren = {
   MissionControlRoute: MissionControlRoute,
   NotificationsRoute: NotificationsRoute,
   OpportunityRadarRoute: OpportunityRadarRoute,
+  PaymentsRoute: PaymentsRoute,
   PlaybooksRoute: PlaybooksRoute,
+  PricingRoute: PricingRoute,
   QuickActionsRoute: QuickActionsRoute,
   RoadmapRoute: RoadmapRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   SmeGrowthRoute: SmeGrowthRoute,
+  SubscriptionRoute: SubscriptionRoute,
+  WorkspaceRoute: WorkspaceRoute,
   AiAutomationRoute: AiAutomationRoute,
   AiCeoRoute: AiCeoRoute,
   AiCoachRoute: AiCoachRoute,
@@ -1770,8 +2056,17 @@ const rootRouteChildren: RootRouteChildren = {
   AiWorkforceRoute: AiWorkforceRoute,
   ApiAiProviderStatusRoute: ApiAiProviderStatusRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiFathomHealthRoute: ApiFathomHealthRoute,
+  ApiFathomWebhookRoute: ApiFathomWebhookRoute,
   ApiGrowthAnalyticsRoute: ApiGrowthAnalyticsRouteWithChildren,
+  ApiPlatformAnalyticsRoute: ApiPlatformAnalyticsRoute,
   ApiWebsiteHealthRoute: ApiWebsiteHealthRoute,
+  BusinessesConstructionRoute: BusinessesConstructionRoute,
+  BusinessesFacilityServicesRoute: BusinessesFacilityServicesRoute,
+  BusinessesNexdocsRoute: BusinessesNexdocsRoute,
+  BusinessesStoreRoute: BusinessesStoreRoute,
+  BusinessesStoreProductsRoute: BusinessesStoreProductsRoute,
+  BusinessesTechRoute: BusinessesTechRoute,
   MarketingAiDirectorRoute: MarketingAiDirectorRoute,
   MarketingBrandRoute: MarketingBrandRoute,
   MarketingCampaignsRoute: MarketingCampaignsRoute,
