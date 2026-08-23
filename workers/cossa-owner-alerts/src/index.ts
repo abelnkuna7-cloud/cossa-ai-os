@@ -183,7 +183,7 @@ async function fetchExactCount(
   params: Record<string, string>,
 ) {
   const endpoint = new URL(
-    `${env.SUPABASE_URL.replace(/\\/$/, "")}/rest/v1/${table}`,
+    `${env.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${table}`,
   );
 
   endpoint.search = new URLSearchParams({
@@ -214,7 +214,7 @@ async function fetchExactCount(
 
 async function alreadyDeliveredDailyDigest(env: Env, idempotencyKey: string) {
   const endpoint = new URL(
-    `${env.SUPABASE_URL.replace(/\\/$/, "")}/rest/v1/notification_deliveries`,
+    `${env.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/notification_deliveries`,
   );
 
   endpoint.search = new URLSearchParams({
@@ -375,6 +375,23 @@ export default {
         // The original provider failure remains the actionable result.
       }
       return json({ error: "Alert delivery failed" }, 502);
+    }
+  },
+
+  async scheduled(
+    controller: ScheduledController,
+    env: Env,
+  ): Promise<void> {
+    try {
+      await runDailyAttentionDigest(
+        env,
+        Number.isFinite(controller.scheduledTime)
+          ? controller.scheduledTime
+          : Date.now(),
+      );
+    } catch (error) {
+      console.error("Daily attention briefing failed.", error);
+      throw error;
     }
   },
 };
