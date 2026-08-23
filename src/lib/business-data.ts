@@ -180,6 +180,13 @@ type Adapter<T> = {
   toRow: (
     value: Partial<T>,
   ) => Record<string, unknown>;
+
+  /**
+   * Values required only when a record originates inside this workspace.
+   * They are not applied on update, so imported/source-system ownership
+   * remains unchanged.
+   */
+  createDefaults?: Record<string, unknown>;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -715,10 +722,12 @@ function adaptedCrud<T>(
         payload:
           Partial<T>,
       ): Promise<T> => {
-        const row =
-          adapter.toRow(
+        const row = {
+          ...(adapter.createDefaults ?? {}),
+          ...adapter.toRow(
             payload,
-          );
+          ),
+        };
 
         if (
           adapter.organisationScoped
@@ -1023,6 +1032,19 @@ export const salesLeads =
 
     organisationScoped:
       true,
+
+    /*
+     * The central lead registry validates its origin. Manual Growth entries
+     * are created under Cossa Growth, while updates leave an existing source
+     * (website, Store, NexDocs, etc.) intact.
+     */
+    createDefaults: {
+      source_app:
+        "cossa_growth",
+
+      source_label:
+        "COSSA GROWTH",
+    },
 
     fromRow:
       (row) => ({
