@@ -2,6 +2,10 @@ name = "cossa-owner-alerts"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"
 
+# 08:00 SAST daily. Cloudflare executes schedules in UTC.
+[triggers]
+crons = ["0 6 * * *"]
+
 # Create the namespace first, then replace the placeholder below. The binding
 # prevents a webhook retry from sending the owner the same alert repeatedly.
 [[kv_namespaces]]

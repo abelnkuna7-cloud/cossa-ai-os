@@ -163,7 +163,9 @@ export type HandoffStatus =
 
 export type WorkforceExecutionProvider =
   | "groq"
+  | "gemini"
   | "openai"
+  | "cossa_ai_gateway"
   | "cossa_tool"
   | "internal_rule";
 
@@ -5457,6 +5459,7 @@ export async function completeControlledWorkforceRun(
         | "mission_id"
         | "model_provider"
         | "model_name"
+        | "model_request_id"
       >;
 
     handoff:
@@ -5476,6 +5479,17 @@ export async function completeControlledWorkforceRun(
 
     content:
       string;
+
+    /**
+     * The Cossa AI gateway only knows the resolved provider/model after a
+     * response completes. Persist that execution truth instead of leaving a
+     * requested fallback provider on the run record.
+     */
+    execution?: {
+      provider: WorkforceExecutionProvider;
+      modelName: string | null;
+      requestId: string | null;
+    } | null;
   },
 
   organisationId =
@@ -5551,9 +5565,11 @@ export async function completeControlledWorkforceRun(
         false,
 
       execution_provider:
+        input.execution?.provider ??
         input.run.model_provider,
 
       execution_name:
+        input.execution?.modelName ??
         input.run.model_name,
 
       source_scope:
@@ -5578,6 +5594,18 @@ export async function completeControlledWorkforceRun(
           "completed",
 
         output,
+
+        model_provider:
+          input.execution?.provider ??
+          input.run.model_provider,
+
+        model_name:
+          input.execution?.modelName ??
+          input.run.model_name,
+
+        model_request_id:
+          input.execution?.requestId ??
+          input.run.model_request_id,
 
         completed_at:
           completedAt,
@@ -5912,12 +5940,17 @@ export async function failControlledWorkforceRun(
       organisationId,
     );
 
+  /**
+   * A failed run is no longer running. Keep its released handoff queued for a
+   * deliberate retry instead of leaving the entire mission falsely "running"
+   * until a manual database cleanup happens.
+   */
   const nextMissionStatus:
     MissionStatus =
     pendingApprovalCount >
     0
       ? "awaiting_approval"
-      : "running";
+      : "queued";
 
   const {
     error:
