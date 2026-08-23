@@ -49,6 +49,7 @@ import {
 import { AppSidebar } from "@/components/app-sidebar";
 
 import {
+  GrowthEagleArtwork,
   GrowthSymbol,
 } from "@/components/brand/growth-brand";
 
@@ -1451,8 +1452,20 @@ export function AppShell({
           {/* PAGE CONTENT                                                    */}
           {/* --------------------------------------------------------------- */}
 
-          <main className="flex-1 p-4 md:p-6 lg:p-8">
-            {children}
+          <main className="relative flex-1 overflow-hidden p-4 md:p-6 lg:p-8">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 overflow-hidden"
+            >
+              <GrowthEagleArtwork
+                className="absolute -bottom-40 -right-40 h-[min(94vw,980px)] w-auto max-w-none opacity-[0.14] saturate-75 lg:-right-28"
+              />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_86%_72%,hsl(var(--primary)/0.12),transparent_43%)]" />
+            </div>
+
+            <div className="relative z-10">
+              {children}
+            </div>
           </main>
         </div>
       </div>
