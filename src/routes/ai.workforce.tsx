@@ -4047,7 +4047,7 @@ function AiWorkforce() {
 
     if (!content) {
       throw new Error(
-        \`${employee.name} did not return a usable workforce output.\`,
+        `${employee.name} did not return a usable workforce output.`,
       );
     }
 
@@ -4075,6 +4075,7 @@ function AiWorkforce() {
     priorOutputs: string[];
   }): Promise<{
     content: string;
+    metadata: AiExecutionMetadata | null;
     finalStage: boolean;
   }> {
     if (
