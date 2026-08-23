@@ -5940,12 +5940,17 @@ export async function failControlledWorkforceRun(
       organisationId,
     );
 
+  /**
+   * A failed run is no longer running. Keep its released handoff queued for a
+   * deliberate retry instead of leaving the entire mission falsely "running"
+   * until a manual database cleanup happens.
+   */
   const nextMissionStatus:
     MissionStatus =
     pendingApprovalCount >
     0
       ? "awaiting_approval"
-      : "running";
+      : "queued";
 
   const {
     error:
