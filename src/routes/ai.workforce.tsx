@@ -57,6 +57,7 @@ import {
   canonicalEmployeeKey,
   COSSA_GROWTH_WORKFORCE,
   completeControlledWorkforceRun,
+  createDirectEmployeeMission,
   createGrowthCoordinationMission,
   createRevenueAcquisitionMission,
   failControlledWorkforceRun,
@@ -89,7 +90,11 @@ import {
   type LeadHunterServiceCategory,
 } from "@/lib/lead-hunter-data";
 
-import { streamChat } from "@/lib/ai-stream";
+import {
+  streamChatWithMetadata,
+  type AiExecutionMetadata,
+  type CossaAiProvider,
+} from "@/lib/ai-stream";
 
 import {
   checkOfficialWebsite,
@@ -277,11 +282,17 @@ const GROWTH_MISSION_PREFIX =
 const REVENUE_MISSION_PREFIX =
   "Revenue acquisition:";
 
-const DEFAULT_WORKFORCE_PROVIDER =
-  "groq" as const;
+/**
+ * The Cossa AI gateway loads verified knowledge, authorised memory and
+ * operational context before it selects a configured model provider. Provider
+ * fallback belongs to that gateway, not to an individual browser employee.
+ */
+const DEFAULT_WORKFORCE_PROVIDER:
+  CossaAiProvider =
+  "auto";
 
 const DEFAULT_WORKFORCE_MODEL =
-  "llama-3.3-70b-versatile";
+  "server-selected";
 
 const LEAD_HUNTER_TOOL_PROVIDER =
   "cossa_tool" as const;
@@ -310,13 +321,13 @@ const MAX_HANDOFF_CONTEXT_CHARS =
 const MAX_RETAINED_RECORD_CONTEXT_CHARS =
   1_200;
 
+/**
+ * One browser request enters the Cossa AI gateway. The gateway itself owns
+ * configured-provider failover, so the client never repeats the whole chain
+ * and burns additional requests after a provider failure.
+ */
 const PROVIDER_MAX_ATTEMPTS =
-  3;
-
-const PROVIDER_RETRY_DELAYS_MS = [
-  2_000,
-  5_000,
-] as const;
+  1;
 
 const WORKFORCE_STAGE_DELAY_MS =
   2_000;
@@ -1004,41 +1015,7 @@ function normaliseErrorMessage(
   return "Unknown workforce execution error.";
 }
 
-function isRetryableProviderError(
-  error: unknown,
-): boolean {
-  const message =
-    normaliseErrorMessage(
-      error,
-    ).toLowerCase();
-
-  return [
-    "rate limit",
-    "rate-limit",
-    "429",
-    "temporarily",
-    "temporary",
-    "timeout",
-    "timed out",
-    "overloaded",
-    "service unavailable",
-    "unavailable",
-    "bad gateway",
-    "gateway timeout",
-    "502",
-    "503",
-    "504",
-    "connection reset",
-    "network error",
-    "fetch failed",
-  ].some((marker) =>
-    message.includes(
-      marker,
-    ),
-  );
-}
-
-function uniqueStrings(
+function uniqueStrings(function uniqueStrings(
   values: string[],
 ): string[] {
   return [
@@ -1498,11 +1475,13 @@ function nextWorkflowEmployeeForHandoff({
 
 function employeeOperationalView({
   employee,
+  missions,
   handoffs,
   runs,
   approvals,
 }: {
   employee: AiEmployee;
+  missions: Mission[];
   handoffs: EmployeeHandoff[];
   runs: MissionRun[];
   approvals: Approval[];
@@ -1512,6 +1491,33 @@ function employeeOperationalView({
       (handoff) =>
         handoff.to_employee_id ===
         employee.id,
+    );
+
+  const activeMissionIds =
+    new Set(
+      missions
+        .filter(
+          (mission) =>
+            [
+              "queued",
+              "running",
+              "awaiting_approval",
+            ].includes(
+              mission.status,
+            ),
+        )
+        .map(
+          (mission) =>
+            mission.id,
+        ),
+    );
+
+  const operationalHandoffs =
+    employeeHandoffs.filter(
+      (handoff) =>
+        activeMissionIds.has(
+          handoff.mission_id,
+        ),
     );
 
   const employeeRuns =
@@ -1544,14 +1550,14 @@ function employeeOperationalView({
     );
 
   const pendingHandoffs =
-    employeeHandoffs.filter(
+    operationalHandoffs.filter(
       (handoff) =>
         handoff.status ===
         "pending",
     );
 
   const acceptedHandoffs =
-    employeeHandoffs.filter(
+    operationalHandoffs.filter(
       (handoff) =>
         handoff.status ===
         "accepted",
@@ -1659,7 +1665,7 @@ function employeeOperationalView({
     lastActivity:
       latestActivity,
     assignedCount:
-      employeeHandoffs.length,
+      operationalHandoffs.length,
     pendingCount:
       pendingHandoffs.length,
     runningCount:
@@ -3464,6 +3470,7 @@ function AiWorkforce() {
             operational:
               employeeOperationalView({
                 employee,
+                missions,
                 handoffs,
                 runs,
                 approvals,
@@ -4002,92 +4009,54 @@ function AiWorkforce() {
   }: {
     prompt: string;
     employee: AiEmployee;
-  }): Promise<string> {
-    let lastError:
-      unknown =
-      null;
+  }): Promise<{
+    content: string;
+    metadata: AiExecutionMetadata;
+  }> {
+    /**
+     * The browser makes one request only. /api/chat first grounds it with
+     * Cossa knowledge/memory, then selects OpenAI, Gemini or Groq according
+     * to the server-owned configured-provider route.
+     */
+    const result =
+      await streamChatWithMetadata(
+        [
+          {
+            role:
+              "user",
 
-    for (
-      let attempt = 1;
-      attempt <=
-      PROVIDER_MAX_ATTEMPTS;
-      attempt += 1
-    ) {
-      try {
-        const content =
-          await streamChat(
-            [
-              {
-                role:
-                  "user",
+            content:
+              prompt,
+          },
+        ],
 
-                content:
-                  prompt,
-              },
-            ],
+        () =>
+          undefined,
 
-            () =>
-              undefined,
-
-            undefined,
-
+        {
+          system:
             employee.system_instructions,
 
+          provider:
             DEFAULT_WORKFORCE_PROVIDER,
-          );
+        },
+      );
 
-        if (
-          !content.trim()
-        ) {
-          throw new Error(
-            `${employee.name} did not return a usable workforce output.`,
-          );
-        }
+    const content =
+      result.content.trim();
 
-        return content.trim();
-      } catch (error) {
-        lastError =
-          error;
-
-        const retryable =
-          isRetryableProviderError(
-            error,
-          );
-
-        const hasAnotherAttempt =
-          attempt <
-          PROVIDER_MAX_ATTEMPTS;
-
-        if (
-          !retryable ||
-          !hasAnotherAttempt
-        ) {
-          break;
-        }
-
-        const delay =
-          PROVIDER_RETRY_DELAYS_MS[
-            attempt - 1
-          ] ??
-          5_000;
-
-        console.warn(
-          `Cossa AI provider attempt ${attempt} failed for ${employee.employee_key}. Retrying in ${delay}ms.`,
-          error,
-        );
-
-        await sleep(
-          delay,
-        );
-      }
+    if (!content) {
+      throw new Error(
+        \`${employee.name} did not return a usable workforce output.\`,
+      );
     }
 
-    throw lastError instanceof
-    Error
-      ? lastError
-      : new Error(
-          "The workforce language-model provider failed after all retry attempts.",
-        );
+    return {
+      content,
+
+      metadata:
+        result.metadata,
+    };
   }
 
   /* ------------------------------------------------------------------------ */
@@ -4175,7 +4144,7 @@ function AiWorkforce() {
         provider:
           leadHunterStage
             ? LEAD_HUNTER_TOOL_PROVIDER
-            : DEFAULT_WORKFORCE_PROVIDER,
+            : "cossa_ai_gateway",
 
         modelName:
           leadHunterStage
@@ -4197,6 +4166,11 @@ function AiWorkforce() {
     try {
       let content:
         string;
+
+      let executionMetadata:
+        AiExecutionMetadata |
+        null =
+        null;
 
       if (
         leadHunterStage
@@ -4237,11 +4211,17 @@ function AiWorkforce() {
           );
         }
 
-        content =
+        const execution =
           await executeProviderWithRetry({
             prompt,
             employee,
           });
+
+        content =
+          execution.content;
+
+        executionMetadata =
+          execution.metadata;
       }
 
       const result =
@@ -4250,10 +4230,27 @@ function AiWorkforce() {
           handoff,
           employee,
           content,
+
+          execution:
+            executionMetadata
+              ? {
+                  provider:
+                    executionMetadata.provider,
+
+                  modelName:
+                    executionMetadata.model,
+
+                  requestId:
+                    executionMetadata.requestId,
+                }
+              : null,
         });
 
       return {
         content,
+
+        metadata:
+          executionMetadata,
 
         finalStage:
           result.finalStage,
@@ -6343,7 +6340,7 @@ function AiWorkforce() {
                 value={
                   PROVIDER_MAX_ATTEMPTS
                 }
-                description="Maximum temporary LLM retry attempts."
+                description="One Cossa AI gateway call; configured provider fallback is server-owned."
               />
 
               <ControlMetric
