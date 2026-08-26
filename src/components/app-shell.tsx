@@ -781,7 +781,7 @@ export function AppShell({
               {/* DESKTOP COMPANY SEARCH                                    */}
               {/* --------------------------------------------------------- */}
 
-              <div className="hidden w-[300px] max-w-full items-center gap-2 rounded-lg border border-border/60 bg-card/40 px-3 py-1.5 text-sm text-muted-foreground xl:flex 2xl:w-[380px]">
+              <div className="hidden w-[300px] max-w-full items-center gap-2 rounded-lg border border-border/60 bg-card/40 px-3 py-1.5 text-sm text-muted-foreground min-[1750px]:flex min-[1900px]:w-[380px]">
                 <Search className="h-4 w-4 shrink-0" />
 
                 <span className="flex-1 truncate">
@@ -798,7 +798,7 @@ export function AppShell({
               {/* --------------------------------------------------------- */}
 
               <nav
-                className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex"
+                className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 min-[1750px]:flex"
                 aria-label="Company navigation"
               >
                 {COMPANY_NAVIGATION.slice(
@@ -1176,7 +1176,7 @@ export function AppShell({
                         !current,
                     );
                   }}
-                  className="gap-1.5 text-muted-foreground hover:text-foreground lg:hidden"
+                  className="gap-1.5 text-muted-foreground hover:text-foreground min-[1750px]:hidden"
                   aria-expanded={
                     mobileCompanyNavOpen
                   }
@@ -1309,7 +1309,7 @@ export function AppShell({
             {/* ------------------------------------------------------------- */}
 
             {mobileCompanyNavOpen ? (
-              <div className="border-t border-border/50 px-3 py-3 lg:hidden">
+              <div className="border-t border-border/50 px-3 py-3 min-[1750px]:hidden">
                 <div className="grid gap-2 sm:grid-cols-2">
                   {COMPANY_NAVIGATION.map(
                     (

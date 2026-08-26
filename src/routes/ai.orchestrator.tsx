@@ -94,6 +94,17 @@ function formatTime(value: unknown): string {
     : "—";
 }
 
+function leadHunterInputReady(input: LeadHunterRuntimeInput): boolean {
+  return (
+    input.objective.trim().length >= 12 &&
+    Boolean(input.targetCompany.trim()) &&
+    Boolean(input.targetService.trim()) &&
+    Boolean(input.targetLocation.trim()) &&
+    Number.isFinite(input.resultCount) &&
+    input.resultCount >= 1
+  );
+}
+
 function CossaOrchestrator() {
   const queryClient = useQueryClient();
   const [input, setInput] = useState<LeadHunterRuntimeInput>({
@@ -109,7 +120,8 @@ function CossaOrchestrator() {
     queryFn: getAgentRuntimeDashboard,
     refetchInterval: 15_000,
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["cossa-agent-runtime"] });
+  const refresh = () => queryClient.refetchQueries({ queryKey: ["cossa-agent-runtime"] });
+  const missionIsReady = leadHunterInputReady(input);
 
   const queueMission = useMutation({
     mutationFn: () => queueLeadHunterRuntimeProof(input),
@@ -202,7 +214,9 @@ function CossaOrchestrator() {
             <CardTitle className="text-lg">
               {dashboard?.runtime.server_execution === "configuration_required"
                 ? "Configuration required"
-                : dashboard?.runtime.server_execution === "deployment_verification_required"
+                : dashboard?.runtime.server_execution === "active"
+                  ? "Hosted worker active"
+                  : dashboard?.runtime.server_execution === "deployment_verification_required"
                   ? "Deployment verification required"
                   : "Checking runtime"}
             </CardTitle>
@@ -349,7 +363,7 @@ function CossaOrchestrator() {
           <div className="flex flex-wrap gap-3 lg:col-span-2">
             <Button
               onClick={() => queueMission.mutate()}
-              disabled={queueMission.isPending || input.objective.trim().length < 12}
+              disabled={queueMission.isPending || !missionIsReady}
             >
               <Play className="mr-2 h-4 w-4" />
               Queue safe proof
@@ -357,7 +371,7 @@ function CossaOrchestrator() {
             <Button
               variant="outline"
               onClick={() => setSchedule.mutate(true)}
-              disabled={setSchedule.isPending}
+              disabled={setSchedule.isPending || !missionIsReady}
             >
               <Clock3 className="mr-2 h-4 w-4" />
               Enable daily trigger
@@ -376,7 +390,7 @@ function CossaOrchestrator() {
               {formatTime(schedule.next_run_at)}.{" "}
               {dashboard?.runtime.worker_deployment_verified
                 ? "It only queues safe internal work."
-                : "The schedule is saved, but worker deployment is not yet verified, so it is not presented as running."}
+                : "The schedule is saved, but no recent authenticated worker tick has been recorded yet."}
             </p>
           ) : null}
         </CardContent>

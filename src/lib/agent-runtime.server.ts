@@ -1171,6 +1171,11 @@ async function existingLeadHunterSearch(
     result_count: input.resultCount,
     minimum_score: 60,
     minimum_evidence_sources: 2,
+    include_private_sector: true,
+    include_government_sector: false,
+    include_nonprofits: false,
+    include_small_projects: true,
+    include_large_projects: true,
     require_public_phone_or_email: true,
     require_opportunity_signal: true,
     verified_sources_only: true,
@@ -1587,7 +1592,13 @@ async function assertTaskPermission(
 }
 
 function taskInput(task: RuntimeTask): LeadHunterInput {
-  return validateLeadHunterInput(task.payload);
+  const payload = asRecord(task.payload);
+  // Scheduled trigger tasks deliberately wrap mission fields in configuration.
+  return validateLeadHunterInput(
+    task.task_type === "scheduled_lead_hunter_trigger"
+      ? asRecord(payload.configuration)
+      : payload,
+  );
 }
 
 async function executeAgentTask(
@@ -2027,6 +2038,22 @@ export async function runAgentRuntimeTick(): Promise<{
     if (outcome === "failed") failed += 1;
   }
 
+  // Only the shared-secret hosted worker can reach this path. Persisting its
+  // completed tick gives the dashboard a real, recent deployment health signal.
+  await logExecutionEvent(environment, {
+    organisationId: environment.organisationId,
+    eventType: "runtime_worker_heartbeat",
+    message: "Authenticated hosted worker completed an agent-runtime tick.",
+    metadata: {
+      claimed: tasks.length,
+      completed,
+      retried,
+      failed,
+      scheduled_triggers_queued: scheduled.length,
+      external_sending_enabled: false,
+    },
+  });
+
   console.info(
     JSON.stringify({
       event: "agent_runtime_tick",
@@ -2049,7 +2076,7 @@ export async function runAgentRuntimeTick(): Promise<{
 export async function orchestrationDashboard(actor: RuntimeActor): Promise<JsonObject> {
   const environment = requireRuntimeEnvironment();
   const organisationId = actor.organisationId;
-  const [agents, adapters, tasks, approvals, circuits, triggers, missions] = await Promise.all([
+  const [agents, adapters, tasks, approvals, circuits, triggers, missions, heartbeats] = await Promise.all([
     databaseRequest<JsonObject[]>(
       environment,
       `ai_agents?${new URLSearchParams({ select: "id,agent_key,name,purpose,status,employee_id", organisation_id: `eq.${organisationId}`, order: "agent_key.asc" })}`,
@@ -2078,7 +2105,15 @@ export async function orchestrationDashboard(actor: RuntimeActor): Promise<JsonO
       environment,
       `missions?${new URLSearchParams({ select: "id,title,status,objective,target_service,target_location,created_at,updated_at", organisation_id: `eq.${organisationId}`, title: "ilike.Orchestrated Lead Hunter:*", order: "created_at.desc", limit: "12" })}`,
     ),
+    databaseRequest<JsonObject[]>(
+      environment,
+      `agent_execution_events?${new URLSearchParams({ select: "created_at", organisation_id: `eq.${organisationId}`, event_type: "eq.runtime_worker_heartbeat", order: "created_at.desc", limit: "1" })}`,
+    ),
   ]);
+
+  const latestWorkerHeartbeat = readString(heartbeats[0]?.created_at);
+  const workerDeploymentVerified =
+    Boolean(latestWorkerHeartbeat) && Date.now() - Date.parse(latestWorkerHeartbeat) < 5 * 60_000;
 
   const circuitByComponent = new Map(
     circuits.map((circuit) => [
@@ -2117,10 +2152,13 @@ export async function orchestrationDashboard(actor: RuntimeActor): Promise<JsonO
       const toolKey = readString(adapter.tool_key);
       if (readString(adapter.connection_state) === "disabled") return "disabled";
       if (toolKey === "cossa-crm") return "ready";
-      if (toolKey === "cossa-lead-hunter")
+      if (toolKey === "cossa-lead-hunter") {
+        const circuit = circuitByComponent.get("tool:cossa-lead-hunter");
+        if (isCircuitOpen(circuit as RuntimeCircuit | undefined)) return "degraded";
         return environment.runtimeWorkerToken && environment.publicSiteUrl
           ? "ready"
           : "configuration_required";
+      }
       if (toolKey === "hunter")
         return environment.hunterApiKey ? "ready" : "configuration_required";
       return "connection_required";
@@ -2130,16 +2168,19 @@ export async function orchestrationDashboard(actor: RuntimeActor): Promise<JsonO
   return {
     runtime: {
       server_execution:
-        environment.runtimeWorkerToken && environment.publicSiteUrl
-          ? "deployment_verification_required"
-          : "configuration_required",
+        workerDeploymentVerified
+          ? "active"
+          : environment.runtimeWorkerToken && environment.publicSiteUrl
+            ? "deployment_verification_required"
+            : "configuration_required",
       device_independence:
         "After the hosted worker is deployed and its cron is verified, queued work continues while the CEO device is offline. External APIs still require hosted-server internet connectivity.",
       provider_order: configuredModelProviders(environment),
       worker_trigger_configuration_present: Boolean(
         environment.runtimeWorkerToken && environment.publicSiteUrl,
       ),
-      worker_deployment_verified: false,
+      worker_deployment_verified: workerDeploymentVerified,
+      worker_last_seen_at: latestWorkerHeartbeat || null,
       external_sending_enabled: false,
     },
     providers,

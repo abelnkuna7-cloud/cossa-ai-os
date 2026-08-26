@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Loader2,
   MessageSquare,
+  Mic,
   Pin,
   Plus,
   Search,
@@ -147,6 +148,34 @@ interface CreatedMissionState {
 const DEFAULT_CHAT_PROVIDER:
   CossaAiProvider =
   "auto";
+
+type BrowserSpeechRecognitionEvent = {
+  results: ArrayLike<{
+    0?: { transcript?: string };
+  }>;
+};
+
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
+function browserSpeechRecognition(): BrowserSpeechRecognitionConstructor | null {
+  if (typeof window === "undefined") return null;
+  const browser = window as typeof window & {
+    SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+  };
+  return browser.SpeechRecognition ?? browser.webkitSpeechRecognition ?? null;
+}
 
 /* -------------------------------------------------------------------------- */
 /* WORKFORCE MISSION DEFINITIONS                                              */
@@ -612,6 +641,8 @@ export function SpecialistChat({
   const category =
     `specialist:${to}`;
 
+  const isVoiceAssistant = to === "/ai/voice";
+
   const qc =
     useQueryClient();
 
@@ -644,6 +675,14 @@ export function SpecialistChat({
   ] =
     useState(
       "",
+    );
+
+  const [
+    voiceState,
+    setVoiceState,
+  ] =
+    useState<"idle" | "listening">(
+      "idle",
     );
 
   /**
@@ -787,6 +826,14 @@ export function SpecialistChat({
   const abortRef =
     useRef<
       AbortController |
+      null
+    >(
+      null,
+    );
+
+  const voiceRecognitionRef =
+    useRef<
+      BrowserSpeechRecognition |
       null
     >(
       null,
@@ -1311,6 +1358,62 @@ export function SpecialistChat({
     }
 
     abortRef.current.abort();
+  }
+
+  function handleVoiceInput() {
+    if (!isVoiceAssistant) return;
+
+    if (voiceRecognitionRef.current) {
+      voiceRecognitionRef.current.stop();
+      return;
+    }
+
+    const Recognition = browserSpeechRecognition();
+    if (!Recognition) {
+      toast.error("Voice input is unavailable in this browser", {
+        description: "Use a current Chromium browser, or type your message instead.",
+      });
+      return;
+    }
+
+    const recognition = new Recognition();
+    const prefix = input.trim();
+    recognition.lang = "en-ZA";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript?.trim() ?? "")
+        .filter(Boolean)
+        .join(" ");
+      setInput([prefix, transcript].filter(Boolean).join(prefix && transcript ? " " : ""));
+    };
+    recognition.onerror = (event) => {
+      if (event.error !== "aborted") {
+        toast.error("Voice input stopped", {
+          description:
+            event.error === "not-allowed"
+              ? "Allow microphone access in your browser, then try again."
+              : "Your words could not be transcribed. You can type your message instead.",
+        });
+      }
+    };
+    recognition.onend = () => {
+      voiceRecognitionRef.current = null;
+      setVoiceState("idle");
+    };
+
+    try {
+      voiceRecognitionRef.current = recognition;
+      setVoiceState("listening");
+      recognition.start();
+    } catch {
+      voiceRecognitionRef.current = null;
+      setVoiceState("idle");
+      toast.error("Voice input could not start", {
+        description: "Check microphone permission, then try again.",
+      });
+    }
   }
 
   /* ------------------------------------------------------------------------ */
@@ -2944,6 +3047,21 @@ export function SpecialistChat({
                 }
               />
 
+              {isVoiceAssistant ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={voiceState === "listening" ? "default" : "outline"}
+                  onClick={handleVoiceInput}
+                  disabled={sending}
+                  className={voiceState === "listening" ? "animate-pulse" : ""}
+                  aria-label={voiceState === "listening" ? "Stop voice input" : "Start voice input"}
+                  title={voiceState === "listening" ? "Stop listening" : "Speak your message"}
+                >
+                  <Mic className="h-4 w-4" />
+                </Button>
+              ) : null}
+
               {sending ? (
                 <Button
                   type="button"
@@ -2974,8 +3092,10 @@ export function SpecialistChat({
 
             <div className="mx-auto mt-2 flex max-w-3xl flex-col items-center justify-between gap-2 sm:flex-row">
               <p className="text-center text-[10px] text-muted-foreground sm:text-left">
-                Cossa AI can make mistakes. Verify important information.
-                Provider identity is reported by the server gateway.
+                {isVoiceAssistant
+                  ? "Voice input turns speech into an editable message. It does not place or answer calls."
+                  : "Cossa AI can make mistakes. Verify important information."}
+                {" "}Provider identity is reported by the server gateway.
               </p>
 
               {missionBridgeEnabled ? (

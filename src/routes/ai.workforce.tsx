@@ -2,7 +2,10 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import {
   Activity,
@@ -14,6 +17,7 @@ import {
   Building2,
   ChevronRight,
   ClipboardList,
+  CircleStop,
   Code2,
   Command,
   FileCheck2,
@@ -79,7 +83,7 @@ import {
   type LeadHunterServiceCategory,
 } from "@/lib/lead-hunter-data";
 
-import { streamChat } from "@/lib/ai-stream";
+import { streamChat, streamChatWithMetadata } from "@/lib/ai-stream";
 
 import { checkOfficialWebsite, type OfficialWebsiteHealthReport } from "@/lib/website-health";
 
@@ -3732,9 +3736,9 @@ function AiWorkforce() {
                               </span>
                             </div>
 
-                            <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-                              {content}
-                            </p>
+                            <div className="mt-2 text-xs leading-relaxed text-muted-foreground [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:mt-2 [&_p:first-child]:mt-0 [&_ul]:ml-4 [&_ul]:list-disc">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                            </div>
                           </article>
                         );
                       })}
@@ -4528,6 +4532,8 @@ function EmployeeDrawer({
           </section>
         ) : null}
 
+        <EmployeeConversation employee={employee} />
+
         <div className="mt-6 grid gap-2 sm:grid-cols-2">
           <Button
             type="button"
@@ -4547,19 +4553,146 @@ function EmployeeDrawer({
           </Button>
         </div>
 
-        <div className="mt-4 rounded-xl border border-border/60 bg-background/30 p-3">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            Direct assignment
-          </p>
-
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            The backend now supports real direct employee missions. This drawer does not yet expose
-            a standalone execution control, so it does not pretend a direct task has run. Use the AI
-            CEO or a recorded workflow until the direct-execution UI is connected.
-          </p>
-        </div>
+        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+          Conversation is internal advice and drafting. It does not start a workflow, publish,
+          send, pay, or change a customer record.
+        </p>
       </aside>
     </div>
+  );
+}
+
+type EmployeeConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+function employeeConversationSystem(employee: AiEmployee): string {
+  return [
+    `You are ${employee.name}, ${employee.title}, an AI employee in Cossa Nexus Holdings.`,
+    "Cossa Nexus Holdings coordinates Cossa Store, Cossa Growth, NexDocs, Cossa Tech, Cossa Construction and Cossa Facility Services.",
+    "Write like a capable Cossa colleague: warm, specific and natural. Avoid robotic filler, generic hype and unsupported certainty.",
+    "Use South African business context where helpful. Treat company facts, prices, customers, performance, integrations and completed work as unknown unless supplied or verified in the conversation.",
+    "Work hand-in-hand with other Cossa employees by naming the practical next handoff when one is needed.",
+    "This is an internal conversation. You may analyse, plan and draft, but you must not claim you sent, published, paid, contacted, changed or executed anything.",
+    `Your assigned mission: ${employee.mission}`,
+    `Your operating instructions: ${employee.system_instructions.slice(0, 1_800)}`,
+  ].join("\n\n");
+}
+
+function EmployeeConversation({ employee }: { employee: AiEmployee }) {
+  const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<EmployeeConversationMessage[]>([]);
+  const [streaming, setStreaming] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  async function sendMessage() {
+    const content = draft.trim();
+    if (!content || sending) return;
+
+    const prior = [...messages.slice(-6), { role: "user" as const, content }];
+    setDraft("");
+    setMessages(prior);
+    setSending(true);
+    setStreaming("");
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const result = await streamChatWithMetadata(
+        prior,
+        (chunk) => setStreaming((current) => `${current ?? ""}${chunk}`),
+        {
+          signal: controller.signal,
+          provider: "auto",
+          system: employeeConversationSystem(employee),
+        },
+      );
+      setMessages((current) => [...current, { role: "assistant", content: result.content }]);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        toast.error(`${employee.name} could not reply`, {
+          description: error instanceof Error ? error.message : "Try again shortly.",
+        });
+      }
+    } finally {
+      abortRef.current = null;
+      setStreaming(null);
+      setSending(false);
+    }
+  }
+
+  return (
+    <section className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
+      <p className="text-[10px] font-medium uppercase tracking-widest text-primary">
+        Talk with {employee.name}
+      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+        Ask for a plan, draft, explanation or the next internal handoff. This conversation remains
+        inside Growth.
+      </p>
+
+      {messages.length > 0 || streaming !== null ? (
+        <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+          {messages.map((message, index) => (
+            <div
+              key={`${message.role}-${index}`}
+              className={
+                message.role === "user"
+                  ? "ml-6 rounded-lg bg-background/80 p-2 text-xs leading-relaxed"
+                  : "mr-3 rounded-lg border border-border/60 bg-card/60 p-2 text-xs leading-relaxed text-muted-foreground"
+              }
+            >
+              {message.content}
+            </div>
+          ))}
+          {streaming !== null ? (
+            <div className="mr-3 rounded-lg border border-border/60 bg-card/60 p-2 text-xs leading-relaxed text-muted-foreground">
+              {streaming || "Thinking…"}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-3 flex items-end gap-2 rounded-lg border border-border/60 bg-background/60 p-2 focus-within:border-primary/50">
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void sendMessage();
+            }
+          }}
+          rows={2}
+          placeholder={`Message ${employee.name}…`}
+          className="min-h-12 flex-1 resize-none bg-transparent px-1 py-1 text-sm outline-none"
+          disabled={sending}
+        />
+        {sending ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => abortRef.current?.abort()}
+            aria-label="Stop employee response"
+          >
+            <CircleStop className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void sendMessage()}
+            disabled={!draft.trim()}
+            aria-label={`Send message to ${employee.name}`}
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    </section>
   );
 }
 
