@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, AlertTriangle, Clock, CalendarDays, FileText, UserPlus, CheckCircle2 } from "lucide-react";
+import { Bell, AlertTriangle, Clock, CalendarDays, FileText, UserPlus, CheckCircle2, ArrowRight } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import {
   salesFollowUps, salesAppointments, salesLeads, salesQuotations, opsTasks,
@@ -23,9 +23,13 @@ interface Item {
   id: string;
   priority: Priority;
   icon: typeof Bell;
+  type: string;
   title: string;
   description: string;
-  to: string;
+  href: string;
+  affectedRecord: string;
+  why: string;
+  recommendedAction: string;
   when: string;
 }
 
@@ -66,9 +70,13 @@ function NotificationsPage() {
       id: `task-${t.id}`,
       priority: overdue ? "urgent" : "high",
       icon: overdue ? AlertTriangle : Clock,
+      type: overdue ? "overdue_task" : "task_due_soon",
       title: overdue ? `Overdue task: ${t.title}` : `Task due soon: ${t.title}`,
-      description: `Was due ${fmt(t.due_at)} · ${t.status}`,
-      to: "/operations/tasks",
+      description: `Due ${fmt(t.due_at)} · ${t.status}`,
+      href: "/operations/tasks",
+      affectedRecord: t.id,
+      why: overdue ? "The task passed its recorded due time without being marked done." : "The task is due within 24 hours.",
+      recommendedAction: "Open task and update the owner, due date or completion state.",
       when: t.due_at,
     });
   }
@@ -83,9 +91,13 @@ function NotificationsPage() {
       id: `fu-${f.id}`,
       priority: overdue ? "urgent" : "high",
       icon: Bell,
+      type: overdue ? "overdue_follow_up" : "follow_up_due",
       title: overdue ? `Overdue follow-up: ${f.subject}` : `Follow-up due: ${f.subject}`,
-      description: `Was scheduled ${fmt(f.due_at)}`,
-      to: "/sales/follow-ups",
+      description: `Scheduled ${fmt(f.due_at)}`,
+      href: "/sales/follow-ups",
+      affectedRecord: f.id,
+      why: overdue ? "The recorded follow-up time has passed and the follow-up is still open." : "The follow-up is due within 24 hours.",
+      recommendedAction: "Open follow-up, review the customer context and complete or reschedule it.",
       when: f.due_at,
     });
   }
@@ -97,9 +109,13 @@ function NotificationsPage() {
       id: `appt-${a.id}`,
       priority: when - now < 4 * 3600_000 ? "high" : "normal",
       icon: CalendarDays,
+      type: "upcoming_appointment",
       title: `Upcoming: ${a.title}`,
       description: `${fmt(a.starts_at)}${a.location ? ` · ${a.location}` : ""}`,
-      to: "/sales/appointments",
+      href: "/sales/appointments",
+      affectedRecord: a.id,
+      why: "The appointment starts within the next 48 hours.",
+      recommendedAction: "Open appointment and confirm preparation, customer context and required documents.",
       when: a.starts_at,
     });
   }
@@ -113,9 +129,13 @@ function NotificationsPage() {
           id: `quote-exp-${q.id}`,
           priority: "high",
           icon: FileText,
+          type: "quotation_expired",
           title: `Quote expired: ${q.number}`,
           description: `Expired ${fmt(q.valid_until)} · ${q.status}`,
-          to: "/sales/quotations",
+          href: `/sales/quotations?record=${encodeURIComponent(q.id)}`,
+          affectedRecord: `${q.number} · ${q.id}`,
+          why: "The quotation remains draft or sent after its recorded validity date.",
+          recommendedAction: "Open quotation, verify customer status and decide whether to follow up, revise validity or close it.",
           when: q.valid_until,
         });
         continue;
@@ -125,9 +145,13 @@ function NotificationsPage() {
           id: `quote-exp-soon-${q.id}`,
           priority: "normal",
           icon: FileText,
+          type: "quotation_expiring",
           title: `Quote expiring: ${q.number}`,
           description: `Valid until ${fmt(q.valid_until)}`,
-          to: "/sales/quotations",
+          href: `/sales/quotations?record=${encodeURIComponent(q.id)}`,
+          affectedRecord: `${q.number} · ${q.id}`,
+          why: "The quotation will reach its recorded validity date within three days.",
+          recommendedAction: "Open quotation and review whether a customer follow-up is required before expiry.",
           when: q.valid_until,
         });
       }
@@ -142,9 +166,13 @@ function NotificationsPage() {
       id: `lead-${l.id}`,
       priority: l.score >= 70 ? "high" : "normal",
       icon: UserPlus,
+      type: "new_lead",
       title: `New lead: ${l.name}`,
       description: `Score ${l.score} · ${l.source ?? "unknown source"}`,
-      to: "/sales/leads",
+      href: "/sales/leads",
+      affectedRecord: l.id,
+      why: "The lead was created within the last 48 hours and is still new or prospect status.",
+      recommendedAction: "Open lead, verify evidence and assign the next legitimate sales action.",
       when: l.created_at,
     });
   }
@@ -173,7 +201,7 @@ function NotificationsPage() {
         </div>
         <h1 className="mt-4 font-display text-3xl font-semibold">Notifications</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
-          Everything important, nothing noisy. Ranked by business impact across sales, operations and marketing.
+          Operational alerts generated from current Cossa records. Open the affected record before taking action.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Stat label="Urgent" value={counts.urgent} tone="urgent" />
@@ -188,7 +216,7 @@ function NotificationsPage() {
             <CheckCircle2 className="h-8 w-8 text-primary" />
             <div className="font-display text-lg font-semibold">All clear</div>
             <p className="max-w-md text-sm text-muted-foreground">
-              No urgent items right now. Add leads, tasks or follow-ups and Cossa AI will surface anything that needs attention.
+              No current records meet the notification rules for overdue work, upcoming appointments, quotation expiry or recent leads.
             </p>
           </div>
         ) : (
@@ -200,16 +228,29 @@ function NotificationsPage() {
                 n.priority === "high" ? "text-primary" : "text-muted-foreground";
               return (
                 <li key={n.id}>
-                  <Link to={n.to} className="flex items-start gap-3 py-3 hover:bg-card/40 rounded-lg px-2 -mx-2 transition">
-                    <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone}`} />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium truncate">{n.title}</div>
-                      <div className="text-xs text-muted-foreground">{n.description}</div>
+                  <a href={n.href} className="block rounded-lg px-2 py-4 -mx-2 transition hover:bg-card/40">
+                    <div className="flex items-start gap-3">
+                      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-medium">{n.title}</div>
+                          <span className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+                            {n.type.replaceAll("_", " ")}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">{n.description}</div>
+                        <div className="mt-2 grid gap-1 text-[11px] text-muted-foreground md:grid-cols-2">
+                          <span><strong className="text-foreground">Affected record:</strong> {n.affectedRecord}</span>
+                          <span><strong className="text-foreground">Raised:</strong> {fmt(n.when)} · {relative(n.when)}</span>
+                          <span className="md:col-span-2"><strong className="text-foreground">Why:</strong> {n.why}</span>
+                          <span className="md:col-span-2"><strong className="text-foreground">Next action:</strong> {n.recommendedAction}</span>
+                        </div>
+                      </div>
+                      <span className="flex shrink-0 items-center gap-1 pt-1 text-[10px] uppercase tracking-widest text-primary">
+                        Open record <ArrowRight className="h-3 w-3" />
+                      </span>
                     </div>
-                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground shrink-0 pt-1">
-                      {relative(n.when)}
-                    </span>
-                  </Link>
+                  </a>
                 </li>
               );
             })}
