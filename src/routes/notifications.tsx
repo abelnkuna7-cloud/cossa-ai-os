@@ -247,6 +247,33 @@ function NotificationsPage() {
     });
   }
 
+  async function openRecord(item: Item) {
+    if (busyKey) return;
+    if (interactions.isError) {
+      window.location.assign(item.href);
+      return;
+    }
+
+    setBusyKey(item.id);
+    try {
+      await recordNotificationInteraction({
+        notificationKey: item.id,
+        entityType: item.entityType,
+        entityId: item.entityId,
+        action: "opened",
+        reason: null,
+        snoozedUntil: null,
+        metadata: { href: item.href, type: item.type, affected_business: item.affectedBusiness },
+      });
+      window.location.assign(item.href);
+    } catch (error) {
+      toast.error("Notification open was not audited", {
+        description: error instanceof Error ? error.message : "The audit record was not saved.",
+      });
+      setBusyKey(null);
+    }
+  }
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
       <section className="glass-card relative overflow-hidden p-8">
@@ -287,7 +314,21 @@ function NotificationsPage() {
                 n.priority === "high" ? "text-primary" : "text-muted-foreground";
               return (
                 <li key={n.id}>
-                  <div className="rounded-lg px-2 py-4 -mx-2 transition hover:bg-card/40">
+                  <div
+                    className="cursor-pointer rounded-lg px-2 py-4 -mx-2 transition hover:bg-card/40"
+                    role="link"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest("button, a")) return;
+                      void openRecord(n);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        void openRecord(n);
+                      }
+                    }}
+                  >
                     <div className="flex items-start gap-3">
                       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone}`} />
                       <div className="min-w-0 flex-1">
@@ -307,7 +348,7 @@ function NotificationsPage() {
                           <span className="md:col-span-2"><strong className="text-foreground">Evidence/source:</strong> {n.evidence}</span>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <a href={n.href} onClick={() => !interactions.isError && recordAction(n, "opened")} className="inline-flex items-center rounded-md border border-primary/40 px-2.5 py-1.5 text-[10px] uppercase tracking-widest text-primary">Open record <ArrowRight className="ml-1 h-3 w-3" /></a>
+                          <button disabled={busyKey === n.id} onClick={() => void openRecord(n)} className="inline-flex items-center rounded-md border border-primary/40 px-2.5 py-1.5 text-[10px] uppercase tracking-widest text-primary">Open record <ArrowRight className="ml-1 h-3 w-3" /></button>
                           {!interactions.isError ? <>
                             <button disabled={busyKey === n.id} onClick={() => recordAction(n, "resolved")} className="inline-flex items-center rounded-md border border-border/60 px-2.5 py-1.5 text-[10px] uppercase tracking-widest"><Check className="mr-1 h-3 w-3" />Resolve</button>
                             <button disabled={busyKey === n.id} onClick={() => recordAction(n, "snoozed")} className="inline-flex items-center rounded-md border border-border/60 px-2.5 py-1.5 text-[10px] uppercase tracking-widest"><AlarmClock className="mr-1 h-3 w-3" />Snooze 24h</button>
