@@ -124,14 +124,14 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   const router = useRouter();
   const location = useRouterState({ select: (state) => state.location });
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(() => page || (typeof window !== "undefined" && window.localStorage.getItem(ASSISTANT_OPEN_KEY) === "true"));
-  const [activeId, setActiveId] = useState<string | null>(() => typeof window === "undefined" ? null : window.localStorage.getItem(ACTIVE_CONVERSATION_KEY));
+  const [open, setOpen] = useState(page);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [streaming, setStreaming] = useState<string | null>(null);
   const [state, setState] = useState<AssistantState>("READY");
   const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<VoiceSettings>(readSettings);
+  const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_SETTINGS);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [inputProvider, setInputProvider] = useState<VoiceProviderState>("permission_required");
@@ -153,6 +153,12 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
     const search = location.search as Record<string, unknown>;
     return typeof search.record === "string" ? search.record : null;
   }, [location.search]);
+
+  useEffect(() => {
+    setSettings(readSettings());
+    setActiveId(window.localStorage.getItem(ACTIVE_CONVERSATION_KEY));
+    if (!page) setOpen(window.localStorage.getItem(ASSISTANT_OPEN_KEY) === "true");
+  }, [page]);
 
   useEffect(() => {
     if (!activeId && conversations.data?.[0]) setActiveId(conversations.data[0].id);

@@ -81,9 +81,7 @@ const starterPrompts = [
 function AiChatWorkspace() {
   const queryClient = useQueryClient();
 
-  const [activeId, setActiveId] = useState<string | null>(() =>
-    typeof window === "undefined" ? null : window.localStorage.getItem("cossa-ai-active-conversation"),
-  );
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<string | null>(null);
@@ -108,6 +106,10 @@ function AiChatWorkspace() {
     queryFn: () => (activeId ? listMessages(activeId) : Promise.resolve([] as AiMessage[])),
     enabled: Boolean(activeId),
   });
+
+  useEffect(() => {
+    setActiveId(window.localStorage.getItem("cossa-ai-active-conversation"));
+  }, []);
 
   useEffect(() => {
     if (!activeId && conversations.data && conversations.data.length > 0) {
