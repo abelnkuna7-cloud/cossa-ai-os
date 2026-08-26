@@ -3,7 +3,14 @@ import { FileText } from "lucide-react";
 import { CrudWorkspace, fmtCurrency, fmtDate } from "@/components/crud-workspace";
 import { salesQuotations, type SalesQuotation } from "@/lib/business-data";
 
+interface QuotationSearch {
+  record: string | null;
+}
+
 export const Route = createFileRoute("/sales/quotations")({
+  validateSearch: (search: Record<string, unknown>): QuotationSearch => ({
+    record: typeof search.record === "string" && search.record.trim() ? search.record : null,
+  }),
   component: QuotationsPage,
   head: () => ({
     meta: [
@@ -42,6 +49,8 @@ function Stats({ rows }: { rows: SalesQuotation[] }) {
 }
 
 function QuotationsPage() {
+  const { record } = Route.useSearch();
+
   return (
     <CrudWorkspace<SalesQuotation>
       title="Quotations"
@@ -53,6 +62,7 @@ function QuotationsPage() {
       update={salesQuotations.update}
       remove={salesQuotations.remove}
       singular="quotation"
+      initialRecordId={record}
       Stats={Stats}
       fields={[
         { key: "number", label: "Quote number", required: true, placeholder: "Q-0001" },
