@@ -81,7 +81,9 @@ const starterPrompts = [
 function AiChatWorkspace() {
   const queryClient = useQueryClient();
 
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : window.localStorage.getItem("cossa-ai-active-conversation"),
+  );
   const [search, setSearch] = useState("");
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<string | null>(null);
@@ -112,6 +114,20 @@ function AiChatWorkspace() {
       setActiveId(conversations.data[0].id);
     }
   }, [conversations.data, activeId]);
+
+  useEffect(() => {
+    if (!activeId || typeof window === "undefined") return;
+    window.localStorage.setItem("cossa-ai-active-conversation", activeId);
+  }, [activeId]);
+
+  useEffect(() => {
+    function handleConversationChange(event: Event) {
+      const conversationId = (event as CustomEvent<string>).detail;
+      if (conversationId) setActiveId(conversationId);
+    }
+    window.addEventListener("cossa-ai-conversation-change", handleConversationChange);
+    return () => window.removeEventListener("cossa-ai-conversation-change", handleConversationChange);
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({

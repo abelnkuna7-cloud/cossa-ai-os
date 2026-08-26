@@ -1,5 +1,7 @@
 import {
   useEffect,
+  lazy,
+  Suspense,
   useRef,
   useState,
   type ReactNode,
@@ -53,6 +55,11 @@ import {
 } from "@/components/brand/growth-brand";
 
 import { Button } from "@/components/ui/button";
+
+const LazyCossaVoiceAssistant = lazy(async () => {
+  const module = await import("@/components/cossa-voice-assistant");
+  return { default: module.CossaVoiceAssistant };
+});
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
@@ -1465,6 +1472,12 @@ export function AppShell({
           <main className="flex-1 p-4 md:p-6 lg:p-8">
             {children}
           </main>
+
+          {routerLocation.pathname !== "/ai/voice" ? (
+            <Suspense fallback={null}>
+              <LazyCossaVoiceAssistant />
+            </Suspense>
+          ) : null}
         </div>
       </div>
     </SidebarProvider>
