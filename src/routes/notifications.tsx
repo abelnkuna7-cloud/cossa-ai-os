@@ -276,6 +276,7 @@ function NotificationsPage() {
             <div className="font-display text-lg font-semibold">All clear</div>
             <p className="max-w-md text-sm text-muted-foreground">
               No current records meet the notification rules for overdue work, upcoming appointments, quotation expiry or recent leads.
+            </p>
           </div>
         ) : (
           <ul className="flex flex-col divide-y divide-border/60">
