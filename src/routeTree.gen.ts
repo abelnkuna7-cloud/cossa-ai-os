@@ -52,6 +52,7 @@ import { Route as OperationsReportsRouteImport } from './routes/operations.repor
 import { Route as OperationsProjectsRouteImport } from './routes/operations.projects'
 import { Route as OperationsNexdocsRouteImport } from './routes/operations.nexdocs'
 import { Route as OperationsDocumentsRouteImport } from './routes/operations.documents'
+import { Route as OperationsCapabilityRegistryRouteImport } from './routes/operations.capability-registry'
 import { Route as OperationsCalendarRouteImport } from './routes/operations.calendar'
 import { Route as OperationsBusinessIntelligenceRouteImport } from './routes/operations.business-intelligence'
 import { Route as OperationsAutomationRouteImport } from './routes/operations.automation'
@@ -59,6 +60,7 @@ import { Route as OperationsAnalyticsRouteImport } from './routes/operations.ana
 import { Route as MarketingWhatsappRouteImport } from './routes/marketing.whatsapp'
 import { Route as MarketingTrendsRouteImport } from './routes/marketing.trends'
 import { Route as MarketingSocialRouteImport } from './routes/marketing.social'
+import { Route as MarketingShowcaseLibraryRouteImport } from './routes/marketing.showcase-library'
 import { Route as MarketingSeoRouteImport } from './routes/marketing.seo'
 import { Route as MarketingMonitoringRouteImport } from './routes/marketing.monitoring'
 import { Route as MarketingMetaAdsRouteImport } from './routes/marketing.meta-ads'
@@ -325,6 +327,12 @@ const OperationsDocumentsRoute = OperationsDocumentsRouteImport.update({
   path: '/operations/documents',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OperationsCapabilityRegistryRoute =
+  OperationsCapabilityRegistryRouteImport.update({
+    id: '/operations/capability-registry',
+    path: '/operations/capability-registry',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const OperationsCalendarRoute = OperationsCalendarRouteImport.update({
   id: '/operations/calendar',
   path: '/operations/calendar',
@@ -361,6 +369,12 @@ const MarketingSocialRoute = MarketingSocialRouteImport.update({
   path: '/marketing/social',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MarketingShowcaseLibraryRoute =
+  MarketingShowcaseLibraryRouteImport.update({
+    id: '/marketing/showcase-library',
+    path: '/marketing/showcase-library',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const MarketingSeoRoute = MarketingSeoRouteImport.update({
   id: '/marketing/seo',
   path: '/marketing/seo',
@@ -685,6 +699,7 @@ export interface FileRoutesByFullPath {
   '/marketing/meta-ads': typeof MarketingMetaAdsRoute
   '/marketing/monitoring': typeof MarketingMonitoringRoute
   '/marketing/seo': typeof MarketingSeoRoute
+  '/marketing/showcase-library': typeof MarketingShowcaseLibraryRoute
   '/marketing/social': typeof MarketingSocialRoute
   '/marketing/trends': typeof MarketingTrendsRoute
   '/marketing/whatsapp': typeof MarketingWhatsappRoute
@@ -692,6 +707,7 @@ export interface FileRoutesByFullPath {
   '/operations/automation': typeof OperationsAutomationRoute
   '/operations/business-intelligence': typeof OperationsBusinessIntelligenceRoute
   '/operations/calendar': typeof OperationsCalendarRoute
+  '/operations/capability-registry': typeof OperationsCapabilityRegistryRoute
   '/operations/documents': typeof OperationsDocumentsRoute
   '/operations/nexdocs': typeof OperationsNexdocsRoute
   '/operations/projects': typeof OperationsProjectsRoute
@@ -787,6 +803,7 @@ export interface FileRoutesByTo {
   '/marketing/meta-ads': typeof MarketingMetaAdsRoute
   '/marketing/monitoring': typeof MarketingMonitoringRoute
   '/marketing/seo': typeof MarketingSeoRoute
+  '/marketing/showcase-library': typeof MarketingShowcaseLibraryRoute
   '/marketing/social': typeof MarketingSocialRoute
   '/marketing/trends': typeof MarketingTrendsRoute
   '/marketing/whatsapp': typeof MarketingWhatsappRoute
@@ -794,6 +811,7 @@ export interface FileRoutesByTo {
   '/operations/automation': typeof OperationsAutomationRoute
   '/operations/business-intelligence': typeof OperationsBusinessIntelligenceRoute
   '/operations/calendar': typeof OperationsCalendarRoute
+  '/operations/capability-registry': typeof OperationsCapabilityRegistryRoute
   '/operations/documents': typeof OperationsDocumentsRoute
   '/operations/nexdocs': typeof OperationsNexdocsRoute
   '/operations/projects': typeof OperationsProjectsRoute
@@ -890,6 +908,7 @@ export interface FileRoutesById {
   '/marketing/meta-ads': typeof MarketingMetaAdsRoute
   '/marketing/monitoring': typeof MarketingMonitoringRoute
   '/marketing/seo': typeof MarketingSeoRoute
+  '/marketing/showcase-library': typeof MarketingShowcaseLibraryRoute
   '/marketing/social': typeof MarketingSocialRoute
   '/marketing/trends': typeof MarketingTrendsRoute
   '/marketing/whatsapp': typeof MarketingWhatsappRoute
@@ -897,6 +916,7 @@ export interface FileRoutesById {
   '/operations/automation': typeof OperationsAutomationRoute
   '/operations/business-intelligence': typeof OperationsBusinessIntelligenceRoute
   '/operations/calendar': typeof OperationsCalendarRoute
+  '/operations/capability-registry': typeof OperationsCapabilityRegistryRoute
   '/operations/documents': typeof OperationsDocumentsRoute
   '/operations/nexdocs': typeof OperationsNexdocsRoute
   '/operations/projects': typeof OperationsProjectsRoute
@@ -994,6 +1014,7 @@ export interface FileRouteTypes {
     | '/marketing/meta-ads'
     | '/marketing/monitoring'
     | '/marketing/seo'
+    | '/marketing/showcase-library'
     | '/marketing/social'
     | '/marketing/trends'
     | '/marketing/whatsapp'
@@ -1001,6 +1022,7 @@ export interface FileRouteTypes {
     | '/operations/automation'
     | '/operations/business-intelligence'
     | '/operations/calendar'
+    | '/operations/capability-registry'
     | '/operations/documents'
     | '/operations/nexdocs'
     | '/operations/projects'
@@ -1096,6 +1118,7 @@ export interface FileRouteTypes {
     | '/marketing/meta-ads'
     | '/marketing/monitoring'
     | '/marketing/seo'
+    | '/marketing/showcase-library'
     | '/marketing/social'
     | '/marketing/trends'
     | '/marketing/whatsapp'
@@ -1103,6 +1126,7 @@ export interface FileRouteTypes {
     | '/operations/automation'
     | '/operations/business-intelligence'
     | '/operations/calendar'
+    | '/operations/capability-registry'
     | '/operations/documents'
     | '/operations/nexdocs'
     | '/operations/projects'
@@ -1198,6 +1222,7 @@ export interface FileRouteTypes {
     | '/marketing/meta-ads'
     | '/marketing/monitoring'
     | '/marketing/seo'
+    | '/marketing/showcase-library'
     | '/marketing/social'
     | '/marketing/trends'
     | '/marketing/whatsapp'
@@ -1205,6 +1230,7 @@ export interface FileRouteTypes {
     | '/operations/automation'
     | '/operations/business-intelligence'
     | '/operations/calendar'
+    | '/operations/capability-registry'
     | '/operations/documents'
     | '/operations/nexdocs'
     | '/operations/projects'
@@ -1301,6 +1327,7 @@ export interface RootRouteChildren {
   MarketingMetaAdsRoute: typeof MarketingMetaAdsRoute
   MarketingMonitoringRoute: typeof MarketingMonitoringRoute
   MarketingSeoRoute: typeof MarketingSeoRoute
+  MarketingShowcaseLibraryRoute: typeof MarketingShowcaseLibraryRoute
   MarketingSocialRoute: typeof MarketingSocialRoute
   MarketingTrendsRoute: typeof MarketingTrendsRoute
   MarketingWhatsappRoute: typeof MarketingWhatsappRoute
@@ -1308,6 +1335,7 @@ export interface RootRouteChildren {
   OperationsAutomationRoute: typeof OperationsAutomationRoute
   OperationsBusinessIntelligenceRoute: typeof OperationsBusinessIntelligenceRoute
   OperationsCalendarRoute: typeof OperationsCalendarRoute
+  OperationsCapabilityRegistryRoute: typeof OperationsCapabilityRegistryRoute
   OperationsDocumentsRoute: typeof OperationsDocumentsRoute
   OperationsNexdocsRoute: typeof OperationsNexdocsRoute
   OperationsProjectsRoute: typeof OperationsProjectsRoute
@@ -1634,6 +1662,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperationsDocumentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/operations/capability-registry': {
+      id: '/operations/capability-registry'
+      path: '/operations/capability-registry'
+      fullPath: '/operations/capability-registry'
+      preLoaderRoute: typeof OperationsCapabilityRegistryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/operations/calendar': {
       id: '/operations/calendar'
       path: '/operations/calendar'
@@ -1681,6 +1716,13 @@ declare module '@tanstack/react-router' {
       path: '/marketing/social'
       fullPath: '/marketing/social'
       preLoaderRoute: typeof MarketingSocialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/showcase-library': {
+      id: '/marketing/showcase-library'
+      path: '/marketing/showcase-library'
+      fullPath: '/marketing/showcase-library'
+      preLoaderRoute: typeof MarketingShowcaseLibraryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/marketing/seo': {
@@ -2131,6 +2173,7 @@ const rootRouteChildren: RootRouteChildren = {
   MarketingMetaAdsRoute: MarketingMetaAdsRoute,
   MarketingMonitoringRoute: MarketingMonitoringRoute,
   MarketingSeoRoute: MarketingSeoRoute,
+  MarketingShowcaseLibraryRoute: MarketingShowcaseLibraryRoute,
   MarketingSocialRoute: MarketingSocialRoute,
   MarketingTrendsRoute: MarketingTrendsRoute,
   MarketingWhatsappRoute: MarketingWhatsappRoute,
@@ -2138,6 +2181,7 @@ const rootRouteChildren: RootRouteChildren = {
   OperationsAutomationRoute: OperationsAutomationRoute,
   OperationsBusinessIntelligenceRoute: OperationsBusinessIntelligenceRoute,
   OperationsCalendarRoute: OperationsCalendarRoute,
+  OperationsCapabilityRegistryRoute: OperationsCapabilityRegistryRoute,
   OperationsDocumentsRoute: OperationsDocumentsRoute,
   OperationsNexdocsRoute: OperationsNexdocsRoute,
   OperationsProjectsRoute: OperationsProjectsRoute,

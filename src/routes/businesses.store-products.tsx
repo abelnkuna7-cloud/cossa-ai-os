@@ -54,6 +54,15 @@ type FulfilmentModel =
   | "print_on_demand"
   | "affiliate"
   | "digital";
+type InventoryOwnership =
+  | "cossa_owned"
+  | "supplier_managed"
+  | "pod_managed"
+  | "affiliate_merchant"
+  | "digital"
+  | "not_applicable"
+  | "unknown";
+type InventorySourceStatus = "verified" | "manual" | "stale" | "not_connected" | "failed" | "unknown";
 
 type StoreProduct = {
   id: string;
@@ -78,6 +87,9 @@ type StoreProduct = {
   track_inventory: boolean;
   stock_quantity: number;
   unlimited_stock: boolean;
+  inventory_ownership: InventoryOwnership;
+  inventory_source_status: InventorySourceStatus;
+  inventory_source_reference: string | null;
   featured: boolean;
   image_urls: string[];
   seo_title: string | null;
@@ -112,6 +124,9 @@ type ProductForm = {
   track_inventory: boolean;
   stock_quantity: string;
   unlimited_stock: boolean;
+  inventory_ownership: InventoryOwnership;
+  inventory_source_status: InventorySourceStatus;
+  inventory_source_reference: string;
   featured: boolean;
   image_urls: string[];
   seo_title: string;
@@ -143,6 +158,9 @@ const EMPTY_FORM: ProductForm = {
   track_inventory: false,
   stock_quantity: "0",
   unlimited_stock: true,
+  inventory_ownership: "unknown",
+  inventory_source_status: "unknown",
+  inventory_source_reference: "",
   featured: false,
   image_urls: [],
   seo_title: "",
@@ -243,6 +261,9 @@ function rowToForm(row: StoreProduct): ProductForm {
     track_inventory: row.track_inventory,
     stock_quantity: String(row.stock_quantity ?? 0),
     unlimited_stock: row.unlimited_stock,
+    inventory_ownership: row.inventory_ownership ?? "unknown",
+    inventory_source_status: row.inventory_source_status ?? "unknown",
+    inventory_source_reference: row.inventory_source_reference ?? "",
     featured: row.featured,
     image_urls: row.image_urls ?? [],
     seo_title: row.seo_title ?? "",
@@ -430,6 +451,9 @@ function StoreProductManager() {
       track_inventory: tracksInventory ? form.track_inventory : false,
       stock_quantity: tracksInventory ? Math.max(0, Number(form.stock_quantity || 0)) : 0,
       unlimited_stock: tracksInventory ? form.unlimited_stock : form.product_type !== "physical",
+      inventory_ownership: form.inventory_ownership,
+      inventory_source_status: form.inventory_source_status,
+      inventory_source_reference: form.inventory_source_reference.trim() || null,
       featured: form.featured,
       image_urls: form.image_urls,
       seo_title: form.seo_title.trim() || null,
@@ -778,6 +802,52 @@ function StoreProductManager() {
           ) : null}
 
           <div className="mt-7 border-t border-border/60 pt-6">
+            <h3 className="font-semibold">Inventory provenance</h3>
+            <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+              A quantity is not proof that Cossa owns stock. Record who owns or fulfils it and how that information was checked. “Unknown” is kept visible until a real source is recorded.
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label="Inventory ownership">
+                <select
+                  className={inputClass}
+                  value={form.inventory_ownership}
+                  onChange={(event) => update("inventory_ownership", event.target.value as InventoryOwnership)}
+                >
+                  <option value="unknown">Unknown — not yet verified</option>
+                  <option value="cossa_owned">Cossa-owned stock</option>
+                  <option value="supplier_managed">Supplier-managed availability</option>
+                  <option value="pod_managed">Print-on-demand provider</option>
+                  <option value="affiliate_merchant">Affiliate merchant</option>
+                  <option value="digital">Digital delivery</option>
+                  <option value="not_applicable">Not applicable</option>
+                </select>
+              </Field>
+              <Field label="Source status">
+                <select
+                  className={inputClass}
+                  value={form.inventory_source_status}
+                  onChange={(event) => update("inventory_source_status", event.target.value as InventorySourceStatus)}
+                >
+                  <option value="unknown">Unknown</option>
+                  <option value="verified">Verified from a current source</option>
+                  <option value="manual">Manually recorded</option>
+                  <option value="stale">Source needs re-checking</option>
+                  <option value="not_connected">No live source connected</option>
+                  <option value="failed">Last source check failed</option>
+                </select>
+              </Field>
+              <Field label="Evidence or source reference" className="sm:col-span-2">
+                <input
+                  className={inputClass}
+                  value={form.inventory_source_reference}
+                  onChange={(event) => update("inventory_source_reference", event.target.value)}
+                  placeholder="Supplier portal reference, stock count date, or approved internal record"
+                />
+              </Field>
+            </div>
+          </div>
+
+          <div className="mt-7 border-t border-border/60 pt-6">
             <div className="flex items-center justify-between gap-3">
               <h3 className="font-semibold">Search & merchandising</h3>
               <Toggle label="Featured product" checked={form.featured} onChange={(checked) => update("featured", checked)} />
@@ -853,7 +923,9 @@ function StoreProductManager() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <h3 className="line-clamp-2 text-sm font-semibold">{product.name}</h3>
-                          <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{product.product_type} Â· {product.status}</p>
+                          <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                            {product.product_type} Â· {product.status} Â· {product.inventory_ownership.replaceAll("_", " ")}
+                          </p>
                         </div>
                         <p className="shrink-0 text-sm font-semibold text-primary">R{Number(product.price).toFixed(2)}</p>
                       </div>

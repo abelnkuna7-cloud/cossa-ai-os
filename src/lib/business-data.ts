@@ -2396,30 +2396,7 @@ export async function dashboardStats() {
         0,
       );
 
-  const wonValue =
-    opportunities
-      .filter(
-        (
-          opportunity,
-        ) =>
-          normaliseUiOpportunityStage(
-            opportunity.stage,
-          ) === "won",
-      )
-      .reduce(
-        (
-          total,
-          opportunity,
-        ) =>
-          total +
-          safeNumber(
-            opportunity.value,
-            0,
-          ),
-        0,
-      );
-
-  const acceptedRevenue =
+  const acceptedQuotationValue =
     quotations
       .filter(
         (
@@ -2501,13 +2478,11 @@ export async function dashboardStats() {
 
   return {
     /*
-     * Existing source records do not currently retain a dependable
-     * win/acceptance timestamp. This is therefore RECORDED revenue rather
-     * than month-to-date revenue.
+     * An accepted quotation is a commercial commitment, not payment-confirmed
+     * revenue. Revenue is intentionally withheld until a payment truth source
+     * is verified and connected.
      */
-    recordedRevenue:
-      wonValue +
-      acceptedRevenue,
+    acceptedQuotationValue,
 
     newLeads:
       leads.filter(

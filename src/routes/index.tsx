@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
   useEffect,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -80,6 +81,7 @@ const initialFormState = {
   phone: "",
   email: "",
   message: "",
+  consentToResponse: false,
 };
 
 type SubmitState =
@@ -96,26 +98,13 @@ interface DatabaseError {
 }
 
 interface PublicGrowthDatabaseClient {
-  from:
-    (
-      table:
-        | "contact_messages"
-        | "leads",
-    ) => {
-      insert:
-        (
-          row:
-            Record<
-              string,
-              unknown
-            >,
-        ) =>
-          Promise<{
-            error:
-              DatabaseError |
-              null;
-          }>;
-    };
+  rpc: (
+    functionName: "ingest_cossa_lead",
+    parameters: Record<string, unknown>,
+  ) => Promise<{
+    data: Array<{ lead_id: string; is_new: boolean }> | null;
+    error: DatabaseError | null;
+  }>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -465,6 +454,25 @@ function createLeadNotes(
   );
 }
 
+function createSourceRecordId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `growth-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function campaignAttribution(): Record<string, string> {
+  const parameters = new URLSearchParams(window.location.search);
+  const keys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
+
+  return keys.reduce<Record<string, string>>((attribution, key) => {
+    const value = parameters.get(key)?.trim();
+    if (value) attribution[key] = value.slice(0, 200);
+    return attribution;
+  }, {});
+}
+
 /* -------------------------------------------------------------------------- */
 /* PAGE                                                                       */
 /* -------------------------------------------------------------------------- */
@@ -496,8 +504,10 @@ function GrowthHome() {
       string |
       null
     >(
-      null,
-    );
+    null,
+  );
+
+  const sourceRecordIdRef = useRef<string | null>(null);
 
   const [
     activePreview,
@@ -662,14 +672,15 @@ function GrowthHome() {
     if (
       !name ||
       !phone ||
-      !message
+      !message ||
+      !form.consentToResponse
     ) {
       setSubmitState(
         "error",
       );
 
       setSubmitError(
-        "Please enter your name, phone number and a short description of what you need.",
+        "Please enter your name, phone number, a short description of what you need, and confirm that Cossa may respond to your enquiry.",
       );
 
       return;
@@ -687,34 +698,31 @@ function GrowthHome() {
       supabase as unknown as
         PublicGrowthDatabaseClient;
 
-    const {
-      error:
-        contactMessageError,
-    } =
-      await database
-        .from(
-          "contact_messages",
-        )
-        .insert({
-          name,
-          phone,
-          email,
+    const sourceRecordId = sourceRecordIdRef.current ?? createSourceRecordId();
+    sourceRecordIdRef.current = sourceRecordId;
 
-          subject:
-            "Growth website quote request",
+    const { data: intakeResult, error: leadError } = await database.rpc("ingest_cossa_lead", {
+      p_source_app: "cossa_growth",
+      p_source_record_id: sourceRecordId,
+      p_lead_type: "quote_request",
+      p_full_name: name,
+      p_email: email,
+      p_phone: phone,
+      p_service: "Business growth consultation",
+      p_location: null,
+      p_notes: createLeadNotes(message),
+      p_company: null,
+      p_raw_payload: {
+        source_page: window.location.pathname,
+        campaign_attribution: campaignAttribution(),
+        response_contact_consent: true,
+      },
+    });
 
-          message,
-
-          status:
-            "unread",
-        });
-
-    if (
-      contactMessageError
-    ) {
+    if (leadError || !intakeResult?.[0]?.lead_id) {
       console.error(
-        "Unable to save Growth contact message:",
-        contactMessageError,
+        "The Growth enquiry intake did not return a valid CRM lead:",
+        leadError ?? "No lead identifier returned",
       );
 
       setSubmitState(
@@ -722,72 +730,7 @@ function GrowthHome() {
       );
 
       setSubmitError(
-        "We could not save your request. Please call, WhatsApp or email Cossa directly.",
-      );
-
-      return;
-    }
-
-    const {
-      error:
-        leadError,
-    } =
-      await database
-        .from(
-          "leads",
-        )
-        .insert({
-          full_name:
-            name,
-
-          name,
-          phone,
-          email,
-
-          service:
-            "Business enquiry",
-
-          location:
-            null,
-
-          source:
-            "growth_website_quote_request",
-
-          status:
-            "New",
-
-          stage:
-            "New",
-
-          notes:
-            createLeadNotes(
-              message,
-            ),
-
-          score:
-            40,
-
-          value:
-            0,
-
-          estimated_value:
-            0,
-        });
-
-    if (
-      leadError
-    ) {
-      console.error(
-        "The enquiry was saved but the CRM lead could not be created:",
-        leadError,
-      );
-
-      setSubmitState(
-        "error",
-      );
-
-      setSubmitError(
-        "Your request was received, but our CRM could not complete the lead record. Please call or WhatsApp Cossa so we can assist immediately.",
+        "We could not add your enquiry to the Cossa follow-up system. Please call or WhatsApp Cossa so we can assist immediately.",
       );
 
       return;
@@ -796,6 +739,8 @@ function GrowthHome() {
     setForm(
       initialFormState,
     );
+
+    sourceRecordIdRef.current = null;
 
     setSubmitState(
       "sent",
@@ -1238,6 +1183,24 @@ function GrowthHome() {
                     }
                   />
                 </div>
+
+                <label className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/35 p-3 text-xs leading-5 text-muted-foreground sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={form.consentToResponse}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        consentToResponse: event.target.checked,
+                      }))
+                    }
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                  />
+                  <span>
+                    I agree that Cossa may use these details to respond to this enquiry and prepare the requested consultation or quotation. This does not subscribe me to unrelated marketing.
+                  </span>
+                </label>
               </div>
 
               <Button

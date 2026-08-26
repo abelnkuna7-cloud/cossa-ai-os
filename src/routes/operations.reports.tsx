@@ -44,7 +44,7 @@ function ReportsPage() {
         <>
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: "Recorded revenue", value: fmtCurrency(data.recordedRevenue) },
+              { label: "Accepted quote value", value: fmtCurrency(data.acceptedQuotationValue) },
               { label: "Pipeline value", value: fmtCurrency(data.pipelineValue) },
               { label: "New leads (7d)", value: data.newLeads },
               { label: "Customers", value: data.customers },

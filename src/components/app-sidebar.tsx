@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Megaphone,
   PackageSearch,
+  Presentation,
   Settings2,
   Sparkles,
   Store,
@@ -215,7 +216,21 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
         icon: Megaphone,
 
         matchPrefixes: [
-          "/marketing",
+          "/marketing/ai-director",
+          "/marketing/brand",
+          "/marketing/campaigns",
+          "/marketing/competitors",
+          "/marketing/content-studio",
+          "/marketing/email",
+          "/marketing/google-ads",
+          "/marketing/keywords",
+          "/marketing/landing-pages",
+          "/marketing/meta-ads",
+          "/marketing/monitoring",
+          "/marketing/seo",
+          "/marketing/social",
+          "/marketing/trends",
+          "/marketing/whatsapp",
         ],
       },
 
@@ -231,6 +246,21 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
         matchPrefixes: [
           "/sales",
+        ],
+      },
+
+      {
+        title: "Showcase Library",
+
+        description:
+          "Verified Cossa systems, authorised client work and clearly labelled capability samples for customer acquisition.",
+
+        to: "/marketing/showcase-library",
+
+        icon: Presentation,
+
+        matchPrefixes: [
+          "/marketing/showcase-library",
         ],
       },
     ],

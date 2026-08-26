@@ -39,29 +39,29 @@ function BusinessIntelligence() {
 
   const kpis = [
     {
-      label: "Recorded revenue",
-      value: fmtCurrency(data?.recordedRevenue ?? 0),
-      detail: "Won opportunities and accepted quotations",
+      label: "Accepted quote value",
+      value: data ? fmtCurrency(data.acceptedQuotationValue) : "Unavailable",
+      detail: "Accepted quotations only — not cash received",
       icon: DollarSign,
       to: "/sales/quotations" as const,
     },
     {
       label: "Open pipeline",
-      value: fmtCurrency(data?.pipelineValue ?? 0),
+      value: data ? fmtCurrency(data.pipelineValue) : "Unavailable",
       detail: "Recorded value on open opportunities",
       icon: TrendingUp,
       to: "/sales/pipeline" as const,
     },
     {
       label: "Customers",
-      value: String(data?.customers ?? 0),
+      value: data ? String(data.customers) : "Unavailable",
       detail: "Customer records in the CRM",
       icon: Users,
       to: "/sales/customers" as const,
     },
     {
       label: "Active projects",
-      value: String(data?.activeProjects ?? 0),
+      value: data ? String(data.activeProjects) : "Unavailable",
       detail: "Projects not marked done or archived",
       icon: FolderKanban,
       to: "/operations/projects" as const,
@@ -99,6 +99,12 @@ function BusinessIntelligence() {
             {statsQuery.isFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Refresh snapshot
           </button>
+          <Link
+            to="/operations/capability-registry"
+            className="inline-flex h-9 items-center justify-center rounded-md border border-primary/40 px-4 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+          >
+            Capability registry
+          </Link>
         </div>
       </section>
 

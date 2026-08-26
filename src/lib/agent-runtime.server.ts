@@ -569,6 +569,60 @@ async function logExecutionEvent(
   }
 }
 
+function capabilityForComponent(componentType: "provider" | "tool", componentKey: string): string | null {
+  if (componentType !== "tool") return null;
+  if (componentKey === "cossa-lead-hunter") return "lead-hunter";
+  if (componentKey === "cossa-crm") return "growth-crm";
+  return null;
+}
+
+function capabilityForTask(taskType: string): string | null {
+  if (taskType === "orchestrate_lead_hunt" || taskType === "scheduled_lead_hunter_trigger") {
+    return "cossa-orchestrator";
+  }
+  if (taskType === "lead_research") return "lead-hunter";
+  if (taskType === "lead_crm_save") return "growth-crm";
+  if (taskType === "lead_outreach_draft") return "outreach-drafting";
+  return null;
+}
+
+async function recordCapabilityOutcome(
+  environment: RuntimeEnvironment,
+  capabilityKey: string,
+  values: {
+    status: "operational" | "integration_required" | "degraded";
+    error?: Error | null;
+  },
+): Promise<void> {
+  const now = new Date().toISOString();
+  const query = new URLSearchParams({
+    organisation_id: `eq.${environment.organisationId}`,
+    capability_key: `eq.${capabilityKey}`,
+  });
+  const payload = values.error
+    ? {
+        operational_status: values.status,
+        last_failure_at: now,
+        last_error: clip(values.error.message, 1_000),
+      }
+    : {
+        operational_status: values.status,
+        last_success_at: now,
+        verified_at: now,
+        last_error: null,
+      };
+
+  try {
+    await databaseRequest(environment, `capability_registry?${query.toString()}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    console.error("[agent-runtime] unable to record capability outcome", error);
+  }
+}
+
 async function activeEmployeesAndAgents(environment: RuntimeEnvironment, organisationId: string) {
   const query = new URLSearchParams({
     select: "id,employee_key,name,title,status",
@@ -810,6 +864,14 @@ async function recordCircuitResult(
       }),
     },
   );
+
+  const capabilityKey = capabilityForComponent(componentType, componentKey);
+  if (capabilityKey) {
+    await recordCapabilityOutcome(environment, capabilityKey, {
+      status: error ? "degraded" : "operational",
+      error,
+    });
+  }
 }
 
 async function circuitAllowsAttempt(
@@ -1100,6 +1162,10 @@ async function modelWithFallback(
 ): Promise<{ provider: string; model: string; content: string }> {
   const providers = configuredModelProviders(environment);
   if (providers.length === 0) {
+    await recordCapabilityOutcome(environment, "provider-router", {
+      status: "integration_required",
+      error: new Error("No protected model provider is configured."),
+    });
     throw new AgentRuntimeError(
       "model_not_configured",
       "No protected model provider is configured. Add at least one of GROQ_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY to the server environment.",
@@ -1117,12 +1183,20 @@ async function modelWithFallback(
     try {
       const result = await providerCompletion(environment, provider, prompt);
       await recordCircuitResult(environment, "provider", provider, null);
+      await recordCapabilityOutcome(environment, "provider-router", { status: "operational" });
       return result;
     } catch (error) {
       const failure = providerFailureFromException(provider, error);
       await recordCircuitResult(environment, "provider", provider, failure);
       failures.push(`${provider} (${failure.category}): ${failure.message}`);
       if (!failure.retryable) {
+        await recordCapabilityOutcome(environment, "provider-router", {
+          status:
+            failure.category === "authentication_failed" || failure.category === "permission_denied"
+              ? "integration_required"
+              : "degraded",
+          error: failure,
+        });
         throw new AgentRuntimeError(
           failure.category === "authentication_failed" || failure.category === "permission_denied"
             ? "provider_configuration_required"
@@ -1136,6 +1210,10 @@ async function modelWithFallback(
     }
   }
 
+  await recordCapabilityOutcome(environment, "provider-router", {
+    status: "degraded",
+    error: new Error(`No configured model provider could complete the task. ${failures.join(" | ")}`),
+  });
   throw new AgentRuntimeError(
     "all_model_providers_failed",
     `No configured model provider could complete the task. ${clip(failures.join(" | "), 700)}`,
@@ -1969,6 +2047,10 @@ async function processOneTask(
       message: `${agent.name} completed ${task.task_type}.`,
       metadata: { provider: result.provider, model: result.model, external_actions_enabled: false },
     });
+    const capabilityKey = capabilityForTask(task.task_type);
+    if (capabilityKey) {
+      await recordCapabilityOutcome(environment, capabilityKey, { status: "operational" });
+    }
     return "completed";
   } catch (unknownError) {
     const error =
@@ -1977,6 +2059,13 @@ async function processOneTask(
       console.error("[agent-runtime] unable to fail run", failure),
     );
     const status = await failTask(environment, task, error);
+    const capabilityKey = capabilityForTask(task.task_type);
+    if (
+      capabilityKey &&
+      !(error instanceof AgentRuntimeError && error.code.startsWith("invalid_lead_hunter_"))
+    ) {
+      await recordCapabilityOutcome(environment, capabilityKey, { status: "degraded", error });
+    }
     if (status === "failed" && task.mission_id) {
       await databaseRequest(
         environment,
@@ -2053,6 +2142,7 @@ export async function runAgentRuntimeTick(): Promise<{
       external_sending_enabled: false,
     },
   });
+  await recordCapabilityOutcome(environment, "cossa-orchestrator", { status: "operational" });
 
   console.info(
     JSON.stringify({
