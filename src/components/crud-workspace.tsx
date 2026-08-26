@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Trash2, Loader2, Pencil, Inbox } from "lucide-react";
 import { toast } from "sonner";
@@ -48,6 +48,7 @@ export interface CrudWorkspaceProps<T extends { id: string }> {
   Stats?: ComponentType<{ rows: T[] }>;
   extra?: ReactNode;
   singular?: string;
+  initialRecordId?: string | null;
 }
 
 function toFormValue(v: unknown): string {
@@ -66,7 +67,7 @@ export function CrudWorkspace<T extends { id: string; created_at?: string; updat
 ) {
   const {
     title, tagline, description, icon: Icon, queryKey, fetch, create, update, remove,
-    fields, columns, searchKeys, emptyHint, Stats, extra, singular = "item",
+    fields, columns, searchKeys, emptyHint, Stats, extra, singular = "item", initialRecordId = null,
   } = props;
 
   const qc = useQueryClient();
@@ -76,6 +77,16 @@ export function CrudWorkspace<T extends { id: string; created_at?: string; updat
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Partial<T> | null>(null);
+  const openedInitialRecordRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!initialRecordId || isLoading || openedInitialRecordRef.current === initialRecordId) return;
+    const row = rows.find((candidate) => candidate.id === initialRecordId);
+    if (!row) return;
+    openedInitialRecordRef.current = initialRecordId;
+    setEditing({ ...row });
+    setOpen(true);
+  }, [initialRecordId, isLoading, rows]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
