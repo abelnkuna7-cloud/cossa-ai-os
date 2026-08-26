@@ -16,6 +16,7 @@ export const COSSA_MARKETING_PROFILE = {
     "The priority business units are recorded in DOCUMENT: Cossa AI — Verified Mission, Vision and Values. They are not a complete approved service catalogue.",
     "The same source mentions South Africa and African SMEs. It does not define a complete service-coverage area.",
     "The owner supplied an initial R300 advertising test ceiling. It is a draft guardrail, not an approved spend. Founder and CEO Abel Nkuna must approve every campaign, budget and account connection before action.",
+    "The Cossa Nexus Holdings LinkedIn Company Page exists publicly at https://www.linkedin.com/company/cossa-nexus-holdings/. Public-page existence does not mean LinkedIn publishing, analytics or inbox APIs are connected.",
   ],
 } as const;
 
@@ -136,10 +137,10 @@ export const COSSA_SOCIAL_PROFILES: readonly CossaSocialProfile[] = [
     id: "linkedin-hub",
     platform: "LinkedIn",
     label: "Cossa Nexus Holdings",
-    handle: "No Company Page yet",
-    url: null,
-    source: "Not created",
-    connectionState: "Ready when created",
+    handle: "cossa-nexus-holdings",
+    url: "https://www.linkedin.com/company/cossa-nexus-holdings/",
+    source: "Owner-listed URL",
+    connectionState: "Public profile listed",
   },
 ];
 
@@ -157,7 +158,7 @@ OWNER-APPROVED COSSA MARKETING CONTEXT
 - Priority business units named in the approved Mission, Vision and Values source: ${COSSA_MARKETING_PROFILE.priorityBusinessUnits.join(", ")}. Do not represent this list as a complete service catalogue.
 - Owner-listed public profiles (identity only, not an analytics, inbox or publishing connection):
 - ${socialProfileSummary}
-- LinkedIn has no Company Page yet. It is ready for an owner-created Page and later least-privilege OAuth approval; do not claim it is connected or managed.
+- LinkedIn Company Page exists publicly at https://www.linkedin.com/company/cossa-nexus-holdings/ (organisation/page ID 144749972). This public identity may be used for social planning and content preparation, but publishing, analytics and inbox access remain separate capability states until an authorised LinkedIn API connection is verified.
 - The owner supplied a proposed R300 advertising test ceiling, but no advertising account, campaign or spend is approved. Founder and CEO Abel Nkuna must approve every campaign, budget and account connection.
 - Never invent a service, social handle, platform connection, audience, website issue, customer result, testimonial, case study or performance metric.
 `.trim();
