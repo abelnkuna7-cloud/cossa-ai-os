@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 54532)
-Total output lines: 11885
-
 import { createFileRoute } from "@tanstack/react-router";
 
 import type {
@@ -5548,7 +5545,942 @@ function isCossaFirstPartyCandidate(
   }
 
   if (
-    inspection.…4532 tokens truncated…uire_opportunity_signal ||
+    inspection.emails.some(
+      (
+        email,
+      ) =>
+        email.endsWith(
+          "@cossanexusholdings.co.za",
+        ),
+    )
+  ) {
+    return true;
+  }
+
+  return COSSA_FIRST_PARTY_NAME_PATTERN.test(
+    `${candidate.title} ${inspection.title ?? ""}`,
+  );
+}
+
+function isDirectorySource(
+  url: string,
+  content: string,
+): boolean {
+  const host =
+    getHostname(
+      url,
+    );
+
+  return (
+    DIRECTORY_HOST_PATTERNS.some(
+      (
+        pattern,
+      ) =>
+        host.includes(
+          pattern,
+        ),
+    ) ||
+    DIRECTORY_TEXT_PATTERN.test(
+      content,
+    )
+  );
+}
+
+function competitorPatternsForService(
+  service:
+    LeadHunterServiceCategory,
+): RegExp[] {
+  const map:
+    Partial<
+      Record<
+        LeadHunterServiceCategory,
+        RegExp[]
+      >
+    > = {
+    construction: [
+      /\bconstruction company\b/i,
+      /\bbuilding contractor\b/i,
+      /\bbuilders? in\b/i,
+      /\bbuilding company\b/i,
+      /\bconstruction services\b/i,
+      /\bwe build\b/i,
+    ],
+
+    renovation: [
+      /\brenovation company\b/i,
+      /\brenovation contractor\b/i,
+      /\brenovation services\b/i,
+      /\bhome improvement company\b/i,
+    ],
+
+    property_maintenance: [
+      /\bproperty maintenance company\b/i,
+      /\bmaintenance contractor\b/i,
+      /\bproperty maintenance services\b/i,
+      /\bhandyman services\b/i,
+    ],
+
+    painting: [
+      /\bpainting contractor\b/i,
+      /\bpainters? in\b/i,
+      /\bpainting services\b/i,
+    ],
+
+    tiling: [
+      /\btiling contractor\b/i,
+      /\btiling services\b/i,
+      /\bprofessional tilers?\b/i,
+    ],
+
+    ceilings: [
+      /\bceiling installer\b/i,
+      /\bceiling contractor\b/i,
+      /\bceiling services\b/i,
+    ],
+
+    roofing: [
+      /\broofing contractor\b/i,
+      /\broofing company\b/i,
+      /\broof repair services\b/i,
+    ],
+
+    plumbing: [
+      /\bplumbing company\b/i,
+      /\bprofessional plumbers?\b/i,
+      /\bplumbing services\b/i,
+    ],
+
+    facility_management: [
+      /\bfacilities management company\b/i,
+      /\bfacility management services\b/i,
+    ],
+
+    commercial_cleaning: [
+      /\bcleaning company\b/i,
+      /\bcommercial cleaning services\b/i,
+      /\bprofessional cleaners?\b/i,
+      /\bjanitorial services\b/i,
+    ],
+
+    deep_cleaning: [
+      /\bdeep cleaning services\b/i,
+      /\bcleaning company\b/i,
+      /\bprofessional cleaners?\b/i,
+    ],
+
+    hygiene: [
+      /\bhygiene services\b/i,
+      /\bsanitation services\b/i,
+      /\bcleaning company\b/i,
+    ],
+
+    landscaping: [
+      /\blandscaping company\b/i,
+      /\bgarden services\b/i,
+      /\blandscape contractor\b/i,
+    ],
+
+    waste_management: [
+      /\bwaste management company\b/i,
+      /\bwaste collection services\b/i,
+    ],
+
+    website_design: [
+      /\bweb design company\b/i,
+      /\bwebsite design agency\b/i,
+      /\bweb development agency\b/i,
+      /\bweb designer\b/i,
+    ],
+
+    logo_design: [
+      /\blogo design company\b/i,
+      /\bgraphic design agency\b/i,
+      /\blogo designer\b/i,
+      /\bbranding agency\b/i,
+    ],
+
+    branding: [
+      /\bbranding agency\b/i,
+      /\bbrand design agency\b/i,
+      /\bgraphic design agency\b/i,
+      /\bbranding company\b/i,
+    ],
+
+    seo: [
+      /\bseo agency\b/i,
+      /\bseo company\b/i,
+      /\bsearch marketing agency\b/i,
+    ],
+
+    digital_marketing: [
+      /\bdigital marketing agency\b/i,
+      /\bmarketing agency\b/i,
+      /\bsocial media agency\b/i,
+    ],
+
+    social_media_management: [
+      /\bsocial media agency\b/i,
+      /\bsocial media management services\b/i,
+      /\bdigital marketing agency\b/i,
+    ],
+
+    google_business_profile: [
+      /\bgoogle business profile management\b/i,
+      /\blocal seo agency\b/i,
+      /\bdigital marketing agency\b/i,
+    ],
+
+    lead_generation: [
+      /\blead generation agency\b/i,
+      /\bappointment setting company\b/i,
+    ],
+
+    crm: [
+      /\bcrm consultancy\b/i,
+      /\bcrm implementation partner\b/i,
+      /\bcrm software company\b/i,
+    ],
+
+    ai_automation: [
+      /\bai automation agency\b/i,
+      /\bautomation consultancy\b/i,
+      /\bai solutions provider\b/i,
+    ],
+
+    business_documents: [
+      /\bdocument drafting services\b/i,
+      /\bbusiness plan writer\b/i,
+      /\btender writing services\b/i,
+    ],
+
+    quotations: [
+      /\bquotation software\b/i,
+      /\binvoicing software\b/i,
+    ],
+
+    proposals: [
+      /\bproposal writing services\b/i,
+      /\btender writing company\b/i,
+    ],
+
+    contracts: [
+      /\blegal document services\b/i,
+      /\bcontract drafting services\b/i,
+    ],
+
+    ecommerce: [
+      /\becommerce agency\b/i,
+      /\bshopify agency\b/i,
+      /\bonline store developers?\b/i,
+    ],
+  };
+
+  return (
+    map[
+      service
+    ] ??
+    []
+  );
+}
+
+function inferBuyerRole(
+  service:
+    LeadHunterServiceCategory,
+
+  content: string,
+): string | null {
+  const match =
+    content.match(
+      PUBLIC_BUYER_ROLE_PATTERN,
+    );
+
+  if (
+    match?.[0]
+  ) {
+    return match[0].replace(
+      /\b\w/g,
+      (
+        letter,
+      ) =>
+        letter.toUpperCase(),
+    );
+  }
+
+  const roles:
+    Partial<
+      Record<
+        LeadHunterServiceCategory,
+        string
+      >
+    > = {
+    construction:
+      "Property Owner, Project Manager or Procurement Manager",
+
+    renovation:
+      "Property Manager, Facilities Manager or Property Owner",
+
+    property_maintenance:
+      "Property Manager or Facilities Manager",
+
+    painting:
+      "Facilities Manager or Property Manager",
+
+    tiling:
+      "Property Manager or Project Manager",
+
+    ceilings:
+      "Facilities Manager or Property Manager",
+
+    roofing:
+      "Facilities Manager or Property Manager",
+
+    plumbing:
+      "Facilities Manager or Property Manager",
+
+    facility_management:
+      "Operations Manager or Facilities Director",
+
+    commercial_cleaning:
+      "Facilities Manager, Operations Manager or Property Manager",
+
+    deep_cleaning:
+      "Facilities Manager or Office Manager",
+
+    hygiene:
+      "Facilities Manager or Operations Manager",
+
+    landscaping:
+      "Estate Manager, Property Manager or Facilities Manager",
+
+    waste_management:
+      "Facilities Manager or Operations Manager",
+
+    website_design:
+      "Business Owner, Marketing Manager or IT Manager",
+
+    logo_design:
+      "Business Owner or Marketing Manager",
+
+    branding:
+      "Business Owner or Marketing Manager",
+
+    seo:
+      "Business Owner or Marketing Manager",
+
+    digital_marketing:
+      "Business Owner or Marketing Manager",
+
+    social_media_management:
+      "Business Owner or Marketing Manager",
+
+    google_business_profile:
+      "Business Owner or Marketing Manager",
+
+    lead_generation:
+      "Sales Director, Business Owner or Marketing Manager",
+
+    crm:
+      "Sales Director, Operations Manager or Business Owner",
+
+    ai_automation:
+      "Operations Manager, IT Manager or Business Owner",
+
+    business_documents:
+      "Business Owner, Operations Manager or Project Manager",
+
+    quotations:
+      "Business Owner, Finance Manager or Sales Manager",
+
+    proposals:
+      "Business Owner, Sales Manager or Bid Manager",
+
+    contracts:
+      "Business Owner, Operations Manager or Legal/Compliance Manager",
+
+    ecommerce:
+      "Business Owner, E-commerce Manager or Marketing Manager",
+
+    general:
+      "Business Owner or Operations Manager",
+  };
+
+  return (
+    roles[
+      service
+    ] ??
+    null
+  );
+}
+
+function inferSectorFromSource(
+  candidate:
+    SearchCandidate,
+
+  inspection:
+    PageInspection,
+): CandidateSector {
+  const searchable =
+    `${candidate.title} ${candidate.snippet} ${candidate.url} ${inspection.title ?? ""} ${inspection.text.slice(
+      0,
+      8_000,
+    )}`;
+
+  const organisationIdentity =
+    `${candidate.title} ${inspection.title ?? ""} ${candidate.url}`;
+
+  if (
+    isOfficialPublicSectorSource(
+      candidate.url,
+    ) ||
+    inspection.emails.some(
+      (
+        email,
+      ) =>
+        email.endsWith(
+          ".gov.za",
+        ),
+    ) ||
+    (
+      PROCUREMENT_PATTERN.test(
+        searchable,
+      ) &&
+      GOVERNMENT_BUYER_PATTERN.test(
+        searchable,
+      )
+    )
+  ) {
+    return "government";
+  }
+
+  if (
+    PUBLIC_SCHOOL_PATTERN.test(
+      searchable,
+    )
+  ) {
+    return "government";
+  }
+
+  if (
+    /\b(church|ministry|nonprofit|non-profit|ngo|charity|foundation|community centre|community center)\b/i.test(
+      organisationIdentity,
+    ) ||
+    /\b(?:registered (?:as )?(?:a )?(?:nonprofit|non-profit|npo|ngo)|charitable organisation|public benefit organisation|\bpbo\b)\b/i.test(
+      searchable,
+    )
+  ) {
+    return "nonprofit";
+  }
+
+  return "private";
+}
+
+function sectorAllowed(
+  request:
+    LeadHunterSearchRequest,
+
+  sector:
+    CandidateSector,
+): boolean {
+  if (
+    request.sector ===
+      "private" &&
+    sector !==
+      "private"
+  ) {
+    return false;
+  }
+
+  if (
+    request.sector ===
+      "government" &&
+    sector !==
+      "government"
+  ) {
+    return false;
+  }
+
+  if (
+    request.sector ===
+      "nonprofit" &&
+    sector !==
+      "nonprofit"
+  ) {
+    return false;
+  }
+
+  if (
+    sector ===
+    "private"
+  ) {
+    return (
+      request.include_private_sector ===
+      true
+    );
+  }
+
+  if (
+    sector ===
+    "government"
+  ) {
+    return (
+      request.include_government_sector ===
+      true
+    );
+  }
+
+  return (
+    request.include_nonprofits ===
+    true
+  );
+}
+
+function detectCompetitorServices(
+  request:
+    LeadHunterSearchRequest,
+
+  content: string,
+): LeadHunterServiceCategory[] {
+  const matches:
+    LeadHunterServiceCategory[] =
+    [];
+
+  for (
+    const service of
+    request.services
+  ) {
+    const patterns =
+      competitorPatternsForService(
+        service,
+      );
+
+    if (
+      patterns.some(
+        (
+          pattern,
+        ) =>
+          pattern.test(
+            content,
+          ),
+      )
+    ) {
+      matches.push(
+        service,
+      );
+    }
+  }
+
+  return [
+    ...new Set(
+      matches,
+    ),
+  ];
+}
+
+function serviceRequirementPatterns(
+  service:
+    LeadHunterServiceCategory,
+): RegExp[] {
+  const patterns:
+    Partial<
+      Record<
+        LeadHunterServiceCategory,
+        RegExp[]
+      >
+    > = {
+    construction: [
+      /\b(construction works?|building works?|civil works?|infrastructure works?|main contractor|contractor panel)\b/i,
+    ],
+
+    renovation: [
+      /\b(renovation|refurbishment|building upgrade|alterations?)\b/i,
+    ],
+
+    property_maintenance: [
+      /\b(property maintenance|maintenance contract|planned maintenance|minor works?|repair works?)\b/i,
+    ],
+
+    painting: [
+      /\b(painting works?|repainting|painting contract)\b/i,
+    ],
+
+    tiling: [
+      /\b(tiling works?|floor tiling|wall tiling)\b/i,
+    ],
+
+    ceilings: [
+      /\b(ceiling (?:installation|repair|repairs|works)|suspended ceilings?)\b/i,
+    ],
+
+    roofing: [
+      /\b(roof(?:ing)? (?:works?|repair|repairs|replacement)|roof replacement)\b/i,
+    ],
+
+    plumbing: [
+      /\b(plumbing (?:works?|repair|repairs|contract)|water reticulation)\b/i,
+    ],
+
+    facility_management: [
+      /\b(facilit(?:y|ies) management|facility services?)\b/i,
+    ],
+
+    commercial_cleaning: [
+      /\b(commercial cleaning|cleaning contract|cleaning services required|janitorial)\b/i,
+    ],
+
+    deep_cleaning: [
+      /\b(deep cleaning|post[- ]construction cleaning|industrial cleaning)\b/i,
+    ],
+
+    hygiene: [
+      /\b(hygiene|sanitation|washroom services?|sanitary services?)\b/i,
+    ],
+
+    landscaping: [
+      /\b(landscaping|landscape maintenance|garden services?)\b/i,
+    ],
+
+    waste_management: [
+      /\b(waste management|waste collection|refuse removal|waste disposal)\b/i,
+    ],
+
+    website_design: [
+      /\b(website (?:design|development|redesign|upgrade)|web(?:site)? development|web design|web portal)\b/i,
+    ],
+
+    logo_design: [
+      /\b(logo (?:design|redesign|development|upgrade)|new logo)\b/i,
+    ],
+
+    branding: [
+      /\b(branding|brand identity|brand strategy|brand redesign)\b/i,
+    ],
+
+    seo: [
+      /\b(SEO|search engine optimi[sz]ation)\b/i,
+    ],
+
+    digital_marketing: [
+      /\b(digital marketing|marketing services? required|marketing campaign)\b/i,
+    ],
+
+    social_media_management: [
+      /\b(social media (?:management|services?|campaign))\b/i,
+    ],
+
+    google_business_profile: [
+      /\b(google business profile|google business listing|google profile)\b/i,
+    ],
+
+    lead_generation: [
+      /\b(lead generation|appointment setting|sales leads?)\b/i,
+    ],
+
+    crm: [
+      /\b(CRM|customer relationship management|salesforce automation)\b/i,
+    ],
+
+    ai_automation: [
+      /\b(AI automation|artificial intelligence (?:solution|solutions)|workflow automation|business process automation)\b/i,
+    ],
+
+    business_documents: [
+      /\b(document management|business documents?|document system)\b/i,
+    ],
+
+    quotations: [
+      /\b(quotation system|quote system|quotations? (?:software|process|system))\b/i,
+    ],
+
+    proposals: [
+      /\b(proposal (?:writing|development|system)|bid proposal)\b/i,
+    ],
+
+    contracts: [
+      /\b(contract (?:management|drafting|document|system)|service level agreement)\b/i,
+    ],
+
+    ecommerce: [
+      /\b(e-?commerce|online store|web shop|shopping cart)\b/i,
+    ],
+  };
+
+  return (
+    patterns[
+      service
+    ] ??
+    []
+  );
+}
+
+function matchingRequestedServices(
+  request:
+    LeadHunterSearchRequest,
+
+  content: string,
+): LeadHunterServiceCategory[] {
+  return request.services.filter(
+    (
+      service,
+    ) =>
+      serviceRequirementPatterns(
+        service,
+      ).some(
+        (
+          pattern,
+        ) =>
+          pattern.test(
+            content,
+          ),
+      ),
+  );
+}
+
+function requiresSouthAfricanPresence(
+  request:
+    LeadHunterSearchRequest,
+): boolean {
+  if (
+    request.delivery_model !==
+    "physical"
+  ) {
+    return false;
+  }
+
+  if (
+    request.search_scope ===
+    "south_africa"
+  ) {
+    return true;
+  }
+
+  return [
+    ...request.locations,
+    ...(
+      request.countries ??
+      []
+    ),
+  ].some(
+    (
+      value,
+    ) =>
+      value.toLowerCase() ===
+      "south africa",
+  );
+}
+
+function hasVerifiedSouthAfricanPresence(
+  request:
+    LeadHunterSearchRequest,
+
+  candidate:
+    SearchCandidate,
+
+  inspection:
+    PageInspection,
+): boolean {
+  if (
+    !requiresSouthAfricanPresence(
+      request,
+    )
+  ) {
+    return true;
+  }
+
+  const host =
+    getHostname(
+      inspection.finalUrl ||
+      candidate.url,
+    );
+
+  if (
+    host.endsWith(
+      ".co.za",
+    ) ||
+    host.endsWith(
+      ".org.za",
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    inspection.phones.some(
+      (
+        phone,
+      ) =>
+        /^\+?27\d{9,10}$/.test(
+          phone.replace(
+            /[^\d+]/g,
+            "",
+          ),
+        ),
+    )
+  ) {
+    return true;
+  }
+
+  const localities = [
+    ...(
+      request.cities ??
+      []
+    ),
+
+    ...(
+      request.suburbs ??
+      []
+    ),
+
+    ...(
+      request.provinces ??
+      []
+    ),
+
+    ...request.locations,
+  ].filter(
+    (
+      value,
+    ) =>
+      value.toLowerCase() !==
+      "south africa",
+  );
+
+  const localIdentity =
+    lowerText(
+      `${candidate.title} ${inspection.title ?? ""} ${candidate.url} ${inspection.finalUrl} ${inspection.text.slice(
+        0,
+        2_500,
+      )}`,
+    );
+
+  return localities.some(
+    (
+      locality,
+    ) =>
+      localIdentity.includes(
+        locality.toLowerCase(),
+      ),
+  );
+}
+
+function isEventOrTradeShowSource(
+  candidate:
+    SearchCandidate,
+
+  inspection:
+    PageInspection,
+): boolean {
+  const identity =
+    lowerText(
+      `${candidate.title} ${inspection.title ?? ""} ${candidate.url}`,
+    );
+
+  return /\b(?:expo|exhibition|trade\s*show|exhibitor|conference|event\s+schedule|event\s+calendar)\b/i.test(
+    identity,
+  );
+}
+
+function organisationIdentitySupportsBuyerTarget(
+  candidate:
+    SearchCandidate,
+
+  inspection:
+    PageInspection,
+): boolean {
+  const identity =
+    lowerText(
+      `${inspection.title ?? candidate.title} ${getHostname(
+        candidate.url,
+      )}`,
+    );
+
+  const target =
+    lowerText(
+      candidate.targetDescription,
+    );
+
+  const targetRules:
+    Array<{
+      target: RegExp;
+      identity: RegExp;
+    }> = [
+    {
+      target:
+        /\b(?:property|facilit)/i,
+
+      identity:
+        /\b(?:property|properties|estate|body corporate|homeowners? association|facilit(?:y|ies)|shopping cent(?:re|er)|office park)\b/i,
+    },
+
+    {
+      target:
+        /\b(?:school|education|training)/i,
+
+      identity:
+        /\b(?:school|college|university|academy|training cent(?:re|er))\b/i,
+    },
+
+    {
+      target:
+        /\b(?:warehouse|logistics|distribution)/i,
+
+      identity:
+        /\b(?:warehouse|logistics|distribution cent(?:re|er)|freight|manufactur(?:er|ing)|factory)\b/i,
+    },
+
+    {
+      target:
+        /\b(?:church|nonprofit|non-profit|ngo)/i,
+
+      identity:
+        /\b(?:church|ministr(?:y|ies)|nonprofit|non-profit|ngo|charity|foundation)\b/i,
+    },
+
+    {
+      target:
+        /\b(?:retail|shopping)/i,
+
+      identity:
+        /\b(?:retail|shopping cent(?:re|er)|mall|store|supermarket)\b/i,
+    },
+  ];
+
+  const rule =
+    targetRules.find(
+      (
+        candidateRule,
+      ) =>
+        candidateRule.target.test(
+          target,
+        ),
+    );
+
+  if (
+    rule
+  ) {
+    return rule.identity.test(
+      identity,
+    );
+  }
+
+  return /\b(?:property|properties|estate|body corporate|homeowners? association|facilit(?:y|ies)|shopping cent(?:re|er)|retail|office park|warehouse|factory|manufactur(?:er|ing)|logistics|distribution cent(?:re|er)|school|college|university|clinic|hospital|hotel|restaurant|franchise|church|nonprofit|non-profit|ngo)\b/i.test(
+    identity,
+  );
+}
+
+function hasVerifiedResearchBuyerProfile(
+  request:
+    LeadHunterSearchRequest,
+
+  candidate:
+    SearchCandidate,
+
+  inspection:
+    PageInspection,
+): boolean {
+  if (
+    candidate.purpose !==
+      "buyer_discovery" ||
+    request.require_opportunity_signal ||
     candidate.searchedService ===
       "general" ||
     !request.services.includes(
