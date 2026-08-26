@@ -20,7 +20,6 @@ import {
   WalletCards,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/status-badge";
 import {
   checkOpenAiConnection,
   getAiProviderStatus,
@@ -32,7 +31,7 @@ import {
   EXTERNAL_CAPABILITY_GAPS,
   capabilityForRoute,
 } from "@/lib/capability-matrix";
-import { MODULES, type ModuleStatus } from "@/lib/modules";
+import { MODULES } from "@/lib/modules";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/integrations")({
@@ -61,7 +60,7 @@ type IntegrationRoute =
 interface CossaSource {
   name: string;
   description: string;
-  status: ModuleStatus;
+  status: "Available in Growth" | "Configuration required" | "External reference";
   to?: IntegrationRoute;
   href?: string;
   icon: typeof BrainCircuit;
@@ -88,7 +87,7 @@ const cossaSources: CossaSource[] = [
     name: "Cossa AI",
     description:
       "Cossa's AI workspace reads verified Cossa knowledge and authorised operational records. Guidance is reviewed by people before any commercial, legal, financial or customer-facing use.",
-    status: "Production",
+    status: "Available in Growth",
     to: "/ai/cossa",
     icon: BrainCircuit,
   },
@@ -96,7 +95,7 @@ const cossaSources: CossaSource[] = [
     name: "Knowledge Base",
     description:
       "The Cossa-approved information store used to ground answers in reviewed business knowledge and cited sources.",
-    status: "Live",
+    status: "Available in Growth",
     to: "/ai/knowledge",
     icon: FileSearch,
   },
@@ -104,7 +103,7 @@ const cossaSources: CossaSource[] = [
     name: "AI Memory",
     description:
       "The workspace for reviewing retained Cossa operational context. It must never be treated as a source of unverified facts.",
-    status: "Production",
+    status: "Available in Growth",
     to: "/ai/memory",
     icon: BrainCircuit,
   },
@@ -112,7 +111,7 @@ const cossaSources: CossaSource[] = [
     name: "Supabase operational data",
     description:
       "The configured application data layer for Cossa records, with organisation ownership used by authorised Cossa AI workflows.",
-    status: "Live",
+    status: "Available in Growth",
     to: "/operations/business-intelligence",
     icon: Database,
   },
@@ -120,7 +119,7 @@ const cossaSources: CossaSource[] = [
     name: "Groq inference",
     description:
       "The lower-cost Cossa AI route when its protected provider setting has available usage. Provider credentials stay outside the browser.",
-    status: "Production",
+    status: "Configuration required",
     to: "/ai/cossa",
     icon: BrainCircuit,
   },
@@ -128,7 +127,7 @@ const cossaSources: CossaSource[] = [
     name: "Cossa Nexus Holdings website",
     description:
       "The official public Cossa reference. Open the live website; this is not a hosting, analytics or editing connection.",
-    status: "Live",
+    status: "External reference",
     href: "https://cossanexusholdings.co.za",
     icon: ExternalLink,
   },
@@ -136,7 +135,7 @@ const cossaSources: CossaSource[] = [
     name: "Website Watch",
     description:
       "A controlled, read-only homepage health check for the GROWTH website. It identifies only live availability, response time, title and noindex signals.",
-    status: "Production",
+    status: "Available in Growth",
     to: "/marketing/monitoring",
     icon: Activity,
   },
@@ -458,7 +457,9 @@ function Integrations() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                 <Plug className="h-4 w-4" />
               </div>
-              <StatusBadge status="Live" />
+              <span className="rounded-full border border-border px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                Connection states shown per provider
+              </span>
             </div>
             <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
               Integration <span className="text-gradient-gold">Center</span>
@@ -706,7 +707,9 @@ function CossaSourceCard({ source }: { source: CossaSource }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-semibold">{source.name}</h3>
-          <StatusBadge status={source.status} className="text-[10px]" />
+          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
+            {source.status}
+          </span>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">{source.description}</p>
       </div>

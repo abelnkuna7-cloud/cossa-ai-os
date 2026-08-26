@@ -166,7 +166,13 @@ function CossaStoreWorkspace() {
               variant="outline"
               className="border-primary/40 text-primary"
             >
-              <Link to="/ai/workforce">
+              <Link
+                to="/ai/workforce"
+                search={{
+                  view: "command",
+                  department: "all",
+                }}
+              >
                 <UsersRound className="mr-1.5 h-4 w-4" />
                 Open Store AI Team
               </Link>

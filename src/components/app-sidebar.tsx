@@ -113,6 +113,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
         matchPrefixes: [
           "/ai/workforce",
           "/ai/ceo",
+          "/ai/orchestrator",
         ],
       },
     ],

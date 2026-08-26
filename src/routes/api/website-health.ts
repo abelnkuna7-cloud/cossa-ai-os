@@ -14,6 +14,20 @@ interface SupabaseUser {
   id: string;
 }
 
+interface WebsiteHealthCheck {
+  id: string;
+  name: string;
+  website: string;
+  final_url: string | null;
+  availability: "healthy" | "degraded" | "unavailable";
+  http_status: number | null;
+  response_time_ms: number | null;
+  page_title: string | null;
+  title_detected: boolean;
+  noindex_detected: boolean;
+  issues: string[];
+}
+
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }

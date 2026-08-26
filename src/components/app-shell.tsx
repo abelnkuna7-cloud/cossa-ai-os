@@ -228,6 +228,17 @@ const AI_TOOL_GROUPS: AiToolGroup[] = [
       },
 
       {
+        title: "Cossa Orchestrator",
+
+        description:
+          "Durable employee-to-agent execution, approvals and recovery.",
+
+        to: "/ai/orchestrator",
+
+        icon: Bot,
+      },
+
+      {
         title: "AI Business Consultant",
 
         description:

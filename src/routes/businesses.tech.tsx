@@ -181,7 +181,13 @@ function CossaTechWorkspace() {
               asChild
               className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
             >
-              <Link to="/ai/workforce">
+              <Link
+                to="/ai/workforce"
+                search={{
+                  view: "command",
+                  department: "all",
+                }}
+              >
                 <BrainCircuit className="mr-1.5 h-4 w-4" />
                 Open Tech AI Team
               </Link>

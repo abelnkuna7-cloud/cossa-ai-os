@@ -1,0 +1,14 @@
+name = "cossa-agent-runtime"
+main = "src/index.ts"
+compatibility_date = "2026-08-26"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[vars]
+AGENT_RUNTIME_URL = "https://growth.cossanexusholdings.co.za/api/agent-runtime/execute"
+
+[triggers]
+crons = ["* * * * *"]

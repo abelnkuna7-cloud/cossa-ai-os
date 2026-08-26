@@ -850,7 +850,13 @@ function Dashboard() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link to="/ai/workforce">
+            <Link
+              to="/ai/workforce"
+              search={{
+                view: "command",
+                department: "all",
+              }}
+            >
               <Button
                 variant="outline"
                 className="border-primary/40 text-primary hover:bg-primary/10"

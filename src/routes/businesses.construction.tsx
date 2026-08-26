@@ -57,7 +57,7 @@ const CONSTRUCTION_TOOLS = [
     title: "Lead Hunter",
     description:
       "Research potential construction customers, companies and commercial opportunities for Cossa Construction.",
-    to: "/sales/lead-hunter",
+    to: "/sales/lead-finder",
     icon: Target,
   },
 
@@ -184,7 +184,7 @@ function CossaConstructionWorkspace() {
               asChild
               className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
             >
-              <Link to="/sales/lead-hunter">
+              <Link to="/sales/lead-finder">
                 <Target className="mr-1.5 h-4 w-4" />
                 Find Construction Leads
               </Link>

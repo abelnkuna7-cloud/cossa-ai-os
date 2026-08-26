@@ -309,6 +309,8 @@ type Environment = {
   newsApiKey: string | null;
   supabaseUrl: string;
   supabaseKey: string;
+  supabaseServiceRoleKey: string | null;
+  agentRuntimeWorkerToken: string | null;
   organisationId: string;
 };
 
@@ -1156,6 +1158,18 @@ function getEnvironment():
     ) ||
     DEFAULT_COSSA_ORGANISATION_ID;
 
+  const supabaseServiceRoleKey =
+    cleanText(
+      process.env
+        .SUPABASE_SERVICE_ROLE_KEY,
+    );
+
+  const agentRuntimeWorkerToken =
+    cleanText(
+      process.env
+        .AGENT_RUNTIME_WORKER_TOKEN,
+    );
+
   if (
     !supabaseUrl ||
     !supabaseKey
@@ -1183,6 +1197,10 @@ function getEnvironment():
       ),
 
     supabaseKey,
+
+    supabaseServiceRoleKey,
+
+    agentRuntimeWorkerToken,
 
     organisationId,
   };
@@ -1212,6 +1230,68 @@ function getBearerToken(
       )
       .trim() ||
     null
+  );
+}
+
+async function fixedTimeEqual(
+  left: string,
+  right: string,
+): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [leftHash, rightHash] =
+    await Promise.all([
+      crypto.subtle.digest(
+        "SHA-256",
+        encoder.encode(left),
+      ),
+      crypto.subtle.digest(
+        "SHA-256",
+        encoder.encode(right),
+      ),
+    ]);
+
+  const leftBytes =
+    new Uint8Array(
+      leftHash,
+    );
+
+  const rightBytes =
+    new Uint8Array(
+      rightHash,
+    );
+
+  let difference =
+    left.length ^ right.length;
+
+  for (
+    let index = 0;
+    index < leftBytes.length;
+    index += 1
+  ) {
+    difference |=
+      leftBytes[index] ^
+      rightBytes[index];
+  }
+
+  return difference === 0;
+}
+
+async function isTrustedAgentRuntimeWorker(
+  request: Request,
+  environment: Environment,
+): Promise<boolean> {
+  const supplied =
+    request.headers.get(
+      "x-cossa-agent-runtime-token",
+    ) ?? "";
+
+  return Boolean(
+    environment.agentRuntimeWorkerToken &&
+      environment.supabaseServiceRoleKey &&
+      await fixedTimeEqual(
+        supplied,
+        environment.agentRuntimeWorkerToken,
+      ),
   );
 }
 
@@ -11112,10 +11192,18 @@ export const Route =
               );
             }
 
-            const token =
-              getBearerToken(
+            const internalRuntimeRequest =
+              await isTrustedAgentRuntimeWorker(
                 request,
+                environment,
               );
+
+            const token =
+              internalRuntimeRequest
+                ? environment.supabaseServiceRoleKey
+                : getBearerToken(
+                    request,
+                  );
 
             if (
               !token
@@ -11129,65 +11217,69 @@ export const Route =
               );
             }
 
-            const user =
-              await verifySupabaseUser(
-                token,
-                environment,
-              );
-
             if (
-              !user
+              !internalRuntimeRequest
             ) {
-              return new Response(
-                "Your session could not be verified. Sign out and sign in again.",
-                {
-                  status:
-                    401,
-                },
-              );
-            }
+              const user =
+                await verifySupabaseUser(
+                  token,
+                  environment,
+                );
 
-            const authorised =
-              await verifyOrganisationMembership(
-                token,
-                user.id,
-                environment,
-              );
-
-            if (
-              !authorised
-            ) {
-              return new Response(
-                "You are not authorised to use the Cossa Lead Hunter.",
-                {
-                  status:
-                    403,
-                },
-              );
-            }
-
-            const limit =
-              enforceRateLimit(
-                user.id,
-              );
-
-            if (
-              !limit.allowed
-            ) {
-              return new Response(
-                `Lead Hunter rate limit reached. Try again in ${limit.retryAfterSeconds} seconds.`,
-                {
-                  status:
-                    429,
-
-                  headers: {
-                    "Retry-After":
-                      String(
-                        limit.retryAfterSeconds,
-                      ),
+              if (
+                !user
+              ) {
+                return new Response(
+                  "Your session could not be verified. Sign out and sign in again.",
+                  {
+                    status:
+                      401,
                   },
-                },
-              );
+                );
+              }
+
+              const authorised =
+                await verifyOrganisationMembership(
+                  token,
+                  user.id,
+                  environment,
+                );
+
+              if (
+                !authorised
+              ) {
+                return new Response(
+                  "You are not authorised to use the Cossa Lead Hunter.",
+                  {
+                    status:
+                      403,
+                  },
+                );
+              }
+
+              const limit =
+                enforceRateLimit(
+                  user.id,
+                );
+
+              if (
+                !limit.allowed
+              ) {
+                return new Response(
+                  `Lead Hunter rate limit reached. Try again in ${limit.retryAfterSeconds} seconds.`,
+                  {
+                    status:
+                      429,
+
+                    headers: {
+                      "Retry-After":
+                        String(
+                          limit.retryAfterSeconds,
+                        ),
+                    },
+                  },
+                );
+              }
             }
 
             let rawPayload:

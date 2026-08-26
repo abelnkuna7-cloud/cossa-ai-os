@@ -58,7 +58,7 @@ const FACILITY_TOOLS = [
     title: "Find Customers",
     description:
       "Research potential commercial, residential and organisational customers that may need facility services.",
-    to: "/sales/lead-hunter",
+    to: "/sales/lead-finder",
     icon: Target,
   },
 
@@ -201,7 +201,7 @@ function CossaFacilityServicesWorkspace() {
               asChild
               className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
             >
-              <Link to="/sales/lead-hunter">
+              <Link to="/sales/lead-finder">
                 <Target className="mr-1.5 h-4 w-4" />
                 Find Customers
               </Link>

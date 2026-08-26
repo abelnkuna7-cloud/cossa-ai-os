@@ -2391,6 +2391,10 @@ export function SpecialistChat({
                 >
                   <Link
                     to="/ai/workforce"
+                    search={{
+                      view: "command",
+                      department: "all",
+                    }}
                   >
                     Open workforce
 
@@ -2669,7 +2673,13 @@ export function SpecialistChat({
                   variant="outline"
                   className="hidden border-primary/40 text-primary hover:bg-primary/10 sm:flex"
                 >
-                  <Link to="/ai/workforce">
+                  <Link
+                    to="/ai/workforce"
+                    search={{
+                      view: "command",
+                      department: "all",
+                    }}
+                  >
                     Workforce
 
                     <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
