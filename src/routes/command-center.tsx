@@ -32,6 +32,7 @@ import { dashboardStats, opsTasks, salesAppointments } from "@/lib/business-data
 import { fmtCurrency, fmtDateTime } from "@/components/crud-workspace";
 import { GrowthEagleArtwork, ParentBrandEndorsement } from "@/components/brand/growth-brand";
 import { GROWTH_BRAND } from "@/lib/brand";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 import {
   listEmployeeHandoffs,
   listEmployees,
@@ -335,7 +336,7 @@ function Dashboard() {
         <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <StatusBadge status="Production" />
+              <StatusBadge status={workspaceRuntimeStatus()} />
 
               <span className="text-xs text-muted-foreground">GROWTH Command Center</span>
             </div>

@@ -263,12 +263,12 @@ const integrations: Integration[] = [
     name: "LinkedIn",
     group: "Communication",
     blurb:
-      "No Cossa Company Page exists yet. The connection plan is ready for owner setup; Cossa AI will remain draft-only until LinkedIn authorisation is complete.",
+      "The verified public Cossa Nexus Holdings Company Page exists at linkedin.com/company/cossa-nexus-holdings/ (organisation/page ID 144749972). It is available now for Growth social planning, content scheduling preparation and creative work. Publishing, analytics and inbox APIs are not connected.",
     short: "LI",
     activation:
-      "Create or claim the Cossa Nexus Holdings Company Page, create a LinkedIn Developer application, register a secure HTTPS callback URL, and approve only the minimum required OAuth permissions. Store credentials only in server-side environment settings.",
+      "Public page verified. Automatic publishing, analytics or inbox access requires a separately authorised LinkedIn Developer application, secure HTTPS callback URL and minimum OAuth permissions. Store credentials only in server-side environment settings.",
     safeguards: [
-      "Owner signs in on LinkedIn",
+      "Public page exists — API connection separate",
       "Least-privilege OAuth scopes",
       "No publishing without approval",
     ],

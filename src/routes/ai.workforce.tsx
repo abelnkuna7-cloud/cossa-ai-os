@@ -88,6 +88,7 @@ import { streamChat, streamChatWithMetadata } from "@/lib/ai-stream";
 import { checkOfficialWebsite, type OfficialWebsiteHealthReport } from "@/lib/website-health";
 
 import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
+import { getAgentRuntimeDashboard } from "@/lib/agent-runtime";
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
@@ -1831,6 +1832,7 @@ async function executeLeadHunterTool({
     "",
     "Verified inputs",
     `Hunt ID: ${response.hunt_id}`,
+    `Workflow outcome: ${response.status}`,
     `Execution engine: ${LEAD_HUNTER_TOOL_NAME}`,
     `Providers used: ${
       response.providers_used.length > 0
@@ -1838,6 +1840,7 @@ async function executeLeadHunterTool({
         : "Server route did not report provider names"
     }`,
     `Public evidence sources processed: ${response.source_count}`,
+    `Provider diagnostics: ${response.provider_diagnostics.map((item) => `${item.provider}=${item.configuration_required ? "configuration required" : item.failed ? "failed" : item.succeeded ? "succeeded" : "not attempted"} (${item.result_count} results)`).join("; ") || "None reported"}`,
     "",
     "Work completed",
     `Verified prospects accepted: ${response.accepted_count}`,
@@ -2032,6 +2035,10 @@ function AiWorkforce() {
 
   const [ceoCommand, setCeoCommand] = useState("");
 
+  const [refreshState, setRefreshState] = useState<"idle" | "refreshing" | "success" | "error">("idle");
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+
   /* ------------------------------------------------------------------------ */
   /* URL NAVIGATION                                                           */
   /* ------------------------------------------------------------------------ */
@@ -2101,32 +2108,58 @@ function AiWorkforce() {
     queryFn: () => listPendingApprovals(),
   });
 
+  const runtimeQuery = useQuery({
+    queryKey: ["cossa-agent-runtime"],
+    queryFn: getAgentRuntimeDashboard,
+  });
+
   /* ------------------------------------------------------------------------ */
   /* REFRESH                                                                  */
   /* ------------------------------------------------------------------------ */
 
   const refreshWorkforce = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: ["ai-workforce-employees"],
-      }),
+    if (refreshState === "refreshing") return;
 
-      queryClient.invalidateQueries({
-        queryKey: ["ai-workforce-missions"],
-      }),
+    setRefreshState("refreshing");
+    setRefreshError(null);
 
-      queryClient.invalidateQueries({
-        queryKey: ["ai-workforce-handoffs"],
-      }),
-
-      queryClient.invalidateQueries({
-        queryKey: ["ai-workforce-runs"],
-      }),
-
-      queryClient.invalidateQueries({
-        queryKey: ["ai-workforce-approvals"],
-      }),
+    const results = await Promise.allSettled([
+      employeesQuery.refetch(),
+      missionsQuery.refetch(),
+      handoffsQuery.refetch(),
+      runsQuery.refetch(),
+      approvalsQuery.refetch(),
+      runtimeQuery.refetch(),
+      queryClient.refetchQueries({ queryKey: ["ops-tasks"], type: "active" }),
+      queryClient.refetchQueries({ queryKey: ["integrations"], type: "active" }),
+      queryClient.refetchQueries({ queryKey: ["notifications"], type: "active" }),
     ]);
+
+    const failed = results.find((result) =>
+      result.status === "rejected" ||
+      (result.status === "fulfilled" &&
+        typeof result.value === "object" &&
+        result.value !== null &&
+        "isError" in result.value &&
+        result.value.isError === true),
+    );
+
+    if (failed) {
+      const message = failed.status === "rejected" && failed.reason instanceof Error
+        ? failed.reason.message
+        : "One or more critical workforce sources could not be refreshed.";
+      setRefreshError(message);
+      setRefreshState("error");
+      toast.error("Workforce refresh failed", { description: message });
+      return;
+    }
+
+    const completedAt = new Date().toISOString();
+    setLastRefreshedAt(completedAt);
+    setRefreshState("success");
+    toast.success("Workforce refreshed", {
+      description: "Employees, missions, assignments, runs, approvals and runtime state were refetched.",
+    });
   };
 
   /* ------------------------------------------------------------------------ */
@@ -2683,6 +2716,7 @@ function AiWorkforce() {
         handoff,
         employee,
         content,
+        missionObjective: mission.objective,
       });
 
       return {
@@ -2930,11 +2964,11 @@ function AiWorkforce() {
                 type="button"
                 variant="outline"
                 onClick={() => void refreshWorkforce()}
-                disabled={isLoading}
+                disabled={isLoading || refreshState === "refreshing"}
                 className="border-primary/40 text-primary hover:bg-primary/10"
               >
-                <RefreshCw className="mr-1.5 h-4 w-4" />
-                Refresh
+                <RefreshCw className={`mr-1.5 h-4 w-4 ${refreshState === "refreshing" ? "animate-spin" : ""}`} />
+                {refreshState === "refreshing" ? "Refreshing" : "Refresh"}
               </Button>
 
               <Button
@@ -2947,6 +2981,14 @@ function AiWorkforce() {
                 </Link>
               </Button>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground" aria-live="polite">
+            <span className={refreshState === "error" ? "text-destructive" : refreshState === "success" ? "text-primary" : ""}>
+              {refreshState === "refreshing" ? "REFRESHING" : refreshState === "success" ? "SUCCESS" : refreshState === "error" ? "ERROR" : "READY"}
+            </span>
+            <span>LAST REFRESHED: {lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleString("en-ZA") : "Not yet"}</span>
+            {refreshError ? <span className="normal-case tracking-normal text-destructive">{refreshError}</span> : null}
           </div>
 
           <div className="relative">

@@ -1,6 +1,6 @@
 export type WorkspaceEnvironment = "production" | "preview" | "development";
 
-export type WorkspaceRuntimeStatus = "Production" | "Testing" | "Development";
+export type WorkspaceRuntimeStatus = "Production" | "Preview" | "Development";
 
 /**
  * Keep the visible runtime state consistent across workspaces. This identifies
@@ -9,6 +9,7 @@ export type WorkspaceRuntimeStatus = "Production" | "Testing" | "Development";
  */
 export function workspaceEnvironment(): WorkspaceEnvironment {
   const configuredEnvironment = import.meta.env.VITE_APP_ENV?.trim().toLowerCase();
+  const deploymentEnvironment = import.meta.env.VITE_DEPLOYMENT_ENV?.trim().toLowerCase();
 
   if (configuredEnvironment === "production") return "production";
   if (configuredEnvironment === "preview" || configuredEnvironment === "staging") {
@@ -16,13 +17,16 @@ export function workspaceEnvironment(): WorkspaceEnvironment {
   }
   if (configuredEnvironment === "development") return "development";
 
+  if (deploymentEnvironment === "preview") return "preview";
+  if (deploymentEnvironment === "production") return "production";
+
   return import.meta.env.PROD ? "production" : "development";
 }
 
 export function workspaceRuntimeStatus(): WorkspaceRuntimeStatus {
   const environment = workspaceEnvironment();
   if (environment === "production") return "Production";
-  if (environment === "preview") return "Testing";
+  if (environment === "preview") return "Preview";
   return "Development";
 }
 

@@ -37,6 +37,7 @@ import {
   fmtCurrency,
   fmtDate,
 } from "@/components/crud-workspace";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute(
   "/sales/opportunities",
@@ -486,7 +487,7 @@ function OpportunitiesPage() {
                 <Radar className="h-5 w-5" />
               </div>
 
-              <StatusBadge status="Production" />
+              <StatusBadge status={workspaceRuntimeStatus()} />
             </div>
 
             <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">

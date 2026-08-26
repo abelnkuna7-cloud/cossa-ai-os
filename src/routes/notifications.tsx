@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { Bell, AlertTriangle, Clock, CalendarDays, FileText, UserPlus, CheckCircle2, ArrowRight } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bell, AlertTriangle, Clock, CalendarDays, FileText, UserPlus, CheckCircle2, ArrowRight, Check, X, AlarmClock, ShieldAlert } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { StatusBadge } from "@/components/status-badge";
 import {
   salesFollowUps, salesAppointments, salesLeads, salesQuotations, opsTasks,
 } from "@/lib/business-data";
+import { listNotificationInteractions, recordNotificationInteraction, type NotificationAction, type NotificationInteraction } from "@/lib/notification-interactions";
 
 export const Route = createFileRoute("/notifications")({
   component: NotificationsPage,
@@ -28,6 +31,10 @@ interface Item {
   description: string;
   href: string;
   affectedRecord: string;
+  entityType: string;
+  entityId: string;
+  affectedBusiness: string;
+  evidence: string;
   why: string;
   recommendedAction: string;
   when: string;
@@ -51,11 +58,23 @@ function relative(iso: string) {
 }
 
 function NotificationsPage() {
+  const queryClient = useQueryClient();
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const { data: tasks = [] } = useQuery({ queryKey: ["ops-tasks"], queryFn: opsTasks.list });
   const { data: followUps = [] } = useQuery({ queryKey: ["sales-follow-ups"], queryFn: salesFollowUps.list });
   const { data: appointments = [] } = useQuery({ queryKey: ["sales-appointments"], queryFn: salesAppointments.list });
   const { data: leads = [] } = useQuery({ queryKey: ["sales-leads"], queryFn: salesLeads.list });
   const { data: quotes = [] } = useQuery({ queryKey: ["sales-quotations"], queryFn: salesQuotations.list });
+  const interactions = useQuery({ queryKey: ["notifications", "interactions"], queryFn: listNotificationInteractions, retry: false });
+  const actionMutation = useMutation({
+    mutationFn: recordNotificationInteraction,
+    onSuccess: async (_, variables) => {
+      await queryClient.refetchQueries({ queryKey: ["notifications", "interactions"] });
+      toast.success(`Notification ${variables.action}`);
+    },
+    onError: (error) => toast.error("Notification action failed", { description: error instanceof Error ? error.message : "The audit record was not saved." }),
+    onSettled: () => setBusyKey(null),
+  });
 
   const now = Date.now();
   const items: Item[] = [];
@@ -75,6 +94,8 @@ function NotificationsPage() {
       description: `Due ${fmt(t.due_at)} · ${t.status}`,
       href: "/operations/tasks",
       affectedRecord: t.id,
+      entityType: "ops_task", entityId: t.id, affectedBusiness: "Cossa Nexus Holdings",
+      evidence: "Operations task due_at and status fields",
       why: overdue ? "The task passed its recorded due time without being marked done." : "The task is due within 24 hours.",
       recommendedAction: "Open task and update the owner, due date or completion state.",
       when: t.due_at,
@@ -96,6 +117,8 @@ function NotificationsPage() {
       description: `Scheduled ${fmt(f.due_at)}`,
       href: "/sales/follow-ups",
       affectedRecord: f.id,
+      entityType: "sales_follow_up", entityId: f.id, affectedBusiness: "Cossa Nexus Holdings",
+      evidence: "Sales follow-up due_at and status fields",
       why: overdue ? "The recorded follow-up time has passed and the follow-up is still open." : "The follow-up is due within 24 hours.",
       recommendedAction: "Open follow-up, review the customer context and complete or reschedule it.",
       when: f.due_at,
@@ -114,6 +137,8 @@ function NotificationsPage() {
       description: `${fmt(a.starts_at)}${a.location ? ` · ${a.location}` : ""}`,
       href: "/sales/appointments",
       affectedRecord: a.id,
+      entityType: "sales_appointment", entityId: a.id, affectedBusiness: "Cossa Nexus Holdings",
+      evidence: "Appointment starts_at record",
       why: "The appointment starts within the next 48 hours.",
       recommendedAction: "Open appointment and confirm preparation, customer context and required documents.",
       when: a.starts_at,
@@ -134,6 +159,8 @@ function NotificationsPage() {
           description: `Expired ${fmt(q.valid_until)} · ${q.status}`,
           href: `/sales/quotations?record=${encodeURIComponent(q.id)}`,
           affectedRecord: `${q.number} · ${q.id}`,
+          entityType: "sales_quotation", entityId: q.id, affectedBusiness: "Cossa Nexus Holdings",
+          evidence: "Quotation valid_until and status fields",
           why: "The quotation remains draft or sent after its recorded validity date.",
           recommendedAction: "Open quotation, verify customer status and decide whether to follow up, revise validity or close it.",
           when: q.valid_until,
@@ -150,6 +177,8 @@ function NotificationsPage() {
           description: `Valid until ${fmt(q.valid_until)}`,
           href: `/sales/quotations?record=${encodeURIComponent(q.id)}`,
           affectedRecord: `${q.number} · ${q.id}`,
+          entityType: "sales_quotation", entityId: q.id, affectedBusiness: "Cossa Nexus Holdings",
+          evidence: "Quotation valid_until field",
           why: "The quotation will reach its recorded validity date within three days.",
           recommendedAction: "Open quotation and review whether a customer follow-up is required before expiry.",
           when: q.valid_until,
@@ -171,6 +200,8 @@ function NotificationsPage() {
       description: `Score ${l.score} · ${l.source ?? "unknown source"}`,
       href: "/sales/leads",
       affectedRecord: l.id,
+      entityType: "sales_lead", entityId: l.id, affectedBusiness: "Cossa Nexus Holdings",
+      evidence: "CRM lead created_at, score, source and status fields",
       why: "The lead was created within the last 48 hours and is still new or prospect status.",
       recommendedAction: "Open lead, verify evidence and assign the next legitimate sales action.",
       when: l.created_at,
@@ -183,11 +214,38 @@ function NotificationsPage() {
     return Math.abs(new Date(a.when).getTime() - now) - Math.abs(new Date(b.when).getTime() - now);
   });
 
+  const latestAction = new Map<string, NotificationInteraction>();
+  for (const interaction of interactions.data ?? []) {
+    if (!latestAction.has(interaction.notification_key)) latestAction.set(interaction.notification_key, interaction);
+  }
+
+  const visibleItems = items.filter((item) => {
+    const action = latestAction.get(item.id);
+    if (!action) return true;
+    if (action.action === "resolved" || action.action === "dismissed") return false;
+    if (action.action === "snoozed" && action.snoozed_until && Date.parse(action.snoozed_until) > now) return false;
+    return true;
+  });
+
   const counts = {
-    urgent: items.filter((i) => i.priority === "urgent").length,
-    high: items.filter((i) => i.priority === "high").length,
-    normal: items.filter((i) => i.priority === "normal").length,
+    urgent: visibleItems.filter((i) => i.priority === "urgent").length,
+    high: visibleItems.filter((i) => i.priority === "high").length,
+    normal: visibleItems.filter((i) => i.priority === "normal").length,
   };
+
+  function recordAction(item: Item, action: NotificationAction) {
+    if (busyKey) return;
+    setBusyKey(item.id);
+    actionMutation.mutate({
+      notificationKey: item.id,
+      entityType: item.entityType,
+      entityId: item.entityId,
+      action,
+      reason: action === "escalated" ? "Escalated for owner attention from the Notifications workspace." : null,
+      snoozedUntil: action === "snoozed" ? new Date(Date.now() + 24 * 3600_000).toISOString() : null,
+      metadata: { href: item.href, type: item.type, affected_business: item.affectedBusiness },
+    });
+  }
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
@@ -211,24 +269,24 @@ function NotificationsPage() {
       </section>
 
       <section className="glass-card p-6">
-        {items.length === 0 ? (
+        {interactions.isError ? <div role="alert" className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">Notification actions require the prepared database migration. Alerts remain readable, but actions will not be presented as saved.</div> : null}
+        {visibleItems.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-center">
             <CheckCircle2 className="h-8 w-8 text-primary" />
             <div className="font-display text-lg font-semibold">All clear</div>
             <p className="max-w-md text-sm text-muted-foreground">
               No current records meet the notification rules for overdue work, upcoming appointments, quotation expiry or recent leads.
-            </p>
           </div>
         ) : (
           <ul className="flex flex-col divide-y divide-border/60">
-            {items.map((n) => {
+            {visibleItems.map((n) => {
               const Icon = n.icon;
               const tone =
                 n.priority === "urgent" ? "text-destructive" :
                 n.priority === "high" ? "text-primary" : "text-muted-foreground";
               return (
                 <li key={n.id}>
-                  <a href={n.href} className="block rounded-lg px-2 py-4 -mx-2 transition hover:bg-card/40">
+                  <div className="rounded-lg px-2 py-4 -mx-2 transition hover:bg-card/40">
                     <div className="flex items-start gap-3">
                       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone}`} />
                       <div className="min-w-0 flex-1">
@@ -241,16 +299,24 @@ function NotificationsPage() {
                         <div className="mt-1 text-xs text-muted-foreground">{n.description}</div>
                         <div className="mt-2 grid gap-1 text-[11px] text-muted-foreground md:grid-cols-2">
                           <span><strong className="text-foreground">Affected record:</strong> {n.affectedRecord}</span>
+                          <span><strong className="text-foreground">Business:</strong> {n.affectedBusiness}</span>
                           <span><strong className="text-foreground">Raised:</strong> {fmt(n.when)} · {relative(n.when)}</span>
                           <span className="md:col-span-2"><strong className="text-foreground">Why:</strong> {n.why}</span>
                           <span className="md:col-span-2"><strong className="text-foreground">Next action:</strong> {n.recommendedAction}</span>
+                          <span className="md:col-span-2"><strong className="text-foreground">Evidence/source:</strong> {n.evidence}</span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <a href={n.href} onClick={() => !interactions.isError && recordAction(n, "opened")} className="inline-flex items-center rounded-md border border-primary/40 px-2.5 py-1.5 text-[10px] uppercase tracking-widest text-primary">Open record <ArrowRight className="ml-1 h-3 w-3" /></a>
+                          {!interactions.isError ? <>
+                            <button disabled={busyKey === n.id} onClick={() => recordAction(n, "resolved")} className="inline-flex items-center rounded-md border border-border/60 px-2.5 py-1.5 text-[10px] uppercase tracking-widest"><Check className="mr-1 h-3 w-3" />Resolve</button>
+                            <button disabled={busyKey === n.id} onClick={() => recordAction(n, "snoozed")} className="inline-flex items-center rounded-md border border-border/60 px-2.5 py-1.5 text-[10px] uppercase tracking-widest"><AlarmClock className="mr-1 h-3 w-3" />Snooze 24h</button>
+                            <button disabled={busyKey === n.id} onClick={() => recordAction(n, "escalated")} className="inline-flex items-center rounded-md border border-border/60 px-2.5 py-1.5 text-[10px] uppercase tracking-widest"><ShieldAlert className="mr-1 h-3 w-3" />Escalate</button>
+                            <button disabled={busyKey === n.id} onClick={() => recordAction(n, "dismissed")} className="inline-flex items-center rounded-md border border-border/60 px-2.5 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground"><X className="mr-1 h-3 w-3" />Dismiss</button>
+                          </> : null}
                         </div>
                       </div>
-                      <span className="flex shrink-0 items-center gap-1 pt-1 text-[10px] uppercase tracking-widest text-primary">
-                        Open record <ArrowRight className="h-3 w-3" />
-                      </span>
                     </div>
-                  </a>
+                  </div>
                 </li>
               );
             })}

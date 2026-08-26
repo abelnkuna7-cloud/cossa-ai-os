@@ -242,11 +242,27 @@ export type ProspectSalesPriority =
   | "cold"
   | "research";
 
-export type HuntStatus =
-  | "idle"
-  | "searching"
-  | "completed"
-  | "failed";
+export type LeadHunterWorkflowOutcome =
+  | "SUCCESS_WITH_RESULTS"
+  | "SUCCESS_NO_VERIFIED_RESULTS"
+  | "SUCCESS_WITH_PROVIDER_WARNINGS"
+  | "PARTIAL_PROVIDER_FAILURE"
+  | "FAILED";
+
+export interface LeadHunterProviderDiagnostic {
+  provider: string;
+  attempted: boolean;
+  configured: boolean;
+  succeeded: boolean;
+  failed: boolean;
+  warning: string | null;
+  http_status: number | null;
+  error_reason: string | null;
+  result_count: number;
+  source_count: number;
+  timing_ms: number | null;
+  configuration_required: boolean;
+}
 
 export type ProcurementCurrentStatus =
   | "active"
@@ -511,7 +527,7 @@ export interface LeadHunterSearchRequest {
 export interface LeadHunterSearchResponse {
   hunt_id: string;
 
-  status: HuntStatus;
+  status: LeadHunterWorkflowOutcome;
 
   searched_at: string;
 
@@ -530,6 +546,8 @@ export interface LeadHunterSearchResponse {
   warnings: string[];
 
   providers_used: string[];
+
+  provider_diagnostics: LeadHunterProviderDiagnostic[];
 }
 
 export interface CrmDuplicateMatch {
@@ -6695,7 +6713,15 @@ export async function huntProspects(
       createClientId(),
 
     status:
-      "completed",
+      payload.status === "SUCCESS_WITH_RESULTS" ||
+      payload.status === "SUCCESS_NO_VERIFIED_RESULTS" ||
+      payload.status === "SUCCESS_WITH_PROVIDER_WARNINGS" ||
+      payload.status === "PARTIAL_PROVIDER_FAILURE" ||
+      payload.status === "FAILED"
+        ? payload.status
+        : acceptedProspects.length > 0
+          ? "SUCCESS_WITH_RESULTS"
+          : "SUCCESS_NO_VERIFIED_RESULTS",
 
     searched_at:
       safeDateString(
@@ -6744,6 +6770,28 @@ export async function huntProspects(
             payload.providers_used,
             15,
           )
+        : [],
+
+    provider_diagnostics:
+      Array.isArray(payload.provider_diagnostics)
+        ? payload.provider_diagnostics.flatMap((entry) => {
+            if (!entry || typeof entry !== "object") return [];
+            const item = entry as Partial<LeadHunterProviderDiagnostic>;
+            return [{
+              provider: cleanText(item.provider) ?? "Unknown provider",
+              attempted: item.attempted === true,
+              configured: item.configured === true,
+              succeeded: item.succeeded === true,
+              failed: item.failed === true,
+              warning: cleanText(item.warning),
+              http_status: safeNumber(item.http_status),
+              error_reason: cleanText(item.error_reason),
+              result_count: safeNumber(item.result_count) ?? 0,
+              source_count: safeNumber(item.source_count) ?? 0,
+              timing_ms: safeNumber(item.timing_ms),
+              configuration_required: item.configuration_required === true,
+            }];
+          })
         : [],
   };
 }

@@ -4544,6 +4544,14 @@ export interface ControlledReviewableOutput {
 
   content:
     string;
+
+  creative_asset?: {
+    request_id: string | null;
+    lifecycle_status: "blocked";
+    asset_generated: false;
+    provider_state: "visual_generation_provider_required";
+    message: string;
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -5476,6 +5484,9 @@ export async function completeControlledWorkforceRun(
 
     content:
       string;
+
+    missionObjective?:
+      string;
   },
 
   organisationId =
@@ -5513,6 +5524,52 @@ export async function completeControlledWorkforceRun(
     canonicalEmployeeKey(
       input.employee.employee_key,
     );
+
+  const isVisualCreativeRequest = canonicalWorkerKey === "creative-media-producer" &&
+    /\b(flyer|brochure|logo|banner|poster|social (?:graphic|post)|advertisement|product creative|business card|landing[- ]page visual|thumbnail|carousel|visual)\b/i.test(
+      input.missionObjective ?? "",
+    );
+
+  let creativeAssetRequestId: string | null = null;
+  if (isVisualCreativeRequest) {
+    const requestText = (input.missionObjective ?? "Create a visual asset").trim();
+    const assetType = /\bbrochure\b/i.test(requestText) ? "brochure"
+      : /\bflyer\b/i.test(requestText) ? "flyer"
+      : /\bbanner\b/i.test(requestText) ? "banner"
+      : /\b(product creative|product visual)\b/i.test(requestText) ? "product_visual"
+      : /\b(social graphic|social post|poster|advertisement)\b/i.test(requestText) ? "social_graphic"
+      : /\bwebsite|landing[- ]page\b/i.test(requestText) ? "website_asset"
+      : "image";
+    const { data, error } = await db
+      .from("creative_asset_requests")
+      .insert({
+        organisation_id: organisationId,
+        requested_by_employee_id: input.employee.id,
+        title: requestText.slice(0, 180),
+        request_text: requestText.slice(0, 6000),
+        asset_type: assetType,
+        requirements: {
+          brand: "Cossa Nexus Holdings",
+          brand_colours: ["#000000", "#D4AF37", "#FFFFFF", "#1A1A1A"],
+          unsupported_claims_prohibited: true,
+          external_publication_authorised: false,
+        },
+        creative_brief: { content, source: "creative-media-producer" },
+        copy_draft: content,
+        lifecycle_status: "blocked",
+        blocker_code: "visual_generation_provider_required",
+        blocker_message: "Creative brief completed — visual generation provider required.",
+        metadata: { mission_id: input.run.mission_id, run_id: input.run.id },
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.warn("Creative asset request could not be persisted:", error.message);
+    } else {
+      creativeAssetRequestId = typeof data?.id === "string" ? data.id : null;
+    }
+  }
 
   const sourceScope =
     canonicalWorkerKey ===
@@ -5560,6 +5617,18 @@ export async function completeControlledWorkforceRun(
         sourceScope,
 
       content,
+
+      ...(isVisualCreativeRequest
+        ? {
+            creative_asset: {
+              request_id: creativeAssetRequestId,
+              lifecycle_status: "blocked" as const,
+              asset_generated: false as const,
+              provider_state: "visual_generation_provider_required" as const,
+              message: "Creative brief completed — visual generation provider required.",
+            },
+          }
+        : {}),
     };
 
   const {

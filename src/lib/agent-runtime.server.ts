@@ -1259,7 +1259,7 @@ async function existingLeadHunterSearch(
     verified_sources_only: true,
     exclude_existing_crm_leads: true,
     search_instruction: input.objective,
-    objectives: ["direct_customers"],
+    objectives: ["find_customers"],
     search_depth: "standard",
     revenue_mode: "quick_revenue",
     revenue_first: true,
@@ -1285,9 +1285,26 @@ async function existingLeadHunterSearch(
       },
       90_000,
     );
-    const body = asRecord(await response.json().catch(() => ({})));
-    if (!response.ok)
-      throw new Error(readString(body.error, `Lead Hunter search failed (${response.status}).`));
+    const rawBody = await response.text().catch(() => "");
+    let body: JsonObject = {};
+    if (rawBody) {
+      try {
+        body = asRecord(JSON.parse(rawBody));
+      } catch {
+        body = { error: rawBody };
+      }
+    }
+    if (!response.ok) {
+      const safeReason = clip(
+        readString(body.error, rawBody || `Lead Hunter search failed (${response.status}).`),
+        700,
+      );
+      throw new AgentRuntimeError(
+        response.status === 400 ? "invalid_lead_hunter_request" : "lead_hunter_search_failed",
+        safeReason,
+        response.status,
+      );
+    }
     await recordCircuitResult(environment, "tool", "cossa-lead-hunter", null);
     return body;
   } catch (error) {
@@ -1710,6 +1727,8 @@ async function executeAgentTask(
         providers_used: asArray(hunt.providers_used)
           .map((value) => readString(value))
           .filter(Boolean),
+        workflow_outcome: readString(hunt.status),
+        provider_diagnostics: asArray(hunt.provider_diagnostics).map(asRecord),
         source_count: readNumber(hunt.source_count),
         accepted_count: readNumber(hunt.accepted_count),
         rejected_count: readNumber(hunt.rejected_count),

@@ -72,6 +72,7 @@ import {
   type ProspectVerificationStatus,
 } from "@/lib/lead-hunter-data";
 import { cn } from "@/lib/utils";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute(
   "/sales/lead-finder",
@@ -1533,7 +1534,7 @@ function LeadHunterPage() {
                 <Radar className="h-5 w-5" />
               </div>
 
-              <StatusBadge status="Production" />
+              <StatusBadge status={workspaceRuntimeStatus()} />
 
               <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-success">
                 Evidence-first
@@ -2898,6 +2899,31 @@ function LeadHunterPage() {
               }
             />
           )}
+
+          {huntState === "completed" && result ? (
+            <section className="glass-card p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Workflow outcome</div>
+                  <div className="mt-1 font-semibold text-primary">{result.status.replaceAll("_", " ")}</div>
+                </div>
+                <div className="text-xs text-muted-foreground">Provider diagnostics are separate from the overall hunt result.</div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {result.provider_diagnostics.map((diagnostic) => (
+                  <div key={diagnostic.provider} className="rounded-xl border border-border/60 bg-card/40 p-3 text-xs">
+                    <div className="font-semibold">{diagnostic.provider}</div>
+                    <div className="mt-2 space-y-1 text-muted-foreground">
+                      <div>{diagnostic.configuration_required ? "Configuration required" : diagnostic.failed ? "Failed" : diagnostic.succeeded ? "Succeeded" : diagnostic.attempted ? "Attempted" : "Not attempted"}</div>
+                      <div>{diagnostic.result_count} provider results · {diagnostic.timing_ms ?? "—"} ms</div>
+                      {diagnostic.http_status ? <div>HTTP {diagnostic.http_status}</div> : null}
+                      {diagnostic.error_reason ? <div className="text-warning">{diagnostic.error_reason}</div> : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {huntState ===
             "completed" &&

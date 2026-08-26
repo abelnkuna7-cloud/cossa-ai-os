@@ -7,6 +7,8 @@ import type {
   LeadHunterProspect,
   LeadHunterSearchRequest,
   LeadHunterSearchResponse,
+  LeadHunterProviderDiagnostic,
+  LeadHunterWorkflowOutcome,
   LeadHunterServiceCategory,
   OpportunitySize,
   ProcurementCurrentStatus,
@@ -350,7 +352,25 @@ type SearchExecution = {
   provider: SearchProvider;
   candidates: SearchCandidate[];
   warning?: string;
+  attempted: boolean;
+  configured: boolean;
+  succeeded: boolean;
+  httpStatus: number | null;
+  errorReason: string | null;
+  timingMs: number | null;
+  configurationRequired: boolean;
 };
+
+class SearchProviderError extends Error {
+  constructor(
+    message: string,
+    readonly status: number | null = null,
+    readonly configurationRequired = false,
+  ) {
+    super(message);
+    this.name = "SearchProviderError";
+  }
+}
 
 type CachedSearchExecution = {
   cachedAt: number;
@@ -3694,13 +3714,11 @@ async function newsApiSearch(
   if (
     !response.ok
   ) {
-    throw new Error(
-      await response
-        .text()
-        .catch(
-          () =>
-            `NewsAPI ${response.status}`,
-        ),
+    const detail = await response.text().catch(() => "");
+    throw new SearchProviderError(
+      detail || `NewsAPI ${response.status}`,
+      response.status,
+      response.status === 401 || response.status === 403,
     );
   }
 
@@ -3818,6 +3836,7 @@ async function newsApiSearch(
 async function executePlan(
   plan: SearchPlan,
   environment: Environment,
+  newsApiAttempt: { claimed: boolean },
 ): Promise<SearchExecution[]> {
   const results:
     SearchExecution[] =
@@ -3832,11 +3851,19 @@ async function executePlan(
         Promise<
           SearchCandidate[]
         >,
-    ) =>
-      promise
+    ) => {
+      const startedAt = Date.now();
+      return promise
         .then(
           (
             candidates,
+            attempted: true,
+            configured: true,
+            succeeded: true,
+            httpStatus: null,
+            errorReason: null,
+            timingMs: Date.now() - startedAt,
+            configurationRequired: false,
           ) => ({
             provider,
             candidates,
@@ -3859,14 +3886,27 @@ async function executePlan(
                   ? error.message
                   : "Unknown error"
               }`,
+            attempted: true,
+            configured: true,
+            succeeded: false,
+            httpStatus: error instanceof SearchProviderError ? error.status : null,
+            errorReason: error instanceof Error ? error.message : "Unknown error",
+            timingMs: Date.now() - startedAt,
+            configurationRequired:
+              error instanceof SearchProviderError && error.configurationRequired,
           }),
         );
+    };
 
   if (
     plan.purpose ===
       "growth_signal" &&
-    environment.newsApiKey
+    environment.newsApiKey &&
+    !newsApiAttempt.claimed
   ) {
+    // NewsAPI is optional and is attempted at most once per hunt. This avoids
+    // repeating a known-invalid credential across every generated plan.
+    newsApiAttempt.claimed = true;
     const news =
       await wrap(
         "NewsAPI",
@@ -4148,6 +4188,14 @@ function parsePersistedSearchResults(
                   provider,
 
                   candidates,
+
+                  attempted: true,
+                  configured: true,
+                  succeeded: true,
+                  httpStatus: null,
+                  errorReason: null,
+                  timingMs: null,
+                  configurationRequired: false,
                 },
               ]
             : []
@@ -4453,6 +4501,7 @@ async function executePlanWithCache(
   environment: Environment,
   request: LeadHunterSearchRequest,
   token: string,
+  newsApiAttempt: { claimed: boolean },
 ): Promise<{
   results: SearchExecution[];
   reusedCache: boolean;
@@ -4531,6 +4580,7 @@ async function executePlanWithCache(
     await executePlan(
       plan,
       environment,
+      newsApiAttempt,
     );
 
   if (
@@ -4581,6 +4631,73 @@ async function executePlanWithCache(
     reusedCache:
       false,
   };
+}
+
+function providerDiagnostics(
+  environment: Environment,
+  executions: Array<{ results: SearchExecution[] }>,
+): LeadHunterProviderDiagnostic[] {
+  const configured: Record<SearchProvider, boolean> = {
+    Tavily: Boolean(environment.tavilyApiKey),
+    SerpAPI: Boolean(environment.serpApiKey),
+    NewsAPI: Boolean(environment.newsApiKey),
+  };
+
+  return (["Tavily", "SerpAPI", "NewsAPI"] as const).map((provider) => {
+    const attempts = executions.flatMap((execution) => execution.results)
+      .filter((result) => result.provider === provider);
+    const failures = attempts.filter((result) => !result.succeeded);
+    const successes = attempts.filter((result) => result.succeeded);
+    const resultCount = successes.reduce(
+      (total, result) => total + result.candidates.length,
+      0,
+    );
+    const timings = attempts
+      .map((result) => result.timingMs)
+      .filter((value): value is number => typeof value === "number");
+    const configurationRequired = !configured[provider] ||
+      failures.some((failure) => failure.configurationRequired);
+    const firstFailure = failures[0];
+
+    return {
+      provider,
+      attempted: attempts.some((attempt) => attempt.attempted),
+      configured: configured[provider] && !configurationRequired,
+      succeeded: successes.length > 0,
+      failed: failures.length > 0,
+      warning: configurationRequired
+        ? `${provider} is configuration-required and was not used as an evidence source.`
+        : firstFailure?.warning ?? null,
+      http_status: firstFailure?.httpStatus ?? null,
+      error_reason: configurationRequired
+        ? firstFailure?.errorReason ?? `${provider} credential is not configured.`
+        : firstFailure?.errorReason ?? null,
+      result_count: resultCount,
+      source_count: resultCount,
+      timing_ms: timings.length > 0 ? timings.reduce((sum, value) => sum + value, 0) : null,
+      configuration_required: configurationRequired,
+    };
+  });
+}
+
+function workflowOutcome({
+  prospectCount,
+  diagnostics,
+}: {
+  prospectCount: number;
+  diagnostics: LeadHunterProviderDiagnostic[];
+}): LeadHunterWorkflowOutcome {
+  const attempted = diagnostics.filter((item) => item.attempted);
+  const succeeded = attempted.filter((item) => item.succeeded);
+  const failed = attempted.filter((item) => item.failed);
+  const hasUsableEvidence = succeeded.some((item) => item.result_count > 0);
+
+  if (attempted.length > 0 && succeeded.length === 0) return "FAILED";
+  if (failed.length > 0 && hasUsableEvidence) return "PARTIAL_PROVIDER_FAILURE";
+  if (failed.length > 0 || diagnostics.some((item) => item.configuration_required)) {
+    return "SUCCESS_WITH_PROVIDER_WARNINGS";
+  }
+  return prospectCount > 0 ? "SUCCESS_WITH_RESULTS" : "SUCCESS_NO_VERIFIED_RESULTS";
 }
 
 function normalisePhoneKey(
@@ -11351,6 +11468,8 @@ export const Route =
             const successfulProviders =
               new Set<SearchProvider>();
 
+            const newsApiAttempt = { claimed: false };
+
             const executions =
               await Promise.all(
                 plans.map(
@@ -11362,6 +11481,7 @@ export const Route =
                       environment,
                       searchRequest,
                       token,
+                      newsApiAttempt,
                     ),
                 ),
               );
@@ -11414,6 +11534,14 @@ export const Route =
               }
             }
 
+            const diagnostics = providerDiagnostics(environment, executions);
+
+            for (const diagnostic of diagnostics) {
+              if (diagnostic.warning && !warnings.includes(diagnostic.warning)) {
+                warnings.push(diagnostic.warning);
+              }
+            }
+
             const uniqueCandidates =
               deduplicateCandidates(
                 candidates,
@@ -11432,7 +11560,7 @@ export const Route =
                   crypto.randomUUID(),
 
                 status:
-                  "completed",
+                  workflowOutcome({ prospectCount: 0, diagnostics }),
 
                 searched_at:
                   searchedAt,
@@ -11470,6 +11598,8 @@ export const Route =
 
                   "Cossa buyer-intelligence qualification",
                 ],
+
+                provider_diagnostics: diagnostics,
               };
 
               return Response.json(
@@ -11643,7 +11773,10 @@ export const Route =
                 crypto.randomUUID(),
 
               status:
-                "completed",
+                workflowOutcome({
+                  prospectCount: acceptedProspects.length,
+                  diagnostics,
+                }),
 
               searched_at:
                 searchedAt,
@@ -11732,6 +11865,9 @@ export const Route =
                     : []
                 ),
               ],
+
+              provider_diagnostics:
+                diagnostics,
             };
 
             return Response.json(
