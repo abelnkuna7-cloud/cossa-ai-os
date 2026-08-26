@@ -19,13 +19,15 @@ const STATUSES = ["draft", "sent", "accepted", "declined", "expired"];
 
 function Stats({ rows }: { rows: SalesQuotation[] }) {
   const open = rows.filter((r) => ["draft", "sent"].includes(r.status));
-  const acceptedValue = rows.filter((r) => r.status === "accepted").reduce((s, r) => s + Number(r.amount ?? 0), 0);
-  const openValue = open.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const acceptedQuoteValue = rows
+    .filter((r) => r.status === "accepted")
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+  const openValue = open.reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
   const stats = [
     { label: "Quotes", value: rows.length },
     { label: "Open", value: open.length },
     { label: "Open value", value: fmtCurrency(openValue) },
-    { label: "Accepted revenue", value: fmtCurrency(acceptedValue) },
+    { label: "Accepted quote value", value: fmtCurrency(acceptedQuoteValue) },
   ];
   return (
     <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -43,7 +45,7 @@ function QuotationsPage() {
   return (
     <CrudWorkspace<SalesQuotation>
       title="Quotations"
-      tagline="Send stunning quotes fast"
+      tagline="Track quotation commitments without treating them as cash received"
       icon={FileText}
       queryKey="sales-quotations"
       fetch={salesQuotations.list}
