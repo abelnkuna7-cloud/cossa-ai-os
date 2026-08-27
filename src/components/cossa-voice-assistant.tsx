@@ -4,8 +4,8 @@ import { useRouter, useRouterState } from "@tanstack/react-router";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  Bot, ChevronDown, CircleStop, Loader2, MessageSquare, Mic, MicOff,
-  Minimize2, Send, Settings2, Speaker, Volume2, VolumeX, X,
+  Bot, CircleStop, Loader2, Mic, MicOff,
+  Minimize2, Send, Settings2, Volume2, VolumeX,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,13 +21,18 @@ import { queueLeadHunterRuntimeProof } from "@/lib/agent-runtime";
 type AssistantState = "READY" | "LISTENING" | "TRANSCRIBING" | "THINKING" | "SPEAKING" | "ERROR";
 type VoiceProviderState = "available" | "unavailable" | "permission_required" | "error";
 
-type RecognitionEvent = { results: ArrayLike<{ isFinal?: boolean; 0?: { transcript?: string } }> };
+type RecognitionResult = { isFinal?: boolean; 0?: { transcript?: string } };
+type RecognitionEvent = { results: ArrayLike<RecognitionResult> };
 type Recognition = {
-  lang: string; continuous: boolean; interimResults: boolean;
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
   onresult: ((event: RecognitionEvent) => void) | null;
   onerror: ((event: { error?: string }) => void) | null;
   onend: (() => void) | null;
-  start(): void; stop(): void; abort?(): void;
+  start(): void;
+  stop(): void;
+  abort?(): void;
 };
 type RecognitionConstructor = new () => Recognition;
 
@@ -140,6 +145,8 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   const abortRef = useRef<AbortController | null>(null);
   const responseRef = useRef("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingConversationTranscriptRef = useRef<string | null>(null);
+  const conversationPausedRef = useRef(false);
 
   const conversations = useQuery({ queryKey: ["ai-conversations"], queryFn: () => listConversations() });
   const messages = useQuery({
@@ -155,7 +162,9 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   }, [location.search]);
 
   useEffect(() => {
-    setSettings(readSettings());
+    const restored = readSettings();
+    setSettings(restored);
+    conversationPausedRef.current = !restored.conversationMode;
     setActiveId(window.localStorage.getItem(ACTIVE_CONVERSATION_KEY));
     if (!page) setOpen(window.localStorage.getItem(ASSISTANT_OPEN_KEY) === "true");
   }, [page]);
@@ -202,6 +211,8 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   }, [messages.data, streaming]);
 
   useEffect(() => () => {
+    conversationPausedRef.current = true;
+    pendingConversationTranscriptRef.current = null;
     recognitionRef.current?.abort?.();
     abortRef.current?.abort();
     if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
@@ -220,31 +231,6 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
     setState("READY");
   }
 
-  function speak(text: string) {
-    if (settings.muted || !settings.automaticSpeech || !("speechSynthesis" in window)) return;
-    const availableVoices = voices.length ? voices : window.speechSynthesis.getVoices();
-    const selected = availableVoices.find((voice) => voice.lang.toLowerCase() === settings.language.toLowerCase())
-      ?? availableVoices.find((voice) => voice.lang.toLowerCase().startsWith("en-za"))
-      ?? availableVoices.find((voice) => voice.lang.toLowerCase().startsWith("en"));
-    if (!selected) {
-      setOutputProvider("unavailable");
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text.replace(/[*_#`>-]/g, " "));
-    utterance.voice = selected;
-    utterance.lang = selected.lang || settings.language;
-    utterance.rate = settings.rate;
-    utterance.onstart = () => setState("SPEAKING");
-    utterance.onend = () => setState("READY");
-    utterance.onerror = () => {
-      setOutputProvider("error");
-      setState("READY");
-      toast.error("Voice output failed", { description: "The written answer remains available." });
-    };
-    window.speechSynthesis.speak(utterance);
-  }
-
   function startListening() {
     if (state === "SPEAKING") stopSpeech();
     if (recognitionRef.current) {
@@ -259,16 +245,26 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
     }
     const recognition = new Recognition();
     const startingInput = input.trim();
+    pendingConversationTranscriptRef.current = null;
     recognition.lang = settings.language;
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.onresult = (event) => {
       setState("TRANSCRIBING");
-      const transcript = Array.from(event.results).map((result) => result[0]?.transcript?.trim() ?? "").filter(Boolean).join(" ");
+      const results = Array.from(event.results);
+      const transcript = results
+        .map((result) => result[0]?.transcript?.trim() ?? "")
+        .filter(Boolean)
+        .join(" ");
+      const nextInput = [startingInput, transcript].filter(Boolean).join(" ");
       setInterimTranscript(transcript);
-      setInput([startingInput, transcript].filter(Boolean).join(" "));
+      setInput(nextInput);
+      if (settings.conversationMode && results.some((result) => result.isFinal) && nextInput.trim()) {
+        pendingConversationTranscriptRef.current = nextInput.trim();
+      }
     };
     recognition.onerror = (event) => {
+      pendingConversationTranscriptRef.current = null;
       const denied = event.error === "not-allowed" || event.error === "service-not-allowed";
       setInputProvider(denied ? "error" : "available");
       setError(denied ? "Microphone permission was denied. Text chat remains available." : `Voice input stopped${event.error ? `: ${event.error}` : "."}`);
@@ -277,7 +273,12 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
     recognition.onend = () => {
       recognitionRef.current = null;
       setInterimTranscript("");
+      const pending = pendingConversationTranscriptRef.current;
+      pendingConversationTranscriptRef.current = null;
       setState((current) => current === "ERROR" ? current : "READY");
+      if (settings.conversationMode && !conversationPausedRef.current && pending) {
+        window.setTimeout(() => void send(pending), 0);
+      }
     };
     try {
       recognitionRef.current = recognition;
@@ -287,9 +288,45 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
       recognition.start();
     } catch {
       recognitionRef.current = null;
+      pendingConversationTranscriptRef.current = null;
       setState("ERROR");
       setError("Microphone could not start. Type your message instead.");
     }
+  }
+
+  function speak(text: string) {
+    if (settings.muted || !settings.automaticSpeech || !("speechSynthesis" in window)) {
+      setState("READY");
+      return;
+    }
+    const availableVoices = voices.length ? voices : window.speechSynthesis.getVoices();
+    const selected = availableVoices.find((voice) => voice.lang.toLowerCase() === settings.language.toLowerCase())
+      ?? availableVoices.find((voice) => voice.lang.toLowerCase().startsWith("en-za"))
+      ?? availableVoices.find((voice) => voice.lang.toLowerCase().startsWith("en"));
+    if (!selected) {
+      setOutputProvider("unavailable");
+      setState("READY");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text.replace(/[*_#`>-]/g, " "));
+    utterance.voice = selected;
+    utterance.lang = selected.lang || settings.language;
+    utterance.rate = settings.rate;
+    utterance.onstart = () => setState("SPEAKING");
+    utterance.onend = () => {
+      setState("READY");
+      if (settings.conversationMode && !conversationPausedRef.current) {
+        window.setTimeout(() => startListening(), 250);
+      }
+    };
+    utterance.onerror = () => {
+      conversationPausedRef.current = true;
+      setOutputProvider("error");
+      setState("READY");
+      toast.error("Voice output failed", { description: "The written answer remains available." });
+    };
+    window.speechSynthesis.speak(utterance);
   }
 
   async function saveAssistantMessage(conversationId: string, content: string) {
@@ -301,6 +338,7 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   async function send(text?: string) {
     const content = (text ?? input).trim();
     if (!content || state === "THINKING") return;
+    conversationPausedRef.current = !settings.conversationMode;
     recognitionRef.current?.stop();
     stopSpeech();
     setInput("");
@@ -354,6 +392,7 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
       setState("READY");
       speak(result.content);
     } catch (caught) {
+      conversationPausedRef.current = true;
       setStreaming(null);
       const message = caught instanceof Error ? caught.message : "Cossa AI could not complete the request.";
       setError(message);
@@ -365,11 +404,20 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   }
 
   function stopAll() {
+    conversationPausedRef.current = true;
+    pendingConversationTranscriptRef.current = null;
     recognitionRef.current?.abort?.();
     recognitionRef.current = null;
     abortRef.current?.abort();
     stopSpeech();
     setState("READY");
+  }
+
+  function setConversationMode(enabled: boolean) {
+    conversationPausedRef.current = !enabled;
+    pendingConversationTranscriptRef.current = null;
+    setSettings((current) => ({ ...current, conversationMode: enabled }));
+    if (!enabled && state === "LISTENING") recognitionRef.current?.stop();
   }
 
   if (!page && !open) {
@@ -393,15 +441,18 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-display text-sm font-semibold text-white">COSSA <span className="text-primary">AI</span></div>
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground"><span>{state}</span><span>•</span><span className="truncate">{currentWorkspace}</span></div>
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+            <span>{state}</span><span>•</span><span className="truncate">{currentWorkspace}</span>
+            {settings.conversationMode ? <><span>•</span><span>conversation</span></> : null}
+          </div>
         </div>
         <Button variant="ghost" size="icon" onClick={() => setSettingsOpen((value) => !value)} aria-label="Voice settings"><Settings2 className="h-4 w-4" /></Button>
-        {!page ? <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Minimise assistant"><Minimize2 className="h-4 w-4" /></Button> : null}
+        {!page ? <Button variant="ghost" size="icon" onClick={() => { stopAll(); setOpen(false); }} aria-label="Minimise assistant"><Minimize2 className="h-4 w-4" /></Button> : null}
       </header>
 
       {settingsOpen ? <div className="grid gap-3 border-b border-border/60 bg-card/40 p-4 text-xs sm:grid-cols-2">
         <label className="flex items-center justify-between gap-2">Spoken responses <input type="checkbox" checked={settings.automaticSpeech} onChange={(event) => setSettings((current) => ({ ...current, automaticSpeech: event.target.checked }))} /></label>
-        <label className="flex items-center justify-between gap-2">Conversation mode <input type="checkbox" checked={settings.conversationMode} onChange={(event) => setSettings((current) => ({ ...current, conversationMode: event.target.checked }))} /></label>
+        <label className="flex items-center justify-between gap-2">Conversation mode <input type="checkbox" checked={settings.conversationMode} onChange={(event) => setConversationMode(event.target.checked)} /></label>
         <label className="flex items-center gap-2">Speed <input className="min-w-0 flex-1" type="range" min="0.75" max="1.5" step="0.05" value={settings.rate} onChange={(event) => setSettings((current) => ({ ...current, rate: Number(event.target.value) }))} /></label>
         <div className="text-muted-foreground">Input: {inputProvider.replaceAll("_", " ")} · Output: {outputProvider.replaceAll("_", " ")} · {settings.language}</div>
       </div> : null}
@@ -431,7 +482,7 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
           <p className="text-[10px] text-muted-foreground">Voice conversation inside GROWTH—not telephone calling. External actions remain approval-controlled.</p>
           <div className="flex shrink-0 gap-1">
             <Button variant="ghost" size="icon" onClick={() => setSettings((current) => ({ ...current, muted: !current.muted }))} aria-label={settings.muted ? "Unmute" : "Mute"}>{settings.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</Button>
-            {(state === "SPEAKING" || state === "THINKING" || state === "LISTENING") ? <Button variant="ghost" size="icon" onClick={stopAll} aria-label="Stop"><CircleStop className="h-4 w-4" /></Button> : null}
+            {(state === "SPEAKING" || state === "THINKING" || state === "LISTENING" || settings.conversationMode) ? <Button variant="ghost" size="icon" onClick={stopAll} aria-label="Stop"><CircleStop className="h-4 w-4" /></Button> : null}
           </div>
         </div>
       </footer>
