@@ -42,7 +42,7 @@ export const Route = createFileRoute("/sales/crm")({
       {
         name: "description",
         content:
-          "Manage website enquiries, leads, customers, companies, opportunities and sales activity in Cossa AI.",
+          "Manage website enquiries, leads, the lead funnel, customers, companies, qualified opportunities and sales activity in Cossa AI.",
       },
       {
         property: "og:title",
@@ -172,11 +172,18 @@ function CrmHub() {
 
   const tiles: CrmTile[] = [
     {
-      title: "Leads",
+      title: "Lead Records",
       to: "/sales/leads",
       icon: UserPlus,
       count: leads.data?.length ?? 0,
-      description: "Qualified prospects and sales opportunities.",
+      description: "All canonical CRM leads, including intake, active, converted, won and lost records.",
+    },
+    {
+      title: "Lead Funnel",
+      to: "/sales/lead-pipeline",
+      icon: GitBranch,
+      count: leads.data?.length ?? 0,
+      description: "Move real leads through intake, contact, qualification, inspection, quote, follow-up and outcome stages.",
     },
     {
       title: "Customers",
@@ -193,18 +200,18 @@ function CrmHub() {
       description: "Business accounts and decision-maker intelligence.",
     },
     {
-      title: "Pipeline",
+      title: "Opportunity Pipeline",
       to: "/sales/pipeline",
       icon: GitBranch,
       count: openOpportunityCount,
-      description: "Track opportunities from prospect to close.",
+      description: "Track separate qualified opportunity records from prospect through proposal, negotiation and close.",
     },
     {
       title: "Quotations",
       to: "/sales/quotations",
       icon: FileText,
       count: null,
-      description: "Prepare, issue and track formal quotations.",
+      description: "Prepare and track quotation commitments without treating accepted value as cash received.",
     },
     {
       title: "Follow-ups",
@@ -236,8 +243,9 @@ function CrmHub() {
           </h1>
 
           <p className="mt-1 max-w-3xl text-muted-foreground">
-            Manage website enquiries, qualified leads, customers, companies, quotations,
-            opportunities and follow-up activity from one connected workspace.
+            Manage website enquiries, canonical leads, the lead funnel, customers, companies,
+            quotations, qualified opportunities and follow-up activity from one connected workspace.
+            Lead stages and opportunity stages remain separate so neither dataset is hidden or double-counted.
           </p>
         </div>
       </section>
@@ -252,7 +260,7 @@ function CrmHub() {
             </div>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              Quote requests submitted through growth.cossanexusholdings.co.za.
+              Quote requests submitted through the connected Growth website intake.
             </p>
           </div>
 
@@ -303,7 +311,7 @@ function CrmHub() {
             <h3 className="mt-3 font-display text-lg font-semibold">No website enquiries yet</h3>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              New quote requests from the Growth landing page will appear here.
+              New website quote requests will appear here when the intake source records them.
             </p>
           </div>
         ) : (
