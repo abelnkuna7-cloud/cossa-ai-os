@@ -2038,6 +2038,7 @@ function AiWorkforce() {
   const [refreshState, setRefreshState] = useState<"idle" | "refreshing" | "success" | "error">("idle");
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshWarning, setRefreshWarning] = useState<string | null>(null);
 
   /* ------------------------------------------------------------------------ */
   /* URL NAVIGATION                                                           */
@@ -2122,32 +2123,30 @@ function AiWorkforce() {
 
     setRefreshState("refreshing");
     setRefreshError(null);
+    setRefreshWarning(null);
 
-    const results = await Promise.allSettled([
-      employeesQuery.refetch(),
-      missionsQuery.refetch(),
-      handoffsQuery.refetch(),
-      runsQuery.refetch(),
-      approvalsQuery.refetch(),
-      runtimeQuery.refetch(),
-      queryClient.refetchQueries({ queryKey: ["ops-tasks"], type: "active" }),
-      queryClient.refetchQueries({ queryKey: ["integrations"], type: "active" }),
-      queryClient.refetchQueries({ queryKey: ["notifications"], type: "active" }),
-    ]);
+    const sources = [
+      { label: "employees", critical: true, request: employeesQuery.refetch() },
+      { label: "missions", critical: true, request: missionsQuery.refetch() },
+      { label: "handoffs", critical: true, request: handoffsQuery.refetch() },
+      { label: "runs and failures", critical: true, request: runsQuery.refetch() },
+      { label: "approvals", critical: true, request: approvalsQuery.refetch() },
+      { label: "hosted agent runtime", critical: false, request: runtimeQuery.refetch() },
+      { label: "current tasks", critical: false, request: queryClient.refetchQueries({ queryKey: ["ops-tasks"], type: "active" }) },
+      { label: "integrations", critical: false, request: queryClient.refetchQueries({ queryKey: ["integrations"], type: "active" }) },
+      { label: "notifications", critical: false, request: queryClient.refetchQueries({ queryKey: ["notifications"], type: "active" }) },
+    ];
+    const results = await Promise.allSettled(sources.map((source) => source.request));
 
-    const failed = results.find((result) =>
-      result.status === "rejected" ||
-      (result.status === "fulfilled" &&
-        typeof result.value === "object" &&
-        result.value !== null &&
-        "isError" in result.value &&
-        result.value.isError === true),
-    );
+    const failedSources = results.flatMap((result, index) => {
+      const failed = result.status === "rejected" || (result.status === "fulfilled" && typeof result.value === "object" && result.value !== null && "isError" in result.value && result.value.isError === true);
+      return failed ? [sources[index]] : [];
+    });
+
+    const failed = failedSources.find((source) => source.critical);
 
     if (failed) {
-      const message = failed.status === "rejected" && failed.reason instanceof Error
-        ? failed.reason.message
-        : "One or more critical workforce sources could not be refreshed.";
+      const message = `Critical workforce source failed: ${failed.label}.`;
       setRefreshError(message);
       setRefreshState("error");
       toast.error("Workforce refresh failed", { description: message });
@@ -2157,6 +2156,8 @@ function AiWorkforce() {
     const completedAt = new Date().toISOString();
     setLastRefreshedAt(completedAt);
     setRefreshState("success");
+    const optionalFailures = failedSources.filter((source) => !source.critical).map((source) => source.label);
+    if (optionalFailures.length) setRefreshWarning(`Configuration warning: ${optionalFailures.join(", ")} unavailable.`);
     toast.success("Workforce refreshed", {
       description: "Employees, missions, assignments, runs, approvals and runtime state were refetched.",
     });
@@ -2989,6 +2990,7 @@ function AiWorkforce() {
             </span>
             <span>LAST REFRESHED: {lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleString("en-ZA") : "Not yet"}</span>
             {refreshError ? <span className="normal-case tracking-normal text-destructive">{refreshError}</span> : null}
+            {refreshWarning ? <span className="normal-case tracking-normal text-warning">{refreshWarning}</span> : null}
           </div>
 
           <div className="relative">
