@@ -71,6 +71,13 @@ export function canScheduleAgentRetry(input: {
   );
 }
 
+export function externalActionMayExecute(input: {
+  requiresCeoApproval: boolean;
+  approvalRecorded: boolean;
+}): boolean {
+  return !input.requiresCeoApproval || input.approvalRecorded;
+}
+
 export function hasPublicationEvidence(input: {
   postUrl?: string | null;
   publishedAt?: string | null;
