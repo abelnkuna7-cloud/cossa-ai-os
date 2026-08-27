@@ -38,10 +38,7 @@ import { COSSA_MARKETING_AI_CONTEXT } from "@/lib/cossa-marketing-profile";
 /* TYPES                                                                      */
 /* -------------------------------------------------------------------------- */
 
-export type SpecialistMode =
-  | "advisory"
-  | "workforce"
-  | "hybrid";
+export type SpecialistMode = "advisory" | "workforce" | "hybrid";
 
 export type SpecialistExternalActionBoundary =
   | "internal_only"
@@ -148,24 +145,15 @@ const S = (
 
   starters,
 
-  workforceEmployeeKeys:
-    options.workforceEmployeeKeys,
+  workforceEmployeeKeys: options.workforceEmployeeKeys,
 
-  mode:
-    options.mode ??
-    "advisory",
+  mode: options.mode ?? "advisory",
 
-  canCreateMission:
-    options.canCreateMission ??
-    false,
+  canCreateMission: options.canCreateMission ?? false,
 
-  dataRequirement:
-    options.dataRequirement ??
-    "company_knowledge",
+  dataRequirement: options.dataRequirement ?? "company_knowledge",
 
-  externalActionBoundary:
-    options.externalActionBoundary ??
-    "internal_only",
+  externalActionBoundary: options.externalActionBoundary ?? "internal_only",
 });
 
 /* -------------------------------------------------------------------------- */
@@ -223,8 +211,7 @@ Escalate only genuinely high-risk, irreversible, financial, legal, credential, a
 Cossa Nexus Holdings owner remains final authority for consequential external decisions.
 `.trim();
 
-const marketingBase =
-  `${COSSA_MARKETING_AI_CONTEXT}\n\n${base}`;
+const marketingBase = `${COSSA_MARKETING_AI_CONTEXT}\n\n${base}`;
 
 const workforceBase = `
 You are operating inside the Cossa AI operating system.
@@ -381,9 +368,7 @@ ${base}
       "Build a 12-month strategic operating plan",
     ],
     {
-      workforceEmployeeKeys: [
-        "ai-ceo",
-      ],
+      workforceEmployeeKeys: ["ai-ceo"],
       mode: "hybrid",
       canCreateMission: true,
       dataRequirement: "mixed",
@@ -637,9 +622,7 @@ ${base}
       "Build an overdue-invoice reminder workflow",
     ],
     {
-      workforceEmployeeKeys: [
-        "ai-ceo",
-      ],
+      workforceEmployeeKeys: ["ai-ceo"],
       mode: "hybrid",
       canCreateMission: true,
       dataRequirement: "mixed",
@@ -698,9 +681,7 @@ ${base}
       "Design a monthly executive reporting workflow",
     ],
     {
-      workforceEmployeeKeys: [
-        "ai-ceo",
-      ],
+      workforceEmployeeKeys: ["ai-ceo"],
       mode: "hybrid",
       canCreateMission: true,
       dataRequirement: "workforce",
@@ -851,10 +832,7 @@ ${base}
       "Create our weekly CRM review process",
     ],
     {
-      workforceEmployeeKeys: [
-        "lead-intake-coordinator",
-        "customer-reactivation-analyst",
-      ],
+      workforceEmployeeKeys: ["lead-intake-coordinator", "customer-reactivation-analyst"],
       mode: "hybrid",
       canCreateMission: true,
       dataRequirement: "operational",
@@ -907,9 +885,7 @@ ${base}
       "Audit our operating process for bottlenecks",
     ],
     {
-      workforceEmployeeKeys: [
-        "ai-ceo",
-      ],
+      workforceEmployeeKeys: ["ai-ceo"],
       mode: "hybrid",
       canCreateMission: true,
       dataRequirement: "mixed",
@@ -1050,11 +1026,7 @@ ${base}
       "Turn this objective into a project plan",
     ],
     {
-      workforceEmployeeKeys: [
-        "tech-solutions-specialist",
-        "website-delivery-specialist",
-        "ai-ceo",
-      ],
+      workforceEmployeeKeys: ["tech-solutions-specialist", "website-delivery-specialist", "ai-ceo"],
       mode: "hybrid",
       canCreateMission: true,
       dataRequirement: "mixed",
@@ -2255,10 +2227,7 @@ ${marketingBase}
       "Create content plus the visual brief",
     ],
     {
-      workforceEmployeeKeys: [
-        "content-writer",
-        "creative-media-producer",
-      ],
+      workforceEmployeeKeys: ["content-writer", "creative-media-producer"],
       mode: "hybrid",
       canCreateMission: true,
       dataRequirement: "marketing_context",
@@ -2307,10 +2276,7 @@ ${marketingBase}
       "Build a reactivation sequence",
     ],
     {
-      workforceEmployeeKeys: [
-        "content-writer",
-        "customer-reactivation-analyst",
-      ],
+      workforceEmployeeKeys: ["content-writer", "customer-reactivation-analyst"],
       mode: "hybrid",
       canCreateMission: true,
       dataRequirement: "marketing_context",
@@ -2658,10 +2624,7 @@ ${marketingBase}
       "Turn these keywords into content briefs",
     ],
     {
-      workforceEmployeeKeys: [
-        "website-seo-monitor",
-        "content-writer",
-      ],
+      workforceEmployeeKeys: ["website-seo-monitor", "content-writer"],
       mode: "hybrid",
       canCreateMission: true,
       dataRequirement: "marketing_context",
@@ -2711,11 +2674,7 @@ ${base}
       "Build a weekly reputation-review routine",
     ],
     {
-      workforceEmployeeKeys: [
-        "social-media-manager",
-        "account-growth-analyst",
-        "ai-ceo",
-      ],
+      workforceEmployeeKeys: ["social-media-manager", "account-growth-analyst", "ai-ceo"],
       mode: "hybrid",
       canCreateMission: true,
       dataRequirement: "authorised_external",
@@ -2980,9 +2939,7 @@ ${base}
       "Design an unattended workforce executor",
     ],
     {
-      workforceEmployeeKeys: [
-        "ai-ceo",
-      ],
+      workforceEmployeeKeys: ["ai-ceo"],
       mode: "hybrid",
       canCreateMission: true,
       dataRequirement: "mixed",
@@ -2995,15 +2952,9 @@ ${base}
 /* ROUTE INDEX                                                                */
 /* -------------------------------------------------------------------------- */
 
-const BY_ROUTE =
-  new Map<string, Specialist>(
-    SPECIALISTS.map(
-      (specialist) => [
-        specialist.to,
-        specialist,
-      ],
-    ),
-  );
+const BY_ROUTE = new Map<string, Specialist>(
+  SPECIALISTS.map((specialist) => [specialist.to, specialist]),
+);
 
 /* -------------------------------------------------------------------------- */
 /* WORKFORCE INDEX                                                            */
@@ -3018,31 +2969,15 @@ const BY_ROUTE =
  *
  * specialistsForWorkforceEmployee("content-writer")
  */
-const BY_WORKFORCE_EMPLOYEE =
-  new Map<string, Specialist[]>();
+const BY_WORKFORCE_EMPLOYEE = new Map<string, Specialist[]>();
 
-for (
-  const specialist of
-    SPECIALISTS
-) {
-  for (
-    const employeeKey of
-      specialist.workforceEmployeeKeys ??
-      []
-  ) {
-    const existing =
-      BY_WORKFORCE_EMPLOYEE.get(
-        employeeKey,
-      ) ?? [];
+for (const specialist of SPECIALISTS) {
+  for (const employeeKey of specialist.workforceEmployeeKeys ?? []) {
+    const existing = BY_WORKFORCE_EMPLOYEE.get(employeeKey) ?? [];
 
-    existing.push(
-      specialist,
-    );
+    existing.push(specialist);
 
-    BY_WORKFORCE_EMPLOYEE.set(
-      employeeKey,
-      existing,
-    );
+    BY_WORKFORCE_EMPLOYEE.set(employeeKey, existing);
   }
 }
 
@@ -3050,49 +2985,26 @@ for (
 /* LOOKUPS                                                                    */
 /* -------------------------------------------------------------------------- */
 
-export function specialistFor(
-  to: string,
-): Specialist | undefined {
-  return BY_ROUTE.get(
-    to,
-  );
+export function specialistFor(to: string): Specialist | undefined {
+  return BY_ROUTE.get(to);
 }
 
-export function specialistsForWorkforceEmployee(
-  employeeKey: string,
-): Specialist[] {
-  return [
-    ...(
-      BY_WORKFORCE_EMPLOYEE.get(
-        employeeKey,
-      ) ?? []
-    ),
-  ];
+export function specialistsForWorkforceEmployee(employeeKey: string): Specialist[] {
+  return [...(BY_WORKFORCE_EMPLOYEE.get(employeeKey) ?? [])];
 }
 
 export function specialistsThatCanCreateMissions(): Specialist[] {
-  return SPECIALISTS.filter(
-    (specialist) =>
-      specialist.canCreateMission,
-  );
+  return SPECIALISTS.filter((specialist) => specialist.canCreateMission);
 }
 
 export function workforceSpecialists(): Specialist[] {
   return SPECIALISTS.filter(
-    (specialist) =>
-      specialist.mode ===
-        "workforce" ||
-      specialist.mode ===
-        "hybrid",
+    (specialist) => specialist.mode === "workforce" || specialist.mode === "hybrid",
   );
 }
 
 export function advisorySpecialists(): Specialist[] {
-  return SPECIALISTS.filter(
-    (specialist) =>
-      specialist.mode ===
-      "advisory",
-  );
+  return SPECIALISTS.filter((specialist) => specialist.mode === "advisory");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -3100,39 +3012,21 @@ export function advisorySpecialists(): Specialist[] {
 /* -------------------------------------------------------------------------- */
 
 export function specialistHasWorkforceEmployee(
-  specialist:
-    Specialist,
+  specialist: Specialist,
 
-  employeeKey:
-    string,
+  employeeKey: string,
 ): boolean {
-  return (
-    specialist.workforceEmployeeKeys ??
-    []
-  ).includes(
-    employeeKey,
-  );
+  return (specialist.workforceEmployeeKeys ?? []).includes(employeeKey);
 }
 
-export function specialistRequiresIntegration(
-  specialist:
-    Specialist,
-): boolean {
-  return (
-    specialist.externalActionBoundary ===
-    "integration_required"
-  );
+export function specialistRequiresIntegration(specialist: Specialist): boolean {
+  return specialist.externalActionBoundary === "integration_required";
 }
 
-export function specialistRequiresOwnerApprovalForExternalAction(
-  specialist:
-    Specialist,
-): boolean {
+export function specialistRequiresOwnerApprovalForExternalAction(specialist: Specialist): boolean {
   return (
-    specialist.externalActionBoundary ===
-      "approval_required" ||
-    specialist.externalActionBoundary ===
-      "integration_required"
+    specialist.externalActionBoundary === "approval_required" ||
+    specialist.externalActionBoundary === "integration_required"
   );
 }
 
@@ -3146,91 +3040,41 @@ export function specialistRequiresOwnerApprovalForExternalAction(
  * This catches accidental duplicate routes because duplicate route definitions
  * would otherwise silently overwrite one another inside BY_ROUTE.
  */
-function validateSpecialists(
-  specialists:
-    readonly Specialist[],
-): void {
-  const routes =
-    new Set<string>();
+function validateSpecialists(specialists: readonly Specialist[]): void {
+  const routes = new Set<string>();
 
-  for (
-    const specialist of
-      specialists
-  ) {
-    if (
-      !specialist.to.trim()
-    ) {
-      throw new Error(
-        "A specialist route cannot be empty.",
-      );
+  for (const specialist of specialists) {
+    if (!specialist.to.trim()) {
+      throw new Error("A specialist route cannot be empty.");
     }
 
-    if (
-      routes.has(
-        specialist.to,
-      )
-    ) {
-      throw new Error(
-        `Duplicate specialist route detected: ${specialist.to}`,
-      );
+    if (routes.has(specialist.to)) {
+      throw new Error(`Duplicate specialist route detected: ${specialist.to}`);
     }
 
-    routes.add(
-      specialist.to,
+    routes.add(specialist.to);
+
+    if (!specialist.title.trim()) {
+      throw new Error(`Specialist ${specialist.to} is missing a title.`);
+    }
+
+    if (!specialist.tagline.trim()) {
+      throw new Error(`Specialist ${specialist.to} is missing a tagline.`);
+    }
+
+    if (!specialist.system.trim()) {
+      throw new Error(`Specialist ${specialist.to} is missing system instructions.`);
+    }
+
+    if (specialist.starters.length === 0) {
+      throw new Error(`Specialist ${specialist.to} must contain at least one starter prompt.`);
+    }
+
+    const duplicateEmployeeKeys = (specialist.workforceEmployeeKeys ?? []).filter(
+      (employeeKey, index, employeeKeys) => employeeKeys.indexOf(employeeKey) !== index,
     );
 
-    if (
-      !specialist.title.trim()
-    ) {
-      throw new Error(
-        `Specialist ${specialist.to} is missing a title.`,
-      );
-    }
-
-    if (
-      !specialist.tagline.trim()
-    ) {
-      throw new Error(
-        `Specialist ${specialist.to} is missing a tagline.`,
-      );
-    }
-
-    if (
-      !specialist.system.trim()
-    ) {
-      throw new Error(
-        `Specialist ${specialist.to} is missing system instructions.`,
-      );
-    }
-
-    if (
-      specialist.starters.length ===
-      0
-    ) {
-      throw new Error(
-        `Specialist ${specialist.to} must contain at least one starter prompt.`,
-      );
-    }
-
-    const duplicateEmployeeKeys =
-      (
-        specialist.workforceEmployeeKeys ??
-        []
-      ).filter(
-        (
-          employeeKey,
-          index,
-          employeeKeys,
-        ) =>
-          employeeKeys.indexOf(
-            employeeKey,
-          ) !== index,
-      );
-
-    if (
-      duplicateEmployeeKeys.length >
-      0
-    ) {
+    if (duplicateEmployeeKeys.length > 0) {
       throw new Error(
         `Specialist ${specialist.to} contains duplicate workforce employee mappings: ${duplicateEmployeeKeys.join(", ")}`,
       );
@@ -3238,6 +3082,4 @@ function validateSpecialists(
   }
 }
 
-validateSpecialists(
-  SPECIALISTS,
-);
+validateSpecialists(SPECIALISTS);

@@ -29,7 +29,11 @@ function AppointmentsPage() {
       singular="appointment"
       fields={[
         { key: "title", label: "Title", required: true },
-        { key: "appointment_type", label: "Appointment type", placeholder: "Site inspection, consultation, follow-up, handover…" },
+        {
+          key: "appointment_type",
+          label: "Appointment type",
+          placeholder: "Site inspection, consultation, follow-up, handover…",
+        },
         { key: "service", label: "Service / business division" },
         { key: "customer", label: "Customer" },
         { key: "status", label: "Status", defaultValue: "scheduled" },
@@ -40,7 +44,11 @@ function AppointmentsPage() {
         { key: "notes", label: "Notes", type: "textarea" },
       ]}
       columns={[
-        { key: "title", label: "Title", render: (r) => <span className="font-medium">{r.title}</span> },
+        {
+          key: "title",
+          label: "Title",
+          render: (r) => <span className="font-medium">{r.title}</span>,
+        },
         { key: "appointment_type", label: "Type", render: (r) => r.appointment_type ?? "—" },
         { key: "customer", label: "Customer", render: (r) => r.customer ?? r.customer_id ?? "—" },
         { key: "status", label: "Status", render: (r) => r.status ?? "—" },
@@ -48,7 +56,16 @@ function AppointmentsPage() {
         { key: "ends_at", label: "Ends", render: (r) => fmtDateTime(r.ends_at) },
         { key: "location", label: "Location" },
       ]}
-      searchKeys={["title", "appointment_type", "service", "customer", "customer_id", "status", "location", "notes"]}
+      searchKeys={[
+        "title",
+        "appointment_type",
+        "service",
+        "customer",
+        "customer_id",
+        "status",
+        "location",
+        "notes",
+      ]}
     />
   );
 }

@@ -33,7 +33,9 @@ function Stats({ rows }: { rows: OpsTask[] }) {
     <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {stats.map((s) => (
         <div key={s.label} className="glass-card p-4">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{s.label}</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            {s.label}
+          </div>
           <div className="mt-1 font-display text-2xl font-semibold">{s.value}</div>
         </div>
       ))}
@@ -57,22 +59,47 @@ function TasksPage() {
       fields={[
         { key: "title", label: "Title", required: true },
         { key: "status", label: "Status", type: "select", options: STATUSES, defaultValue: "todo" },
-        { key: "priority", label: "Priority", type: "select", options: PRIORITIES, defaultValue: "medium" },
+        {
+          key: "priority",
+          label: "Priority",
+          type: "select",
+          options: PRIORITIES,
+          defaultValue: "medium",
+        },
         { key: "assignee", label: "Assignee" },
         { key: "due_at", label: "Due", type: "datetime" },
         { key: "notes", label: "Notes", type: "textarea" },
       ]}
       columns={[
-        { key: "title", label: "Task", render: (r) => <span className="font-medium">{r.title}</span> },
-        { key: "status", label: "Status", render: (r) => (
-          <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">{r.status}</span>
-        ) },
+        {
+          key: "title",
+          label: "Task",
+          render: (r) => <span className="font-medium">{r.title}</span>,
+        },
+        {
+          key: "status",
+          label: "Status",
+          render: (r) => (
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">
+              {r.status}
+            </span>
+          ),
+        },
         { key: "priority", label: "Priority" },
         { key: "assignee", label: "Assignee" },
-        { key: "due_at", label: "Due", render: (r) => {
-          const overdue = r.status !== "done" && r.due_at && new Date(r.due_at).getTime() < Date.now();
-          return <span className={overdue ? "text-destructive font-semibold" : ""}>{fmtDateTime(r.due_at)}</span>;
-        } },
+        {
+          key: "due_at",
+          label: "Due",
+          render: (r) => {
+            const overdue =
+              r.status !== "done" && r.due_at && new Date(r.due_at).getTime() < Date.now();
+            return (
+              <span className={overdue ? "text-destructive font-semibold" : ""}>
+                {fmtDateTime(r.due_at)}
+              </span>
+            );
+          },
+        },
       ]}
       searchKeys={["title", "assignee", "status", "notes"]}
     />

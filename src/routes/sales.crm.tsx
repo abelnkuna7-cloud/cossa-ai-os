@@ -176,14 +176,16 @@ function CrmHub() {
       to: "/sales/leads",
       icon: UserPlus,
       count: leads.data?.length ?? 0,
-      description: "All canonical CRM leads, including intake, active, converted, won and lost records.",
+      description:
+        "All canonical CRM leads, including intake, active, converted, won and lost records.",
     },
     {
       title: "Lead Funnel",
       to: "/sales/lead-pipeline",
       icon: GitBranch,
       count: leads.data?.length ?? 0,
-      description: "Move real leads through intake, contact, qualification, inspection, quote, follow-up and outcome stages.",
+      description:
+        "Move real leads through intake, contact, qualification, inspection, quote, follow-up and outcome stages.",
     },
     {
       title: "Customers",
@@ -204,14 +206,16 @@ function CrmHub() {
       to: "/sales/pipeline",
       icon: GitBranch,
       count: openOpportunityCount,
-      description: "Track separate qualified opportunity records from prospect through proposal, negotiation and close.",
+      description:
+        "Track separate qualified opportunity records from prospect through proposal, negotiation and close.",
     },
     {
       title: "Quotations",
       to: "/sales/quotations",
       icon: FileText,
       count: null,
-      description: "Prepare and track quotation commitments without treating accepted value as cash received.",
+      description:
+        "Prepare and track quotation commitments without treating accepted value as cash received.",
     },
     {
       title: "Follow-ups",
@@ -245,7 +249,8 @@ function CrmHub() {
           <p className="mt-1 max-w-3xl text-muted-foreground">
             Manage website enquiries, canonical leads, the lead funnel, customers, companies,
             quotations, qualified opportunities and follow-up activity from one connected workspace.
-            Lead stages and opportunity stages remain separate so neither dataset is hidden or double-counted.
+            Lead stages and opportunity stages remain separate so neither dataset is hidden or
+            double-counted.
           </p>
         </div>
       </section>

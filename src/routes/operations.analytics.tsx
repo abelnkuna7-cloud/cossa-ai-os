@@ -10,7 +10,10 @@ export const Route = createFileRoute("/operations/analytics")({
   head: () => ({
     meta: [
       { title: "Operations Analytics — Cossa AI" },
-      { name: "description", content: "Delivery, throughput and overdue insight across every project." },
+      {
+        name: "description",
+        content: "Delivery, throughput and overdue insight across every project.",
+      },
       { property: "og:title", content: "Operations Analytics — Cossa AI" },
       { property: "og:description", content: "Cossa AI operations analytics." },
     ],
@@ -24,10 +27,14 @@ function OpsAnalyticsPage() {
   const pRows = projects.data ?? [];
   const tRows = tasks.data ?? [];
   const active = pRows.filter((p) => !["done", "archived"].includes(p.status));
-  const avgProgress = active.length ? Math.round(active.reduce((s, p) => s + p.progress, 0) / active.length) : 0;
+  const avgProgress = active.length
+    ? Math.round(active.reduce((s, p) => s + p.progress, 0) / active.length)
+    : 0;
   const doneTasks = tRows.filter((t) => t.status === "done").length;
   const openTasks = tRows.filter((t) => t.status !== "done").length;
-  const overdue = tRows.filter((t) => t.status !== "done" && t.due_at && new Date(t.due_at).getTime() < Date.now()).length;
+  const overdue = tRows.filter(
+    (t) => t.status !== "done" && t.due_at && new Date(t.due_at).getTime() < Date.now(),
+  ).length;
   const throughput = tRows.length ? Math.round((doneTasks / tRows.length) * 100) : 0;
 
   return (
@@ -36,10 +43,14 @@ function OpsAnalyticsPage() {
         <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative">
           <div className="flex items-center gap-2">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow"><PieChart className="h-5 w-5" /></div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow">
+              <PieChart className="h-5 w-5" />
+            </div>
             <StatusBadge status="Live" />
           </div>
-          <h1 className="mt-3 font-display text-3xl md:text-4xl font-semibold">Operations Analytics</h1>
+          <h1 className="mt-3 font-display text-3xl md:text-4xl font-semibold">
+            Operations Analytics
+          </h1>
           <p className="mt-1 text-muted-foreground">Delivery, throughput and risk — live.</p>
         </div>
       </section>
@@ -53,7 +64,12 @@ function OpsAnalyticsPage() {
           { label: "Completed tasks", value: doneTasks },
           { label: "Task throughput", value: `${throughput}%` },
         ].map((s) => (
-          <div key={s.label} className="glass-card p-4"><div className="text-[10px] uppercase tracking-widest text-muted-foreground">{s.label}</div><div className="mt-1 font-display text-2xl font-semibold">{s.value}</div></div>
+          <div key={s.label} className="glass-card p-4">
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              {s.label}
+            </div>
+            <div className="mt-1 font-display text-2xl font-semibold">{s.value}</div>
+          </div>
         ))}
       </div>
 

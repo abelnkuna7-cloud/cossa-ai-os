@@ -47,7 +47,9 @@ export const Route = createFileRoute("/api/public/r/$token")({
           console.error("[Reviews] Unable to load Google review settings", settingsError.message);
         }
 
-        const placeId = settings?.find((setting) => setting.key === "google_place_id")?.value?.trim();
+        const placeId = settings
+          ?.find((setting) => setting.key === "google_place_id")
+          ?.value?.trim();
         const businessName =
           settings?.find((setting) => setting.key === "google_business_name")?.value?.trim() ||
           "Cossa Nexus Holdings";

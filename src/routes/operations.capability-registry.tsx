@@ -50,10 +50,15 @@ function statusTone(status: CapabilityOperationalStatus | string): string {
   if (status === "partially_operational" || status === "manual" || status === "waiting_approval") {
     return "border-primary/40 bg-primary/10 text-primary";
   }
-  if (status === "degraded" || status === "integration_required" || status === "paid_access_required") {
+  if (
+    status === "degraded" ||
+    status === "integration_required" ||
+    status === "paid_access_required"
+  ) {
     return "border-warning/40 bg-warning/10 text-warning";
   }
-  if (status === "failed" || status === "disabled") return "border-destructive/40 bg-destructive/10 text-destructive";
+  if (status === "failed" || status === "disabled")
+    return "border-destructive/40 bg-destructive/10 text-destructive";
   return "border-border/70 bg-muted/40 text-muted-foreground";
 }
 
@@ -73,7 +78,9 @@ function CapabilityRegistryPage() {
   const metrics = metricsQuery.data ?? [];
   const isLoading = capabilitiesQuery.isLoading || metricsQuery.isLoading;
   const hasError = capabilitiesQuery.isError || metricsQuery.isError;
-  const verified = capabilities.filter((capability) => capability.operational_status === "operational").length;
+  const verified = capabilities.filter(
+    (capability) => capability.operational_status === "operational",
+  ).length;
   const needsAttention = capabilities.filter((capability) =>
     ["degraded", "failed", "integration_required", "paid_access_required"].includes(
       capability.operational_status,
@@ -98,10 +105,15 @@ function CapabilityRegistryPage() {
               <Workflow className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-primary">Cossa Growth truth layer</p>
-              <h1 className="mt-1 font-display text-3xl font-semibold md:text-4xl">Capability Registry</h1>
+              <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+                Cossa Growth truth layer
+              </p>
+              <h1 className="mt-1 font-display text-3xl font-semibold md:text-4xl">
+                Capability Registry
+              </h1>
               <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                A source-of-truth view of what Growth can do, what has actually been verified, and what still needs a connection, approval, or live check.
+                A source-of-truth view of what Growth can do, what has actually been verified, and
+                what still needs a connection, approval, or live check.
               </p>
             </div>
           </div>
@@ -113,7 +125,10 @@ function CapabilityRegistryPage() {
       </section>
 
       {hasError ? (
-        <section role="alert" className="glass-card flex items-start gap-3 border-destructive/40 p-5">
+        <section
+          role="alert"
+          className="glass-card flex items-start gap-3 border-destructive/40 p-5"
+        >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
           <div>
             <h2 className="font-semibold">The registry could not be loaded</h2>
@@ -125,10 +140,26 @@ function CapabilityRegistryPage() {
       ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <RegistryStat icon={Database} label="Registered capabilities" value={isLoading ? "Loading" : String(capabilities.length)} />
-        <RegistryStat icon={CheckCircle2} label="Operationally verified" value={isLoading ? "Loading" : String(verified)} />
-        <RegistryStat icon={CircleDashed} label="Awaiting assessment" value={isLoading ? "Loading" : String(awaitingAssessment)} />
-        <RegistryStat icon={ShieldCheck} label="Needs attention" value={isLoading ? "Loading" : String(needsAttention)} />
+        <RegistryStat
+          icon={Database}
+          label="Registered capabilities"
+          value={isLoading ? "Loading" : String(capabilities.length)}
+        />
+        <RegistryStat
+          icon={CheckCircle2}
+          label="Operationally verified"
+          value={isLoading ? "Loading" : String(verified)}
+        />
+        <RegistryStat
+          icon={CircleDashed}
+          label="Awaiting assessment"
+          value={isLoading ? "Loading" : String(awaitingAssessment)}
+        />
+        <RegistryStat
+          icon={ShieldCheck}
+          label="Needs attention"
+          value={isLoading ? "Loading" : String(needsAttention)}
+        />
       </section>
 
       <section className="glass-card p-6">
@@ -136,10 +167,13 @@ function CapabilityRegistryPage() {
           <div>
             <h2 className="font-display text-xl font-semibold">Operational capabilities</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              “Not assessed” is intentional: it means no successful live verification has been recorded yet, not that the capability is working.
+              “Not assessed” is intentional: it means no successful live verification has been
+              recorded yet, not that the capability is working.
             </p>
           </div>
-          <span className="text-xs text-muted-foreground">Browser access is read-only; protected server workflows record outcomes.</span>
+          <span className="text-xs text-muted-foreground">
+            Browser access is read-only; protected server workflows record outcomes.
+          </span>
         </div>
 
         {isLoading ? (
@@ -151,13 +185,20 @@ function CapabilityRegistryPage() {
         ) : (
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             {capabilities.map((capability) => (
-              <article key={capability.id} className="rounded-xl border border-border/60 bg-card/40 p-5">
+              <article
+                key={capability.id}
+                className="rounded-xl border border-border/60 bg-card/40 p-5"
+              >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-widest text-muted-foreground">{capability.module}</p>
+                    <p className="text-xs uppercase tracking-widest text-muted-foreground">
+                      {capability.module}
+                    </p>
                     <h3 className="mt-1 font-semibold">{capability.name}</h3>
                   </div>
-                  <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(capability.operational_status)}`}>
+                  <span
+                    className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(capability.operational_status)}`}
+                  >
                     {humanise(capability.operational_status)}
                   </span>
                 </div>
@@ -171,25 +212,41 @@ function CapabilityRegistryPage() {
                   </div>
                   <div>
                     <dt className="uppercase tracking-widest text-muted-foreground">Approval</dt>
-                    <dd className="mt-1 font-medium">{humanise(capability.approval_requirement)}</dd>
+                    <dd className="mt-1 font-medium">
+                      {humanise(capability.approval_requirement)}
+                    </dd>
                   </div>
                   <div>
-                    <dt className="uppercase tracking-widest text-muted-foreground">Required connection</dt>
-                    <dd className="mt-1 font-medium">{capability.required_integration ?? "None recorded"}</dd>
+                    <dt className="uppercase tracking-widest text-muted-foreground">
+                      Required connection
+                    </dt>
+                    <dd className="mt-1 font-medium">
+                      {capability.required_integration ?? "None recorded"}
+                    </dd>
                   </div>
                   <div>
-                    <dt className="uppercase tracking-widest text-muted-foreground">Latest verification</dt>
-                    <dd className="mt-1 font-medium">{formatDate(capability.verified_at ?? capability.last_success_at)}</dd>
+                    <dt className="uppercase tracking-widest text-muted-foreground">
+                      Latest verification
+                    </dt>
+                    <dd className="mt-1 font-medium">
+                      {formatDate(capability.verified_at ?? capability.last_success_at)}
+                    </dd>
                   </div>
                 </dl>
 
                 <div className="mt-4 border-t border-border/50 pt-3">
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Evidence sources</p>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    Evidence sources
+                  </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {capability.data_sources.length > 0 ? capability.data_sources.join(" · ") : "No source is registered"}
+                    {capability.data_sources.length > 0
+                      ? capability.data_sources.join(" · ")
+                      : "No source is registered"}
                   </p>
                   {capability.last_error ? (
-                    <p className="mt-2 text-xs text-warning">Latest recorded issue: {capability.last_error}</p>
+                    <p className="mt-2 text-xs text-warning">
+                      Latest recorded issue: {capability.last_error}
+                    </p>
                   ) : null}
                 </div>
               </article>
@@ -202,7 +259,8 @@ function CapabilityRegistryPage() {
         <div>
           <h2 className="font-display text-xl font-semibold">Metric definitions</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            These definitions prevent pipeline, quotation value, supplier availability, and payment-confirmed revenue from being treated as the same thing.
+            These definitions prevent pipeline, quotation value, supplier availability, and
+            payment-confirmed revenue from being treated as the same thing.
           </p>
         </div>
 
@@ -224,12 +282,20 @@ function CapabilityRegistryPage() {
                   <tr key={metric.id}>
                     <td className="px-4 py-4 align-top">
                       <p className="font-medium">{metric.name}</p>
-                      <p className="mt-1 max-w-xl text-xs text-muted-foreground">{metric.description}</p>
+                      <p className="mt-1 max-w-xl text-xs text-muted-foreground">
+                        {metric.description}
+                      </p>
                     </td>
-                    <td className="px-4 py-4 align-top text-xs">{humanise(metric.semantic_type)} · {humanise(metric.value_kind)}</td>
-                    <td className="px-4 py-4 align-top text-xs text-muted-foreground">{metric.source_systems.join(" · ") || "No source"}</td>
+                    <td className="px-4 py-4 align-top text-xs">
+                      {humanise(metric.semantic_type)} · {humanise(metric.value_kind)}
+                    </td>
+                    <td className="px-4 py-4 align-top text-xs text-muted-foreground">
+                      {metric.source_systems.join(" · ") || "No source"}
+                    </td>
                     <td className="px-4 py-4 align-top">
-                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(metric.availability_status)}`}>
+                      <span
+                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(metric.availability_status)}`}
+                      >
                         {humanise(metric.availability_status)}
                       </span>
                     </td>

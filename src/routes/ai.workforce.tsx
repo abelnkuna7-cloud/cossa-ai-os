@@ -235,12 +235,9 @@ const REVENUE_MISSION_PREFIX = "Revenue acquisition:";
  * operational context before it selects a configured model provider. Provider
  * fallback belongs to that gateway, not to an individual browser employee.
  */
-const DEFAULT_WORKFORCE_PROVIDER:
-  CossaAiProvider =
-  "auto";
+const DEFAULT_WORKFORCE_PROVIDER: CossaAiProvider = "auto";
 
-const DEFAULT_WORKFORCE_MODEL =
-  "server-selected";
+const DEFAULT_WORKFORCE_MODEL = "server-selected";
 
 const LEAD_HUNTER_TOOL_PROVIDER = "cossa_tool" as const;
 
@@ -265,8 +262,7 @@ const MAX_RETAINED_RECORD_CONTEXT_CHARS = 1_200;
  * configured-provider failover, so the client never repeats the whole chain
  * and burns additional requests after a provider failure.
  */
-const PROVIDER_MAX_ATTEMPTS =
-  1;
+const PROVIDER_MAX_ATTEMPTS = 1;
 
 const WORKFORCE_STAGE_DELAY_MS = 2_000;
 
@@ -1148,39 +1144,17 @@ function employeeOperationalView({
 }): EmployeeOperationalView {
   const employeeHandoffs = handoffs.filter((handoff) => handoff.to_employee_id === employee.id);
 
-  const activeMissionIds =
-    new Set(
-      missions
-        .filter(
-          (mission) =>
-            [
-              "queued",
-              "running",
-              "awaiting_approval",
-            ].includes(
-              mission.status,
-            ),
-        )
-        .map(
-          (mission) =>
-            mission.id,
-        ),
-    );
+  const activeMissionIds = new Set(
+    missions
+      .filter((mission) => ["queued", "running", "awaiting_approval"].includes(mission.status))
+      .map((mission) => mission.id),
+  );
 
-  const operationalHandoffs =
-    employeeHandoffs.filter(
-      (handoff) =>
-        activeMissionIds.has(
-          handoff.mission_id,
-        ),
-    );
+  const operationalHandoffs = employeeHandoffs.filter((handoff) =>
+    activeMissionIds.has(handoff.mission_id),
+  );
 
-  const employeeRuns =
-    runs.filter(
-      (run) =>
-        run.employee_id ===
-        employee.id,
-    );
+  const employeeRuns = runs.filter((run) => run.employee_id === employee.id);
 
   const employeeRunIds = new Set(employeeRuns.map((run) => run.id));
 
@@ -2061,7 +2035,9 @@ function AiWorkforce() {
 
   const [ceoCommand, setCeoCommand] = useState("");
 
-  const [refreshState, setRefreshState] = useState<"idle" | "refreshing" | "success" | "error">("idle");
+  const [refreshState, setRefreshState] = useState<"idle" | "refreshing" | "success" | "error">(
+    "idle",
+  );
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshWarning, setRefreshWarning] = useState<string | null>(null);
@@ -2158,14 +2134,32 @@ function AiWorkforce() {
       { label: "runs and failures", critical: true, request: runsQuery.refetch() },
       { label: "approvals", critical: true, request: approvalsQuery.refetch() },
       { label: "hosted agent runtime", critical: false, request: runtimeQuery.refetch() },
-      { label: "current tasks", critical: false, request: queryClient.refetchQueries({ queryKey: ["ops-tasks"], type: "active" }) },
-      { label: "integrations", critical: false, request: queryClient.refetchQueries({ queryKey: ["integrations"], type: "active" }) },
-      { label: "notifications", critical: false, request: queryClient.refetchQueries({ queryKey: ["notifications"], type: "active" }) },
+      {
+        label: "current tasks",
+        critical: false,
+        request: queryClient.refetchQueries({ queryKey: ["ops-tasks"], type: "active" }),
+      },
+      {
+        label: "integrations",
+        critical: false,
+        request: queryClient.refetchQueries({ queryKey: ["integrations"], type: "active" }),
+      },
+      {
+        label: "notifications",
+        critical: false,
+        request: queryClient.refetchQueries({ queryKey: ["notifications"], type: "active" }),
+      },
     ];
     const results = await Promise.allSettled(sources.map((source) => source.request));
 
     const failedSources = results.flatMap((result, index) => {
-      const failed = result.status === "rejected" || (result.status === "fulfilled" && typeof result.value === "object" && result.value !== null && "isError" in result.value && result.value.isError === true);
+      const failed =
+        result.status === "rejected" ||
+        (result.status === "fulfilled" &&
+          typeof result.value === "object" &&
+          result.value !== null &&
+          "isError" in result.value &&
+          result.value.isError === true);
       return failed ? [sources[index]] : [];
     });
 
@@ -2182,10 +2176,14 @@ function AiWorkforce() {
     const completedAt = new Date().toISOString();
     setLastRefreshedAt(completedAt);
     setRefreshState("success");
-    const optionalFailures = failedSources.filter((source) => !source.critical).map((source) => source.label);
-    if (optionalFailures.length) setRefreshWarning(`Configuration warning: ${optionalFailures.join(", ")} unavailable.`);
+    const optionalFailures = failedSources
+      .filter((source) => !source.critical)
+      .map((source) => source.label);
+    if (optionalFailures.length)
+      setRefreshWarning(`Configuration warning: ${optionalFailures.join(", ")} unavailable.`);
     toast.success("Workforce refreshed", {
-      description: "Employees, missions, assignments, runs, approvals and runtime state were refetched.",
+      description:
+        "Employees, missions, assignments, runs, approvals and runtime state were refetched.",
     });
   };
 
@@ -2767,121 +2765,80 @@ function AiWorkforce() {
   /* DIRECT EMPLOYEE ASSIGNMENT                                               */
   /* ------------------------------------------------------------------------ */
 
-  const directAssignmentMutation =
-    useMutation({
-      mutationFn:
-        async ({
-          employee,
-          objective:
-            directObjective,
-        }: {
-          employee: AiEmployee;
-          objective: string;
-        }) => {
-          const assignment =
-            await createDirectEmployeeMission({
-              employeeId:
-                employee.id,
+  const directAssignmentMutation = useMutation({
+    mutationFn: async ({
+      employee,
+      objective: directObjective,
+    }: {
+      employee: AiEmployee;
+      objective: string;
+    }) => {
+      const assignment = await createDirectEmployeeMission({
+        employeeId: employee.id,
 
-              objective:
-                directObjective,
+        objective: directObjective,
 
-              target_market:
-                targetMarket,
+        target_market: targetMarket,
 
-              target_location:
-                targetLocation,
+        target_location: targetLocation,
 
-              context: {
-                requested_from:
-                  "ai_workforce_employee_drawer",
+        context: {
+          requested_from: "ai_workforce_employee_drawer",
 
-                source:
-                  "owner_direct_assignment",
-              },
-            });
-
-          const outcome =
-            await executeControlledHandoff({
-              mission:
-                assignment.mission,
-
-              handoff:
-                assignment.handoff,
-
-              employee:
-                assignment.employee,
-
-              priorOutputs:
-                [],
-            });
-
-          return {
-            employee:
-              assignment.employee,
-
-            mission:
-              assignment.mission,
-
-            content:
-              outcome.content,
-
-            metadata:
-              outcome.metadata,
-          };
+          source: "owner_direct_assignment",
         },
+      });
 
-      onSuccess:
-        async ({
-          employee,
-          metadata,
-        }) => {
-          await refreshWorkforce();
+      const outcome = await executeControlledHandoff({
+        mission: assignment.mission,
 
-          toast.success(
-            "Employee task completed",
-            {
-              description:
-                metadata
-                  ? employee.name +
-                    " completed a recorded result through " +
-                    metadata.provider +
-                    (metadata.model
-                      ? " (" +
-                        metadata.model +
-                        ")."
-                      : ".")
-                  : employee.name +
-                    " completed a recorded Cossa tool result.",
-            },
-          );
-        },
+        handoff: assignment.handoff,
 
-      onError:
-        (error) => {
-          toast.error(
-            "Employee task could not run",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
+        employee: assignment.employee,
+
+        priorOutputs: [],
+      });
+
+      return {
+        employee: assignment.employee,
+
+        mission: assignment.mission,
+
+        content: outcome.content,
+
+        metadata: outcome.metadata,
+      };
+    },
+
+    onSuccess: async ({ employee, metadata }) => {
+      await refreshWorkforce();
+
+      toast.success("Employee task completed", {
+        description: metadata
+          ? employee.name +
+            " completed a recorded result through " +
+            metadata.provider +
+            (metadata.model ? " (" + metadata.model + ")." : ".")
+          : employee.name + " completed a recorded Cossa tool result.",
+      });
+    },
+
+    onError: (error) => {
+      toast.error("Employee task could not run", {
+        description: normaliseErrorMessage(error),
+      });
+    },
+  });
 
   async function runDirectEmployeeAssignment(
     employee: AiEmployee,
     directObjective: string,
   ): Promise<string> {
-    const result =
-      await directAssignmentMutation.mutateAsync({
-        employee,
+    const result = await directAssignmentMutation.mutateAsync({
+      employee,
 
-        objective:
-          directObjective,
-      });
+      objective: directObjective,
+    });
 
     return result.content;
   }
@@ -3111,7 +3068,9 @@ function AiWorkforce() {
                 disabled={isLoading || refreshState === "refreshing"}
                 className="border-primary/40 text-primary hover:bg-primary/10"
               >
-                <RefreshCw className={`mr-1.5 h-4 w-4 ${refreshState === "refreshing" ? "animate-spin" : ""}`} />
+                <RefreshCw
+                  className={`mr-1.5 h-4 w-4 ${refreshState === "refreshing" ? "animate-spin" : ""}`}
+                />
                 {refreshState === "refreshing" ? "Refreshing" : "Refresh"}
               </Button>
 
@@ -3127,13 +3086,37 @@ function AiWorkforce() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground" aria-live="polite">
-            <span className={refreshState === "error" ? "text-destructive" : refreshState === "success" ? "text-primary" : ""}>
-              {refreshState === "refreshing" ? "REFRESHING" : refreshState === "success" ? "SUCCESS" : refreshState === "error" ? "ERROR" : "READY"}
+          <div
+            className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground"
+            aria-live="polite"
+          >
+            <span
+              className={
+                refreshState === "error"
+                  ? "text-destructive"
+                  : refreshState === "success"
+                    ? "text-primary"
+                    : ""
+              }
+            >
+              {refreshState === "refreshing"
+                ? "REFRESHING"
+                : refreshState === "success"
+                  ? "SUCCESS"
+                  : refreshState === "error"
+                    ? "ERROR"
+                    : "READY"}
             </span>
-            <span>LAST REFRESHED: {lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleString("en-ZA") : "Not yet"}</span>
-            {refreshError ? <span className="normal-case tracking-normal text-destructive">{refreshError}</span> : null}
-            {refreshWarning ? <span className="normal-case tracking-normal text-warning">{refreshWarning}</span> : null}
+            <span>
+              LAST REFRESHED:{" "}
+              {lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleString("en-ZA") : "Not yet"}
+            </span>
+            {refreshError ? (
+              <span className="normal-case tracking-normal text-destructive">{refreshError}</span>
+            ) : null}
+            {refreshWarning ? (
+              <span className="normal-case tracking-normal text-warning">{refreshWarning}</span>
+            ) : null}
           </div>
 
           <div className="relative">
@@ -4347,12 +4330,8 @@ function AiWorkforce() {
         <EmployeeDrawer
           item={selectedEmployee}
           onClose={() => setSelectedEmployeeId(null)}
-          directAssignmentPending={
-            directAssignmentMutation.isPending
-          }
-          onRunDirectAssignment={
-            runDirectEmployeeAssignment
-          }
+          directAssignmentPending={directAssignmentMutation.isPending}
+          onRunDirectAssignment={runDirectEmployeeAssignment}
           onOpenDepartment={() => {
             const firstDepartment = selectedEmployee.departmentKeys[0];
 
@@ -4547,10 +4526,7 @@ function EmployeeDrawer({
   item: EmployeeDirectoryItem;
   onClose: () => void;
   onOpenDepartment: () => void;
-  onRunDirectAssignment: (
-    employee: AiEmployee,
-    objective: string,
-  ) => Promise<string>;
+  onRunDirectAssignment: (employee: AiEmployee, objective: string) => Promise<string>;
   directAssignmentPending: boolean;
 }) {
   const [directObjective, setDirectObjective] = useState("");
@@ -4757,21 +4733,19 @@ function EmployeeDrawer({
         </div>
 
         <section className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
-          <p className="text-[10px] uppercase tracking-widest text-primary">
-            Direct assignment
-          </p>
+          <p className="text-[10px] uppercase tracking-widest text-primary">Direct assignment</p>
 
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Send a safe internal task directly to this employee. Cossa AI
-            records the mission, run, resolved provider/model and result.
-            High-risk external actions remain blocked for owner approval.
+            Send a safe internal task directly to this employee. Cossa AI records the mission, run,
+            resolved provider/model and result. High-risk external actions remain blocked for owner
+            approval.
           </p>
 
           {isHunter ? (
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Lead Hunter uses the authenticated Cossa research route and may
-              create deduplicated CRM lead records from verified public
-              evidence. It never contacts prospects automatically.
+              Lead Hunter uses the authenticated Cossa research route and may create deduplicated
+              CRM lead records from verified public evidence. It never contacts prospects
+              automatically.
             </p>
           ) : null}
 
@@ -4783,16 +4757,20 @@ function EmployeeDrawer({
               setDirectError(null);
             }}
             maxLength={6_000}
-            placeholder={isHunter
-              ? "Example: Find verified Gauteng facilities-management opportunities for Cossa Facility Services."
-              : "Describe the safe internal work you want this employee to complete."}
+            placeholder={
+              isHunter
+                ? "Example: Find verified Gauteng facilities-management opportunities for Cossa Facility Services."
+                : "Describe the safe internal work you want this employee to complete."
+            }
             className="mt-3 min-h-28 w-full rounded-xl border border-border/70 bg-background/70 p-3 text-sm outline-none transition focus:border-primary/70 focus:ring-2 focus:ring-primary/10"
           />
 
           <Button
             type="button"
             className="mt-3 w-full bg-primary text-primary-foreground hover:bg-primary/90"
-            disabled={directAssignmentPending || employee.status !== "active" || !directObjective.trim()}
+            disabled={
+              directAssignmentPending || employee.status !== "active" || !directObjective.trim()
+            }
             onClick={() => {
               const objective = directObjective.trim();
 
@@ -4819,9 +4797,7 @@ function EmployeeDrawer({
               <Play className="mr-1.5 h-4 w-4" />
             )}
 
-            {directAssignmentPending
-              ? "Working…"
-              : "Run safe internal task"}
+            {directAssignmentPending ? "Working…" : "Run safe internal task"}
           </Button>
 
           {directError ? (

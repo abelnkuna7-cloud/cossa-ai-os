@@ -38,7 +38,9 @@ function ReportsPage() {
           </div>
           <h1 className="mt-3 font-display text-3xl md:text-4xl font-semibold">Reports</h1>
           <p className="mt-1 max-w-3xl text-muted-foreground">
-            Consolidated reporting across the new Cossa AI architecture and the canonical Growth operating records. Lead funnel and opportunity pipeline are reported separately so neither dataset is hidden or double-counted.
+            Consolidated reporting across the new Cossa AI architecture and the canonical Growth
+            operating records. Lead funnel and opportunity pipeline are reported separately so
+            neither dataset is hidden or double-counted.
           </p>
         </div>
       </section>
@@ -51,7 +53,10 @@ function ReportsPage() {
         <>
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: "Accepted quote value", value: fmtCurrency(data.dashboard.acceptedQuotationValue) },
+              {
+                label: "Accepted quote value",
+                value: fmtCurrency(data.dashboard.acceptedQuotationValue),
+              },
               { label: "Open opportunity value", value: fmtCurrency(data.dashboard.pipelineValue) },
               { label: "All leads", value: data.dashboard.totalLeads },
               { label: "New leads (7d)", value: data.dashboard.newLeads },
@@ -84,10 +89,14 @@ function ReportsPage() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
               {data.leadFunnel.map((stage) => (
                 <div key={stage.key} className="rounded-xl border border-border/60 bg-card/40 p-3">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{stage.label}</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    {stage.label}
+                  </div>
                   <div className="mt-1 font-display text-xl font-semibold">{stage.count}</div>
                   {stage.estimatedValue > 0 ? (
-                    <div className="text-xs text-primary">Recorded estimate: {fmtCurrency(stage.estimatedValue)}</div>
+                    <div className="text-xs text-primary">
+                      Recorded estimate: {fmtCurrency(stage.estimatedValue)}
+                    </div>
                   ) : (
                     <div className="text-xs text-muted-foreground">No recorded estimate</div>
                   )}
@@ -96,10 +105,15 @@ function ReportsPage() {
             </div>
             {data.unmappedLeadStages.length > 0 ? (
               <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-                <div className="text-xs font-semibold uppercase tracking-wider text-amber-300">Unmapped real lead stages</div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-amber-300">
+                  Unmapped real lead stages
+                </div>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
                   {data.unmappedLeadStages.map((stage) => (
-                    <span key={stage.key} className="rounded-full border border-border/60 px-2 py-1">
+                    <span
+                      key={stage.key}
+                      className="rounded-full border border-border/60 px-2 py-1"
+                    >
                       {stage.label}: {stage.count}
                     </span>
                   ))}
@@ -122,8 +136,13 @@ function ReportsPage() {
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
               {data.dashboard.pipelineByStage.map((stage) => (
-                <div key={stage.stage} className="rounded-xl border border-border/60 bg-card/40 p-3">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{stage.stage}</div>
+                <div
+                  key={stage.stage}
+                  className="rounded-xl border border-border/60 bg-card/40 p-3"
+                >
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    {stage.stage}
+                  </div>
                   <div className="mt-1 font-display text-xl font-semibold">{stage.count}</div>
                   <div className="text-xs text-primary">{fmtCurrency(stage.value)}</div>
                 </div>
@@ -144,8 +163,13 @@ function ReportsPage() {
                 ["Referrals", data.marketingOperations.referrals],
                 ["Review requests", data.marketingOperations.reviewRequests],
               ].map(([label, value]) => (
-                <div key={String(label)} className="rounded-xl border border-border/60 bg-card/40 p-3">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+                <div
+                  key={String(label)}
+                  className="rounded-xl border border-border/60 bg-card/40 p-3"
+                >
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    {label}
+                  </div>
                   <div className="mt-1 font-display text-xl font-semibold">{value}</div>
                 </div>
               ))}

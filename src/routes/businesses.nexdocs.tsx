@@ -141,16 +141,13 @@ function NexDocsWorkspace() {
           </p>
 
           <h1 className="mt-2 font-display text-3xl font-semibold md:text-4xl">
-            <span className="text-gradient-gold">
-              NexDocs
-            </span>
+            <span className="text-gradient-gold">NexDocs</span>
           </h1>
 
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            The document operating centre for proposals, quotations, contracts,
-            company profiles, business documents and AI-assisted document
-            production. Everything related to NexDocs is organised here instead
-            of being scattered across GROWTH.
+            The document operating centre for proposals, quotations, contracts, company profiles,
+            business documents and AI-assisted document production. Everything related to NexDocs is
+            organised here instead of being scattered across GROWTH.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-2">
@@ -164,22 +161,14 @@ function NexDocsWorkspace() {
               </Link>
             </Button>
 
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary/40 text-primary"
-            >
+            <Button asChild variant="outline" className="border-primary/40 text-primary">
               <Link to="/ai/document-assistant">
                 <BrainCircuit className="mr-1.5 h-4 w-4" />
                 AI Document Assistant
               </Link>
             </Button>
 
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary/40 text-primary"
-            >
+            <Button asChild variant="outline" className="border-primary/40 text-primary">
               <Link to="/sales/quotations">
                 <FileText className="mr-1.5 h-4 w-4" />
                 Quotations
@@ -234,10 +223,9 @@ function NexDocsWorkspace() {
           </h2>
 
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            NexDocs should act as the document business layer across Cossa.
-            Construction quotations, Facility Services proposals, Store
-            supplier documents, Tech proposals and group-level documents can
-            all use the same document capabilities without duplicating tools.
+            NexDocs should act as the document business layer across Cossa. Construction quotations,
+            Facility Services proposals, Store supplier documents, Tech proposals and group-level
+            documents can all use the same document capabilities without duplicating tools.
           </p>
         </div>
 
@@ -255,9 +243,7 @@ function NexDocsWorkspace() {
                   <Icon className="h-5 w-5" />
                 </div>
 
-                <h3 className="mt-4 text-base font-semibold">
-                  {tool.title}
-                </h3>
+                <h3 className="mt-4 text-base font-semibold">{tool.title}</h3>
 
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   {tool.description}
@@ -292,8 +278,8 @@ function NexDocsWorkspace() {
             </h2>
 
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              NexDocs becomes more valuable when it is treated as shared
-              infrastructure rather than a separate isolated tool.
+              NexDocs becomes more valuable when it is treated as shared infrastructure rather than
+              a separate isolated tool.
             </p>
           </div>
         </div>
@@ -441,35 +427,21 @@ function OperatingArea({
         <Icon className="h-4 w-4" />
       </div>
 
-      <h3 className="mt-3 text-sm font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-3 text-sm font-semibold">{title}</h3>
 
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }
 
-function DocumentType({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
+function DocumentType({ title, description }: { title: string; description: string }) {
   return (
     <div className="rounded-xl border border-border/60 bg-card/40 p-4">
       <FileText className="h-4 w-4 text-primary" />
 
-      <h3 className="mt-3 text-sm font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-3 text-sm font-semibold">{title}</h3>
 
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -489,13 +461,9 @@ function ProcessStep({
         {number}
       </span>
 
-      <h3 className="mt-2 text-sm font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-2 text-sm font-semibold">{title}</h3>
 
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -515,13 +483,9 @@ function PriorityCard({
         <Icon className="h-5 w-5" />
       </div>
 
-      <h3 className="mt-4 text-base font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-4 text-base font-semibold">{title}</h3>
 
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }

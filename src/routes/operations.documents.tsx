@@ -36,11 +36,29 @@ function DocumentsPage() {
         { key: "notes", label: "Notes", type: "textarea" },
       ]}
       columns={[
-        { key: "title", label: "Title", render: (r) => <span className="font-medium">{r.title}</span> },
+        {
+          key: "title",
+          label: "Title",
+          render: (r) => <span className="font-medium">{r.title}</span>,
+        },
         { key: "category", label: "Category" },
-        { key: "url", label: "Link", render: (r) => r.url ? (
-          <a href={r.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">Open</a>
-        ) : "—" },
+        {
+          key: "url",
+          label: "Link",
+          render: (r) =>
+            r.url ? (
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary hover:underline"
+              >
+                Open
+              </a>
+            ) : (
+              "—"
+            ),
+        },
         { key: "created_at", label: "Added", render: (r) => fmtDate(r.created_at) },
       ]}
       searchKeys={["title", "category", "notes"]}

@@ -34,7 +34,8 @@ export const Route = createFileRoute("/marketing/ai-director")({
 const operationalTools = [
   {
     title: "Content Calendar",
-    description: "Plan and schedule real content-calendar records without claiming publication occurred.",
+    description:
+      "Plan and schedule real content-calendar records without claiming publication occurred.",
     to: "/marketing/content-calendar" as const,
     icon: CalendarClock,
     countKey: "contentItems" as const,
@@ -89,9 +90,13 @@ function MarketingGrowthHub() {
             </div>
             <StatusBadge status={workspaceRuntimeStatus()} />
           </div>
-          <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">Marketing & Growth</h1>
+          <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
+            Marketing & Growth
+          </h1>
           <p className="mt-1 max-w-3xl text-muted-foreground">
-            One operating hub for the restored Growth marketing records and the newer Cossa AI strategy layer. Real records remain separate from AI recommendations and external publication claims.
+            One operating hub for the restored Growth marketing records and the newer Cossa AI
+            strategy layer. Real records remain separate from AI recommendations and external
+            publication claims.
           </p>
         </div>
       </section>
@@ -125,12 +130,18 @@ function MarketingGrowthHub() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="mr-auto">
             <h2 className="font-display text-lg font-semibold">Growth tools</h2>
-            <p className="text-sm text-muted-foreground">Campaign, content and search strategy workspaces.</p>
+            <p className="text-sm text-muted-foreground">
+              Campaign, content and search strategy workspaces.
+            </p>
           </div>
           {growthTools.map((tool) => {
             const Icon = tool.icon;
             return (
-              <Link key={tool.title} to={tool.to} className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-card/40 px-4 py-3 text-sm transition-colors hover:border-primary/40 hover:bg-primary/5">
+              <Link
+                key={tool.title}
+                to={tool.to}
+                className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-card/40 px-4 py-3 text-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
+              >
                 <Icon className="h-4 w-4 text-primary" />
                 {tool.title}
               </Link>
@@ -141,10 +152,15 @@ function MarketingGrowthHub() {
 
       <section>
         <div className="mb-3">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">AI Director</div>
-          <h2 className="mt-1 font-display text-xl font-semibold">Reason over the marketing operation</h2>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+            AI Director
+          </div>
+          <h2 className="mt-1 font-display text-xl font-semibold">
+            Reason over the marketing operation
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Cossa AI remains the strategy and reasoning interface. It does not replace the operational records above.
+            Cossa AI remains the strategy and reasoning interface. It does not replace the
+            operational records above.
           </p>
         </div>
         <SpecialistChat to={TO} />

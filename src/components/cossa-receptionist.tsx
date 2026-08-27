@@ -1,8 +1,4 @@
-import {
-  useMemo,
-  useState,
-  type FormEvent,
-} from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -34,35 +30,16 @@ import { cn } from "@/lib/utils";
 
 const phoneNumber = "067 801 1907";
 const phoneHref = "tel:+27678011907";
-const emailHref =
-  "mailto:cossa@cossanexusholdings.co.za";
-const whatsappHref =
-  "https://wa.me/27678011907";
+const emailHref = "mailto:cossa@cossanexusholdings.co.za";
+const whatsappHref = "https://wa.me/27678011907";
 
-type ReceptionistStep =
-  | "welcome"
-  | "service"
-  | "details"
-  | "contact"
-  | "review"
-  | "success";
+type ReceptionistStep = "welcome" | "service" | "details" | "contact" | "review" | "success";
 
-type SubmitState =
-  | "idle"
-  | "sending"
-  | "error"
-  | "sent";
+type SubmitState = "idle" | "sending" | "error" | "sent";
 
-type PreferredContact =
-  | "phone"
-  | "whatsapp"
-  | "email";
+type PreferredContact = "phone" | "whatsapp" | "email";
 
-type Urgency =
-  | "urgent"
-  | "this_week"
-  | "this_month"
-  | "planning";
+type Urgency = "urgent" | "this_week" | "this_month" | "planning";
 
 type ServiceKey =
   | "construction"
@@ -92,12 +69,8 @@ interface DatabaseError {
 }
 
 interface PublicReceptionistDatabaseClient {
-  from: (
-    table: "contact_messages" | "leads",
-  ) => {
-    insert: (
-      row: Record<string, unknown>,
-    ) => Promise<{
+  from: (table: "contact_messages" | "leads") => {
+    insert: (row: Record<string, unknown>) => Promise<{
       error: DatabaseError | null;
     }>;
   };
@@ -128,8 +101,7 @@ const serviceOptions: ServiceOption[] = [
     title: "Construction",
     description:
       "Building, renovations, maintenance, painting, ceilings, tiling, roofing and related work.",
-    crmService:
-      "Cossa Nexus Construction",
+    crmService: "Cossa Nexus Construction",
     icon: HardHat,
   },
   {
@@ -137,15 +109,13 @@ const serviceOptions: ServiceOption[] = [
     title: "Facility Services",
     description:
       "Cleaning, hygiene, property care, landscaping, waste and facility-support services.",
-    crmService:
-      "Cossa Facility Services",
+    crmService: "Cossa Facility Services",
     icon: Wrench,
   },
   {
     key: "technology",
     title: "Technology",
-    description:
-      "Websites, AI tools, automation, digital systems, SEO and technology support.",
+    description: "Websites, AI tools, automation, digital systems, SEO and technology support.",
     crmService: "Cossa Tech",
     icon: Laptop,
   },
@@ -154,8 +124,7 @@ const serviceOptions: ServiceOption[] = [
     title: "Business Growth",
     description:
       "Marketing, lead generation, sales systems, CRM, campaigns and business-growth support.",
-    crmService:
-      "Cossa AI Business Growth",
+    crmService: "Cossa AI Business Growth",
     icon: Building2,
   },
   {
@@ -169,18 +138,15 @@ const serviceOptions: ServiceOption[] = [
   {
     key: "store",
     title: "Cossa Store",
-    description:
-      "Products, e-commerce enquiries, sourcing, orders and online-store support.",
+    description: "Products, e-commerce enquiries, sourcing, orders and online-store support.",
     crmService: "Cossa Store",
     icon: ShoppingBag,
   },
   {
     key: "general",
     title: "Something else",
-    description:
-      "A general enquiry or a request that crosses more than one Cossa service.",
-    crmService:
-      "General Cossa Nexus Holdings enquiry",
+    description: "A general enquiry or a request that crosses more than one Cossa service.",
+    crmService: "General Cossa Nexus Holdings enquiry",
     icon: Sparkles,
   },
 ];
@@ -229,55 +195,26 @@ const contactOptions: {
   },
 ];
 
-function normalisePhone(
-  value: string,
-): string {
-  return value
-    .replace(/[^\d+]/g, "")
-    .trim();
+function normalisePhone(value: string): string {
+  return value.replace(/[^\d+]/g, "").trim();
 }
 
-function normaliseEmail(
-  value: string,
-): string | null {
-  const email = value
-    .trim()
-    .toLowerCase();
+function normaliseEmail(value: string): string | null {
+  const email = value.trim().toLowerCase();
 
   return email || null;
 }
 
-function getSelectedService(
-  key: ServiceKey | "",
-): ServiceOption | null {
-  return (
-    serviceOptions.find(
-      (service) =>
-        service.key === key,
-    ) ?? null
-  );
+function getSelectedService(key: ServiceKey | ""): ServiceOption | null {
+  return serviceOptions.find((service) => service.key === key) ?? null;
 }
 
-function getUrgencyLabel(
-  urgency: Urgency,
-): string {
-  return (
-    urgencyOptions.find(
-      (option) =>
-        option.value === urgency,
-    )?.label ?? urgency
-  );
+function getUrgencyLabel(urgency: Urgency): string {
+  return urgencyOptions.find((option) => option.value === urgency)?.label ?? urgency;
 }
 
-function getContactLabel(
-  contact: PreferredContact,
-): string {
-  return (
-    contactOptions.find(
-      (option) =>
-        option.value === contact,
-    )?.label ?? contact
-  );
+function getContactLabel(contact: PreferredContact): string {
+  return contactOptions.find((option) => option.value === contact)?.label ?? contact;
 }
 
 function createReceptionistNotes({
@@ -291,25 +228,16 @@ function createReceptionistNotes({
     "Submitted through the Cossa AI public receptionist.",
     "",
     `Requested service: ${service.title}`,
-    `Location: ${
-      form.location.trim() ||
-      "Not supplied"
-    }`,
-    `Urgency: ${getUrgencyLabel(
-      form.urgency,
-    )}`,
-    `Preferred contact method: ${getContactLabel(
-      form.preferredContact,
-    )}`,
+    `Location: ${form.location.trim() || "Not supplied"}`,
+    `Urgency: ${getUrgencyLabel(form.urgency)}`,
+    `Preferred contact method: ${getContactLabel(form.preferredContact)}`,
     "",
     "Customer request:",
     form.request.trim(),
   ].join("\n");
 }
 
-function scoreLead(
-  form: ReceptionistForm,
-): number {
+function scoreLead(form: ReceptionistForm): number {
   let score = 40;
 
   if (form.email.trim()) {
@@ -320,21 +248,15 @@ function scoreLead(
     score += 10;
   }
 
-  if (
-    form.request.trim().length >= 80
-  ) {
+  if (form.request.trim().length >= 80) {
     score += 10;
   }
 
   if (form.urgency === "urgent") {
     score += 20;
-  } else if (
-    form.urgency === "this_week"
-  ) {
+  } else if (form.urgency === "this_week") {
     score += 15;
-  } else if (
-    form.urgency === "this_month"
-  ) {
+  } else if (form.urgency === "this_month") {
     score += 5;
   }
 
@@ -342,37 +264,14 @@ function scoreLead(
 }
 
 export function CossaReceptionist() {
-  const [open, setOpen] =
-    useState(false);
-  const [minimised, setMinimised] =
-    useState(false);
-  const [step, setStep] =
-    useState<ReceptionistStep>(
-      "welcome",
-    );
-  const [form, setForm] =
-    useState<ReceptionistForm>(
-      initialForm,
-    );
-  const [
-    submitState,
-    setSubmitState,
-  ] = useState<SubmitState>("idle");
-  const [
-    submitError,
-    setSubmitError,
-  ] = useState<string | null>(
-    null,
-  );
+  const [open, setOpen] = useState(false);
+  const [minimised, setMinimised] = useState(false);
+  const [step, setStep] = useState<ReceptionistStep>("welcome");
+  const [form, setForm] = useState<ReceptionistForm>(initialForm);
+  const [submitState, setSubmitState] = useState<SubmitState>("idle");
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const selectedService =
-    useMemo(
-      () =>
-        getSelectedService(
-          form.service,
-        ),
-      [form.service],
-    );
+  const selectedService = useMemo(() => getSelectedService(form.service), [form.service]);
 
   const progress = useMemo(() => {
     const steps: ReceptionistStep[] = [
@@ -384,18 +283,9 @@ export function CossaReceptionist() {
       "success",
     ];
 
-    const index =
-      steps.indexOf(step);
+    const index = steps.indexOf(step);
 
-    return Math.max(
-      0,
-      Math.min(
-        100,
-        ((index + 1) /
-          steps.length) *
-          100,
-      ),
-    );
+    return Math.max(0, Math.min(100, ((index + 1) / steps.length) * 100));
   }, [step]);
 
   function openReceptionist() {
@@ -417,9 +307,7 @@ export function CossaReceptionist() {
 
   function nextFromService() {
     if (!form.service) {
-      setSubmitError(
-        "Please choose the service you need.",
-      );
+      setSubmitError("Please choose the service you need.");
       return;
     }
 
@@ -428,14 +316,8 @@ export function CossaReceptionist() {
   }
 
   function nextFromDetails() {
-    if (
-      form.request
-        .trim()
-        .length < 10
-    ) {
-      setSubmitError(
-        "Please describe what you need in at least 10 characters.",
-      );
+    if (form.request.trim().length < 10) {
+      setSubmitError("Please describe what you need in at least 10 characters.");
       return;
     }
 
@@ -444,32 +326,21 @@ export function CossaReceptionist() {
   }
 
   function nextFromContact() {
-    const name =
-      form.name.trim();
-    const phone =
-      normalisePhone(form.phone);
-    const email =
-      normaliseEmail(form.email);
+    const name = form.name.trim();
+    const phone = normalisePhone(form.phone);
+    const email = normaliseEmail(form.email);
 
     if (!name) {
-      setSubmitError(
-        "Please enter your name.",
-      );
+      setSubmitError("Please enter your name.");
       return;
     }
 
     if (!phone) {
-      setSubmitError(
-        "Please enter a phone number.",
-      );
+      setSubmitError("Please enter a phone number.");
       return;
     }
 
-    if (
-      form.preferredContact ===
-        "email" &&
-      !email
-    ) {
+    if (form.preferredContact === "email" && !email) {
       setSubmitError(
         "Please enter an email address because email is your preferred contact method.",
       );
@@ -480,116 +351,76 @@ export function CossaReceptionist() {
     setStep("review");
   }
 
-  async function submitEnquiry(
-    event: FormEvent<HTMLFormElement>,
-  ) {
+  async function submitEnquiry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (
-      submitState === "sending"
-    ) {
+    if (submitState === "sending") {
       return;
     }
 
     if (!selectedService) {
       setSubmitState("error");
-      setSubmitError(
-        "Please select a service before submitting.",
-      );
+      setSubmitError("Please select a service before submitting.");
       return;
     }
 
-    const name =
-      form.name.trim();
-    const phone =
-      normalisePhone(form.phone);
-    const email =
-      normaliseEmail(form.email);
-    const location =
-      form.location.trim() ||
-      null;
-    const request =
-      form.request.trim();
+    const name = form.name.trim();
+    const phone = normalisePhone(form.phone);
+    const email = normaliseEmail(form.email);
+    const location = form.location.trim() || null;
+    const request = form.request.trim();
 
-    if (
-      !name ||
-      !phone ||
-      request.length < 10
-    ) {
+    if (!name || !phone || request.length < 10) {
       setSubmitState("error");
-      setSubmitError(
-        "Your name, phone number and request details are required.",
-      );
+      setSubmitError("Your name, phone number and request details are required.");
       return;
     }
 
     setSubmitState("sending");
     setSubmitError(null);
 
-    const database =
-      supabase as unknown as PublicReceptionistDatabaseClient;
+    const database = supabase as unknown as PublicReceptionistDatabaseClient;
 
-    const notes =
-      createReceptionistNotes({
-        form,
-        service:
-          selectedService,
-      });
+    const notes = createReceptionistNotes({
+      form,
+      service: selectedService,
+    });
 
-    const {
-      error:
-        contactMessageError,
-    } = await database
-      .from("contact_messages")
-      .insert({
-        name,
-        phone,
-        email,
-        subject: `Cossa receptionist enquiry — ${selectedService.title}`,
-        message: notes,
-        status: "unread",
-      });
+    const { error: contactMessageError } = await database.from("contact_messages").insert({
+      name,
+      phone,
+      email,
+      subject: `Cossa receptionist enquiry — ${selectedService.title}`,
+      message: notes,
+      status: "unread",
+    });
 
     if (contactMessageError) {
-      console.error(
-        "Cossa receptionist contact-message error:",
-        contactMessageError,
-      );
+      console.error("Cossa receptionist contact-message error:", contactMessageError);
 
       setSubmitState("error");
-      setSubmitError(
-        "We could not record your request. Please call or WhatsApp Cossa directly.",
-      );
+      setSubmitError("We could not record your request. Please call or WhatsApp Cossa directly.");
       return;
     }
 
-    const {
-      error: leadError,
-    } = await database
-      .from("leads")
-      .insert({
-        full_name: name,
-        name,
-        phone,
-        email,
-        service:
-          selectedService.crmService,
-        location,
-        source:
-          "cossa_public_receptionist",
-        status: "New",
-        stage: "New",
-        notes,
-        score: scoreLead(form),
-        value: 0,
-        estimated_value: 0,
-      });
+    const { error: leadError } = await database.from("leads").insert({
+      full_name: name,
+      name,
+      phone,
+      email,
+      service: selectedService.crmService,
+      location,
+      source: "cossa_public_receptionist",
+      status: "New",
+      stage: "New",
+      notes,
+      score: scoreLead(form),
+      value: 0,
+      estimated_value: 0,
+    });
 
     if (leadError) {
-      console.error(
-        "Cossa receptionist lead-creation error:",
-        leadError,
-      );
+      console.error("Cossa receptionist lead-creation error:", leadError);
 
       setSubmitState("error");
       setSubmitError(
@@ -607,9 +438,7 @@ export function CossaReceptionist() {
       {!open && (
         <button
           type="button"
-          onClick={
-            openReceptionist
-          }
+          onClick={openReceptionist}
           className={cn(
             "fixed bottom-4 right-4 z-50",
             "flex items-center gap-3 rounded-full",
@@ -626,13 +455,9 @@ export function CossaReceptionist() {
           </span>
 
           <span className="hidden text-left sm:block">
-            <span className="block text-xs font-semibold">
-              Cossa Receptionist
-            </span>
+            <span className="block text-xs font-semibold">Cossa Receptionist</span>
 
-            <span className="block text-[10px] opacity-80">
-              Tell us what you need
-            </span>
+            <span className="block text-[10px] opacity-80">Tell us what you need</span>
           </span>
         </button>
       )}
@@ -675,17 +500,8 @@ export function CossaReceptionist() {
                 type="button"
                 size="icon"
                 variant="ghost"
-                onClick={() =>
-                  setMinimised(
-                    (current) =>
-                      !current,
-                  )
-                }
-                aria-label={
-                  minimised
-                    ? "Expand receptionist"
-                    : "Minimise receptionist"
-                }
+                onClick={() => setMinimised((current) => !current)}
+                aria-label={minimised ? "Expand receptionist" : "Minimise receptionist"}
               >
                 {minimised ? (
                   <ChevronUp className="h-4 w-4" />
@@ -698,9 +514,7 @@ export function CossaReceptionist() {
                 type="button"
                 size="icon"
                 variant="ghost"
-                onClick={
-                  closeReceptionist
-                }
+                onClick={closeReceptionist}
                 aria-label="Close receptionist"
               >
                 <X className="h-4 w-4" />
@@ -721,35 +535,21 @@ export function CossaReceptionist() {
 
           {!minimised && (
             <div className="max-h-[72vh] overflow-y-auto">
-              {step === "welcome" && (
-                <WelcomeStep
-                  onContinue={() =>
-                    setStep("service")
-                  }
-                />
-              )}
+              {step === "welcome" && <WelcomeStep onContinue={() => setStep("service")} />}
 
               {step === "service" && (
                 <ServiceStep
                   value={form.service}
                   error={submitError}
                   onChange={(service) => {
-                    setForm(
-                      (current) => ({
-                        ...current,
-                        service,
-                      }),
-                    );
-                    setSubmitError(
-                      null,
-                    );
+                    setForm((current) => ({
+                      ...current,
+                      service,
+                    }));
+                    setSubmitError(null);
                   }}
-                  onBack={() =>
-                    setStep("welcome")
-                  }
-                  onContinue={
-                    nextFromService
-                  }
+                  onBack={() => setStep("welcome")}
+                  onContinue={nextFromService}
                 />
               )}
 
@@ -758,12 +558,8 @@ export function CossaReceptionist() {
                   form={form}
                   error={submitError}
                   onChange={setForm}
-                  onBack={() =>
-                    setStep("service")
-                  }
-                  onContinue={
-                    nextFromDetails
-                  }
+                  onBack={() => setStep("service")}
+                  onContinue={nextFromDetails}
                 />
               )}
 
@@ -772,52 +568,30 @@ export function CossaReceptionist() {
                   form={form}
                   error={submitError}
                   onChange={setForm}
-                  onBack={() =>
-                    setStep("details")
-                  }
-                  onContinue={
-                    nextFromContact
-                  }
+                  onBack={() => setStep("details")}
+                  onContinue={nextFromContact}
                 />
               )}
 
-              {step === "review" &&
-                selectedService && (
-                  <ReviewStep
-                    form={form}
-                    service={
-                      selectedService
-                    }
-                    submitState={
-                      submitState
-                    }
-                    error={submitError}
-                    onBack={() =>
-                      setStep(
-                        "contact",
-                      )
-                    }
-                    onSubmit={
-                      submitEnquiry
-                    }
-                  />
-                )}
+              {step === "review" && selectedService && (
+                <ReviewStep
+                  form={form}
+                  service={selectedService}
+                  submitState={submitState}
+                  error={submitError}
+                  onBack={() => setStep("contact")}
+                  onSubmit={submitEnquiry}
+                />
+              )}
 
-              {step === "success" &&
-                selectedService && (
-                  <SuccessStep
-                    name={form.name}
-                    service={
-                      selectedService
-                    }
-                    preferredContact={
-                      form.preferredContact
-                    }
-                    onReset={
-                      resetReceptionist
-                    }
-                  />
-                )}
+              {step === "success" && selectedService && (
+                <SuccessStep
+                  name={form.name}
+                  service={selectedService}
+                  preferredContact={form.preferredContact}
+                  onReset={resetReceptionist}
+                />
+              )}
             </div>
           )}
         </section>
@@ -826,27 +600,19 @@ export function CossaReceptionist() {
   );
 }
 
-function WelcomeStep({
-  onContinue,
-}: {
-  onContinue: () => void;
-}) {
+function WelcomeStep({ onContinue }: { onContinue: () => void }) {
   return (
     <div className="p-5">
       <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
         <div className="flex items-center gap-2 text-primary">
           <Sparkles className="h-4 w-4" />
 
-          <p className="text-sm font-semibold">
-            Welcome to Cossa
-          </p>
+          <p className="text-sm font-semibold">Welcome to Cossa</p>
         </div>
 
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          I can help identify the
-          right Cossa service and
-          record your request in our
-          customer follow-up system.
+          I can help identify the right Cossa service and record your request in our customer
+          follow-up system.
         </p>
       </div>
 
@@ -854,9 +620,14 @@ function WelcomeStep({
         <div className="flex gap-3">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 
+          <p className="text-muted-foreground">Choose the service you need.</p>
+        </div>
+
+        <div className="flex gap-3">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+
           <p className="text-muted-foreground">
-            Choose the service you
-            need.
+            Tell us about the project or business requirement.
           </p>
         </div>
 
@@ -864,18 +635,7 @@ function WelcomeStep({
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 
           <p className="text-muted-foreground">
-            Tell us about the project
-            or business requirement.
-          </p>
-        </div>
-
-        <div className="flex gap-3">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-
-          <p className="text-muted-foreground">
-            Your enquiry will be saved
-            as a CRM lead for human
-            follow-up.
+            Your enquiry will be saved as a CRM lead for human follow-up.
           </p>
         </div>
       </div>
@@ -901,11 +661,7 @@ function WelcomeStep({
           </Button>
         </a>
 
-        <a
-          href={whatsappHref}
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href={whatsappHref} target="_blank" rel="noreferrer">
           <Button
             type="button"
             variant="outline"
@@ -940,84 +696,60 @@ function ServiceStep({
 }: {
   value: ServiceKey | "";
   error: string | null;
-  onChange: (
-    service: ServiceKey,
-  ) => void;
+  onChange: (service: ServiceKey) => void;
   onBack: () => void;
   onContinue: () => void;
 }) {
   return (
     <div className="p-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-        Step 1
-      </p>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Step 1</p>
 
-      <h3 className="mt-2 font-display text-xl font-semibold">
-        What can Cossa help you
-        with?
-      </h3>
+      <h3 className="mt-2 font-display text-xl font-semibold">What can Cossa help you with?</h3>
 
       <p className="mt-1 text-sm text-muted-foreground">
-        Choose the service that best
-        matches your requirement.
+        Choose the service that best matches your requirement.
       </p>
 
       <div className="mt-4 grid gap-2">
-        {serviceOptions.map(
-          (service) => {
-            const Icon =
-              service.icon;
-            const active =
-              value === service.key;
+        {serviceOptions.map((service) => {
+          const Icon = service.icon;
+          const active = value === service.key;
 
-            return (
-              <button
-                type="button"
-                key={service.key}
-                onClick={() =>
-                  onChange(service.key)
-                }
-                className={cn(
-                  "flex items-start gap-3 rounded-xl border p-3 text-left transition-colors",
-                  active
-                    ? "border-primary/50 bg-primary/10"
-                    : "border-border/60 bg-card/40 hover:border-primary/30 hover:bg-primary/5",
-                )}
-              >
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-                  <Icon className="h-4 w-4" />
+          return (
+            <button
+              type="button"
+              key={service.key}
+              onClick={() => onChange(service.key)}
+              className={cn(
+                "flex items-start gap-3 rounded-xl border p-3 text-left transition-colors",
+                active
+                  ? "border-primary/50 bg-primary/10"
+                  : "border-border/60 bg-card/40 hover:border-primary/30 hover:bg-primary/5",
+              )}
+            >
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+                <Icon className="h-4 w-4" />
+              </span>
+
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{service.title}</span>
+
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                  {service.description}
                 </span>
-
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold">
-                    {service.title}
-                  </span>
-
-                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                    {
-                      service.description
-                    }
-                  </span>
-                </span>
-              </button>
-            );
-          },
-        )}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {error && (
-        <p
-          role="alert"
-          className="mt-3 text-xs text-destructive"
-        >
+        <p role="alert" className="mt-3 text-xs text-destructive">
           {error}
         </p>
       )}
 
-      <StepButtons
-        onBack={onBack}
-        onContinue={onContinue}
-      />
+      <StepButtons onBack={onBack} onContinue={onContinue} />
     </div>
   );
 }
@@ -1031,29 +763,20 @@ function DetailsStep({
 }: {
   form: ReceptionistForm;
   error: string | null;
-  onChange: (
-    value: ReceptionistForm,
-  ) => void;
+  onChange: (value: ReceptionistForm) => void;
   onBack: () => void;
   onContinue: () => void;
 }) {
   return (
     <div className="p-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-        Step 2
-      </p>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Step 2</p>
 
-      <h3 className="mt-2 font-display text-xl font-semibold">
-        Tell us about the request
-      </h3>
+      <h3 className="mt-2 font-display text-xl font-semibold">Tell us about the request</h3>
 
       <div className="mt-4 space-y-4">
         <div className="space-y-2">
           <Label htmlFor="receptionist-location">
-            Location{" "}
-            <span className="text-muted-foreground">
-              (optional)
-            </span>
+            Location <span className="text-muted-foreground">(optional)</span>
           </Label>
 
           <Input
@@ -1065,17 +788,14 @@ function DetailsStep({
             onChange={(event) =>
               onChange({
                 ...form,
-                location:
-                  event.target.value,
+                location: event.target.value,
               })
             }
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="receptionist-request">
-            What do you need?
-          </Label>
+          <Label htmlFor="receptionist-request">What do you need?</Label>
 
           <Textarea
             id="receptionist-request"
@@ -1088,17 +808,14 @@ function DetailsStep({
             onChange={(event) =>
               onChange({
                 ...form,
-                request:
-                  event.target.value,
+                request: event.target.value,
               })
             }
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="receptionist-urgency">
-            When do you need help?
-          </Label>
+          <Label htmlFor="receptionist-urgency">When do you need help?</Label>
 
           <select
             id="receptionist-urgency"
@@ -1106,44 +823,27 @@ function DetailsStep({
             onChange={(event) =>
               onChange({
                 ...form,
-                urgency:
-                  event.target
-                    .value as Urgency,
+                urgency: event.target.value as Urgency,
               })
             }
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
           >
-            {urgencyOptions.map(
-              (option) => (
-                <option
-                  key={
-                    option.value
-                  }
-                  value={
-                    option.value
-                  }
-                >
-                  {option.label}
-                </option>
-              ),
-            )}
+            {urgencyOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
       {error && (
-        <p
-          role="alert"
-          className="mt-3 text-xs text-destructive"
-        >
+        <p role="alert" className="mt-3 text-xs text-destructive">
           {error}
         </p>
       )}
 
-      <StepButtons
-        onBack={onBack}
-        onContinue={onContinue}
-      />
+      <StepButtons onBack={onBack} onContinue={onContinue} />
     </div>
   );
 }
@@ -1157,28 +857,19 @@ function ContactStep({
 }: {
   form: ReceptionistForm;
   error: string | null;
-  onChange: (
-    value: ReceptionistForm,
-  ) => void;
+  onChange: (value: ReceptionistForm) => void;
   onBack: () => void;
   onContinue: () => void;
 }) {
   return (
     <div className="p-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-        Step 3
-      </p>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Step 3</p>
 
-      <h3 className="mt-2 font-display text-xl font-semibold">
-        How should Cossa contact
-        you?
-      </h3>
+      <h3 className="mt-2 font-display text-xl font-semibold">How should Cossa contact you?</h3>
 
       <div className="mt-4 space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="receptionist-name">
-            Your name
-          </Label>
+          <Label htmlFor="receptionist-name">Your name</Label>
 
           <Input
             id="receptionist-name"
@@ -1189,17 +880,14 @@ function ContactStep({
             onChange={(event) =>
               onChange({
                 ...form,
-                name:
-                  event.target.value,
+                name: event.target.value,
               })
             }
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="receptionist-phone">
-            Phone number
-          </Label>
+          <Label htmlFor="receptionist-phone">Phone number</Label>
 
           <Input
             id="receptionist-phone"
@@ -1212,8 +900,7 @@ function ContactStep({
             onChange={(event) =>
               onChange({
                 ...form,
-                phone:
-                  event.target.value,
+                phone: event.target.value,
               })
             }
           />
@@ -1222,10 +909,7 @@ function ContactStep({
         <div className="space-y-2">
           <Label htmlFor="receptionist-email">
             Email address{" "}
-            <span className="text-muted-foreground">
-              (optional unless email
-              is preferred)
-            </span>
+            <span className="text-muted-foreground">(optional unless email is preferred)</span>
           </Label>
 
           <Input
@@ -1238,70 +922,53 @@ function ContactStep({
             onChange={(event) =>
               onChange({
                 ...form,
-                email:
-                  event.target.value,
+                email: event.target.value,
               })
             }
           />
         </div>
 
         <div className="space-y-2">
-          <Label>
-            Preferred contact method
-          </Label>
+          <Label>Preferred contact method</Label>
 
           <div className="grid grid-cols-3 gap-2">
-            {contactOptions.map(
-              (option) => {
-                const Icon =
-                  option.icon;
-                const active =
-                  form.preferredContact ===
-                  option.value;
+            {contactOptions.map((option) => {
+              const Icon = option.icon;
+              const active = form.preferredContact === option.value;
 
-                return (
-                  <button
-                    type="button"
-                    key={
-                      option.value
-                    }
-                    onClick={() =>
-                      onChange({
-                        ...form,
-                        preferredContact:
-                          option.value,
-                      })
-                    }
-                    className={cn(
-                      "rounded-lg border p-3 text-center text-xs transition-colors",
-                      active
-                        ? "border-primary/50 bg-primary/10 text-primary"
-                        : "border-border/60 text-muted-foreground hover:border-primary/30",
-                    )}
-                  >
-                    <Icon className="mx-auto mb-1 h-4 w-4" />
-                    {option.label}
-                  </button>
-                );
-              },
-            )}
+              return (
+                <button
+                  type="button"
+                  key={option.value}
+                  onClick={() =>
+                    onChange({
+                      ...form,
+                      preferredContact: option.value,
+                    })
+                  }
+                  className={cn(
+                    "rounded-lg border p-3 text-center text-xs transition-colors",
+                    active
+                      ? "border-primary/50 bg-primary/10 text-primary"
+                      : "border-border/60 text-muted-foreground hover:border-primary/30",
+                  )}
+                >
+                  <Icon className="mx-auto mb-1 h-4 w-4" />
+                  {option.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
       {error && (
-        <p
-          role="alert"
-          className="mt-3 text-xs text-destructive"
-        >
+        <p role="alert" className="mt-3 text-xs text-destructive">
           {error}
         </p>
       )}
 
-      <StepButtons
-        onBack={onBack}
-        onContinue={onContinue}
-      />
+      <StepButtons onBack={onBack} onContinue={onContinue} />
     </div>
   );
 }
@@ -1319,94 +986,43 @@ function ReviewStep({
   submitState: SubmitState;
   error: string | null;
   onBack: () => void;
-  onSubmit: (
-    event: FormEvent<HTMLFormElement>,
-  ) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
-    <form
-      onSubmit={onSubmit}
-      className="p-5"
-    >
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-        Final step
-      </p>
+    <form onSubmit={onSubmit} className="p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Final step</p>
 
-      <h3 className="mt-2 font-display text-xl font-semibold">
-        Review your enquiry
-      </h3>
+      <h3 className="mt-2 font-display text-xl font-semibold">Review your enquiry</h3>
 
       <div className="mt-4 space-y-3 rounded-xl border border-border/60 bg-card/40 p-4 text-sm">
-        <ReviewRow
-          label="Service"
-          value={service.title}
-        />
+        <ReviewRow label="Service" value={service.title} />
 
-        <ReviewRow
-          label="Name"
-          value={form.name}
-        />
+        <ReviewRow label="Name" value={form.name} />
 
-        <ReviewRow
-          label="Phone"
-          value={form.phone}
-        />
+        <ReviewRow label="Phone" value={form.phone} />
 
-        <ReviewRow
-          label="Email"
-          value={
-            form.email ||
-            "Not supplied"
-          }
-        />
+        <ReviewRow label="Email" value={form.email || "Not supplied"} />
 
-        <ReviewRow
-          label="Location"
-          value={
-            form.location ||
-            "Not supplied"
-          }
-        />
+        <ReviewRow label="Location" value={form.location || "Not supplied"} />
 
-        <ReviewRow
-          label="Urgency"
-          value={getUrgencyLabel(
-            form.urgency,
-          )}
-        />
+        <ReviewRow label="Urgency" value={getUrgencyLabel(form.urgency)} />
 
-        <ReviewRow
-          label="Preferred contact"
-          value={getContactLabel(
-            form.preferredContact,
-          )}
-        />
+        <ReviewRow label="Preferred contact" value={getContactLabel(form.preferredContact)} />
 
         <div className="border-t border-border/60 pt-3">
-          <p className="text-xs font-semibold text-muted-foreground">
-            Request
-          </p>
+          <p className="text-xs font-semibold text-muted-foreground">Request</p>
 
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-6">
-            {form.request}
-          </p>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{form.request}</p>
         </div>
       </div>
 
       <div className="mt-4 rounded-lg border border-primary/25 bg-primary/5 p-3 text-xs leading-5 text-muted-foreground">
-        Your enquiry will be saved
-        as an original contact message
-        and as an actionable CRM lead.
-        This receptionist does not
-        promise that work has already
-        been assigned or completed.
+        Your enquiry will be saved as an original contact message and as an actionable CRM lead.
+        This receptionist does not promise that work has already been assigned or completed.
       </div>
 
       {error && (
-        <p
-          role="alert"
-          className="mt-3 text-xs text-destructive"
-        >
+        <p role="alert" className="mt-3 text-xs text-destructive">
           {error}
         </p>
       )}
@@ -1416,10 +1032,7 @@ function ReviewStep({
           type="button"
           variant="outline"
           onClick={onBack}
-          disabled={
-            submitState ===
-            "sending"
-          }
+          disabled={submitState === "sending"}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
@@ -1427,14 +1040,10 @@ function ReviewStep({
 
         <Button
           type="submit"
-          disabled={
-            submitState ===
-            "sending"
-          }
+          disabled={submitState === "sending"}
           className="bg-primary text-primary-foreground hover:bg-primary/90"
         >
-          {submitState ===
-          "sending" ? (
+          {submitState === "sending" ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Saving…
@@ -1468,29 +1077,18 @@ function SuccessStep({
         <CheckCircle2 className="h-7 w-7" />
       </div>
 
-      <h3 className="mt-4 font-display text-xl font-semibold">
-        Thank you, {name}
-      </h3>
+      <h3 className="mt-4 font-display text-xl font-semibold">Thank you, {name}</h3>
 
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        Your {service.title} enquiry
-        has been recorded in the Cossa
-        customer follow-up system.
+        Your {service.title} enquiry has been recorded in the Cossa customer follow-up system.
       </p>
 
       <p className="mt-2 text-xs leading-5 text-muted-foreground">
-        Preferred contact method:{" "}
-        {getContactLabel(
-          preferredContact,
-        )}.
+        Preferred contact method: {getContactLabel(preferredContact)}.
       </p>
 
       <div className="mt-5 grid gap-2 sm:grid-cols-2">
-        <a
-          href={whatsappHref}
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href={whatsappHref} target="_blank" rel="noreferrer">
           <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
             <MessageCircle className="mr-2 h-4 w-4" />
             WhatsApp now
@@ -1508,32 +1106,17 @@ function SuccessStep({
         </a>
       </div>
 
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={onReset}
-        className="mt-3 text-primary"
-      >
+      <Button type="button" variant="ghost" onClick={onReset} className="mt-3 text-primary">
         Submit another enquiry
       </Button>
     </div>
   );
 }
 
-function StepButtons({
-  onBack,
-  onContinue,
-}: {
-  onBack: () => void;
-  onContinue: () => void;
-}) {
+function StepButtons({ onBack, onContinue }: { onBack: () => void; onContinue: () => void }) {
   return (
     <div className="mt-5 grid grid-cols-2 gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        onClick={onBack}
-      >
+      <Button type="button" variant="outline" onClick={onBack}>
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back
       </Button>
@@ -1550,22 +1133,12 @@ function StepButtons({
   );
 }
 
-function ReviewRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <span className="shrink-0 text-xs text-muted-foreground">
-        {label}
-      </span>
+      <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
 
-      <span className="text-right text-xs font-medium">
-        {value}
-      </span>
+      <span className="text-right text-xs font-medium">{value}</span>
     </div>
   );
 }

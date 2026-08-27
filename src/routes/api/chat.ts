@@ -4,39 +4,31 @@ import { createFileRoute } from "@tanstack/react-router";
 /* CONFIGURATION                                                              */
 /* -------------------------------------------------------------------------- */
 
-const DEFAULT_COSSA_ORGANISATION_ID =
-  "00000000-0000-4000-8000-000000000001";
+const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 
 /**
  * Confirmed available in the current Groq project.
  *
  * GROQ_MODEL can still override this from the protected environment.
  */
-const DEFAULT_GROQ_MODEL =
-  "openai/gpt-oss-120b";
+const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 
-const DEFAULT_GEMINI_MODEL =
-  "gemini-3.7-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-3.7-flash";
 
-const MAX_MESSAGES =
-  40;
+const MAX_MESSAGES = 40;
 
-const MAX_MESSAGE_LENGTH =
-  12_000;
+const MAX_MESSAGE_LENGTH = 12_000;
 
-const MAX_TOTAL_MESSAGE_LENGTH =
-  60_000;
+const MAX_TOTAL_MESSAGE_LENGTH = 60_000;
 
 /**
  * Browser history may contain much more than we should send to a provider.
  *
  * The server keeps only a short recent reasoning window.
  */
-const MAX_RECENT_HISTORY_MESSAGES =
-  6;
+const MAX_RECENT_HISTORY_MESSAGES = 6;
 
-const MAX_RECENT_HISTORY_LENGTH =
-  6_000;
+const MAX_RECENT_HISTORY_LENGTH = 6_000;
 
 /**
  * Context budgets are intentionally conservative.
@@ -47,23 +39,17 @@ const MAX_RECENT_HISTORY_LENGTH =
  * Cossa therefore aims to keep the reasoning request materially below that
  * limit instead of depending on paid tier expansion.
  */
-const MAX_KNOWLEDGE_CONTEXT_LENGTH =
-  4_200;
+const MAX_KNOWLEDGE_CONTEXT_LENGTH = 4_200;
 
-const MAX_SELECTED_KNOWLEDGE_DOCUMENTS =
-  7;
+const MAX_SELECTED_KNOWLEDGE_DOCUMENTS = 7;
 
-const MAX_OPERATIONAL_CONTEXT_LENGTH =
-  5_000;
+const MAX_OPERATIONAL_CONTEXT_LENGTH = 5_000;
 
-const MAX_WORKFORCE_CONTEXT_LENGTH =
-  4_500;
+const MAX_WORKFORCE_CONTEXT_LENGTH = 4_500;
 
-const MAX_EXTERNAL_NEWS_CONTEXT_LENGTH =
-  2_500;
+const MAX_EXTERNAL_NEWS_CONTEXT_LENGTH = 2_500;
 
-const MAX_CUSTOM_SYSTEM_LENGTH =
-  2_500;
+const MAX_CUSTOM_SYSTEM_LENGTH = 2_500;
 
 /**
  * Final protection after all context assembly.
@@ -76,20 +62,15 @@ const MAX_CUSTOM_SYSTEM_LENGTH =
  * tokenisation, leaving room for completion output under an 8,000-token
  * request/TPM ceiling.
  */
-const MAX_PROVIDER_INPUT_CHARACTERS =
-  22_000;
+const MAX_PROVIDER_INPUT_CHARACTERS = 22_000;
 
-const MAX_SYSTEM_PROMPT_CHARACTERS =
-  15_000;
+const MAX_SYSTEM_PROMPT_CHARACTERS = 15_000;
 
-const MAX_GROQ_COMPLETION_TOKENS =
-  800;
+const MAX_GROQ_COMPLETION_TOKENS = 800;
 
-const MAX_GEMINI_COMPLETION_TOKENS =
-  900;
+const MAX_GEMINI_COMPLETION_TOKENS = 900;
 
-const MAX_OPENAI_COMPLETION_TOKENS =
-  1_000;
+const MAX_OPENAI_COMPLETION_TOKENS = 1_000;
 
 /**
  * Limits raw records before prompt formatting.
@@ -134,30 +115,17 @@ const MAX_CONTEXT_RECORDS = {
  *   Final resilience fallback. Groq is never the browser default or the first
  *   provider tried by Cossa AI.
  */
-const DEFAULT_PROVIDER_ORDER:
-  readonly ChatProvider[] = [
-    "openai",
-    "gemini",
-    "groq",
-  ];
+const DEFAULT_PROVIDER_ORDER: readonly ChatProvider[] = ["openai", "gemini", "groq"];
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
 /* -------------------------------------------------------------------------- */
 
-type ChatRole =
-  | "system"
-  | "user"
-  | "assistant";
+type ChatRole = "system" | "user" | "assistant";
 
-type ChatProvider =
-  | "groq"
-  | "gemini"
-  | "openai";
+type ChatProvider = "groq" | "gemini" | "openai";
 
-type ChatProviderPreference =
-  | ChatProvider
-  | "auto";
+type ChatProviderPreference = ChatProvider | "auto";
 
 interface ChatMessage {
   role: ChatRole;
@@ -276,87 +244,61 @@ interface OpenAiCompatibleCompletion {
 }
 
 interface ProviderEnvironment {
-  groqApiKey:
-    string | undefined;
+  groqApiKey: string | undefined;
 
-  geminiApiKey:
-    string | undefined;
+  geminiApiKey: string | undefined;
 
-  openAiApiKey:
-    string | undefined;
+  openAiApiKey: string | undefined;
 
-  newsApiKey:
-    string | undefined;
+  newsApiKey: string | undefined;
 
-  supabaseUrl:
-    string;
+  supabaseUrl: string;
 
-  supabaseKey:
-    string;
+  supabaseKey: string;
 
-  organisationId:
-    string;
+  organisationId: string;
 
-  groqModel:
-    string;
+  groqModel: string;
 
-  geminiModel:
-    string;
+  geminiModel: string;
 
-  openAiModel:
-    string | null;
+  openAiModel: string | null;
 }
 
 interface ProviderSuccess {
   ok: true;
 
-  provider:
-    ChatProvider;
+  provider: ChatProvider;
 
-  model:
-    string;
+  model: string;
 
-  stream:
-    ReadableStream<Uint8Array>;
+  stream: ReadableStream<Uint8Array>;
 }
 
 interface ProviderFailure {
   ok: false;
 
-  provider:
-    ChatProvider;
+  provider: ChatProvider;
 
-  model:
-    string | null;
+  model: string | null;
 
-  status:
-    number;
+  status: number;
 
-  safeMessage:
-    string;
+  safeMessage: string;
 
-  internalMessage:
-    string;
+  internalMessage: string;
 
-  retryable:
-    boolean;
+  retryable: boolean;
 }
 
-type ProviderResult =
-  | ProviderSuccess
-  | ProviderFailure;
+type ProviderResult = ProviderSuccess | ProviderFailure;
 
 interface ProviderAttemptRecord {
-  provider:
-    ChatProvider;
+  provider: ChatProvider;
 
-  model:
-    string | null;
+  model: string | null;
 
-  status:
-    | "success"
-    | "failed"
-    | "not_configured";
+  status: "success" | "failed" | "not_configured";
 
   httpStatus?: number;
 
@@ -366,36 +308,27 @@ interface ProviderAttemptRecord {
 interface PrimedStreamSuccess {
   ok: true;
 
-  stream:
-    ReadableStream<Uint8Array>;
+  stream: ReadableStream<Uint8Array>;
 }
 
 interface PrimedStreamFailure {
   ok: false;
 
-  error:
-    string;
+  error: string;
 }
 
-type PrimedStreamResult =
-  | PrimedStreamSuccess
-  | PrimedStreamFailure;
+type PrimedStreamResult = PrimedStreamSuccess | PrimedStreamFailure;
 
 interface ContextNeeds {
-  operational:
-    boolean;
+  operational: boolean;
 
-  workforce:
-    boolean;
+  workforce: boolean;
 
-  externalNews:
-    boolean;
+  externalNews: boolean;
 
-  leadContacts:
-    boolean;
+  leadContacts: boolean;
 
-  briefing:
-    boolean;
+  briefing: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -406,13 +339,7 @@ function createRequestId(): string {
   try {
     return crypto.randomUUID();
   } catch {
-    return [
-      "cossa",
-      Date.now().toString(36),
-      Math.random()
-        .toString(36)
-        .slice(2),
-    ].join("-");
+    return ["cossa", Date.now().toString(36), Math.random().toString(36).slice(2)].join("-");
   }
 }
 
@@ -420,27 +347,16 @@ function createRequestId(): string {
 /* ENVIRONMENT                                                                */
 /* -------------------------------------------------------------------------- */
 
-function trimTrailingSlash(
-  value: string,
-): string {
-  return value.replace(
-    /\/+$/,
-    "",
-  );
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
 }
 
 function resolveGroqModel(): string {
-  return (
-    process.env.GROQ_MODEL?.trim() ||
-    DEFAULT_GROQ_MODEL
-  );
+  return process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
 }
 
 function resolveGeminiModel(): string {
-  return (
-    process.env.GEMINI_MODEL?.trim() ||
-    DEFAULT_GEMINI_MODEL
-  );
+  return process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
 }
 
 /**
@@ -449,31 +365,21 @@ function resolveGeminiModel(): string {
  * Do not silently choose a paid OpenAI model.
  */
 function resolveOpenAiModel(): string | null {
-  const configured =
-    process.env.OPENAI_MODEL?.trim();
+  const configured = process.env.OPENAI_MODEL?.trim();
 
   return configured || null;
 }
 
-function getEnvironment():
-  ProviderEnvironment |
-  null {
-  const groqApiKey =
-    process.env.GROQ_API_KEY?.trim();
+function getEnvironment(): ProviderEnvironment | null {
+  const groqApiKey = process.env.GROQ_API_KEY?.trim();
 
-  const geminiApiKey =
-    process.env.GEMINI_API_KEY?.trim() ||
-    process.env.GOOGLE_AI_API_KEY?.trim();
+  const geminiApiKey = process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_AI_API_KEY?.trim();
 
-  const openAiApiKey =
-    process.env.OPENAI_API_KEY?.trim();
+  const openAiApiKey = process.env.OPENAI_API_KEY?.trim();
 
-  const newsApiKey =
-    process.env.NEWS_API_KEY?.trim();
+  const newsApiKey = process.env.NEWS_API_KEY?.trim();
 
-  const supabaseUrl =
-    process.env.VITE_SUPABASE_URL?.trim() ||
-    process.env.SUPABASE_URL?.trim();
+  const supabaseUrl = process.env.VITE_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim();
 
   const supabaseKey =
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ||
@@ -486,18 +392,11 @@ function getEnvironment():
     process.env.VITE_COSSA_ORGANISATION_ID?.trim() ||
     DEFAULT_COSSA_ORGANISATION_ID;
 
-  if (
-    !supabaseUrl ||
-    !supabaseKey
-  ) {
+  if (!supabaseUrl || !supabaseKey) {
     return null;
   }
 
-  if (
-    !groqApiKey &&
-    !geminiApiKey &&
-    !openAiApiKey
-  ) {
+  if (!groqApiKey && !geminiApiKey && !openAiApiKey) {
     return null;
   }
 
@@ -510,23 +409,17 @@ function getEnvironment():
 
     newsApiKey,
 
-    supabaseUrl:
-      trimTrailingSlash(
-        supabaseUrl,
-      ),
+    supabaseUrl: trimTrailingSlash(supabaseUrl),
 
     supabaseKey,
 
     organisationId,
 
-    groqModel:
-      resolveGroqModel(),
+    groqModel: resolveGroqModel(),
 
-    geminiModel:
-      resolveGeminiModel(),
+    geminiModel: resolveGeminiModel(),
 
-    openAiModel:
-      resolveOpenAiModel(),
+    openAiModel: resolveOpenAiModel(),
   };
 }
 
@@ -534,26 +427,14 @@ function getEnvironment():
 /* AUTH                                                                       */
 /* -------------------------------------------------------------------------- */
 
-function getBearerToken(
-  request: Request,
-): string | null {
-  const authorization =
-    request.headers.get(
-      "authorization",
-    );
+function getBearerToken(request: Request): string | null {
+  const authorization = request.headers.get("authorization");
 
-  if (
-    !authorization?.startsWith(
-      "Bearer ",
-    )
-  ) {
+  if (!authorization?.startsWith("Bearer ")) {
     return null;
   }
 
-  const token =
-    authorization
-      .slice(7)
-      .trim();
+  const token = authorization.slice(7).trim();
 
   return token || null;
 }
@@ -563,46 +444,28 @@ async function verifySupabaseUser({
   supabaseUrl,
   supabaseKey,
 }: {
-  token:
-    string;
+  token: string;
 
-  supabaseUrl:
-    string;
+  supabaseUrl: string;
 
-  supabaseKey:
-    string;
+  supabaseKey: string;
 }): Promise<SupabaseUser | null> {
   try {
-    const response =
-      await fetch(
-        `${supabaseUrl}/auth/v1/user`,
-        {
-          headers: {
-            apikey:
-              supabaseKey,
+    const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        apikey: supabaseKey,
 
-            Authorization:
-              `Bearer ${token}`,
-          },
-        },
-      );
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-    if (
-      !response.ok
-    ) {
+    if (!response.ok) {
       return null;
     }
 
-    return (
-      await response.json()
-    ) as SupabaseUser;
-  } catch (
-    error
-  ) {
-    console.error(
-      "Supabase user verification failed.",
-      error,
-    );
+    return (await response.json()) as SupabaseUser;
+  } catch (error) {
+    console.error("Supabase user verification failed.", error);
 
     return null;
   }
@@ -619,67 +482,36 @@ async function restSelect<T>({
   supabaseUrl,
   supabaseKey,
 }: RestRequestOptions): Promise<T[]> {
-  let response:
-    Response;
+  let response: Response;
 
   try {
-    response =
-      await fetch(
-        `${supabaseUrl}/rest/v1/${table}?${query}`,
-        {
-          headers: {
-            apikey:
-              supabaseKey,
+    response = await fetch(`${supabaseUrl}/rest/v1/${table}?${query}`, {
+      headers: {
+        apikey: supabaseKey,
 
-            Authorization:
-              `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
 
-            Accept:
-              "application/json",
-          },
-        },
-      );
-  } catch (
-    error
-  ) {
-    console.error(
-      `Supabase connection failed for ${table}.`,
-      error,
-    );
+        Accept: "application/json",
+      },
+    });
+  } catch (error) {
+    console.error(`Supabase connection failed for ${table}.`, error);
 
     return [];
   }
 
-  if (
-    !response.ok
-  ) {
-    const errorText =
-      await response
-        .text()
-        .catch(
-          () => "",
-        );
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
 
-    console.error(
-      `Supabase query failed for ${table}:`,
-      response.status,
-      errorText,
-    );
+    console.error(`Supabase query failed for ${table}:`, response.status, errorText);
 
     return [];
   }
 
   try {
-    return (
-      await response.json()
-    ) as T[];
-  } catch (
-    error
-  ) {
-    console.error(
-      `Supabase response could not be decoded for ${table}.`,
-      error,
-    );
+    return (await response.json()) as T[];
+  } catch (error) {
+    console.error(`Supabase response could not be decoded for ${table}.`, error);
 
     return [];
   }
@@ -692,64 +524,45 @@ async function verifyOrganisationMembership({
   supabaseUrl,
   supabaseKey,
 }: {
-  token:
-    string;
+  token: string;
 
-  userId:
-    string;
+  userId: string;
 
-  organisationId:
-    string;
+  organisationId: string;
 
-  supabaseUrl:
-    string;
+  supabaseUrl: string;
 
-  supabaseKey:
-    string;
+  supabaseKey: string;
 }): Promise<boolean> {
-  const rows =
-    await restSelect<{
-      user_id:
-        string;
+  const rows = await restSelect<{
+    user_id: string;
 
-      status:
-        string;
+    status: string;
 
-      role:
-        string;
-    }>({
-      table:
-        "organisation_members",
+    role: string;
+  }>({
+    table: "organisation_members",
 
-      query:
-        new URLSearchParams({
-          select:
-            "user_id,status,role",
+    query: new URLSearchParams({
+      select: "user_id,status,role",
 
-          organisation_id:
-            `eq.${organisationId}`,
+      organisation_id: `eq.${organisationId}`,
 
-          user_id:
-            `eq.${userId}`,
+      user_id: `eq.${userId}`,
 
-          status:
-            "eq.active",
+      status: "eq.active",
 
-          limit:
-            "1",
-        }).toString(),
+      limit: "1",
+    }).toString(),
 
-      token,
+    token,
 
-      supabaseUrl,
+    supabaseUrl,
 
-      supabaseKey,
-    });
+    supabaseKey,
+  });
 
-  return (
-    rows.length ===
-    1
-  );
+  return rows.length === 1;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -757,117 +570,80 @@ async function verifyOrganisationMembership({
 /* -------------------------------------------------------------------------- */
 
 async function authenticateRequest(
-  request:
-    Request,
+  request: Request,
 
-  environment:
-    ProviderEnvironment,
-):
-  Promise<
-    | {
-        ok:
-          true;
+  environment: ProviderEnvironment,
+): Promise<
+  | {
+      ok: true;
 
-        token:
-          string;
+      token: string;
 
-        user:
-          SupabaseUser;
-      }
-    | {
-        ok:
-          false;
+      user: SupabaseUser;
+    }
+  | {
+      ok: false;
 
-        response:
-          Response;
-      }
-  > {
-  const token =
-    getBearerToken(
-      request,
-    );
+      response: Response;
+    }
+> {
+  const token = getBearerToken(request);
 
   if (!token) {
     return {
-      ok:
-        false,
+      ok: false,
 
-      response:
-        new Response(
-          "Unauthorized",
-          {
-            status:
-              401,
-          },
-        ),
+      response: new Response("Unauthorized", {
+        status: 401,
+      }),
     };
   }
 
-  const user =
-    await verifySupabaseUser({
-      token,
+  const user = await verifySupabaseUser({
+    token,
 
-      supabaseUrl:
-        environment.supabaseUrl,
+    supabaseUrl: environment.supabaseUrl,
 
-      supabaseKey:
-        environment.supabaseKey,
-    });
+    supabaseKey: environment.supabaseKey,
+  });
 
   if (!user) {
     return {
-      ok:
-        false,
+      ok: false,
 
-      response:
-        new Response(
-          "Your Cossa AI session could not be verified. Sign out and sign in again.",
-          {
-            status:
-              401,
-          },
-        ),
+      response: new Response(
+        "Your Cossa AI session could not be verified. Sign out and sign in again.",
+        {
+          status: 401,
+        },
+      ),
     };
   }
 
-  const isOrganisationMember =
-    await verifyOrganisationMembership({
-      token,
+  const isOrganisationMember = await verifyOrganisationMembership({
+    token,
 
-      userId:
-        user.id,
+    userId: user.id,
 
-      organisationId:
-        environment.organisationId,
+    organisationId: environment.organisationId,
 
-      supabaseUrl:
-        environment.supabaseUrl,
+    supabaseUrl: environment.supabaseUrl,
 
-      supabaseKey:
-        environment.supabaseKey,
-    });
+    supabaseKey: environment.supabaseKey,
+  });
 
-  if (
-    !isOrganisationMember
-  ) {
+  if (!isOrganisationMember) {
     return {
-      ok:
-        false,
+      ok: false,
 
-      response:
-        new Response(
-          "You are not authorised to use this Cossa AI workspace.",
-          {
-            status:
-              403,
-          },
-        ),
+      response: new Response("You are not authorised to use this Cossa AI workspace.", {
+        status: 403,
+      }),
     };
   }
 
   return {
-    ok:
-      true,
+    ok: true,
 
     token,
 
@@ -879,160 +655,87 @@ async function authenticateRequest(
 /* PAYLOAD VALIDATION                                                         */
 /* -------------------------------------------------------------------------- */
 
-function validateMessages(
-  value:
-    unknown,
-):
+function validateMessages(value: unknown):
   | {
-      valid:
-        true;
+      valid: true;
 
-      messages:
-        ChatMessage[];
+      messages: ChatMessage[];
     }
   | {
-      valid:
-        false;
+      valid: false;
 
-      error:
-        string;
+      error: string;
     } {
-  if (
-    !Array.isArray(
-      value,
-    ) ||
-    value.length ===
-      0
-  ) {
+  if (!Array.isArray(value) || value.length === 0) {
     return {
-      valid:
-        false,
+      valid: false,
 
-      error:
-        "At least one chat message is required.",
+      error: "At least one chat message is required.",
     };
   }
 
-  if (
-    value.length >
-    MAX_MESSAGES
-  ) {
+  if (value.length > MAX_MESSAGES) {
     return {
-      valid:
-        false,
+      valid: false,
 
-      error:
-        `A maximum of ${MAX_MESSAGES} messages is allowed per request.`,
+      error: `A maximum of ${MAX_MESSAGES} messages is allowed per request.`,
     };
   }
 
-  const messages:
-    ChatMessage[] =
-    [];
+  const messages: ChatMessage[] = [];
 
-  let totalLength =
-    0;
+  let totalLength = 0;
 
-  for (
-    const item of
-      value
-  ) {
-    if (
-      typeof item !==
-        "object" ||
-      item ===
-        null ||
-      !(
-        "role" in
-        item
-      ) ||
-      !(
-        "content" in
-        item
-      )
-    ) {
+  for (const item of value) {
+    if (typeof item !== "object" || item === null || !("role" in item) || !("content" in item)) {
       return {
-        valid:
-          false,
+        valid: false,
 
-        error:
-          "Invalid chat message format.",
+        error: "Invalid chat message format.",
       };
     }
 
-    const candidate =
-      item as {
-        role?:
-          unknown;
+    const candidate = item as {
+      role?: unknown;
 
-        content?:
-          unknown;
-      };
+      content?: unknown;
+    };
 
-    const role =
-      candidate.role;
+    const role = candidate.role;
 
-    const content =
-      typeof candidate.content ===
-      "string"
-        ? candidate.content.trim()
-        : "";
+    const content = typeof candidate.content === "string" ? candidate.content.trim() : "";
 
-    if (
-      role !==
-        "system" &&
-      role !==
-        "user" &&
-      role !==
-        "assistant"
-    ) {
+    if (role !== "system" && role !== "user" && role !== "assistant") {
       return {
-        valid:
-          false,
+        valid: false,
 
-        error:
-          "Unsupported chat message role.",
+        error: "Unsupported chat message role.",
       };
     }
 
-    if (
-      !content
-    ) {
+    if (!content) {
       return {
-        valid:
-          false,
+        valid: false,
 
-        error:
-          "Chat messages cannot be empty.",
+        error: "Chat messages cannot be empty.",
       };
     }
 
-    if (
-      content.length >
-      MAX_MESSAGE_LENGTH
-    ) {
+    if (content.length > MAX_MESSAGE_LENGTH) {
       return {
-        valid:
-          false,
+        valid: false,
 
-        error:
-          `Individual messages cannot exceed ${MAX_MESSAGE_LENGTH} characters.`,
+        error: `Individual messages cannot exceed ${MAX_MESSAGE_LENGTH} characters.`,
       };
     }
 
-    totalLength +=
-      content.length;
+    totalLength += content.length;
 
-    if (
-      totalLength >
-      MAX_TOTAL_MESSAGE_LENGTH
-    ) {
+    if (totalLength > MAX_TOTAL_MESSAGE_LENGTH) {
       return {
-        valid:
-          false,
+        valid: false,
 
-        error:
-          "The conversation is too large. Start a new chat.",
+        error: "The conversation is too large. Start a new chat.",
       };
     }
 
@@ -1044,53 +747,28 @@ function validateMessages(
   }
 
   return {
-    valid:
-      true,
+    valid: true,
 
     messages,
   };
 }
 
-function cleanCustomSystem(
-  value:
-    unknown,
-): string | undefined {
-  if (
-    typeof value !==
-    "string"
-  ) {
+function cleanCustomSystem(value: unknown): string | undefined {
+  if (typeof value !== "string") {
     return undefined;
   }
 
-  const cleaned =
-    value.trim();
+  const cleaned = value.trim();
 
-  if (
-    !cleaned
-  ) {
+  if (!cleaned) {
     return undefined;
   }
 
-  return cleaned.slice(
-    0,
-    MAX_CUSTOM_SYSTEM_LENGTH,
-  );
+  return cleaned.slice(0, MAX_CUSTOM_SYSTEM_LENGTH);
 }
 
-function isChatProviderPreference(
-  value:
-    unknown,
-): value is ChatProviderPreference {
-  return (
-    value ===
-      "auto" ||
-    value ===
-      "groq" ||
-    value ===
-      "gemini" ||
-    value ===
-      "openai"
-  );
+function isChatProviderPreference(value: unknown): value is ChatProviderPreference {
+  return value === "auto" || value === "groq" || value === "gemini" || value === "openai";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1098,52 +776,27 @@ function isChatProviderPreference(
 /* -------------------------------------------------------------------------- */
 
 function truncateText(
-  value:
-    string,
+  value: string,
 
-  maxLength:
-    number,
+  maxLength: number,
 ): string {
-  if (
-    value.length <=
-    maxLength
-  ) {
+  if (value.length <= maxLength) {
     return value;
   }
 
   return `${value.slice(
     0,
-    Math.max(
-      0,
-      maxLength - 80,
-    ),
+    Math.max(0, maxLength - 80),
   )}\n\n[Context truncated by Cossa AI input budget.]`;
 }
 
-function estimateTokens(
-  value:
-    string,
-): number {
-  return Math.ceil(
-    value.length /
-      4,
-  );
+function estimateTokens(value: string): number {
+  return Math.ceil(value.length / 4);
 }
 
-function estimateMessagesTokens(
-  messages:
-    ChatMessage[],
-): number {
+function estimateMessagesTokens(messages: ChatMessage[]): number {
   return messages.reduce(
-    (
-      total,
-      message,
-    ) =>
-      total +
-      estimateTokens(
-        message.content,
-      ) +
-      6,
+    (total, message) => total + estimateTokens(message.content) + 6,
 
     0,
   );
@@ -1157,183 +810,89 @@ function estimateMessagesTokens(
  *
  * The newest user message must always survive.
  */
-function budgetProviderMessages(
-  messages:
-    ChatMessage[],
-): ChatMessage[] {
-  if (
-    messages.length ===
-    0
-  ) {
+function budgetProviderMessages(messages: ChatMessage[]): ChatMessage[] {
+  if (messages.length === 0) {
     return [];
   }
 
-  const systemMessages =
-    messages.filter(
-      (
-        message,
-      ) =>
-        message.role ===
-        "system",
-    );
+  const systemMessages = messages.filter((message) => message.role === "system");
 
-  const conversation =
-    messages.filter(
-      (
-        message,
-      ) =>
-        message.role !==
-        "system",
-    );
+  const conversation = messages.filter((message) => message.role !== "system");
 
-  const boundedSystem =
-    systemMessages.map(
-      (
-        message,
-      ) => ({
-        ...message,
+  const boundedSystem = systemMessages.map((message) => ({
+    ...message,
 
-        content:
-          truncateText(
-            message.content,
-            MAX_SYSTEM_PROMPT_CHARACTERS,
-          ),
-      }),
-    );
+    content: truncateText(message.content, MAX_SYSTEM_PROMPT_CHARACTERS),
+  }));
 
-  const systemLength =
-    boundedSystem.reduce(
-      (
-        total,
-        message,
-      ) =>
-        total +
-        message.content.length,
+  const systemLength = boundedSystem.reduce(
+    (total, message) => total + message.content.length,
 
-      0,
-    );
+    0,
+  );
 
-  const remainingBudget =
-    Math.max(
-      2_000,
-      MAX_PROVIDER_INPUT_CHARACTERS -
-        systemLength,
-    );
+  const remainingBudget = Math.max(2_000, MAX_PROVIDER_INPUT_CHARACTERS - systemLength);
 
-  const selected:
-    ChatMessage[] =
-    [];
+  const selected: ChatMessage[] = [];
 
-  let used =
-    0;
+  let used = 0;
 
-  for (
-    const message of [
-      ...conversation,
-    ].reverse()
-  ) {
-    const remaining =
-      remainingBudget -
-      used;
+  for (const message of [...conversation].reverse()) {
+    const remaining = remainingBudget - used;
 
-    if (
-      remaining <=
-      0
-    ) {
+    if (remaining <= 0) {
       break;
     }
 
     const content =
-      message.content.length >
-      remaining
-        ? message.content.slice(
-            -remaining,
-          )
-        : message.content;
+      message.content.length > remaining ? message.content.slice(-remaining) : message.content;
 
     selected.unshift({
-      role:
-        message.role,
+      role: message.role,
 
       content,
     });
 
-    used +=
-      content.length;
+    used += content.length;
   }
 
-  return [
-    ...boundedSystem,
-    ...selected,
-  ];
+  return [...boundedSystem, ...selected];
 }
 
 /* -------------------------------------------------------------------------- */
 /* CHAT HISTORY                                                               */
 /* -------------------------------------------------------------------------- */
 
-function selectRecentHistory(
-  messages:
-    ChatMessage[],
-): ChatMessage[] {
-  const conversationMessages =
-    messages.filter(
-      (
-        message,
-      ) =>
-        message.role ===
-          "user" ||
-        message.role ===
-          "assistant",
-    );
+function selectRecentHistory(messages: ChatMessage[]): ChatMessage[] {
+  const conversationMessages = messages.filter(
+    (message) => message.role === "user" || message.role === "assistant",
+  );
 
-  const recent:
-    ChatMessage[] =
-    [];
+  const recent: ChatMessage[] = [];
 
-  let length =
-    0;
+  let length = 0;
 
-  for (
-    const message of [
-      ...conversationMessages,
-    ].reverse()
-  ) {
-    if (
-      recent.length >=
-      MAX_RECENT_HISTORY_MESSAGES
-    ) {
+  for (const message of [...conversationMessages].reverse()) {
+    if (recent.length >= MAX_RECENT_HISTORY_MESSAGES) {
       break;
     }
 
-    const remaining =
-      MAX_RECENT_HISTORY_LENGTH -
-      length;
+    const remaining = MAX_RECENT_HISTORY_LENGTH - length;
 
-    if (
-      remaining <=
-      0
-    ) {
+    if (remaining <= 0) {
       break;
     }
 
     const content =
-      message.content.length >
-      remaining
-        ? message.content.slice(
-            -remaining,
-          )
-        : message.content;
+      message.content.length > remaining ? message.content.slice(-remaining) : message.content;
 
     recent.unshift({
-      role:
-        message.role,
+      role: message.role,
 
       content,
     });
 
-    length +=
-      content.length;
+    length += content.length;
   }
 
   return recent;
@@ -1343,79 +902,57 @@ function selectRecentHistory(
 /* KNOWLEDGE                                                                  */
 /* -------------------------------------------------------------------------- */
 
-const KNOWLEDGE_STOP_WORDS =
-  new Set([
-    "about",
-    "after",
-    "again",
-    "also",
-    "and",
-    "are",
-    "can",
-    "cossa",
-    "could",
-    "for",
-    "from",
-    "give",
-    "have",
-    "help",
-    "into",
-    "need",
-    "please",
-    "tell",
-    "that",
-    "the",
-    "their",
-    "this",
-    "today",
-    "want",
-    "what",
-    "when",
-    "where",
-    "which",
-    "with",
-    "would",
-    "you",
-    "your",
-  ]);
+const KNOWLEDGE_STOP_WORDS = new Set([
+  "about",
+  "after",
+  "again",
+  "also",
+  "and",
+  "are",
+  "can",
+  "cossa",
+  "could",
+  "for",
+  "from",
+  "give",
+  "have",
+  "help",
+  "into",
+  "need",
+  "please",
+  "tell",
+  "that",
+  "the",
+  "their",
+  "this",
+  "today",
+  "want",
+  "what",
+  "when",
+  "where",
+  "which",
+  "with",
+  "would",
+  "you",
+  "your",
+]);
 
-function extractSearchTerms(
-  message:
-    string,
-): Set<string> {
+function extractSearchTerms(message: string): Set<string> {
   return new Set(
-    (
-      message
-        .toLowerCase()
-        .match(
-          /[a-z0-9]{3,}/g,
-        ) ??
-      []
-    ).filter(
-      (
-        term,
-      ) =>
-        !KNOWLEDGE_STOP_WORDS.has(
-          term,
-        ),
+    (message.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter(
+      (term) => !KNOWLEDGE_STOP_WORDS.has(term),
     ),
   );
 }
 
 function selectRelevantKnowledge(
-  knowledge:
-    KnowledgeDocument[],
+  knowledge: KnowledgeDocument[],
 
-  latestUserMessage:
-    string,
+  latestUserMessage: string,
 ): KnowledgeDocument[] {
-  const queryTerms =
-    extractSearchTerms(
-      latestUserMessage,
-    );
+  const queryTerms = extractSearchTerms(latestUserMessage);
 
-  const lowerMessage =
-    latestUserMessage.toLowerCase();
+  const lowerMessage = latestUserMessage.toLowerCase();
 
   const asksIdentity =
     /\b(who are you|who is the ceo|company overview|about cossa|what is cossa)\b/i.test(
@@ -1432,336 +969,160 @@ function selectRelevantKnowledge(
       latestUserMessage,
     );
 
-  const coreKnowledgeTitles =
-    [
-      "constitution",
-      "approval authority",
-      "mission",
-      "vision",
-      "company overview",
-      "verified company overview",
-    ];
+  const coreKnowledgeTitles = [
+    "constitution",
+    "approval authority",
+    "mission",
+    "vision",
+    "company overview",
+    "verified company overview",
+  ];
 
   return knowledge
-    .map(
-      (
+    .map((document) => {
+      const title = document.title.toLowerCase();
+
+      const searchable = `${document.title} ${document.body}`.toLowerCase();
+
+      const relevance = [...queryTerms].reduce(
+        (score, term) => score + (searchable.includes(term) ? 2 : 0),
+
+        0,
+      );
+
+      const isCore = coreKnowledgeTitles.some((coreTitle) => title.includes(coreTitle));
+
+      const approvalBoost =
+        asksApproval && (title.includes("approval") || searchable.includes("approval authority"))
+          ? 8
+          : 0;
+
+      const identityBoost =
+        asksIdentity &&
+        (title.includes("company overview") ||
+          title.includes("mission") ||
+          title.includes("vision"))
+          ? 8
+          : 0;
+
+      const briefingBoost = asksBriefing && isCore ? 3 : 0;
+
+      const directPhraseBoost = lowerMessage
+        .split(/\s+/)
+        .some((term) => term.length >= 5 && title.includes(term))
+        ? 2
+        : 0;
+
+      return {
         document,
-      ) => {
-        const title =
-          document.title.toLowerCase();
 
-        const searchable =
-          `${document.title} ${document.body}`.toLowerCase();
-
-        const relevance =
-          [
-            ...queryTerms,
-          ].reduce(
-            (
-              score,
-              term,
-            ) =>
-              score +
-              (
-                searchable.includes(
-                  term,
-                )
-                  ? 2
-                  : 0
-              ),
-
-            0,
-          );
-
-        const isCore =
-          coreKnowledgeTitles.some(
-            (
-              coreTitle,
-            ) =>
-              title.includes(
-                coreTitle,
-              ),
-          );
-
-        const approvalBoost =
-          asksApproval &&
-          (
-            title.includes(
-              "approval",
-            ) ||
-            searchable.includes(
-              "approval authority",
-            )
-          )
-            ? 8
-            : 0;
-
-        const identityBoost =
-          asksIdentity &&
-          (
-            title.includes(
-              "company overview",
-            ) ||
-            title.includes(
-              "mission",
-            ) ||
-            title.includes(
-              "vision",
-            )
-          )
-            ? 8
-            : 0;
-
-        const briefingBoost =
-          asksBriefing &&
-          isCore
-            ? 3
-            : 0;
-
-        const directPhraseBoost =
-          lowerMessage
-            .split(
-              /\s+/,
-            )
-            .some(
-              (
-                term,
-              ) =>
-                term.length >=
-                  5 &&
-                title.includes(
-                  term,
-                ),
-            )
-            ? 2
-            : 0;
-
-        return {
-          document,
-
-          score:
-            relevance +
-            approvalBoost +
-            identityBoost +
-            briefingBoost +
-            directPhraseBoost +
-            (
-              isCore
-                ? 1
-                : 0
-            ),
-        };
-      },
-    )
-    .filter(
-      (
-        entry,
-      ) =>
-        entry.score >
-          0 ||
-        queryTerms.size ===
-          0,
-    )
+        score:
+          relevance +
+          approvalBoost +
+          identityBoost +
+          briefingBoost +
+          directPhraseBoost +
+          (isCore ? 1 : 0),
+      };
+    })
+    .filter((entry) => entry.score > 0 || queryTerms.size === 0)
     .sort(
-      (
-        a,
-        b,
-      ) =>
-        b.score -
-          a.score ||
-        Date.parse(
-          b.document.updated_at,
-        ) -
-          Date.parse(
-            a.document.updated_at,
-          ),
+      (a, b) =>
+        b.score - a.score || Date.parse(b.document.updated_at) - Date.parse(a.document.updated_at),
     )
-    .slice(
-      0,
-      MAX_SELECTED_KNOWLEDGE_DOCUMENTS,
-    )
-    .map(
-      (
-        entry,
-      ) =>
-        entry.document,
-    );
+    .slice(0, MAX_SELECTED_KNOWLEDGE_DOCUMENTS)
+    .map((entry) => entry.document);
 }
 
-function formatKnowledgeContext(
-  knowledge:
-    KnowledgeDocument[],
-): string {
-  if (
-    knowledge.length ===
-    0
-  ) {
+function formatKnowledgeContext(knowledge: KnowledgeDocument[]): string {
+  if (knowledge.length === 0) {
     return "No verified company knowledge was retrieved for this request.";
   }
 
-  const chunks:
-    string[] =
-    [];
+  const chunks: string[] = [];
 
-  let used =
-    0;
+  let used = 0;
 
-  for (
-    const document of
-      knowledge
-  ) {
-    const remaining =
-      MAX_KNOWLEDGE_CONTEXT_LENGTH -
-      used;
+  for (const document of knowledge) {
+    const remaining = MAX_KNOWLEDGE_CONTEXT_LENGTH - used;
 
-    if (
-      remaining <=
-      0
-    ) {
+    if (remaining <= 0) {
       break;
     }
 
-    const metadata =
-      [
-        `DOCUMENT: ${document.title}`,
+    const metadata = [
+      `DOCUMENT: ${document.title}`,
 
-        document.category
-          ? `CATEGORY: ${document.category}`
-          : null,
+      document.category ? `CATEGORY: ${document.category}` : null,
 
-        document.source
-          ? `SOURCE: ${document.source}`
-          : null,
-      ]
-        .filter(
-          Boolean,
-        )
-        .join(
-          "\n",
-        );
+      document.source ? `SOURCE: ${document.source}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
-    const availableBody =
-      Math.max(
-        250,
-        remaining -
-          metadata.length -
-          40,
-      );
+    const availableBody = Math.max(250, remaining - metadata.length - 40);
 
-    const chunk =
-      [
-        metadata,
+    const chunk = [metadata, truncateText(document.body, availableBody)].join("\n");
 
-        truncateText(
-          document.body,
-          availableBody,
-        ),
-      ].join(
-        "\n",
-      );
+    chunks.push(chunk);
 
-    chunks.push(
-      chunk,
-    );
-
-    used +=
-      chunk.length +
-      10;
+    used += chunk.length + 10;
   }
 
-  return chunks.join(
-    "\n\n---\n\n",
-  );
+  return chunks.join("\n\n---\n\n");
 }
 
 /* -------------------------------------------------------------------------- */
 /* CONTEXT DETECTION                                                          */
 /* -------------------------------------------------------------------------- */
 
-function isCeoBriefingRequest(
-  message:
-    string,
-): boolean {
+function isCeoBriefingRequest(message: string): boolean {
   return /\b(ceo briefing|owner briefing|today'?s briefing|todays briefing|today'?s feedback|todays feedback|company briefing|company status|what needs attention|what is working|what is blocked|what needs my attention|executive briefing)\b/i.test(
     message,
   );
 }
 
-function needsOperationalData(
-  message:
-    string,
-): boolean {
+function needsOperationalData(message: string): boolean {
   return (
-    isCeoBriefingRequest(
-      message,
-    ) ||
+    isCeoBriefingRequest(message) ||
     /\b(lead|leads|enquiry|enquiries|quote request|quote requests|customer|customers|pipeline|opportunity|opportunities|quotation|quotations|quote|quotes|project|projects|appointment|appointments|follow[- ]?up|crm|sales|revenue|website request|website requests|store|product|products|order|orders|inventory|catalogue|catalog|supplier|suppliers)\b/i.test(
       message,
     )
   );
 }
 
-function needsLeadContactData(
-  message:
-    string,
-): boolean {
+function needsLeadContactData(message: string): boolean {
   return /\b(phone|email|contact|call|whatsapp|outreach|follow[- ]?up|lead details|customer details|contact details)\b/i.test(
     message,
   );
 }
 
-function needsWorkforceData(
-  message:
-    string,
-): boolean {
+function needsWorkforceData(message: string): boolean {
   return (
-    isCeoBriefingRequest(
-      message,
-    ) ||
+    isCeoBriefingRequest(message) ||
     /\b(ai[- ]?ceo|workforce|worker|workers|employee|employees|handoff|handoffs|mission|missions|approval|approvals|owner briefing|briefing|working|idle|automatic|automation|task|tasks)\b/i.test(
       message,
     )
   );
 }
 
-function needsExternalNewsData(
-  message:
-    string,
-): boolean {
+function needsExternalNewsData(message: string): boolean {
   return /\b(news|latest news|current news|market news|industry news|trend|trends|trending|current developments|current events|industry developments|market developments|business news|technology news|construction news|retail news|ecommerce news|e-commerce news)\b/i.test(
     message,
   );
 }
 
-function detectContextNeeds(
-  message:
-    string,
-): ContextNeeds {
+function detectContextNeeds(message: string): ContextNeeds {
   return {
-    operational:
-      needsOperationalData(
-        message,
-      ),
+    operational: needsOperationalData(message),
 
-    workforce:
-      needsWorkforceData(
-        message,
-      ),
+    workforce: needsWorkforceData(message),
 
-    externalNews:
-      needsExternalNewsData(
-        message,
-      ),
+    externalNews: needsExternalNewsData(message),
 
-    leadContacts:
-      needsLeadContactData(
-        message,
-      ),
+    leadContacts: needsLeadContactData(message),
 
-    briefing:
-      isCeoBriefingRequest(
-        message,
-      ),
+    briefing: isCeoBriefingRequest(message),
   };
 }
 
@@ -1769,81 +1130,30 @@ function detectContextNeeds(
 /* RECORD COMPACTION                                                          */
 /* -------------------------------------------------------------------------- */
 
-function compactRecord(
-  record:
-    Record<
-      string,
-      unknown
-    >,
-): Record<
-  string,
-  unknown
-> {
+function compactRecord(record: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
-    Object.entries(
-      record,
-    ).filter(
-      (
-        [
-          ,
-          value,
-        ],
-      ) =>
-        value !==
-          null &&
-        value !==
-          undefined &&
-        value !==
-          "",
+    Object.entries(record).filter(
+      ([, value]) => value !== null && value !== undefined && value !== "",
     ),
   );
 }
 
 function formatRecordSection(
-  title:
-    string,
+  title: string,
 
-  records:
-    Record<
-      string,
-      unknown
-    >[],
+  records: Record<string, unknown>[],
 
-  maxRecords:
-    number,
+  maxRecords: number,
 ): string {
-  const selected =
-    records
-      .slice(
-        0,
-        maxRecords,
-      )
-      .map(
-        compactRecord,
-      );
+  const selected = records.slice(0, maxRecords).map(compactRecord);
 
   return [
     `${title} COUNT: ${records.length}`,
 
-    selected.length >
-      0
-      ? selected
-          .map(
-            (
-              record,
-              index,
-            ) =>
-              `${index + 1}. ${JSON.stringify(
-                record,
-              )}`,
-          )
-          .join(
-            "\n",
-          )
+    selected.length > 0
+      ? selected.map((record, index) => `${index + 1}. ${JSON.stringify(record)}`).join("\n")
       : "No records returned.",
-  ].join(
-    "\n",
-  );
+  ].join("\n");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1857,39 +1167,27 @@ async function loadOperationalContext({
   supabaseUrl,
   supabaseKey,
 }: {
-  latestUserMessage:
-    string;
+  latestUserMessage: string;
 
-  token:
-    string;
+  token: string;
 
-  organisationId:
-    string;
+  organisationId: string;
 
-  supabaseUrl:
-    string;
+  supabaseUrl: string;
 
-  supabaseKey:
-    string;
+  supabaseKey: string;
 }): Promise<string> {
-  const needs =
-    detectContextNeeds(
-      latestUserMessage,
-    );
+  const needs = detectContextNeeds(latestUserMessage);
 
-  if (
-    !needs.operational
-  ) {
+  if (!needs.operational) {
     return "Operational CRM records were not required for this request.";
   }
 
-  const includeContactFields =
-    needs.leadContacts;
+  const includeContactFields = needs.leadContacts;
 
-  const leadSelect =
-    includeContactFields
-      ? "id,name,full_name,phone,email,service,location,source,status,stage,score,notes,estimated_value,created_at,updated_at"
-      : "id,name,full_name,service,location,source,status,stage,score,estimated_value,created_at,updated_at";
+  const leadSelect = includeContactFields
+    ? "id,name,full_name,phone,email,service,location,source,status,stage,score,notes,estimated_value,created_at,updated_at"
+    : "id,name,full_name,service,location,source,status,stage,score,estimated_value,created_at,updated_at";
 
   const [
     leads,
@@ -1900,332 +1198,196 @@ async function loadOperationalContext({
     customers,
     projects,
     appointments,
-  ] =
-    await Promise.all([
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "leads",
-
-        query:
-          new URLSearchParams({
-            select:
-              leadSelect,
-
-            organisation_id:
-              `eq.${organisationId}`,
-
-            order:
-              "created_at.desc",
-
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.leads,
-              ),
-          }).toString(),
-
-        token,
-
-        supabaseUrl,
-
-        supabaseKey,
-      }),
-
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "quote_requests",
-
-        query:
-          new URLSearchParams({
-            select:
-              "id,full_name,name,service,location,project_details,message,budget,timeline,created_at",
-
-            order:
-              "created_at.desc",
-
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.quoteRequests,
-              ),
-          }).toString(),
-
-        token,
-
-        supabaseUrl,
-
-        supabaseKey,
-      }),
-
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "contact_messages",
-
-        query:
-          new URLSearchParams({
-            select:
-              includeContactFields
-                ? "id,name,email,phone,subject,message,status,created_at"
-                : "id,name,subject,message,status,created_at",
-
-            order:
-              "created_at.desc",
-
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.contactMessages,
-              ),
-          }).toString(),
-
-        token,
-
-        supabaseUrl,
-
-        supabaseKey,
-      }),
-
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "opportunities",
-
-        query:
-          new URLSearchParams({
-            select:
-              "id,organization_name,opportunity_type,location,estimated_value,status,probability,expected_close,notes,created_at,updated_at",
-
-            organisation_id:
-              `eq.${organisationId}`,
-
-            order:
-              "created_at.desc",
-
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.opportunities,
-              ),
-          }).toString(),
-
-        token,
-
-        supabaseUrl,
-
-        supabaseKey,
-      }),
-
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "quotations",
-
-        query:
-          new URLSearchParams({
-            select:
-              "id,quote_number,title,amount,status,valid_until,service,description,created_at,updated_at",
-
-            organisation_id:
-              `eq.${organisationId}`,
-
-            order:
-              "created_at.desc",
-
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.quotations,
-              ),
-          }).toString(),
-
-        token,
-
-        supabaseUrl,
-
-        supabaseKey,
-      }),
-
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "customers",
-
-        query:
-          new URLSearchParams({
-            select:
-              includeContactFields
-                ? "id,name,email,phone,company,customer_type,status,created_at,updated_at"
-                : "id,name,company,customer_type,status,created_at,updated_at",
-
-            organisation_id:
-              `eq.${organisationId}`,
-
-            order:
-              "created_at.desc",
-
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.customers,
-              ),
-          }).toString(),
-
-        token,
-
-        supabaseUrl,
-
-        supabaseKey,
-      }),
-
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "projects",
-
-        query:
-          new URLSearchParams({
-            select:
-              "id,name,project_name,service,location,budget,status,priority,progress,start_date,end_date,created_at,updated_at",
-
-            organisation_id:
-              `eq.${organisationId}`,
-
-            order:
-              "created_at.desc",
-
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.projects,
-              ),
-          }).toString(),
-
-        token,
-
-        supabaseUrl,
-
-        supabaseKey,
-      }),
-
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "appointments",
-
-        query:
-          new URLSearchParams({
-            select:
-              "id,title,service,location,status,scheduled_at,appointment_date,ends_at,created_at,updated_at",
-
-            organisation_id:
-              `eq.${organisationId}`,
-
-            order:
-              "created_at.desc",
-
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.appointments,
-              ),
-          }).toString(),
-
-        token,
-
-        supabaseUrl,
-
-        supabaseKey,
-      }),
-    ]);
-
-  const sections =
-    [
-      `LIVE OPERATIONAL DATA CHECKED AT: ${new Date().toISOString()}`,
-
-      "Use only these records as live operational evidence.",
-
-      formatRecordSection(
-        "LEADS",
-        leads,
-        MAX_CONTEXT_RECORDS.leads,
-      ),
-
-      formatRecordSection(
-        "QUOTE REQUESTS",
-        quoteRequests,
-        MAX_CONTEXT_RECORDS.quoteRequests,
-      ),
-
-      formatRecordSection(
-        "CONTACT MESSAGES",
-        contactMessages,
-        MAX_CONTEXT_RECORDS.contactMessages,
-      ),
-
-      formatRecordSection(
-        "OPPORTUNITIES",
-        opportunities,
-        MAX_CONTEXT_RECORDS.opportunities,
-      ),
-
-      formatRecordSection(
-        "QUOTATIONS",
-        quotations,
-        MAX_CONTEXT_RECORDS.quotations,
-      ),
-
-      formatRecordSection(
-        "CUSTOMERS",
-        customers,
-        MAX_CONTEXT_RECORDS.customers,
-      ),
-
-      formatRecordSection(
-        "PROJECTS",
-        projects,
-        MAX_CONTEXT_RECORDS.projects,
-      ),
-
-      formatRecordSection(
-        "APPOINTMENTS",
-        appointments,
-        MAX_CONTEXT_RECORDS.appointments,
-      ),
-    ];
-
-  return truncateText(
-    sections.join(
-      "\n\n",
-    ),
-    MAX_OPERATIONAL_CONTEXT_LENGTH,
-  );
+  ] = await Promise.all([
+    restSelect<Record<string, unknown>>({
+      table: "leads",
+
+      query: new URLSearchParams({
+        select: leadSelect,
+
+        organisation_id: `eq.${organisationId}`,
+
+        order: "created_at.desc",
+
+        limit: String(MAX_CONTEXT_RECORDS.leads),
+      }).toString(),
+
+      token,
+
+      supabaseUrl,
+
+      supabaseKey,
+    }),
+
+    restSelect<Record<string, unknown>>({
+      table: "quote_requests",
+
+      query: new URLSearchParams({
+        select:
+          "id,full_name,name,service,location,project_details,message,budget,timeline,created_at",
+
+        order: "created_at.desc",
+
+        limit: String(MAX_CONTEXT_RECORDS.quoteRequests),
+      }).toString(),
+
+      token,
+
+      supabaseUrl,
+
+      supabaseKey,
+    }),
+
+    restSelect<Record<string, unknown>>({
+      table: "contact_messages",
+
+      query: new URLSearchParams({
+        select: includeContactFields
+          ? "id,name,email,phone,subject,message,status,created_at"
+          : "id,name,subject,message,status,created_at",
+
+        order: "created_at.desc",
+
+        limit: String(MAX_CONTEXT_RECORDS.contactMessages),
+      }).toString(),
+
+      token,
+
+      supabaseUrl,
+
+      supabaseKey,
+    }),
+
+    restSelect<Record<string, unknown>>({
+      table: "opportunities",
+
+      query: new URLSearchParams({
+        select:
+          "id,organization_name,opportunity_type,location,estimated_value,status,probability,expected_close,notes,created_at,updated_at",
+
+        organisation_id: `eq.${organisationId}`,
+
+        order: "created_at.desc",
+
+        limit: String(MAX_CONTEXT_RECORDS.opportunities),
+      }).toString(),
+
+      token,
+
+      supabaseUrl,
+
+      supabaseKey,
+    }),
+
+    restSelect<Record<string, unknown>>({
+      table: "quotations",
+
+      query: new URLSearchParams({
+        select:
+          "id,quote_number,title,amount,status,valid_until,service,description,created_at,updated_at",
+
+        organisation_id: `eq.${organisationId}`,
+
+        order: "created_at.desc",
+
+        limit: String(MAX_CONTEXT_RECORDS.quotations),
+      }).toString(),
+
+      token,
+
+      supabaseUrl,
+
+      supabaseKey,
+    }),
+
+    restSelect<Record<string, unknown>>({
+      table: "customers",
+
+      query: new URLSearchParams({
+        select: includeContactFields
+          ? "id,name,email,phone,company,customer_type,status,created_at,updated_at"
+          : "id,name,company,customer_type,status,created_at,updated_at",
+
+        organisation_id: `eq.${organisationId}`,
+
+        order: "created_at.desc",
+
+        limit: String(MAX_CONTEXT_RECORDS.customers),
+      }).toString(),
+
+      token,
+
+      supabaseUrl,
+
+      supabaseKey,
+    }),
+
+    restSelect<Record<string, unknown>>({
+      table: "projects",
+
+      query: new URLSearchParams({
+        select:
+          "id,name,project_name,service,location,budget,status,priority,progress,start_date,end_date,created_at,updated_at",
+
+        organisation_id: `eq.${organisationId}`,
+
+        order: "created_at.desc",
+
+        limit: String(MAX_CONTEXT_RECORDS.projects),
+      }).toString(),
+
+      token,
+
+      supabaseUrl,
+
+      supabaseKey,
+    }),
+
+    restSelect<Record<string, unknown>>({
+      table: "appointments",
+
+      query: new URLSearchParams({
+        select:
+          "id,title,service,location,status,scheduled_at,appointment_date,ends_at,created_at,updated_at",
+
+        organisation_id: `eq.${organisationId}`,
+
+        order: "created_at.desc",
+
+        limit: String(MAX_CONTEXT_RECORDS.appointments),
+      }).toString(),
+
+      token,
+
+      supabaseUrl,
+
+      supabaseKey,
+    }),
+  ]);
+
+  const sections = [
+    `LIVE OPERATIONAL DATA CHECKED AT: ${new Date().toISOString()}`,
+
+    "Use only these records as live operational evidence.",
+
+    formatRecordSection("LEADS", leads, MAX_CONTEXT_RECORDS.leads),
+
+    formatRecordSection("QUOTE REQUESTS", quoteRequests, MAX_CONTEXT_RECORDS.quoteRequests),
+
+    formatRecordSection("CONTACT MESSAGES", contactMessages, MAX_CONTEXT_RECORDS.contactMessages),
+
+    formatRecordSection("OPPORTUNITIES", opportunities, MAX_CONTEXT_RECORDS.opportunities),
+
+    formatRecordSection("QUOTATIONS", quotations, MAX_CONTEXT_RECORDS.quotations),
+
+    formatRecordSection("CUSTOMERS", customers, MAX_CONTEXT_RECORDS.customers),
+
+    formatRecordSection("PROJECTS", projects, MAX_CONTEXT_RECORDS.projects),
+
+    formatRecordSection("APPOINTMENTS", appointments, MAX_CONTEXT_RECORDS.appointments),
+  ];
+
+  return truncateText(sections.join("\n\n"), MAX_OPERATIONAL_CONTEXT_LENGTH);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2239,487 +1401,292 @@ async function loadWorkforceContext({
   supabaseUrl,
   supabaseKey,
 }: {
-  latestUserMessage:
-    string;
+  latestUserMessage: string;
 
-  token:
-    string;
+  token: string;
 
-  organisationId:
-    string;
+  organisationId: string;
 
-  supabaseUrl:
-    string;
+  supabaseUrl: string;
 
-  supabaseKey:
-    string;
+  supabaseKey: string;
 }): Promise<string> {
-  if (
-    !needsWorkforceData(
-      latestUserMessage,
-    )
-  ) {
+  if (!needsWorkforceData(latestUserMessage)) {
     return "Workforce records were not required for this request.";
   }
 
-  const [
-    employees,
-    missions,
-    runs,
-    handoffs,
-    approvals,
-  ] =
-    await Promise.all([
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "ai_employees",
+  const [employees, missions, runs, handoffs, approvals] = await Promise.all([
+    restSelect<Record<string, unknown>>({
+      table: "ai_employees",
 
-        query:
-          new URLSearchParams({
-            select:
-              "id,employee_key,name,title,department,mission,status,requires_approval_by_default,updated_at",
+      query: new URLSearchParams({
+        select:
+          "id,employee_key,name,title,department,mission,status,requires_approval_by_default,updated_at",
 
-            organisation_id:
-              `eq.${organisationId}`,
+        organisation_id: `eq.${organisationId}`,
 
-            order:
-              "updated_at.desc",
+        order: "updated_at.desc",
 
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.employees,
-              ),
-          }).toString(),
+        limit: String(MAX_CONTEXT_RECORDS.employees),
+      }).toString(),
 
-        token,
+      token,
 
-        supabaseUrl,
+      supabaseUrl,
 
-        supabaseKey,
-      }),
+      supabaseKey,
+    }),
 
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "missions",
+    restSelect<Record<string, unknown>>({
+      table: "missions",
 
-        query:
-          new URLSearchParams({
-            select:
-              "id,title,objective,status,priority,risk_level,assigned_employee_id,created_at,updated_at",
+      query: new URLSearchParams({
+        select:
+          "id,title,objective,status,priority,risk_level,assigned_employee_id,created_at,updated_at",
 
-            organisation_id:
-              `eq.${organisationId}`,
+        organisation_id: `eq.${organisationId}`,
 
-            order:
-              "created_at.desc",
+        order: "created_at.desc",
 
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.missions,
-              ),
-          }).toString(),
+        limit: String(MAX_CONTEXT_RECORDS.missions),
+      }).toString(),
 
-        token,
+      token,
 
-        supabaseUrl,
+      supabaseUrl,
 
-        supabaseKey,
-      }),
+      supabaseKey,
+    }),
 
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "mission_runs",
+    restSelect<Record<string, unknown>>({
+      table: "mission_runs",
 
-        query:
-          new URLSearchParams({
-            select:
-              "id,mission_id,employee_id,status,model_provider,model_name,created_at,started_at,completed_at,error_code,error_message",
+      query: new URLSearchParams({
+        select:
+          "id,mission_id,employee_id,status,model_provider,model_name,created_at,started_at,completed_at,error_code,error_message",
 
-            organisation_id:
-              `eq.${organisationId}`,
+        organisation_id: `eq.${organisationId}`,
 
-            order:
-              "created_at.desc",
+        order: "created_at.desc",
 
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.runs,
-              ),
-          }).toString(),
+        limit: String(MAX_CONTEXT_RECORDS.runs),
+      }).toString(),
 
-        token,
+      token,
 
-        supabaseUrl,
+      supabaseUrl,
 
-        supabaseKey,
-      }),
+      supabaseKey,
+    }),
 
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "employee_handoffs",
+    restSelect<Record<string, unknown>>({
+      table: "employee_handoffs",
 
-        query:
-          new URLSearchParams({
-            select:
-              "id,mission_id,from_employee_id,to_employee_id,reason,status,created_at,accepted_at,completed_at",
+      query: new URLSearchParams({
+        select:
+          "id,mission_id,from_employee_id,to_employee_id,reason,status,created_at,accepted_at,completed_at",
 
-            organisation_id:
-              `eq.${organisationId}`,
+        organisation_id: `eq.${organisationId}`,
 
-            order:
-              "created_at.desc",
+        order: "created_at.desc",
 
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.handoffs,
-              ),
-          }).toString(),
+        limit: String(MAX_CONTEXT_RECORDS.handoffs),
+      }).toString(),
 
-        token,
+      token,
 
-        supabaseUrl,
+      supabaseUrl,
 
-        supabaseKey,
-      }),
+      supabaseKey,
+    }),
 
-      restSelect<
-        Record<
-          string,
-          unknown
-        >
-      >({
-        table:
-          "approvals",
+    restSelect<Record<string, unknown>>({
+      table: "approvals",
 
-        query:
-          new URLSearchParams({
-            select:
-              "id,mission_id,requested_by_employee_id,action_type,risk_level,justification,status,requested_at,decided_at",
+      query: new URLSearchParams({
+        select:
+          "id,mission_id,requested_by_employee_id,action_type,risk_level,justification,status,requested_at,decided_at",
 
-            organisation_id:
-              `eq.${organisationId}`,
+        organisation_id: `eq.${organisationId}`,
 
-            order:
-              "requested_at.desc",
+        order: "requested_at.desc",
 
-            limit:
-              String(
-                MAX_CONTEXT_RECORDS.approvals,
-              ),
-          }).toString(),
+        limit: String(MAX_CONTEXT_RECORDS.approvals),
+      }).toString(),
 
-        token,
+      token,
 
-        supabaseUrl,
+      supabaseUrl,
 
-        supabaseKey,
-      }),
-    ]);
+      supabaseKey,
+    }),
+  ]);
 
-  const sections =
-    [
-      `LIVE AI WORKFORCE DATA CHECKED AT: ${new Date().toISOString()}`,
+  const sections = [
+    `LIVE AI WORKFORCE DATA CHECKED AT: ${new Date().toISOString()}`,
 
-      "Interpret status literally. Active does not mean currently working. Pending does not mean completed.",
+    "Interpret status literally. Active does not mean currently working. Pending does not mean completed.",
 
-      formatRecordSection(
-        "EMPLOYEES",
-        employees,
-        MAX_CONTEXT_RECORDS.employees,
-      ),
+    formatRecordSection("EMPLOYEES", employees, MAX_CONTEXT_RECORDS.employees),
 
-      formatRecordSection(
-        "MISSIONS",
-        missions,
-        MAX_CONTEXT_RECORDS.missions,
-      ),
+    formatRecordSection("MISSIONS", missions, MAX_CONTEXT_RECORDS.missions),
 
-      formatRecordSection(
-        "MISSION RUNS",
-        runs,
-        MAX_CONTEXT_RECORDS.runs,
-      ),
+    formatRecordSection("MISSION RUNS", runs, MAX_CONTEXT_RECORDS.runs),
 
-      formatRecordSection(
-        "HANDOFFS",
-        handoffs,
-        MAX_CONTEXT_RECORDS.handoffs,
-      ),
+    formatRecordSection("HANDOFFS", handoffs, MAX_CONTEXT_RECORDS.handoffs),
 
-      formatRecordSection(
-        "APPROVALS",
-        approvals,
-        MAX_CONTEXT_RECORDS.approvals,
-      ),
-    ];
+    formatRecordSection("APPROVALS", approvals, MAX_CONTEXT_RECORDS.approvals),
+  ];
 
-  return truncateText(
-    sections.join(
-      "\n\n",
-    ),
-    MAX_WORKFORCE_CONTEXT_LENGTH,
-  );
+  return truncateText(sections.join("\n\n"), MAX_WORKFORCE_CONTEXT_LENGTH);
 }
 
 /* -------------------------------------------------------------------------- */
 /* EXTERNAL NEWS INTELLIGENCE                                                 */
 /* -------------------------------------------------------------------------- */
 
-const NEWS_SEARCH_STOP_WORDS =
-  new Set([
-    "about",
-    "after",
-    "again",
-    "against",
-    "also",
-    "and",
-    "are",
-    "been",
-    "before",
-    "being",
-    "business",
-    "can",
-    "cossa",
-    "could",
-    "does",
-    "for",
-    "from",
-    "growth",
-    "have",
-    "into",
-    "latest",
-    "need",
-    "news",
-    "our",
-    "please",
-    "should",
-    "that",
-    "the",
-    "their",
-    "them",
-    "there",
-    "they",
-    "this",
-    "today",
-    "want",
-    "what",
-    "when",
-    "where",
-    "which",
-    "with",
-    "would",
-    "you",
-    "your",
-  ]);
+const NEWS_SEARCH_STOP_WORDS = new Set([
+  "about",
+  "after",
+  "again",
+  "against",
+  "also",
+  "and",
+  "are",
+  "been",
+  "before",
+  "being",
+  "business",
+  "can",
+  "cossa",
+  "could",
+  "does",
+  "for",
+  "from",
+  "growth",
+  "have",
+  "into",
+  "latest",
+  "need",
+  "news",
+  "our",
+  "please",
+  "should",
+  "that",
+  "the",
+  "their",
+  "them",
+  "there",
+  "they",
+  "this",
+  "today",
+  "want",
+  "what",
+  "when",
+  "where",
+  "which",
+  "with",
+  "would",
+  "you",
+  "your",
+]);
 
-function createNewsSearchQuery(
-  message:
-    string,
-): string | null {
-  const terms =
-    message
-      .toLowerCase()
-      .match(
-        /[a-z0-9]{3,}/g,
-      ) ??
-    [];
+function createNewsSearchQuery(message: string): string | null {
+  const terms = message.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [];
 
-  const selected =
-    Array.from(
-      new Set(
-        terms.filter(
-          (
-            term,
-          ) =>
-            !NEWS_SEARCH_STOP_WORDS.has(
-              term,
-            ),
-        ),
-      ),
-    ).slice(
-      0,
-      7,
-    );
+  const selected = Array.from(
+    new Set(terms.filter((term) => !NEWS_SEARCH_STOP_WORDS.has(term))),
+  ).slice(0, 7);
 
-  if (
-    selected.length ===
-    0
-  ) {
+  if (selected.length === 0) {
     return null;
   }
 
-  return selected.join(
-    " ",
-  );
+  return selected.join(" ");
 }
 
 async function loadExternalNewsContext({
   latestUserMessage,
   newsApiKey,
 }: {
-  latestUserMessage:
-    string;
+  latestUserMessage: string;
 
-  newsApiKey:
-    string | undefined;
+  newsApiKey: string | undefined;
 }): Promise<string> {
-  if (
-    !needsExternalNewsData(
-      latestUserMessage,
-    )
-  ) {
+  if (!needsExternalNewsData(latestUserMessage)) {
     return "External news intelligence was not required for this request.";
   }
 
-  if (
-    !newsApiKey
-  ) {
+  if (!newsApiKey) {
     return "External news intelligence was requested, but NEWS_API_KEY is not configured in the protected server environment.";
   }
 
-  const searchQuery =
-    createNewsSearchQuery(
-      latestUserMessage,
-    );
+  const searchQuery = createNewsSearchQuery(latestUserMessage);
 
-  if (
-    !searchQuery
-  ) {
+  if (!searchQuery) {
     return "External news intelligence was requested, but a useful search query could not be derived.";
   }
 
-  const params =
-    new URLSearchParams({
-      q:
-        searchQuery,
+  const params = new URLSearchParams({
+    q: searchQuery,
 
-      language:
-        "en",
+    language: "en",
 
-      sortBy:
-        "publishedAt",
+    sortBy: "publishedAt",
 
-      pageSize:
-        "5",
-    });
+    pageSize: "5",
+  });
 
   try {
-    const response =
-      await fetch(
-        `https://newsapi.org/v2/everything?${params.toString()}`,
-        {
-          headers: {
-            "X-Api-Key":
-              newsApiKey,
-          },
-        },
-      );
+    const response = await fetch(`https://newsapi.org/v2/everything?${params.toString()}`, {
+      headers: {
+        "X-Api-Key": newsApiKey,
+      },
+    });
 
-    if (
-      !response.ok
-    ) {
-      const errorText =
-        await response
-          .text()
-          .catch(
-            () => "",
-          );
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
 
-      console.error(
-        "NewsAPI request failed:",
-        response.status,
-        errorText,
-      );
+      console.error("NewsAPI request failed:", response.status, errorText);
 
       return "External news intelligence could not be retrieved for this request.";
     }
 
-    const payload =
-      (
-        await response.json()
-      ) as NewsApiResponse;
+    const payload = (await response.json()) as NewsApiResponse;
 
-    const articles =
-      payload.articles ??
-      [];
+    const articles = payload.articles ?? [];
 
-    if (
-      articles.length ===
-      0
-    ) {
+    if (articles.length === 0) {
       return `External news search returned no articles for query: ${searchQuery}`;
     }
 
-    const context =
-      [
-        `EXTERNAL NEWS CHECKED AT: ${new Date().toISOString()}`,
+    const context = [
+      `EXTERNAL NEWS CHECKED AT: ${new Date().toISOString()}`,
 
-        `SEARCH QUERY: ${searchQuery}`,
+      `SEARCH QUERY: ${searchQuery}`,
 
-        "External news is supplementary intelligence only. It does not prove Cossa company facts, supplier legitimacy, customer intent or commercial opportunity.",
+      "External news is supplementary intelligence only. It does not prove Cossa company facts, supplier legitimacy, customer intent or commercial opportunity.",
 
-        ...articles.map(
-          (
-            article,
-            index,
-          ) =>
-            [
-              `${index + 1}. ${article.title ?? "Untitled"}`,
+      ...articles.map((article, index) =>
+        [
+          `${index + 1}. ${article.title ?? "Untitled"}`,
 
-              `Source: ${article.source?.name ?? "Unknown"}`,
+          `Source: ${article.source?.name ?? "Unknown"}`,
 
-              `Published: ${article.publishedAt ?? "Unknown"}`,
+          `Published: ${article.publishedAt ?? "Unknown"}`,
 
-              article.description
-                ? `Summary: ${article.description}`
-                : null,
+          article.description ? `Summary: ${article.description}` : null,
 
-              article.url
-                ? `URL: ${article.url}`
-                : null,
-            ]
-              .filter(
-                Boolean,
-              )
-              .join(
-                "\n",
-              ),
-        ),
-      ].join(
-        "\n\n",
-      );
+          article.url ? `URL: ${article.url}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      ),
+    ].join("\n\n");
 
-    return truncateText(
-      context,
-      MAX_EXTERNAL_NEWS_CONTEXT_LENGTH,
-    );
-  } catch (
-    error
-  ) {
-    console.error(
-      "NewsAPI connection failed:",
-      error,
-    );
+    return truncateText(context, MAX_EXTERNAL_NEWS_CONTEXT_LENGTH);
+  } catch (error) {
+    console.error("NewsAPI connection failed:", error);
 
     return "External news intelligence could not be retrieved because the news provider connection failed.";
   }
@@ -2745,36 +1712,23 @@ function buildSystemPrompt({
   customSystem,
   latestUserMessage,
 }: {
-  verifiedContext:
-    string;
+  verifiedContext: string;
 
-  operationalContext:
-    string;
+  operationalContext: string;
 
-  workforceContext:
-    string;
+  workforceContext: string;
 
-  externalNewsContext:
-    string;
+  externalNewsContext: string;
 
-  customSystem?:
-    string;
+  customSystem?: string;
 
-  latestUserMessage:
-    string;
+  latestUserMessage: string;
 }): string {
-  const needs =
-    detectContextNeeds(
-      latestUserMessage,
-    );
+  const needs = detectContextNeeds(latestUserMessage);
 
-  const domainRules:
-    string[] =
-    [];
+  const domainRules: string[] = [];
 
-  if (
-    needs.operational
-  ) {
+  if (needs.operational) {
     domainRules.push(`
 LIVE OPERATIONS
 - CRM, lead, quotation, opportunity, project, appointment and customer claims must come from supplied live records.
@@ -2785,9 +1739,7 @@ LIVE OPERATIONS
 `);
   }
 
-  if (
-    needs.workforce
-  ) {
+  if (needs.workforce) {
     domainRules.push(`
 WORKFORCE
 - Active means available to receive work, not currently working.
@@ -2829,11 +1781,7 @@ STORE AND SUPPLIERS
 `);
   }
 
-  if (
-    /\b(tender|procurement|rfq|broker|deal)\b/i.test(
-      latestUserMessage,
-    )
-  ) {
+  if (/\b(tender|procurement|rfq|broker|deal)\b/i.test(latestUserMessage)) {
     domainRules.push(`
 PROCUREMENT
 - Never fabricate tenders, deadlines, eligibility, buyers, brokers or deals.
@@ -2842,9 +1790,7 @@ PROCUREMENT
 `);
   }
 
-  if (
-    needs.externalNews
-  ) {
+  if (needs.externalNews) {
     domainRules.push(`
 EXTERNAL INTELLIGENCE
 - Label external news as external intelligence.
@@ -2853,9 +1799,7 @@ EXTERNAL INTELLIGENCE
 `);
   }
 
-  if (
-    needs.briefing
-  ) {
+  if (needs.briefing) {
     domainRules.push(`
 CEO BRIEFING FORMAT
 Prioritise:
@@ -2871,8 +1815,7 @@ Do not turn ordinary internal drafting/research into owner approval requests.
 `);
   }
 
-  const prompt =
-    `
+  const prompt = `
 You are Cossa AI, the internal executive reasoning and controlled workforce intelligence layer for Cossa Nexus Holdings.
 
 You support authorised Cossa work across strategy, sales, CRM, marketing, operations, procurement, commerce, technology, customer development, workforce coordination and executive decision support.
@@ -2930,9 +1873,7 @@ TRUTH ABOUT EXECUTION
 - Never describe an expected integration as connected unless verified.
 - If a required integration or data source is missing, identify exactly what is missing.
 
-${domainRules.join(
-  "\n",
-)}
+${domainRules.join("\n")}
 
 VERIFIED COMPANY KNOWLEDGE
 
@@ -2963,20 +1904,14 @@ ${customSystem.trim()}
 }
 `.trim();
 
-  return truncateText(
-    prompt,
-    MAX_SYSTEM_PROMPT_CHARACTERS,
-  );
+  return truncateText(prompt, MAX_SYSTEM_PROMPT_CHARACTERS);
 }
 
 /* -------------------------------------------------------------------------- */
 /* RECORD-SAFE SUPPORT                                                        */
 /* -------------------------------------------------------------------------- */
 
-function needsRecordSafeSupport(
-  message:
-    string,
-): boolean {
+function needsRecordSafeSupport(message: string): boolean {
   return /\b(no|without|missing|cannot find|couldn['’]t find)\b[\s\S]{0,100}\b(order|payment|courier|delivery|tracking)\s+(record|details?|information)\b/i.test(
     message,
   );
@@ -2986,24 +1921,12 @@ function needsRecordSafeSupport(
 /* GENERIC STREAM HELPERS                                                     */
 /* -------------------------------------------------------------------------- */
 
-function createTextResponseStream(
-  text:
-    string,
-): ReadableStream<Uint8Array> {
-  const encoder =
-    new TextEncoder();
+function createTextResponseStream(text: string): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
 
-  return new ReadableStream<
-    Uint8Array
-  >({
-    start(
-      controller,
-    ) {
-      controller.enqueue(
-        encoder.encode(
-          text,
-        ),
-      );
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(text));
 
       controller.close();
     },
@@ -3015,155 +1938,79 @@ function createTextResponseStream(
 /* -------------------------------------------------------------------------- */
 
 function createOpenAiCompatibleTextStream(
-  upstreamBody:
-    ReadableStream<Uint8Array>,
+  upstreamBody: ReadableStream<Uint8Array>,
 
-  provider:
-    "groq" |
-    "gemini",
+  provider: "groq" | "gemini",
 ): ReadableStream<Uint8Array> {
-  const encoder =
-    new TextEncoder();
+  const encoder = new TextEncoder();
 
-  const decoder =
-    new TextDecoder();
+  const decoder = new TextDecoder();
 
-  const reader =
-    upstreamBody.getReader();
+  const reader = upstreamBody.getReader();
 
-  return new ReadableStream<
-    Uint8Array
-  >({
-    start(
-      controller,
-    ) {
-      let buffer =
-        "";
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      let buffer = "";
 
-      let streamClosed =
-        false;
+      let streamClosed = false;
 
       function closeStream() {
-        if (
-          streamClosed
-        ) {
+        if (streamClosed) {
           return;
         }
 
-        streamClosed =
-          true;
+        streamClosed = true;
 
         controller.close();
       }
 
-      function processSseLine(
-        line:
-          string,
-      ) {
-        if (
-          !line.startsWith(
-            "data:",
-          )
-        ) {
+      function processSseLine(line: string) {
+        if (!line.startsWith("data:")) {
           return;
         }
 
-        const data =
-          line
-            .slice(
-              5,
-            )
-            .trim();
+        const data = line.slice(5).trim();
 
-        if (
-          !data
-        ) {
+        if (!data) {
           return;
         }
 
-        if (
-          data ===
-          "[DONE]"
-        ) {
+        if (data === "[DONE]") {
           closeStream();
 
           return;
         }
 
         try {
-          const parsed =
-            JSON.parse(
-              data,
-            ) as OpenAiCompatibleCompletion;
+          const parsed = JSON.parse(data) as OpenAiCompatibleCompletion;
 
-          const token =
-            parsed
-              .choices?.[0]
-              ?.delta
-              ?.content;
+          const token = parsed.choices?.[0]?.delta?.content;
 
-          if (
-            typeof token ===
-              "string" &&
-            token &&
-            !streamClosed
-          ) {
-            controller.enqueue(
-              encoder.encode(
-                token,
-              ),
-            );
+          if (typeof token === "string" && token && !streamClosed) {
+            controller.enqueue(encoder.encode(token));
           }
-        } catch (
-          error
-        ) {
-          console.warn(
-            `Ignored malformed ${provider} streaming chunk.`,
-            error,
-          );
+        } catch (error) {
+          console.warn(`Ignored malformed ${provider} streaming chunk.`, error);
         }
       }
 
       async function pump() {
         try {
-          while (
-            !streamClosed
-          ) {
-            const {
-              value,
-              done,
-            } =
-              await reader.read();
+          while (!streamClosed) {
+            const { value, done } = await reader.read();
 
-            if (
-              done
-            ) {
-              buffer +=
-                decoder.decode();
+            if (done) {
+              buffer += decoder.decode();
 
-              if (
-                buffer.trim()
-              ) {
-                for (
-                  const rawLine of
-                    buffer.split(
-                      /\r?\n/,
-                    )
-                ) {
-                  const line =
-                    rawLine.trim();
+              if (buffer.trim()) {
+                for (const rawLine of buffer.split(/\r?\n/)) {
+                  const line = rawLine.trim();
 
-                  if (
-                    line
-                  ) {
-                    processSseLine(
-                      line,
-                    );
+                  if (line) {
+                    processSseLine(line);
                   }
 
-                  if (
-                    streamClosed
-                  ) {
+                  if (streamClosed) {
                     return;
                   }
                 }
@@ -3174,71 +2021,31 @@ function createOpenAiCompatibleTextStream(
               return;
             }
 
-            buffer +=
-              decoder.decode(
-                value,
-                {
-                  stream:
-                    true,
-                },
-              );
+            buffer += decoder.decode(value, {
+              stream: true,
+            });
 
-            let lineBreakIndex =
-              buffer.indexOf(
-                "\n",
-              );
+            let lineBreakIndex = buffer.indexOf("\n");
 
-            while (
-              lineBreakIndex !==
-              -1
-            ) {
-              const line =
-                buffer
-                  .slice(
-                    0,
-                    lineBreakIndex,
-                  )
-                  .replace(
-                    /\r$/,
-                    "",
-                  )
-                  .trim();
+            while (lineBreakIndex !== -1) {
+              const line = buffer.slice(0, lineBreakIndex).replace(/\r$/, "").trim();
 
-              buffer =
-                buffer.slice(
-                  lineBreakIndex +
-                    1,
-                );
+              buffer = buffer.slice(lineBreakIndex + 1);
 
-              if (
-                line
-              ) {
-                processSseLine(
-                  line,
-                );
+              if (line) {
+                processSseLine(line);
               }
 
-              if (
-                streamClosed
-              ) {
+              if (streamClosed) {
                 return;
               }
 
-              lineBreakIndex =
-                buffer.indexOf(
-                  "\n",
-                );
+              lineBreakIndex = buffer.indexOf("\n");
             }
           }
-        } catch (
-          error
-        ) {
-          if (
-            !streamClosed
-          ) {
-            controller.error(
-              error,
-            );
+        } catch (error) {
+          if (!streamClosed) {
+            controller.error(error);
           }
         }
       }
@@ -3256,146 +2063,70 @@ function createOpenAiCompatibleTextStream(
 /* FIRST OUTPUT GATE                                                          */
 /* -------------------------------------------------------------------------- */
 
-async function primeTextStream(
-  stream:
-    ReadableStream<Uint8Array>,
-): Promise<PrimedStreamResult> {
-  const reader =
-    stream.getReader();
+async function primeTextStream(stream: ReadableStream<Uint8Array>): Promise<PrimedStreamResult> {
+  const reader = stream.getReader();
 
-  const decoder =
-    new TextDecoder();
+  const decoder = new TextDecoder();
 
   try {
-    while (
-      true
-    ) {
-      const {
-        value,
-        done,
-      } =
-        await reader.read();
+    while (true) {
+      const { value, done } = await reader.read();
 
-      if (
-        done
-      ) {
+      if (done) {
         reader.releaseLock();
 
         return {
-          ok:
-            false,
+          ok: false,
 
-          error:
-            "The provider opened a response stream but returned no usable assistant output.",
+          error: "The provider opened a response stream but returned no usable assistant output.",
         };
       }
 
-      if (
-        !value ||
-        value.byteLength ===
-          0
-      ) {
+      if (!value || value.byteLength === 0) {
         continue;
       }
 
-      const preview =
-        decoder.decode(
-          value,
-          {
-            stream:
-              true,
-          },
-        );
+      const preview = decoder.decode(value, {
+        stream: true,
+      });
 
-      if (
-        !preview.trim()
-      ) {
+      if (!preview.trim()) {
         continue;
       }
 
-      const firstChunk =
-        value;
+      const firstChunk = value;
 
-      let completed =
-        false;
+      let completed = false;
 
-      const reconstructedStream =
-        new ReadableStream<
-          Uint8Array
-        >({
-          start(
-            controller,
-          ) {
-            controller.enqueue(
-              firstChunk,
-            );
+      const reconstructedStream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(firstChunk);
 
-            async function pump() {
-              try {
-                while (
-                  !completed
-                ) {
-                  const {
-                    value:
-                      nextValue,
+          async function pump() {
+            try {
+              while (!completed) {
+                const {
+                  value: nextValue,
 
-                    done:
-                      nextDone,
-                  } =
-                    await reader.read();
+                  done: nextDone,
+                } = await reader.read();
 
-                  if (
-                    nextDone
-                  ) {
-                    completed =
-                      true;
+                if (nextDone) {
+                  completed = true;
 
-                    controller.close();
+                  controller.close();
 
-                    return;
-                  }
-
-                  if (
-                    nextValue &&
-                    nextValue.byteLength >
-                      0
-                  ) {
-                    controller.enqueue(
-                      nextValue,
-                    );
-                  }
+                  return;
                 }
-              } catch (
-                error
-              ) {
-                completed =
-                  true;
 
-                controller.error(
-                  error,
-                );
-              } finally {
-                try {
-                  reader.releaseLock();
-                } catch {
-                  // Reader may already be released.
+                if (nextValue && nextValue.byteLength > 0) {
+                  controller.enqueue(nextValue);
                 }
               }
-            }
+            } catch (error) {
+              completed = true;
 
-            void pump();
-          },
-
-          async cancel(
-            reason,
-          ) {
-            completed =
-              true;
-
-            try {
-              await reader.cancel(
-                reason,
-              );
+              controller.error(error);
             } finally {
               try {
                 reader.releaseLock();
@@ -3403,20 +2134,33 @@ async function primeTextStream(
                 // Reader may already be released.
               }
             }
-          },
-        });
+          }
+
+          void pump();
+        },
+
+        async cancel(reason) {
+          completed = true;
+
+          try {
+            await reader.cancel(reason);
+          } finally {
+            try {
+              reader.releaseLock();
+            } catch {
+              // Reader may already be released.
+            }
+          }
+        },
+      });
 
       return {
-        ok:
-          true,
+        ok: true,
 
-        stream:
-          reconstructedStream,
+        stream: reconstructedStream,
       };
     }
-  } catch (
-    error
-  ) {
+  } catch (error) {
     try {
       reader.releaseLock();
     } catch {
@@ -3424,16 +2168,9 @@ async function primeTextStream(
     }
 
     return {
-      ok:
-        false,
+      ok: false,
 
-      error:
-        error instanceof
-        Error
-          ? error.message
-          : String(
-              error,
-            ),
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -3442,57 +2179,22 @@ async function primeTextStream(
 /* OPENAI RESPONSE EXTRACTION                                                 */
 /* -------------------------------------------------------------------------- */
 
-function extractOpenAiResponseText(
-  response:
-    unknown,
-): string {
-  if (
-    !response ||
-    typeof response !==
-      "object"
-  ) {
+function extractOpenAiResponseText(response: unknown): string {
+  if (!response || typeof response !== "object") {
     return "";
   }
 
-  const payload =
-    response as OpenAiResponsePayload;
+  const payload = response as OpenAiResponsePayload;
 
-  if (
-    typeof payload.output_text ===
-      "string"
-  ) {
+  if (typeof payload.output_text === "string") {
     return payload.output_text.trim();
   }
 
-  return (
-    payload.output ??
-    []
-  )
-    .flatMap(
-      (
-        item,
-      ) =>
-        item.content ??
-        [],
-    )
-    .filter(
-      (
-        item,
-      ) =>
-        item.type ===
-          "output_text" &&
-        typeof item.text ===
-          "string",
-    )
-    .map(
-      (
-        item,
-      ) =>
-        item.text as string,
-    )
-    .join(
-      "",
-    )
+  return (payload.output ?? [])
+    .flatMap((item) => item.content ?? [])
+    .filter((item) => item.type === "output_text" && typeof item.text === "string")
+    .map((item) => item.text as string)
+    .join("")
     .trim();
 }
 
@@ -3500,32 +2202,20 @@ function extractOpenAiResponseText(
 /* PROVIDER ERRORS                                                            */
 /* -------------------------------------------------------------------------- */
 
-function parseProviderError(
-  errorText:
-    string,
-): ProviderErrorBody | null {
-  if (
-    !errorText.trim()
-  ) {
+function parseProviderError(errorText: string): ProviderErrorBody | null {
+  if (!errorText.trim()) {
     return null;
   }
 
   try {
-    return JSON.parse(
-      errorText,
-    ) as ProviderErrorBody;
+    return JSON.parse(errorText) as ProviderErrorBody;
   } catch {
     return null;
   }
 }
 
-function providerDisplayName(
-  provider:
-    ChatProvider,
-): string {
-  switch (
-    provider
-  ) {
+function providerDisplayName(provider: ChatProvider): string {
+  switch (provider) {
     case "groq":
       return "Groq";
 
@@ -3541,125 +2231,66 @@ function providerDisplayName(
 }
 
 function isProviderCapacityError(
-  status:
-    number,
+  status: number,
 
-  errorText:
-    string,
+  errorText: string,
 ): boolean {
-  const lower =
-    errorText.toLowerCase();
+  const lower = errorText.toLowerCase();
 
   return (
-    status ===
-      413 &&
-    (
-      lower.includes(
-        "tokens per minute",
-      ) ||
-      lower.includes(
-        "request too large for model",
-      ) ||
-      lower.includes(
-        "rate_limit_exceeded",
-      ) ||
-      lower.includes(
-        "token",
-      )
-    )
+    status === 413 &&
+    (lower.includes("tokens per minute") ||
+      lower.includes("request too large for model") ||
+      lower.includes("rate_limit_exceeded") ||
+      lower.includes("token"))
   );
 }
 
 function safeProviderFailure(
-  provider:
-    ChatProvider,
+  provider: ChatProvider,
 
-  status:
-    number,
+  status: number,
 
-  errorText:
-    string,
+  errorText: string,
 ): string {
-  const body =
-    parseProviderError(
-      errorText,
-    );
+  const body = parseProviderError(errorText);
 
-  const code =
-    body?.error?.code
-      ?.toLowerCase() ??
-    "";
+  const code = body?.error?.code?.toLowerCase() ?? "";
 
-  const type =
-    body?.error?.type
-      ?.toLowerCase() ??
-    "";
+  const type = body?.error?.type?.toLowerCase() ?? "";
 
-  const name =
-    providerDisplayName(
-      provider,
-    );
+  const name = providerDisplayName(provider);
 
-  if (
-    isProviderCapacityError(
-      status,
-      errorText,
-    )
-  ) {
+  if (isProviderCapacityError(status, errorText)) {
     return `${name} could not accept the current reasoning context within its token-capacity limit.`;
   }
 
   if (
-    provider ===
-      "openai" &&
-    (
-      code ===
-        "credit_balance_exhausted" ||
-      code ===
-        "insufficient_quota" ||
-      type ===
-        "insufficient_quota"
-    )
+    provider === "openai" &&
+    (code === "credit_balance_exhausted" ||
+      code === "insufficient_quota" ||
+      type === "insufficient_quota")
   ) {
     return "Strategic OpenAI reasoning currently has no available API credit.";
   }
 
-  if (
-    status ===
-    429
-  ) {
+  if (status === 429) {
     return `${name} is temporarily rate-limiting Cossa AI.`;
   }
 
-  if (
-    status ===
-      401 ||
-    status ===
-      403
-  ) {
+  if (status === 401 || status === 403) {
     return `${name} could not authorise the protected Cossa AI provider request.`;
   }
 
-  if (
-    status ===
-      408 ||
-    status ===
-      504
-  ) {
+  if (status === 408 || status === 504) {
     return `${name} timed out while processing the Cossa AI request.`;
   }
 
-  if (
-    status ===
-    404
-  ) {
+  if (status === 404) {
     return `${name} could not access the configured reasoning model.`;
   }
 
-  if (
-    status >=
-    500
-  ) {
+  if (status >= 500) {
     return `${name} is temporarily unavailable.`;
   }
 
@@ -3667,11 +2298,9 @@ function safeProviderFailure(
 }
 
 function providerFailureIsRetryable(
-  status:
-    number,
+  status: number,
 
-  errorText:
-    string,
+  errorText: string,
 ): boolean {
   /**
    * Important distinction:
@@ -3683,30 +2312,18 @@ function providerFailureIsRetryable(
    *
    * Therefore this kind of 413 is retryable.
    */
-  if (
-    isProviderCapacityError(
-      status,
-      errorText,
-    )
-  ) {
+  if (isProviderCapacityError(status, errorText)) {
     return true;
   }
 
   return (
-    status ===
-      401 ||
-    status ===
-      402 ||
-    status ===
-      403 ||
-    status ===
-      408 ||
-    status ===
-      409 ||
-    status ===
-      429 ||
-    status >=
-      500
+    status === 401 ||
+    status === 402 ||
+    status === 403 ||
+    status === 408 ||
+    status === 409 ||
+    status === 429 ||
+    status >= 500
   );
 }
 
@@ -3715,30 +2332,19 @@ function providerFailureIsRetryable(
 /* -------------------------------------------------------------------------- */
 
 function providerConfigured(
-  provider:
-    ChatProvider,
+  provider: ChatProvider,
 
-  environment:
-    ProviderEnvironment,
+  environment: ProviderEnvironment,
 ): boolean {
-  switch (
-    provider
-  ) {
+  switch (provider) {
     case "groq":
-      return Boolean(
-        environment.groqApiKey,
-      );
+      return Boolean(environment.groqApiKey);
 
     case "gemini":
-      return Boolean(
-        environment.geminiApiKey,
-      );
+      return Boolean(environment.geminiApiKey);
 
     case "openai":
-      return Boolean(
-        environment.openAiApiKey &&
-        environment.openAiModel,
-      );
+      return Boolean(environment.openAiApiKey && environment.openAiModel);
 
     default:
       return false;
@@ -3746,15 +2352,11 @@ function providerConfigured(
 }
 
 function providerModel(
-  provider:
-    ChatProvider,
+  provider: ChatProvider,
 
-  environment:
-    ProviderEnvironment,
+  environment: ProviderEnvironment,
 ): string | null {
-  switch (
-    provider
-  ) {
+  switch (provider) {
     case "groq":
       return environment.groqModel;
 
@@ -3770,45 +2372,18 @@ function providerModel(
 }
 
 function buildProviderOrder(
-  preferred:
-    ChatProviderPreference,
+  preferred: ChatProviderPreference,
 
-  environment:
-    ProviderEnvironment,
+  environment: ProviderEnvironment,
 ): ChatProvider[] {
-  const requestedOrder:
-    ChatProvider[] =
-    preferred ===
-    "auto"
-      ? [
-          ...DEFAULT_PROVIDER_ORDER,
-        ]
-      : [
-          preferred,
-
-          ...DEFAULT_PROVIDER_ORDER.filter(
-            (
-              provider,
-            ) =>
-              provider !==
-              preferred,
-          ),
-        ];
+  const requestedOrder: ChatProvider[] =
+    preferred === "auto"
+      ? [...DEFAULT_PROVIDER_ORDER]
+      : [preferred, ...DEFAULT_PROVIDER_ORDER.filter((provider) => provider !== preferred)];
 
   return requestedOrder.filter(
-    (
-      provider,
-      index,
-      providers,
-    ) =>
-      providers.indexOf(
-        provider,
-      ) ===
-        index &&
-      providerConfigured(
-        provider,
-        environment,
-      ),
+    (provider, index, providers) =>
+      providers.indexOf(provider) === index && providerConfigured(provider, environment),
   );
 }
 
@@ -3816,27 +2391,12 @@ function buildProviderOrder(
 /* PROVIDER ROUTE                                                             */
 /* -------------------------------------------------------------------------- */
 
-function providerAttemptRoute(
-  attempts:
-    ProviderAttemptRecord[],
-): string {
-  if (
-    attempts.length ===
-    0
-  ) {
+function providerAttemptRoute(attempts: ProviderAttemptRecord[]): string {
+  if (attempts.length === 0) {
     return "none";
   }
 
-  return attempts
-    .map(
-      (
-        attempt,
-      ) =>
-        attempt.provider,
-    )
-    .join(
-      ">",
-    );
+  return attempts.map((attempt) => attempt.provider).join(">");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -3851,95 +2411,58 @@ function chatResponseHeaders({
   requestId,
   estimatedInputTokens,
 }: {
-  requestedProvider:
-    ChatProviderPreference;
+  requestedProvider: ChatProviderPreference;
 
-  actualProvider:
-    ChatProvider;
+  actualProvider: ChatProvider;
 
-  model:
-    string;
+  model: string;
 
-  attempts:
-    ProviderAttemptRecord[];
+  attempts: ProviderAttemptRecord[];
 
-  requestId:
-    string;
+  requestId: string;
 
-  estimatedInputTokens:
-    number;
+  estimatedInputTokens: number;
 }): HeadersInit {
-  const providerRoute =
-    providerAttemptRoute(
-      attempts,
-    );
+  const providerRoute = providerAttemptRoute(attempts);
 
   const fallbackUsed =
-    attempts.length >
-      1 ||
-    (
-      requestedProvider !==
-        "auto" &&
-      requestedProvider !==
-        actualProvider
-    );
+    attempts.length > 1 || (requestedProvider !== "auto" && requestedProvider !== actualProvider);
 
   return {
-    "Content-Type":
-      "text/plain; charset=utf-8",
+    "Content-Type": "text/plain; charset=utf-8",
 
-    "Cache-Control":
-      "no-cache, no-transform",
+    "Cache-Control": "no-cache, no-transform",
 
-    "X-Accel-Buffering":
-      "no",
+    "X-Accel-Buffering": "no",
 
-    "X-Content-Type-Options":
-      "nosniff",
+    "X-Content-Type-Options": "nosniff",
 
-    "X-Cossa-AI-Request-ID":
-      requestId,
+    "X-Cossa-AI-Request-ID": requestId,
 
-    "X-Cossa-AI-Requested-Provider":
-      requestedProvider,
+    "X-Cossa-AI-Requested-Provider": requestedProvider,
 
-    "X-Cossa-AI-Provider":
-      actualProvider,
+    "X-Cossa-AI-Provider": actualProvider,
 
-    "X-Cossa-AI-Model":
-      model,
+    "X-Cossa-AI-Model": model,
 
-    "X-Cossa-AI-Fallback":
-      fallbackUsed
-        ? "true"
-        : "false",
+    "X-Cossa-AI-Fallback": fallbackUsed ? "true" : "false",
 
-    "X-Cossa-AI-Attempts":
-      String(
-        attempts.length,
-      ),
+    "X-Cossa-AI-Attempts": String(attempts.length),
 
-    "X-Cossa-AI-Provider-Route":
-      providerRoute,
+    "X-Cossa-AI-Provider-Route": providerRoute,
 
-    "X-Cossa-AI-Estimated-Input-Tokens":
-      String(
-        estimatedInputTokens,
-      ),
+    "X-Cossa-AI-Estimated-Input-Tokens": String(estimatedInputTokens),
 
-    "Access-Control-Expose-Headers":
-      [
-        "X-Cossa-AI-Request-ID",
-        "X-Cossa-AI-Requested-Provider",
-        "X-Cossa-AI-Provider",
-        "X-Cossa-AI-Model",
-        "X-Cossa-AI-Fallback",
-        "X-Cossa-AI-Attempts",
-        "X-Cossa-AI-Provider-Route",
-        "X-Cossa-AI-Estimated-Input-Tokens",
-      ].join(
-        ", ",
-      ),
+    "Access-Control-Expose-Headers": [
+      "X-Cossa-AI-Request-ID",
+      "X-Cossa-AI-Requested-Provider",
+      "X-Cossa-AI-Provider",
+      "X-Cossa-AI-Model",
+      "X-Cossa-AI-Fallback",
+      "X-Cossa-AI-Attempts",
+      "X-Cossa-AI-Provider-Route",
+      "X-Cossa-AI-Estimated-Input-Tokens",
+    ].join(", "),
   };
 }
 
@@ -3952,203 +2475,128 @@ async function executeGroq({
   environment,
   signal,
 }: {
-  providerMessages:
-    ChatMessage[];
+  providerMessages: ChatMessage[];
 
-  environment:
-    ProviderEnvironment;
+  environment: ProviderEnvironment;
 
-  signal:
-    AbortSignal;
+  signal: AbortSignal;
 }): Promise<ProviderResult> {
-  const provider:
-    ChatProvider =
-    "groq";
+  const provider: ChatProvider = "groq";
 
-  const model =
-    environment.groqModel;
+  const model = environment.groqModel;
 
-  if (
-    !environment.groqApiKey
-  ) {
+  if (!environment.groqApiKey) {
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        503,
+      status: 503,
 
-      safeMessage:
-        "Groq is not configured.",
+      safeMessage: "Groq is not configured.",
 
-      internalMessage:
-        "GROQ_API_KEY is not configured.",
+      internalMessage: "GROQ_API_KEY is not configured.",
 
-      retryable:
-        true,
+      retryable: true,
     };
   }
 
-  let response:
-    Response;
+  let response: Response;
 
   try {
-    response =
-      await fetch(
-        "https://api.groq.com/openai/v1/chat/completions",
-        {
-          method:
-            "POST",
+    response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
+      headers: {
+        "Content-Type": "application/json",
 
-            Authorization:
-              `Bearer ${environment.groqApiKey}`,
-          },
+        Authorization: `Bearer ${environment.groqApiKey}`,
+      },
 
-          body:
-            JSON.stringify({
-              model,
+      body: JSON.stringify({
+        model,
 
-              stream:
-                true,
+        stream: true,
 
-              temperature:
-                0.2,
+        temperature: 0.2,
 
-              max_tokens:
-                MAX_GROQ_COMPLETION_TOKENS,
+        max_tokens: MAX_GROQ_COMPLETION_TOKENS,
 
-              messages:
-                providerMessages,
-            }),
+        messages: providerMessages,
+      }),
 
-          signal,
-        },
-      );
-  } catch (
-    error
-  ) {
+      signal,
+    });
+  } catch (error) {
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        503,
+      status: 503,
 
-      safeMessage:
-        "Groq could not be reached.",
+      safeMessage: "Groq could not be reached.",
 
-      internalMessage:
-        error instanceof
-        Error
-          ? error.message
-          : String(
-              error,
-            ),
+      internalMessage: error instanceof Error ? error.message : String(error),
 
-      retryable:
-        true,
+      retryable: true,
     };
   }
 
-  if (
-    !response.ok ||
-    !response.body
-  ) {
-    const errorText =
-      await response
-        .text()
-        .catch(
-          () => "",
-        );
+  if (!response.ok || !response.body) {
+    const errorText = await response.text().catch(() => "");
 
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        response.status ||
-        502,
+      status: response.status || 502,
 
-      safeMessage:
-        safeProviderFailure(
-          provider,
-          response.status,
-          errorText,
-        ),
+      safeMessage: safeProviderFailure(provider, response.status, errorText),
 
-      internalMessage:
-        errorText,
+      internalMessage: errorText,
 
-      retryable:
-        providerFailureIsRetryable(
-          response.status,
-          errorText,
-        ),
+      retryable: providerFailureIsRetryable(response.status, errorText),
     };
   }
 
-  const convertedStream =
-    createOpenAiCompatibleTextStream(
-      response.body,
-      "groq",
-    );
+  const convertedStream = createOpenAiCompatibleTextStream(response.body, "groq");
 
-  const primed =
-    await primeTextStream(
-      convertedStream,
-    );
+  const primed = await primeTextStream(convertedStream);
 
-  if (
-    !primed.ok
-  ) {
+  if (!primed.ok) {
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        502,
+      status: 502,
 
-      safeMessage:
-        "Groq returned no usable Cossa AI response.",
+      safeMessage: "Groq returned no usable Cossa AI response.",
 
-      internalMessage:
-        primed.error,
+      internalMessage: primed.error,
 
-      retryable:
-        true,
+      retryable: true,
     };
   }
 
   return {
-    ok:
-      true,
+    ok: true,
 
     provider,
 
     model,
 
-    stream:
-      primed.stream,
+    stream: primed.stream,
   };
 }
 
@@ -4161,203 +2609,131 @@ async function executeGemini({
   environment,
   signal,
 }: {
-  providerMessages:
-    ChatMessage[];
+  providerMessages: ChatMessage[];
 
-  environment:
-    ProviderEnvironment;
+  environment: ProviderEnvironment;
 
-  signal:
-    AbortSignal;
+  signal: AbortSignal;
 }): Promise<ProviderResult> {
-  const provider:
-    ChatProvider =
-    "gemini";
+  const provider: ChatProvider = "gemini";
 
-  const model =
-    environment.geminiModel;
+  const model = environment.geminiModel;
 
-  if (
-    !environment.geminiApiKey
-  ) {
+  if (!environment.geminiApiKey) {
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        503,
+      status: 503,
 
-      safeMessage:
-        "Gemini is not configured.",
+      safeMessage: "Gemini is not configured.",
 
-      internalMessage:
-        "GEMINI_API_KEY is not configured.",
+      internalMessage: "GEMINI_API_KEY is not configured.",
 
-      retryable:
-        true,
+      retryable: true,
     };
   }
 
-  let response:
-    Response;
+  let response: Response;
 
   try {
-    response =
-      await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-        {
-          method:
-            "POST",
+    response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      {
+        method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
+        headers: {
+          "Content-Type": "application/json",
 
-            Authorization:
-              `Bearer ${environment.geminiApiKey}`,
-          },
-
-          body:
-            JSON.stringify({
-              model,
-
-              messages:
-                providerMessages,
-
-              stream:
-                true,
-
-              temperature:
-                0.2,
-
-              max_tokens:
-                MAX_GEMINI_COMPLETION_TOKENS,
-            }),
-
-          signal,
+          Authorization: `Bearer ${environment.geminiApiKey}`,
         },
-      );
-  } catch (
-    error
-  ) {
+
+        body: JSON.stringify({
+          model,
+
+          messages: providerMessages,
+
+          stream: true,
+
+          temperature: 0.2,
+
+          max_tokens: MAX_GEMINI_COMPLETION_TOKENS,
+        }),
+
+        signal,
+      },
+    );
+  } catch (error) {
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        503,
+      status: 503,
 
-      safeMessage:
-        "Gemini could not be reached.",
+      safeMessage: "Gemini could not be reached.",
 
-      internalMessage:
-        error instanceof
-        Error
-          ? error.message
-          : String(
-              error,
-            ),
+      internalMessage: error instanceof Error ? error.message : String(error),
 
-      retryable:
-        true,
+      retryable: true,
     };
   }
 
-  if (
-    !response.ok ||
-    !response.body
-  ) {
-    const errorText =
-      await response
-        .text()
-        .catch(
-          () => "",
-        );
+  if (!response.ok || !response.body) {
+    const errorText = await response.text().catch(() => "");
 
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        response.status ||
-        502,
+      status: response.status || 502,
 
-      safeMessage:
-        safeProviderFailure(
-          provider,
-          response.status,
-          errorText,
-        ),
+      safeMessage: safeProviderFailure(provider, response.status, errorText),
 
-      internalMessage:
-        errorText,
+      internalMessage: errorText,
 
-      retryable:
-        providerFailureIsRetryable(
-          response.status,
-          errorText,
-        ),
+      retryable: providerFailureIsRetryable(response.status, errorText),
     };
   }
 
-  const convertedStream =
-    createOpenAiCompatibleTextStream(
-      response.body,
-      "gemini",
-    );
+  const convertedStream = createOpenAiCompatibleTextStream(response.body, "gemini");
 
-  const primed =
-    await primeTextStream(
-      convertedStream,
-    );
+  const primed = await primeTextStream(convertedStream);
 
-  if (
-    !primed.ok
-  ) {
+  if (!primed.ok) {
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        502,
+      status: 502,
 
-      safeMessage:
-        "Gemini returned no usable Cossa AI response.",
+      safeMessage: "Gemini returned no usable Cossa AI response.",
 
-      internalMessage:
-        primed.error,
+      internalMessage: primed.error,
 
-      retryable:
-        true,
+      retryable: true,
     };
   }
 
   return {
-    ok:
-      true,
+    ok: true,
 
     provider,
 
     model,
 
-    stream:
-      primed.stream,
+    stream: primed.stream,
   };
 }
 
@@ -4370,297 +2746,180 @@ async function executeOpenAi({
   environment,
   signal,
 }: {
-  providerMessages:
-    ChatMessage[];
+  providerMessages: ChatMessage[];
 
-  environment:
-    ProviderEnvironment;
+  environment: ProviderEnvironment;
 
-  signal:
-    AbortSignal;
+  signal: AbortSignal;
 }): Promise<ProviderResult> {
-  const provider:
-    ChatProvider =
-    "openai";
+  const provider: ChatProvider = "openai";
 
-  const model =
-    environment.openAiModel;
+  const model = environment.openAiModel;
 
-  if (
-    !environment.openAiApiKey
-  ) {
+  if (!environment.openAiApiKey) {
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        503,
+      status: 503,
 
-      safeMessage:
-        "OpenAI is not configured.",
+      safeMessage: "OpenAI is not configured.",
 
-      internalMessage:
-        "OPENAI_API_KEY is not configured.",
+      internalMessage: "OPENAI_API_KEY is not configured.",
 
-      retryable:
-        true,
+      retryable: true,
     };
   }
 
-  if (
-    !model
-  ) {
+  if (!model) {
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        503,
+      status: 503,
 
       safeMessage:
         "Strategic OpenAI reasoning is disabled because no approved OpenAI model is configured.",
 
-      internalMessage:
-        "OPENAI_MODEL is not configured.",
+      internalMessage: "OPENAI_MODEL is not configured.",
 
-      retryable:
-        true,
+      retryable: true,
     };
   }
 
-  const instructions =
-    providerMessages
-      .filter(
-        (
-          message,
-        ) =>
-          message.role ===
-          "system",
-      )
-      .map(
-        (
-          message,
-        ) =>
-          message.content,
-      )
-      .join(
-        "\n\n",
-      );
+  const instructions = providerMessages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content)
+    .join("\n\n");
 
-  const input =
-    providerMessages
-      .filter(
-        (
-          message,
-        ) =>
-          message.role !==
-          "system",
-      )
-      .map(
-        (
-          message,
-        ) => ({
-          role:
-            message.role,
+  const input = providerMessages
+    .filter((message) => message.role !== "system")
+    .map((message) => ({
+      role: message.role,
 
-          content:
-            message.content,
-        }),
-      );
+      content: message.content,
+    }));
 
-  let response:
-    Response;
+  let response: Response;
 
   try {
-    response =
-      await fetch(
-        "https://api.openai.com/v1/responses",
-        {
-          method:
-            "POST",
+    response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
+      headers: {
+        "Content-Type": "application/json",
 
-            Authorization:
-              `Bearer ${environment.openAiApiKey}`,
-          },
+        Authorization: `Bearer ${environment.openAiApiKey}`,
+      },
 
-          body:
-            JSON.stringify({
-              model,
+      body: JSON.stringify({
+        model,
 
-              instructions,
+        instructions,
 
-              input,
+        input,
 
-              max_output_tokens:
-                MAX_OPENAI_COMPLETION_TOKENS,
+        max_output_tokens: MAX_OPENAI_COMPLETION_TOKENS,
 
-              store:
-                false,
-            }),
+        store: false,
+      }),
 
-          signal,
-        },
-      );
-  } catch (
-    error
-  ) {
+      signal,
+    });
+  } catch (error) {
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        503,
+      status: 503,
 
-      safeMessage:
-        "OpenAI could not be reached.",
+      safeMessage: "OpenAI could not be reached.",
 
-      internalMessage:
-        error instanceof
-        Error
-          ? error.message
-          : String(
-              error,
-            ),
+      internalMessage: error instanceof Error ? error.message : String(error),
 
-      retryable:
-        true,
+      retryable: true,
     };
   }
 
-  if (
-    !response.ok
-  ) {
-    const errorText =
-      await response
-        .text()
-        .catch(
-          () => "",
-        );
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
 
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        response.status ||
-        502,
+      status: response.status || 502,
 
-      safeMessage:
-        safeProviderFailure(
-          provider,
-          response.status,
-          errorText,
-        ),
+      safeMessage: safeProviderFailure(provider, response.status, errorText),
 
-      internalMessage:
-        errorText,
+      internalMessage: errorText,
 
-      retryable:
-        providerFailureIsRetryable(
-          response.status,
-          errorText,
-        ),
+      retryable: providerFailureIsRetryable(response.status, errorText),
     };
   }
 
-  let payload:
-    unknown;
+  let payload: unknown;
 
   try {
-    payload =
-      await response.json();
-  } catch (
-    error
-  ) {
+    payload = await response.json();
+  } catch (error) {
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        502,
+      status: 502,
 
-      safeMessage:
-        "OpenAI returned an unreadable response.",
+      safeMessage: "OpenAI returned an unreadable response.",
 
-      internalMessage:
-        error instanceof
-        Error
-          ? error.message
-          : String(
-              error,
-            ),
+      internalMessage: error instanceof Error ? error.message : String(error),
 
-      retryable:
-        true,
+      retryable: true,
     };
   }
 
-  const responseText =
-    extractOpenAiResponseText(
-      payload,
-    );
+  const responseText = extractOpenAiResponseText(payload);
 
-  if (
-    !responseText
-  ) {
+  if (!responseText) {
     return {
-      ok:
-        false,
+      ok: false,
 
       provider,
 
       model,
 
-      status:
-        502,
+      status: 502,
 
-      safeMessage:
-        "OpenAI returned an empty Cossa AI response.",
+      safeMessage: "OpenAI returned an empty Cossa AI response.",
 
-      internalMessage:
-        "OpenAI Responses API returned no usable output text.",
+      internalMessage: "OpenAI Responses API returned no usable output text.",
 
-      retryable:
-        true,
+      retryable: true,
     };
   }
 
   return {
-    ok:
-      true,
+    ok: true,
 
     provider,
 
     model,
 
-    stream:
-      createTextResponseStream(
-        responseText,
-      ),
+    stream: createTextResponseStream(responseText),
   };
 }
 
@@ -4674,21 +2933,15 @@ async function executeProvider({
   environment,
   signal,
 }: {
-  provider:
-    ChatProvider;
+  provider: ChatProvider;
 
-  providerMessages:
-    ChatMessage[];
+  providerMessages: ChatMessage[];
 
-  environment:
-    ProviderEnvironment;
+  environment: ProviderEnvironment;
 
-  signal:
-    AbortSignal;
+  signal: AbortSignal;
 }): Promise<ProviderResult> {
-  switch (
-    provider
-  ) {
+  switch (provider) {
     case "groq":
       return executeGroq({
         providerMessages,
@@ -4717,15 +2970,9 @@ async function executeProvider({
       });
 
     default: {
-      const exhaustiveCheck:
-        never =
-        provider;
+      const exhaustiveCheck: never = provider;
 
-      throw new Error(
-        `Unsupported provider: ${String(
-          exhaustiveCheck,
-        )}`,
-      );
+      throw new Error(`Unsupported provider: ${String(exhaustiveCheck)}`);
     }
   }
 }
@@ -4740,91 +2987,56 @@ async function executeProviderGateway({
   environment,
   signal,
 }: {
-  requestedProvider:
-    ChatProviderPreference;
+  requestedProvider: ChatProviderPreference;
 
-  providerMessages:
-    ChatMessage[];
+  providerMessages: ChatMessage[];
 
-  environment:
-    ProviderEnvironment;
+  environment: ProviderEnvironment;
 
-  signal:
-    AbortSignal;
+  signal: AbortSignal;
 }): Promise<{
-  result:
-    ProviderSuccess |
-    null;
+  result: ProviderSuccess | null;
 
-  attempts:
-    ProviderAttemptRecord[];
+  attempts: ProviderAttemptRecord[];
 }> {
-  const providers =
-    buildProviderOrder(
-      requestedProvider,
-      environment,
-    );
+  const providers = buildProviderOrder(requestedProvider, environment);
 
-  const attempts:
-    ProviderAttemptRecord[] =
-    [];
+  const attempts: ProviderAttemptRecord[] = [];
 
-  if (
-    providers.length ===
-    0
-  ) {
+  if (providers.length === 0) {
     return {
-      result:
-        null,
+      result: null,
 
       attempts,
     };
   }
 
-  for (
-    const provider of
-      providers
-  ) {
-    if (
-      signal.aborted
-    ) {
-      throw new DOMException(
-        "The Cossa AI request was cancelled.",
-        "AbortError",
-      );
+  for (const provider of providers) {
+    if (signal.aborted) {
+      throw new DOMException("The Cossa AI request was cancelled.", "AbortError");
     }
 
-    const model =
-      providerModel(
-        provider,
-        environment,
-      );
+    const model = providerModel(provider, environment);
 
-    const result =
-      await executeProvider({
-        provider,
+    const result = await executeProvider({
+      provider,
 
-        providerMessages,
+      providerMessages,
 
-        environment,
+      environment,
 
-        signal,
-      });
+      signal,
+    });
 
-    if (
-      result.ok
-    ) {
+    if (result.ok) {
       attempts.push({
         provider,
 
-        model:
-          result.model,
+        model: result.model,
 
-        status:
-          "success",
+        status: "success",
 
-        httpStatus:
-          200,
+        httpStatus: 200,
       });
 
       return {
@@ -4837,48 +3049,34 @@ async function executeProviderGateway({
     attempts.push({
       provider,
 
-      model:
-        result.model,
+      model: result.model,
 
-      status:
-        "failed",
+      status: "failed",
 
-      httpStatus:
-        result.status,
+      httpStatus: result.status,
 
-      message:
-        result.safeMessage,
+      message: result.safeMessage,
     });
 
-    console.error(
-      `Cossa AI provider ${provider} failed.`,
-      {
-        provider,
+    console.error(`Cossa AI provider ${provider} failed.`, {
+      provider,
 
-        model:
-          result.model,
+      model: result.model,
 
-        status:
-          result.status,
+      status: result.status,
 
-        retryable:
-          result.retryable,
+      retryable: result.retryable,
 
-        detail:
-          result.internalMessage,
-      },
-    );
+      detail: result.internalMessage,
+    });
 
-    if (
-      !result.retryable
-    ) {
+    if (!result.retryable) {
       break;
     }
   }
 
   return {
-    result:
-      null,
+    result: null,
 
     attempts,
   };
@@ -4893,255 +3091,146 @@ function createGatewayFailureResponse({
   requestId,
   requestedProvider,
 }: {
-  attempts:
-    ProviderAttemptRecord[];
+  attempts: ProviderAttemptRecord[];
 
-  requestId:
-    string;
+  requestId: string;
 
-  requestedProvider:
-    ChatProviderPreference;
+  requestedProvider: ChatProviderPreference;
 }): Response {
-  const providerRoute =
-    providerAttemptRoute(
-      attempts,
-    );
+  const providerRoute = providerAttemptRoute(attempts);
 
-  if (
-    attempts.length ===
-    0
-  ) {
-    return new Response(
-      "No Cossa AI reasoning provider is currently configured.",
-      {
-        status:
-          503,
-
-        headers: {
-          "Content-Type":
-            "text/plain; charset=utf-8",
-
-          "Cache-Control":
-            "no-store",
-
-          "X-Content-Type-Options":
-            "nosniff",
-
-          "X-Cossa-AI-Request-ID":
-            requestId,
-
-          "X-Cossa-AI-Requested-Provider":
-            requestedProvider,
-
-          "X-Cossa-AI-Provider":
-            "none",
-
-          "X-Cossa-AI-Fallback":
-            "false",
-
-          "X-Cossa-AI-Attempts":
-            "0",
-
-          "X-Cossa-AI-Provider-Route":
-            "none",
-        },
-      },
-    );
-  }
-
-  const messages =
-    attempts
-      .filter(
-        (
-          attempt,
-        ) =>
-          attempt.status ===
-            "failed" &&
-          attempt.message,
-      )
-      .map(
-        (
-          attempt,
-        ) =>
-          attempt.message as string,
-      );
-
-  const hasRateLimit =
-    attempts.some(
-      (
-        attempt,
-      ) =>
-        attempt.httpStatus ===
-          429 ||
-        attempt.httpStatus ===
-          413,
-    );
-
-  const uniqueMessages =
-    [
-      ...new Set(
-        messages,
-      ),
-    ];
-
-  const message =
-    [
-      "Cossa AI could not complete this reasoning request using the currently available providers.",
-
-      ...uniqueMessages,
-
-      "No external Cossa action should be treated as completed from this failed reasoning request.",
-    ].join(
-      " ",
-    );
-
-  return new Response(
-    message,
-    {
-      status:
-        hasRateLimit
-          ? 429
-          : 503,
+  if (attempts.length === 0) {
+    return new Response("No Cossa AI reasoning provider is currently configured.", {
+      status: 503,
 
       headers: {
-        "Content-Type":
-          "text/plain; charset=utf-8",
+        "Content-Type": "text/plain; charset=utf-8",
 
-        "Cache-Control":
-          "no-store",
+        "Cache-Control": "no-store",
 
-        "X-Content-Type-Options":
-          "nosniff",
+        "X-Content-Type-Options": "nosniff",
 
-        "X-Cossa-AI-Request-ID":
-          requestId,
+        "X-Cossa-AI-Request-ID": requestId,
 
-        "X-Cossa-AI-Requested-Provider":
-          requestedProvider,
+        "X-Cossa-AI-Requested-Provider": requestedProvider,
 
-        "X-Cossa-AI-Provider":
-          "none",
+        "X-Cossa-AI-Provider": "none",
 
-        "X-Cossa-AI-Fallback":
-          attempts.length >
-          1
-            ? "true"
-            : "false",
+        "X-Cossa-AI-Fallback": "false",
 
-        "X-Cossa-AI-Attempts":
-          String(
-            attempts.length,
-          ),
+        "X-Cossa-AI-Attempts": "0",
 
-        "X-Cossa-AI-Provider-Route":
-          providerRoute,
-
-        "Access-Control-Expose-Headers":
-          [
-            "X-Cossa-AI-Request-ID",
-            "X-Cossa-AI-Requested-Provider",
-            "X-Cossa-AI-Provider",
-            "X-Cossa-AI-Fallback",
-            "X-Cossa-AI-Attempts",
-            "X-Cossa-AI-Provider-Route",
-          ].join(
-            ", ",
-          ),
+        "X-Cossa-AI-Provider-Route": "none",
       },
-    },
+    });
+  }
+
+  const messages = attempts
+    .filter((attempt) => attempt.status === "failed" && attempt.message)
+    .map((attempt) => attempt.message as string);
+
+  const hasRateLimit = attempts.some(
+    (attempt) => attempt.httpStatus === 429 || attempt.httpStatus === 413,
   );
+
+  const uniqueMessages = [...new Set(messages)];
+
+  const message = [
+    "Cossa AI could not complete this reasoning request using the currently available providers.",
+
+    ...uniqueMessages,
+
+    "No external Cossa action should be treated as completed from this failed reasoning request.",
+  ].join(" ");
+
+  return new Response(message, {
+    status: hasRateLimit ? 429 : 503,
+
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+
+      "Cache-Control": "no-store",
+
+      "X-Content-Type-Options": "nosniff",
+
+      "X-Cossa-AI-Request-ID": requestId,
+
+      "X-Cossa-AI-Requested-Provider": requestedProvider,
+
+      "X-Cossa-AI-Provider": "none",
+
+      "X-Cossa-AI-Fallback": attempts.length > 1 ? "true" : "false",
+
+      "X-Cossa-AI-Attempts": String(attempts.length),
+
+      "X-Cossa-AI-Provider-Route": providerRoute,
+
+      "Access-Control-Expose-Headers": [
+        "X-Cossa-AI-Request-ID",
+        "X-Cossa-AI-Requested-Provider",
+        "X-Cossa-AI-Provider",
+        "X-Cossa-AI-Fallback",
+        "X-Cossa-AI-Attempts",
+        "X-Cossa-AI-Provider-Route",
+      ].join(", "),
+    },
+  });
 }
 
 /* -------------------------------------------------------------------------- */
 /* PROVIDER CONFIGURATION STATUS                                              */
 /* -------------------------------------------------------------------------- */
 
-function providerConfigurationPayload(
-  environment:
-    ProviderEnvironment,
-) {
+function providerConfigurationPayload(environment: ProviderEnvironment) {
   return {
-    status:
-      "configured",
+    status: "configured",
 
-    checked_at:
-      new Date().toISOString(),
+    checked_at: new Date().toISOString(),
 
     providers: {
       groq: {
-        configured:
-          Boolean(
-            environment.groqApiKey,
-          ),
+        configured: Boolean(environment.groqApiKey),
 
-        model:
-          environment.groqModel,
+        model: environment.groqModel,
       },
 
       gemini: {
-        configured:
-          Boolean(
-            environment.geminiApiKey,
-          ),
+        configured: Boolean(environment.geminiApiKey),
 
-        model:
-          environment.geminiModel,
+        model: environment.geminiModel,
       },
 
       openai: {
-        configured:
-          Boolean(
-            environment.openAiApiKey &&
-            environment.openAiModel,
-          ),
+        configured: Boolean(environment.openAiApiKey && environment.openAiModel),
 
-        key_configured:
-          Boolean(
-            environment.openAiApiKey,
-          ),
+        key_configured: Boolean(environment.openAiApiKey),
 
-        model_configured:
-          Boolean(
-            environment.openAiModel,
-          ),
+        model_configured: Boolean(environment.openAiModel),
 
-        model:
-          environment.openAiModel,
+        model: environment.openAiModel,
       },
     },
 
-    default_provider_order: [
-      ...DEFAULT_PROVIDER_ORDER,
-    ],
+    default_provider_order: [...DEFAULT_PROVIDER_ORDER],
 
     external_news: {
-      configured:
-        Boolean(
-          environment.newsApiKey,
-      ),
+      configured: Boolean(environment.newsApiKey),
     },
 
     context_budget: {
-      max_provider_input_characters:
-        MAX_PROVIDER_INPUT_CHARACTERS,
+      max_provider_input_characters: MAX_PROVIDER_INPUT_CHARACTERS,
 
-      max_recent_history_messages:
-        MAX_RECENT_HISTORY_MESSAGES,
+      max_recent_history_messages: MAX_RECENT_HISTORY_MESSAGES,
 
-      max_recent_history_characters:
-        MAX_RECENT_HISTORY_LENGTH,
+      max_recent_history_characters: MAX_RECENT_HISTORY_LENGTH,
 
-      max_knowledge_characters:
-        MAX_KNOWLEDGE_CONTEXT_LENGTH,
+      max_knowledge_characters: MAX_KNOWLEDGE_CONTEXT_LENGTH,
 
-      max_operational_characters:
-        MAX_OPERATIONAL_CONTEXT_LENGTH,
+      max_operational_characters: MAX_OPERATIONAL_CONTEXT_LENGTH,
 
-      max_workforce_characters:
-        MAX_WORKFORCE_CONTEXT_LENGTH,
+      max_workforce_characters: MAX_WORKFORCE_CONTEXT_LENGTH,
 
-      max_news_characters:
-        MAX_EXTERNAL_NEWS_CONTEXT_LENGTH,
+      max_news_characters: MAX_EXTERNAL_NEWS_CONTEXT_LENGTH,
     },
   };
 }
@@ -5150,684 +3239,431 @@ function providerConfigurationPayload(
 /* API ROUTE                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export const Route =
-  createFileRoute(
-    "/api/chat",
-  )({
-    server: {
-      handlers: {
-        /* ------------------------------------------------------------------ */
-        /* GET                                                                */
-        /* ------------------------------------------------------------------ */
+export const Route = createFileRoute("/api/chat")({
+  server: {
+    handlers: {
+      /* ------------------------------------------------------------------ */
+      /* GET                                                                */
+      /* ------------------------------------------------------------------ */
 
-        GET: async ({
-          request,
-        }) => {
-          const requestId =
-            createRequestId();
+      GET: async ({ request }) => {
+        const requestId = createRequestId();
 
-          const environment =
-            getEnvironment();
+        const environment = getEnvironment();
 
-          if (
-            !environment
-          ) {
-            return Response.json(
-              {
-                status:
-                  "not_configured",
-
-                message:
-                  "Cossa AI server configuration is incomplete.",
-
-                request_id:
-                  requestId,
-              },
-              {
-                status:
-                  503,
-
-                headers: {
-                  "Cache-Control":
-                    "no-store",
-
-                  "X-Content-Type-Options":
-                    "nosniff",
-
-                  "X-Cossa-AI-Request-ID":
-                    requestId,
-                },
-              },
-            );
-          }
-
-          const auth =
-            await authenticateRequest(
-              request,
-              environment,
-            );
-
-          if (
-            !auth.ok
-          ) {
-            return auth.response;
-          }
-
+        if (!environment) {
           return Response.json(
             {
-              ...providerConfigurationPayload(
-                environment,
-              ),
+              status: "not_configured",
 
-              request_id:
-                requestId,
+              message: "Cossa AI server configuration is incomplete.",
+
+              request_id: requestId,
             },
             {
+              status: 503,
+
               headers: {
-                "Cache-Control":
-                  "no-store",
+                "Cache-Control": "no-store",
 
-                "X-Content-Type-Options":
-                  "nosniff",
+                "X-Content-Type-Options": "nosniff",
 
-                "X-Cossa-AI-Request-ID":
-                  requestId,
-
-                "Access-Control-Expose-Headers":
-                  "X-Cossa-AI-Request-ID",
+                "X-Cossa-AI-Request-ID": requestId,
               },
             },
           );
-        },
+        }
 
-        /* ------------------------------------------------------------------ */
-        /* POST                                                               */
-        /* ------------------------------------------------------------------ */
+        const auth = await authenticateRequest(request, environment);
 
-        POST: async ({
-          request,
-        }) => {
-          const requestId =
-            createRequestId();
+        if (!auth.ok) {
+          return auth.response;
+        }
 
-          const environment =
-            getEnvironment();
+        return Response.json(
+          {
+            ...providerConfigurationPayload(environment),
 
-          if (
-            !environment
-          ) {
-            return new Response(
-              "Cossa AI is not fully configured.",
-              {
-                status:
-                  503,
+            request_id: requestId,
+          },
+          {
+            headers: {
+              "Cache-Control": "no-store",
 
-                headers: {
-                  "X-Cossa-AI-Request-ID":
-                    requestId,
-                },
-              },
-            );
-          }
+              "X-Content-Type-Options": "nosniff",
 
-          /* ---------------------------------------------------------------- */
-          /* AUTH                                                             */
-          /* ---------------------------------------------------------------- */
+              "X-Cossa-AI-Request-ID": requestId,
 
-          const auth =
-            await authenticateRequest(
-              request,
-              environment,
-            );
+              "Access-Control-Expose-Headers": "X-Cossa-AI-Request-ID",
+            },
+          },
+        );
+      },
 
-          if (
-            !auth.ok
-          ) {
-            return auth.response;
-          }
+      /* ------------------------------------------------------------------ */
+      /* POST                                                               */
+      /* ------------------------------------------------------------------ */
 
-          const {
-            token,
-          } =
-            auth;
+      POST: async ({ request }) => {
+        const requestId = createRequestId();
 
-          /* ---------------------------------------------------------------- */
-          /* BODY                                                             */
-          /* ---------------------------------------------------------------- */
+        const environment = getEnvironment();
 
-          let payload:
-            ChatPayload;
+        if (!environment) {
+          return new Response("Cossa AI is not fully configured.", {
+            status: 503,
 
-          try {
-            payload =
-              (
-                await request.json()
-              ) as ChatPayload;
-          } catch {
-            return new Response(
-              "Invalid JSON body.",
-              {
-                status:
-                  400,
+            headers: {
+              "X-Cossa-AI-Request-ID": requestId,
+            },
+          });
+        }
 
-                headers: {
-                  "X-Cossa-AI-Request-ID":
-                    requestId,
-                },
-              },
-            );
-          }
+        /* ---------------------------------------------------------------- */
+        /* AUTH                                                             */
+        /* ---------------------------------------------------------------- */
 
-          const validation =
-            validateMessages(
-              payload.messages,
-            );
+        const auth = await authenticateRequest(request, environment);
 
-          if (
-            !validation.valid
-          ) {
-            return new Response(
-              validation.error,
-              {
-                status:
-                  400,
+        if (!auth.ok) {
+          return auth.response;
+        }
 
-                headers: {
-                  "X-Cossa-AI-Request-ID":
-                    requestId,
-                },
-              },
-            );
-          }
+        const { token } = auth;
 
-          const messages =
-            validation.messages;
+        /* ---------------------------------------------------------------- */
+        /* BODY                                                             */
+        /* ---------------------------------------------------------------- */
 
-          const customSystem =
-            cleanCustomSystem(
-              payload.system,
-            );
+        let payload: ChatPayload;
 
-          const requestedProvider:
-            ChatProviderPreference =
-            payload.provider ??
-            "auto";
+        try {
+          payload = (await request.json()) as ChatPayload;
+        } catch {
+          return new Response("Invalid JSON body.", {
+            status: 400,
 
-          if (
-            !isChatProviderPreference(
-              requestedProvider,
-            )
-          ) {
-            return new Response(
-              "Unsupported Cossa AI provider preference.",
-              {
-                status:
-                  400,
+            headers: {
+              "X-Cossa-AI-Request-ID": requestId,
+            },
+          });
+        }
 
-                headers: {
-                  "X-Cossa-AI-Request-ID":
-                    requestId,
-                },
-              },
-            );
-          }
+        const validation = validateMessages(payload.messages);
 
-          const latestUserMessage =
-            [
-              ...messages,
-            ]
-              .reverse()
-              .find(
-                (
-                  message,
-                ) =>
-                  message.role ===
-                  "user",
-              )
-              ?.content ??
-            "";
+        if (!validation.valid) {
+          return new Response(validation.error, {
+            status: 400,
 
-          if (
-            !latestUserMessage
-          ) {
-            return new Response(
-              "At least one user message is required.",
-              {
-                status:
-                  400,
+            headers: {
+              "X-Cossa-AI-Request-ID": requestId,
+            },
+          });
+        }
 
-                headers: {
-                  "X-Cossa-AI-Request-ID":
-                    requestId,
-                },
-              },
-            );
-          }
+        const messages = validation.messages;
 
-          const contextNeeds =
-            detectContextNeeds(
-              latestUserMessage,
-            );
+        const customSystem = cleanCustomSystem(payload.system);
 
-          /* ---------------------------------------------------------------- */
-          /* VERIFIED KNOWLEDGE                                               */
-          /* ---------------------------------------------------------------- */
+        const requestedProvider: ChatProviderPreference = payload.provider ?? "auto";
 
-          const knowledge =
-            await restSelect<KnowledgeDocument>({
-              table:
-                "ai_knowledge_documents",
+        if (!isChatProviderPreference(requestedProvider)) {
+          return new Response("Unsupported Cossa AI provider preference.", {
+            status: 400,
 
-              query:
-                new URLSearchParams({
-                  select:
-                    "title,body,category,tags,source,source_url,updated_at",
+            headers: {
+              "X-Cossa-AI-Request-ID": requestId,
+            },
+          });
+        }
 
-                  organisation_id:
-                    `eq.${environment.organisationId}`,
+        const latestUserMessage =
+          [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
 
-                  verification_status:
-                    "eq.verified",
+        if (!latestUserMessage) {
+          return new Response("At least one user message is required.", {
+            status: 400,
 
-                  order:
-                    "updated_at.desc",
+            headers: {
+              "X-Cossa-AI-Request-ID": requestId,
+            },
+          });
+        }
 
-                  limit:
-                    "80",
-                }).toString(),
+        const contextNeeds = detectContextNeeds(latestUserMessage);
 
-              token,
+        /* ---------------------------------------------------------------- */
+        /* VERIFIED KNOWLEDGE                                               */
+        /* ---------------------------------------------------------------- */
 
-              supabaseUrl:
-                environment.supabaseUrl,
+        const knowledge = await restSelect<KnowledgeDocument>({
+          table: "ai_knowledge_documents",
 
-              supabaseKey:
-                environment.supabaseKey,
-            });
+          query: new URLSearchParams({
+            select: "title,body,category,tags,source,source_url,updated_at",
 
-          const selectedKnowledge =
-            selectRelevantKnowledge(
-              knowledge,
-              latestUserMessage,
-            );
+            organisation_id: `eq.${environment.organisationId}`,
 
-          const verifiedContext =
-            formatKnowledgeContext(
-              selectedKnowledge,
-            );
+            verification_status: "eq.verified",
 
-          /* ---------------------------------------------------------------- */
-          /* LIVE / EXTERNAL CONTEXT                                          */
-          /* ---------------------------------------------------------------- */
+            order: "updated_at.desc",
 
-          const [
+            limit: "80",
+          }).toString(),
+
+          token,
+
+          supabaseUrl: environment.supabaseUrl,
+
+          supabaseKey: environment.supabaseKey,
+        });
+
+        const selectedKnowledge = selectRelevantKnowledge(knowledge, latestUserMessage);
+
+        const verifiedContext = formatKnowledgeContext(selectedKnowledge);
+
+        /* ---------------------------------------------------------------- */
+        /* LIVE / EXTERNAL CONTEXT                                          */
+        /* ---------------------------------------------------------------- */
+
+        const [operationalContext, workforceContext, externalNewsContext] = await Promise.all([
+          contextNeeds.operational
+            ? loadOperationalContext({
+                latestUserMessage,
+
+                token,
+
+                organisationId: environment.organisationId,
+
+                supabaseUrl: environment.supabaseUrl,
+
+                supabaseKey: environment.supabaseKey,
+              })
+            : Promise.resolve("Operational CRM records were not required for this request."),
+
+          contextNeeds.workforce
+            ? loadWorkforceContext({
+                latestUserMessage,
+
+                token,
+
+                organisationId: environment.organisationId,
+
+                supabaseUrl: environment.supabaseUrl,
+
+                supabaseKey: environment.supabaseKey,
+              })
+            : Promise.resolve("Workforce records were not required for this request."),
+
+          contextNeeds.externalNews
+            ? loadExternalNewsContext({
+                latestUserMessage,
+
+                newsApiKey: environment.newsApiKey,
+              })
+            : Promise.resolve("External news intelligence was not required for this request."),
+        ]);
+
+        /* ---------------------------------------------------------------- */
+        /* SYSTEM PROMPT                                                    */
+        /* ---------------------------------------------------------------- */
+
+        const systemPreamble: ChatMessage = {
+          role: "system",
+
+          content: buildSystemPrompt({
+            verifiedContext,
+
             operationalContext,
+
             workforceContext,
+
             externalNewsContext,
-          ] =
-            await Promise.all([
-              contextNeeds.operational
-                ? loadOperationalContext({
-                    latestUserMessage,
 
-                    token,
+            customSystem,
 
-                    organisationId:
-                      environment.organisationId,
+            latestUserMessage,
+          }),
+        };
 
-                    supabaseUrl:
-                      environment.supabaseUrl,
-
-                    supabaseKey:
-                      environment.supabaseKey,
-                  })
-                : Promise.resolve(
-                    "Operational CRM records were not required for this request.",
-                  ),
-
-              contextNeeds.workforce
-                ? loadWorkforceContext({
-                    latestUserMessage,
-
-                    token,
-
-                    organisationId:
-                      environment.organisationId,
-
-                    supabaseUrl:
-                      environment.supabaseUrl,
-
-                    supabaseKey:
-                      environment.supabaseKey,
-                  })
-                : Promise.resolve(
-                    "Workforce records were not required for this request.",
-                  ),
-
-              contextNeeds.externalNews
-                ? loadExternalNewsContext({
-                    latestUserMessage,
-
-                    newsApiKey:
-                      environment.newsApiKey,
-                  })
-                : Promise.resolve(
-                    "External news intelligence was not required for this request.",
-                  ),
-            ]);
-
-          /* ---------------------------------------------------------------- */
-          /* SYSTEM PROMPT                                                    */
-          /* ---------------------------------------------------------------- */
-
-          const systemPreamble:
-            ChatMessage =
-            {
-              role:
-                "system",
+        const safetyGuard: ChatMessage | null = needsRecordSafeSupport(latestUserMessage)
+          ? {
+              role: "system",
 
               content:
-                buildSystemPrompt({
-                  verifiedContext,
-
-                  operationalContext,
-
-                  workforceContext,
-
-                  externalNewsContext,
-
-                  customSystem,
-
-                  latestUserMessage,
-                }),
-            };
-
-          const safetyGuard:
-            ChatMessage |
-            null =
-            needsRecordSafeSupport(
-              latestUserMessage,
-            )
-              ? {
-                  role:
-                    "system",
-
-                  content:
-                    "No verified order, payment, courier, delivery or tracking record is available in the supplied context. Do not promise investigation, follow-up, delivery date or future action as if it already exists. State which order reference or payment evidence is required.",
-                }
-              : null;
-
-          const unbudgetedProviderMessages:
-            ChatMessage[] =
-            [
-              systemPreamble,
-
-              ...(
-                safetyGuard
-                  ? [
-                      safetyGuard,
-                    ]
-                  : []
-              ),
-
-              ...selectRecentHistory(
-                messages,
-              ),
-            ];
-
-          const providerMessages =
-            budgetProviderMessages(
-              unbudgetedProviderMessages,
-            );
-
-          const estimatedInputTokens =
-            estimateMessagesTokens(
-              providerMessages,
-            );
-
-          const totalInputCharacters =
-            providerMessages.reduce(
-              (
-                total,
-                message,
-              ) =>
-                total +
-                message.content.length,
-
-              0,
-            );
-
-          console.info(
-            "Cossa AI request context prepared.",
-            {
-              requestId,
-
-              requestedProvider,
-
-              contextNeeds,
-
-              knowledgeDocumentsSelected:
-                selectedKnowledge.length,
-
-              providerMessages:
-                providerMessages.length,
-
-              totalInputCharacters,
-
-              estimatedInputTokens,
-            },
-          );
-
-          /* ---------------------------------------------------------------- */
-          /* PROVIDER GATEWAY                                                 */
-          /* ---------------------------------------------------------------- */
-
-          let gatewayResult:
-            Awaited<
-              ReturnType<
-                typeof executeProviderGateway
-              >
-            >;
-
-          try {
-            gatewayResult =
-              await executeProviderGateway({
-                requestedProvider,
-
-                providerMessages,
-
-                environment,
-
-                signal:
-                  request.signal,
-              });
-          } catch (
-            error
-          ) {
-            if (
-              error instanceof
-                DOMException &&
-              error.name ===
-                "AbortError"
-            ) {
-              return new Response(
-                "Cossa AI request was cancelled.",
-                {
-                  status:
-                    499,
-
-                  headers: {
-                    "X-Cossa-AI-Request-ID":
-                      requestId,
-                  },
-                },
-              );
+                "No verified order, payment, courier, delivery or tracking record is available in the supplied context. Do not promise investigation, follow-up, delivery date or future action as if it already exists. State which order reference or payment evidence is required.",
             }
+          : null;
 
-            console.error(
-              "Cossa AI provider gateway failed unexpectedly.",
-              {
-                requestId,
+        const unbudgetedProviderMessages: ChatMessage[] = [
+          systemPreamble,
 
-                error,
+          ...(safetyGuard ? [safetyGuard] : []),
+
+          ...selectRecentHistory(messages),
+        ];
+
+        const providerMessages = budgetProviderMessages(unbudgetedProviderMessages);
+
+        const estimatedInputTokens = estimateMessagesTokens(providerMessages);
+
+        const totalInputCharacters = providerMessages.reduce(
+          (total, message) => total + message.content.length,
+
+          0,
+        );
+
+        console.info("Cossa AI request context prepared.", {
+          requestId,
+
+          requestedProvider,
+
+          contextNeeds,
+
+          knowledgeDocumentsSelected: selectedKnowledge.length,
+
+          providerMessages: providerMessages.length,
+
+          totalInputCharacters,
+
+          estimatedInputTokens,
+        });
+
+        /* ---------------------------------------------------------------- */
+        /* PROVIDER GATEWAY                                                 */
+        /* ---------------------------------------------------------------- */
+
+        let gatewayResult: Awaited<ReturnType<typeof executeProviderGateway>>;
+
+        try {
+          gatewayResult = await executeProviderGateway({
+            requestedProvider,
+
+            providerMessages,
+
+            environment,
+
+            signal: request.signal,
+          });
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            return new Response("Cossa AI request was cancelled.", {
+              status: 499,
+
+              headers: {
+                "X-Cossa-AI-Request-ID": requestId,
               },
-            );
-
-            return new Response(
-              "Cossa AI provider routing failed unexpectedly. No external Cossa action was completed.",
-              {
-                status:
-                  503,
-
-                headers: {
-                  "X-Cossa-AI-Request-ID":
-                    requestId,
-
-                  "X-Cossa-AI-Provider":
-                    "none",
-                },
-              },
-            );
-          }
-
-          const {
-            result,
-            attempts,
-          } =
-            gatewayResult;
-
-          if (
-            !result
-          ) {
-            console.error(
-              "All available Cossa AI providers failed.",
-              {
-                requestId,
-
-                requestedProvider,
-
-                providerRoute:
-                  providerAttemptRoute(
-                    attempts,
-                  ),
-
-                totalInputCharacters,
-
-                estimatedInputTokens,
-
-                attempts:
-                  attempts.map(
-                    (
-                      attempt,
-                    ) => ({
-                      provider:
-                        attempt.provider,
-
-                      model:
-                        attempt.model,
-
-                      status:
-                        attempt.status,
-
-                      httpStatus:
-                        attempt.httpStatus,
-                    }),
-                  ),
-              },
-            );
-
-            return createGatewayFailureResponse({
-              attempts,
-
-              requestId,
-
-              requestedProvider,
             });
           }
 
-          const fallbackUsed =
-            attempts.length >
-              1 ||
-            (
-              requestedProvider !==
-                "auto" &&
-              requestedProvider !==
-                result.provider
-            );
+          console.error("Cossa AI provider gateway failed unexpectedly.", {
+            requestId,
 
-          const providerRoute =
-            providerAttemptRoute(
-              attempts,
-            );
-
-          console.info(
-            "Cossa AI provider execution selected.",
-            {
-              requestId,
-
-              requestedProvider,
-
-              actualProvider:
-                result.provider,
-
-              model:
-                result.model,
-
-              fallbackUsed,
-
-              providerRoute,
-
-              totalInputCharacters,
-
-              estimatedInputTokens,
-
-              attempts:
-                attempts.map(
-                  (
-                    attempt,
-                  ) => ({
-                    provider:
-                      attempt.provider,
-
-                    model:
-                      attempt.model,
-
-                    status:
-                      attempt.status,
-
-                    httpStatus:
-                      attempt.httpStatus,
-                  }),
-                ),
-            },
-          );
-
-          /* ---------------------------------------------------------------- */
-          /* SUCCESS                                                          */
-          /* ---------------------------------------------------------------- */
+            error,
+          });
 
           return new Response(
-            result.stream,
+            "Cossa AI provider routing failed unexpectedly. No external Cossa action was completed.",
             {
-              headers:
-                chatResponseHeaders({
-                  requestedProvider,
+              status: 503,
 
-                  actualProvider:
-                    result.provider,
+              headers: {
+                "X-Cossa-AI-Request-ID": requestId,
 
-                  model:
-                    result.model,
-
-                  attempts,
-
-                  requestId,
-
-                  estimatedInputTokens,
-                }),
+                "X-Cossa-AI-Provider": "none",
+              },
             },
           );
-        },
+        }
+
+        const { result, attempts } = gatewayResult;
+
+        if (!result) {
+          console.error("All available Cossa AI providers failed.", {
+            requestId,
+
+            requestedProvider,
+
+            providerRoute: providerAttemptRoute(attempts),
+
+            totalInputCharacters,
+
+            estimatedInputTokens,
+
+            attempts: attempts.map((attempt) => ({
+              provider: attempt.provider,
+
+              model: attempt.model,
+
+              status: attempt.status,
+
+              httpStatus: attempt.httpStatus,
+            })),
+          });
+
+          return createGatewayFailureResponse({
+            attempts,
+
+            requestId,
+
+            requestedProvider,
+          });
+        }
+
+        const fallbackUsed =
+          attempts.length > 1 ||
+          (requestedProvider !== "auto" && requestedProvider !== result.provider);
+
+        const providerRoute = providerAttemptRoute(attempts);
+
+        console.info("Cossa AI provider execution selected.", {
+          requestId,
+
+          requestedProvider,
+
+          actualProvider: result.provider,
+
+          model: result.model,
+
+          fallbackUsed,
+
+          providerRoute,
+
+          totalInputCharacters,
+
+          estimatedInputTokens,
+
+          attempts: attempts.map((attempt) => ({
+            provider: attempt.provider,
+
+            model: attempt.model,
+
+            status: attempt.status,
+
+            httpStatus: attempt.httpStatus,
+          })),
+        });
+
+        /* ---------------------------------------------------------------- */
+        /* SUCCESS                                                          */
+        /* ---------------------------------------------------------------- */
+
+        return new Response(result.stream, {
+          headers: chatResponseHeaders({
+            requestedProvider,
+
+            actualProvider: result.provider,
+
+            model: result.model,
+
+            attempts,
+
+            requestId,
+
+            estimatedInputTokens,
+          }),
+        });
       },
     },
-  });
+  },
+});

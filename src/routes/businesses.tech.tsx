@@ -163,17 +163,13 @@ function CossaTechWorkspace() {
           </p>
 
           <h1 className="mt-2 font-display text-3xl font-semibold md:text-4xl">
-            Cossa{" "}
-            <span className="text-gradient-gold">
-              Tech
-            </span>
+            Cossa <span className="text-gradient-gold">Tech</span>
           </h1>
 
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            One operating workspace for Cossa Tech. Website delivery,
-            software, automation, AI employees, marketing, projects and
-            technical operations are organised here so you do not have to
-            search across the entire GROWTH platform.
+            One operating workspace for Cossa Tech. Website delivery, software, automation, AI
+            employees, marketing, projects and technical operations are organised here so you do not
+            have to search across the entire GROWTH platform.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-2">
@@ -193,22 +189,14 @@ function CossaTechWorkspace() {
               </Link>
             </Button>
 
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary/40 text-primary"
-            >
+            <Button asChild variant="outline" className="border-primary/40 text-primary">
               <Link to="/operations/projects">
                 <Wrench className="mr-1.5 h-4 w-4" />
                 Open Tech Projects
               </Link>
             </Button>
 
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary/40 text-primary"
-            >
+            <Button asChild variant="outline" className="border-primary/40 text-primary">
               <Link to="/marketing/ai-director">
                 <Megaphone className="mr-1.5 h-4 w-4" />
                 Grow Cossa Tech
@@ -258,14 +246,12 @@ function CossaTechWorkspace() {
             Cossa Tech command centre
           </p>
 
-          <h2 className="mt-1 font-display text-2xl font-semibold">
-            Everything Cossa Tech needs
-          </h2>
+          <h2 className="mt-1 font-display text-2xl font-semibold">Everything Cossa Tech needs</h2>
 
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            These are existing GROWTH capabilities grouped around Cossa Tech.
-            Shared tools remain shared across the platform, but this workspace
-            gives the Tech business one clear starting point.
+            These are existing GROWTH capabilities grouped around Cossa Tech. Shared tools remain
+            shared across the platform, but this workspace gives the Tech business one clear
+            starting point.
           </p>
         </div>
 
@@ -283,9 +269,7 @@ function CossaTechWorkspace() {
                   <Icon className="h-5 w-5" />
                 </div>
 
-                <h3 className="mt-4 text-base font-semibold">
-                  {tool.title}
-                </h3>
+                <h3 className="mt-4 text-base font-semibold">{tool.title}</h3>
 
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   {tool.description}
@@ -320,9 +304,9 @@ function CossaTechWorkspace() {
             </h2>
 
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              Cossa Tech should use a consistent path: identify the customer
-              requirement, scope the solution, prepare the proposal, plan the
-              project, execute the technical work and then monitor the result.
+              Cossa Tech should use a consistent path: identify the customer requirement, scope the
+              solution, prepare the proposal, plan the project, execute the technical work and then
+              monitor the result.
             </p>
           </div>
         </div>
@@ -382,13 +366,9 @@ function TechArea({
         <Icon className="h-4 w-4" />
       </div>
 
-      <h3 className="mt-3 text-sm font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-3 text-sm font-semibold">{title}</h3>
 
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -408,13 +388,9 @@ function ProcessStep({
         {number}
       </span>
 
-      <h3 className="mt-2 text-sm font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-2 text-sm font-semibold">{title}</h3>
 
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }

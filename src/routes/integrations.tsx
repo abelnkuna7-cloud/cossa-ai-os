@@ -636,8 +636,7 @@ function CapabilityMatrix() {
     return [...modules, ...external].filter((entry) => {
       const stateMatches = stateFilter === "all" || entry.state === stateFilter;
       const searchMatches =
-        !search ||
-        `${entry.group} ${entry.title} ${entry.detail}`.toLowerCase().includes(search);
+        !search || `${entry.group} ${entry.title} ${entry.detail}`.toLowerCase().includes(search);
 
       return stateMatches && searchMatches;
     });
@@ -655,8 +654,8 @@ function CapabilityMatrix() {
           </h2>
         </div>
         <p className="max-w-xl text-sm text-muted-foreground">
-          Open a workspace card to update its underlying records, or open an external capability
-          to review its activation checklist. Statuses remain evidence-based and cannot be relabelled
+          Open a workspace card to update its underlying records, or open an external capability to
+          review its activation checklist. Statuses remain evidence-based and cannot be relabelled
           as live without a real authorised connection.
         </p>
       </div>
@@ -673,7 +672,9 @@ function CapabilityMatrix() {
               onClick={() => setStateFilter((current) => (current === state ? "all" : state))}
               className={cn(
                 "rounded-xl border bg-card/40 p-4 text-left transition-colors hover:border-primary/50",
-                stateFilter === state ? "border-primary/60 ring-1 ring-primary/30" : "border-border/60",
+                stateFilter === state
+                  ? "border-primary/60 ring-1 ring-primary/30"
+                  : "border-border/60",
               )}
               aria-pressed={stateFilter === state}
             >

@@ -22,8 +22,10 @@ export const Route = createFileRoute("/playbooks")({
 });
 
 function isPlaybook(document: AiKnowledgeDoc): boolean {
-  return document.category?.trim().toLowerCase() === "playbooks" ||
-    document.tags.some((tag) => tag.trim().toLowerCase() === "playbook");
+  return (
+    document.category?.trim().toLowerCase() === "playbooks" ||
+    document.tags.some((tag) => tag.trim().toLowerCase() === "playbook")
+  );
 }
 
 function Playbooks() {
@@ -32,10 +34,7 @@ function Playbooks() {
   const [preview, setPreview] = useState<AiKnowledgeDoc | null>(null);
   const knowledge = useQuery({ queryKey: ["ai-knowledge"], queryFn: listKnowledge });
 
-  const playbooks = useMemo(
-    () => (knowledge.data ?? []).filter(isPlaybook),
-    [knowledge.data],
-  );
+  const playbooks = useMemo(() => (knowledge.data ?? []).filter(isPlaybook), [knowledge.data]);
 
   const tags = useMemo(
     () => [
@@ -52,7 +51,8 @@ function Playbooks() {
 
     return playbooks.filter((playbook) => {
       const matchesTag = selectedTag === "All" || playbook.tags.includes(selectedTag);
-      const searchable = `${playbook.title} ${playbook.body} ${playbook.tags.join(" ")}`.toLowerCase();
+      const searchable =
+        `${playbook.title} ${playbook.body} ${playbook.tags.join(" ")}`.toLowerCase();
       return matchesTag && (!query || searchable.includes(query));
     });
   }, [playbooks, search, selectedTag]);
@@ -73,10 +73,14 @@ function Playbooks() {
               Business <span className="text-gradient-gold">Playbooks</span>
             </h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              Owner-approved Cossa operating guides. Add or change a playbook in the Knowledge Base once; Cossa AI and every specialist can use it as verified context.
+              Owner-approved Cossa operating guides. Add or change a playbook in the Knowledge Base
+              once; Cossa AI and every specialist can use it as verified context.
             </p>
           </div>
-          <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
+          <Button
+            asChild
+            className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+          >
             <Link to="/ai/knowledge">
               <Plus className="mr-1.5 h-4 w-4" /> Add or update a playbook
             </Link>
@@ -122,37 +126,66 @@ function Playbooks() {
           <FileText className="mx-auto h-6 w-6 text-primary" />
           <h2 className="mt-3 font-display text-lg font-semibold">No approved playbooks yet</h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            This page never invents ratings, outcomes or timelines. Create a Knowledge Base document with the category “Playbooks” or the tag “playbook” to add a real Cossa guide here.
+            This page never invents ratings, outcomes or timelines. Create a Knowledge Base document
+            with the category “Playbooks” or the tag “playbook” to add a real Cossa guide here.
           </p>
-          <Button asChild className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
-            <Link to="/ai/knowledge"><Plus className="mr-1.5 h-4 w-4" /> Create a playbook</Link>
+          <Button
+            asChild
+            className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+          >
+            <Link to="/ai/knowledge">
+              <Plus className="mr-1.5 h-4 w-4" /> Create a playbook
+            </Link>
           </Button>
         </section>
       ) : (
         <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {shown.map((playbook) => (
-            <article key={playbook.id} className="glass-card group flex flex-col p-5 transition-all hover:border-primary/40">
+            <article
+              key={playbook.id}
+              className="glass-card group flex flex-col p-5 transition-all hover:border-primary/40"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary gold-glow">
                   <BookOpen className="h-5 w-5" />
                 </div>
-                <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-success">Verified</span>
+                <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-success">
+                  Verified
+                </span>
               </div>
               <h3 className="mt-4 font-display text-base font-semibold">{playbook.title}</h3>
-              <p className="mt-1 line-clamp-5 flex-1 text-xs text-muted-foreground">{playbook.body}</p>
+              <p className="mt-1 line-clamp-5 flex-1 text-xs text-muted-foreground">
+                {playbook.body}
+              </p>
               <div className="mt-4 flex flex-wrap gap-1">
-                {playbook.tags.filter((tag) => tag !== "company-wide").map((tag) => (
-                  <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">
-                    <Tag className="h-2.5 w-2.5" /> {tag}
-                  </span>
-                ))}
+                {playbook.tags
+                  .filter((tag) => tag !== "company-wide")
+                  .map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground"
+                    >
+                      <Tag className="h-2.5 w-2.5" /> {tag}
+                    </span>
+                  ))}
               </div>
               <div className="mt-4 flex gap-2">
-                <Button size="sm" variant="outline" className="flex-1 border-primary/40 text-primary hover:bg-primary/10" onClick={() => setPreview(playbook)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 border-primary/40 text-primary hover:bg-primary/10"
+                  onClick={() => setPreview(playbook)}
+                >
                   Preview
                 </Button>
-                <Button asChild size="sm" className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
-                  <Link to="/ai/cossa">Ask Cossa AI <ArrowRight className="ml-1 h-3 w-3" /></Link>
+                <Button
+                  asChild
+                  size="sm"
+                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+                >
+                  <Link to="/ai/cossa">
+                    Ask Cossa AI <ArrowRight className="ml-1 h-3 w-3" />
+                  </Link>
                 </Button>
               </div>
             </article>
@@ -161,17 +194,31 @@ function Playbooks() {
       )}
 
       {preview ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setPreview(null)}>
-          <article className="glass-card w-full max-w-2xl p-6" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+          onClick={() => setPreview(null)}
+        >
+          <article
+            className="glass-card w-full max-w-2xl p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-primary">Verified Cossa playbook</p>
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-primary">
+                  Verified Cossa playbook
+                </p>
                 <h2 className="mt-1 font-display text-xl font-semibold">{preview.title}</h2>
               </div>
-              <Button variant="outline" onClick={() => setPreview(null)}>Close</Button>
+              <Button variant="outline" onClick={() => setPreview(null)}>
+                Close
+              </Button>
             </div>
-            <div className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{preview.body}</div>
-            {preview.source ? <p className="mt-4 text-xs text-muted-foreground">Source: {preview.source}</p> : null}
+            <div className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+              {preview.body}
+            </div>
+            {preview.source ? (
+              <p className="mt-4 text-xs text-muted-foreground">Source: {preview.source}</p>
+            ) : null}
           </article>
         </div>
       ) : null}

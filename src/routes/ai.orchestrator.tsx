@@ -217,8 +217,8 @@ function CossaOrchestrator() {
                 : dashboard?.runtime.server_execution === "active"
                   ? "Hosted worker active"
                   : dashboard?.runtime.server_execution === "deployment_verification_required"
-                  ? "Deployment verification required"
-                  : "Checking runtime"}
+                    ? "Deployment verification required"
+                    : "Checking runtime"}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">

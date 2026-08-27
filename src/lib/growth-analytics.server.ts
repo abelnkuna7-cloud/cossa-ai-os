@@ -102,7 +102,7 @@ function responseHtml(title: string, message: string, status = 200): Response {
 }
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>\"]/g, (character) => {
+  return value.replace(/[&<>"]/g, (character) => {
     const entities: Record<string, string> = {
       "&": "&amp;",
       "<": "&lt;",

@@ -8,7 +8,10 @@ export const Route = createFileRoute("/sales/companies")({
   head: () => ({
     meta: [
       { title: "Companies — Cossa AI" },
-      { name: "description", content: "Account-based intelligence: companies, industries, and activity." },
+      {
+        name: "description",
+        content: "Account-based intelligence: companies, industries, and activity.",
+      },
       { property: "og:title", content: "Companies — Cossa AI" },
       { property: "og:description", content: "Cossa AI company accounts." },
     ],
@@ -36,11 +39,29 @@ function CompaniesPage() {
         { key: "notes", label: "Notes", type: "textarea" },
       ]}
       columns={[
-        { key: "name", label: "Company", render: (r) => <span className="font-medium">{r.name}</span> },
+        {
+          key: "name",
+          label: "Company",
+          render: (r) => <span className="font-medium">{r.name}</span>,
+        },
         { key: "industry", label: "Industry" },
-        { key: "website", label: "Website", render: (r) => r.website ? (
-          <a className="text-primary hover:underline" href={r.website} target="_blank" rel="noreferrer">{r.website}</a>
-        ) : "—" },
+        {
+          key: "website",
+          label: "Website",
+          render: (r) =>
+            r.website ? (
+              <a
+                className="text-primary hover:underline"
+                href={r.website}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {r.website}
+              </a>
+            ) : (
+              "—"
+            ),
+        },
         { key: "phone", label: "Phone" },
         { key: "created_at", label: "Added", render: (r) => fmtDate(r.created_at) },
       ]}

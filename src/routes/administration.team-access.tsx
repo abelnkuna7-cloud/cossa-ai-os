@@ -67,10 +67,15 @@ async function loadTeamAccess(): Promise<TeamAccessData> {
   }
 
   const currentUserId = auth.user.id;
-  const [{ data: ownRoles, error: ownRolesError }, { data: ownProfile, error: ownProfileError }] = await Promise.all([
-    db.from("user_roles").select("id,user_id,role").eq("user_id", currentUserId),
-    db.from("profiles").select("id,full_name,phone,business_name,created_at").eq("id", currentUserId).maybeSingle(),
-  ]);
+  const [{ data: ownRoles, error: ownRolesError }, { data: ownProfile, error: ownProfileError }] =
+    await Promise.all([
+      db.from("user_roles").select("id,user_id,role").eq("user_id", currentUserId),
+      db
+        .from("profiles")
+        .select("id,full_name,phone,business_name,created_at")
+        .eq("id", currentUserId)
+        .maybeSingle(),
+    ]);
 
   if (ownRolesError) throw new Error(`Unable to load your roles: ${ownRolesError.message}`);
   if (ownProfileError) throw new Error(`Unable to load your profile: ${ownProfileError.message}`);
@@ -91,10 +96,14 @@ async function loadTeamAccess(): Promise<TeamAccessData> {
     };
   }
 
-  const [{ data: profiles, error: profilesError }, { data: roleRows, error: roleRowsError }] = await Promise.all([
-    db.from("profiles").select("id,full_name,phone,business_name,created_at").order("created_at", { ascending: true }),
-    db.from("user_roles").select("id,user_id,role").order("created_at", { ascending: true }),
-  ]);
+  const [{ data: profiles, error: profilesError }, { data: roleRows, error: roleRowsError }] =
+    await Promise.all([
+      db
+        .from("profiles")
+        .select("id,full_name,phone,business_name,created_at")
+        .order("created_at", { ascending: true }),
+      db.from("user_roles").select("id,user_id,role").order("created_at", { ascending: true }),
+    ]);
 
   if (profilesError) throw new Error(`Unable to load team profiles: ${profilesError.message}`);
   if (roleRowsError) throw new Error(`Unable to load team roles: ${roleRowsError.message}`);
@@ -140,7 +149,9 @@ async function setRole(payload: {
   currentUserId: string;
 }): Promise<void> {
   if (payload.userId === payload.currentUserId && payload.role === "admin" && !payload.enabled) {
-    throw new Error("You cannot remove your own admin role from this screen. Use a controlled administrator handover instead.");
+    throw new Error(
+      "You cannot remove your own admin role from this screen. Use a controlled administrator handover instead.",
+    );
   }
 
   if (payload.enabled) {
@@ -153,7 +164,9 @@ async function setRole(payload: {
     if (readError) throw new Error(`Unable to check the role: ${readError.message}`);
     if (existing) return;
 
-    const { error } = await db.from("user_roles").insert({ user_id: payload.userId, role: payload.role });
+    const { error } = await db
+      .from("user_roles")
+      .insert({ user_id: payload.userId, role: payload.role });
     if (error) throw new Error(`Unable to grant the role: ${error.message}`);
     return;
   }
@@ -176,7 +189,8 @@ function TeamAccessPage() {
       await queryClient.invalidateQueries({ queryKey: ["administration-team-access"] });
       toast.success("Profile updated");
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Profile update failed"),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Profile update failed"),
   });
 
   const roleMutation = useMutation({
@@ -189,11 +203,20 @@ function TeamAccessPage() {
   });
 
   if (query.isLoading) {
-    return <div className="glass-card mx-auto flex max-w-5xl items-center justify-center gap-2 p-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading team access…</div>;
+    return (
+      <div className="glass-card mx-auto flex max-w-5xl items-center justify-center gap-2 p-12 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading team access…
+      </div>
+    );
   }
 
   if (query.isError || !query.data) {
-    return <div className="glass-card mx-auto max-w-5xl p-6 text-sm text-destructive">{query.error instanceof Error ? query.error.message : "Team access could not be loaded."}</div>;
+    return (
+      <div className="glass-card mx-auto max-w-5xl p-6 text-sm text-destructive">
+        {query.error instanceof Error ? query.error.message : "Team access could not be loaded."}
+      </div>
+    );
   }
 
   const data = query.data;
@@ -205,14 +228,21 @@ function TeamAccessPage() {
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative">
           <div className="flex items-center gap-2">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow"><ShieldCheck className="h-5 w-5" /></div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
             <StatusBadge status={workspaceRuntimeStatus()} />
           </div>
           <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">Team & Access</h1>
           <p className="mt-1 max-w-3xl text-muted-foreground">
-            Persistent Supabase account profiles and role permissions restored from the original Growth operating layer. Workspace/AI preferences remain separate in Settings.
+            Persistent Supabase account profiles and role permissions restored from the original
+            Growth operating layer. Workspace/AI preferences remain separate in Settings.
           </p>
-          <div className="mt-4"><Button asChild variant="outline"><Link to="/settings">Workspace Settings</Link></Button></div>
+          <div className="mt-4">
+            <Button asChild variant="outline">
+              <Link to="/settings">Workspace Settings</Link>
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -225,25 +255,75 @@ function TeamAccessPage() {
 
       {!isAdmin ? (
         <section className="glass-card p-6">
-          <div className="flex items-start gap-3"><UserCog className="mt-0.5 h-5 w-5 text-primary" /><div><h2 className="font-display text-lg font-semibold">Your access is role-controlled</h2><p className="mt-1 text-sm text-muted-foreground">Only an administrator may view and change team-wide roles. Your current roles: {data.currentRoles.join(", ") || "none"}.</p></div></div>
+          <div className="flex items-start gap-3">
+            <UserCog className="mt-0.5 h-5 w-5 text-primary" />
+            <div>
+              <h2 className="font-display text-lg font-semibold">Your access is role-controlled</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Only an administrator may view and change team-wide roles. Your current roles:{" "}
+                {data.currentRoles.join(", ") || "none"}.
+              </p>
+            </div>
+          </div>
         </section>
       ) : (
         <section className="glass-card overflow-hidden">
           <header className="border-b border-border/60 p-5">
-            <div className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /><h2 className="font-display text-xl font-semibold">Team role matrix</h2></div>
-            <p className="mt-1 text-sm text-muted-foreground">Changes persist to the existing user_roles table and remain subject to database RLS.</p>
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              <h2 className="font-display text-xl font-semibold">Team role matrix</h2>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Changes persist to the existing user_roles table and remain subject to database RLS.
+            </p>
           </header>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="border-b border-border/60 text-left text-[10px] uppercase tracking-widest text-muted-foreground"><th className="px-5 py-3">Member</th>{ROLES.map((role) => <th key={role} className="px-3 py-3 text-center">{role.replaceAll("_", " ")}</th>)}</tr></thead>
+              <thead>
+                <tr className="border-b border-border/60 text-left text-[10px] uppercase tracking-widest text-muted-foreground">
+                  <th className="px-5 py-3">Member</th>
+                  {ROLES.map((role) => (
+                    <th key={role} className="px-3 py-3 text-center">
+                      {role.replaceAll("_", " ")}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
               <tbody>
                 {data.team.map(({ profile, roles }) => (
                   <tr key={profile.id} className="border-b border-border/40">
-                    <td className="px-5 py-4"><div className="font-medium">{profile.full_name || profile.business_name || "Unnamed member"}</div><div className="text-xs text-muted-foreground">{profile.phone || profile.id}</div></td>
+                    <td className="px-5 py-4">
+                      <div className="font-medium">
+                        {profile.full_name || profile.business_name || "Unnamed member"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {profile.phone || profile.id}
+                      </div>
+                    </td>
                     {ROLES.map((role) => {
                       const enabled = roles.includes(role);
-                      const protectedSelfAdmin = profile.id === data.currentUserId && role === "admin" && enabled;
-                      return <td key={role} className="px-3 py-4 text-center"><button type="button" disabled={roleMutation.isPending || protectedSelfAdmin} onClick={() => roleMutation.mutate({ userId: profile.id, role, enabled: !enabled, currentUserId: data.currentUserId })} className={`h-7 min-w-7 rounded border px-2 text-xs ${enabled ? "border-primary/40 bg-primary/15 text-primary" : "border-border/60 bg-background text-muted-foreground"} disabled:cursor-not-allowed disabled:opacity-60`} aria-label={`${enabled ? "Remove" : "Grant"} ${role}`}>{enabled ? "✓" : "—"}</button></td>;
+                      const protectedSelfAdmin =
+                        profile.id === data.currentUserId && role === "admin" && enabled;
+                      return (
+                        <td key={role} className="px-3 py-4 text-center">
+                          <button
+                            type="button"
+                            disabled={roleMutation.isPending || protectedSelfAdmin}
+                            onClick={() =>
+                              roleMutation.mutate({
+                                userId: profile.id,
+                                role,
+                                enabled: !enabled,
+                                currentUserId: data.currentUserId,
+                              })
+                            }
+                            className={`h-7 min-w-7 rounded border px-2 text-xs ${enabled ? "border-primary/40 bg-primary/15 text-primary" : "border-border/60 bg-background text-muted-foreground"} disabled:cursor-not-allowed disabled:opacity-60`}
+                            aria-label={`${enabled ? "Remove" : "Grant"} ${role}`}
+                          >
+                            {enabled ? "✓" : "—"}
+                          </button>
+                        </td>
+                      );
                     })}
                   </tr>
                 ))}
@@ -275,12 +355,30 @@ function ProfileCard({
 
   return (
     <section className="glass-card p-6">
-      <div className="flex items-center gap-2"><UserCog className="h-5 w-5 text-primary" /><h2 className="font-display text-lg font-semibold">Your persistent profile</h2></div>
+      <div className="flex items-center gap-2">
+        <UserCog className="h-5 w-5 text-primary" />
+        <h2 className="font-display text-lg font-semibold">Your persistent profile</h2>
+      </div>
       <p className="mt-1 text-sm text-muted-foreground">Roles: {roles.join(", ") || "none"}</p>
       <form onSubmit={submit} className="mt-5 grid gap-4 sm:grid-cols-2">
-        <label className="grid gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">Full name<Input name="full_name" defaultValue={profile?.full_name ?? ""} /></label>
-        <label className="grid gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">Phone<Input name="phone" defaultValue={profile?.phone ?? ""} /></label>
-        <div className="sm:col-span-2"><Button type="submit" disabled={saving}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save profile</Button></div>
+        <label className="grid gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+          Full name
+          <Input name="full_name" defaultValue={profile?.full_name ?? ""} />
+        </label>
+        <label className="grid gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+          Phone
+          <Input name="phone" defaultValue={profile?.phone ?? ""} />
+        </label>
+        <div className="sm:col-span-2">
+          <Button type="submit" disabled={saving}>
+            {saving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Save profile
+          </Button>
+        </div>
       </form>
     </section>
   );

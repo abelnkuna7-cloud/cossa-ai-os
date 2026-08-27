@@ -41,7 +41,9 @@ function Stats({ rows }: { rows: SalesQuotation[] }) {
     <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {stats.map((s) => (
         <div key={s.label} className="glass-card p-4">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{s.label}</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            {s.label}
+          </div>
           <div className="mt-1 font-display text-2xl font-semibold">{s.value}</div>
         </div>
       ))}
@@ -67,27 +69,60 @@ function QuotationsPage() {
       Stats={Stats}
       fields={[
         { key: "number", label: "Quote number", required: true, placeholder: "Q-0001" },
-        { key: "service", label: "Service / business division", placeholder: "Cossa Tech, Construction, Facility Services…" },
+        {
+          key: "service",
+          label: "Service / business division",
+          placeholder: "Cossa Tech, Construction, Facility Services…",
+        },
         { key: "description", label: "Description / scope", type: "textarea" },
         { key: "customer", label: "Customer" },
-        { key: "opportunity_id", label: "Linked opportunity ID", placeholder: "Optional canonical opportunity ID" },
+        {
+          key: "opportunity_id",
+          label: "Linked opportunity ID",
+          placeholder: "Optional canonical opportunity ID",
+        },
         { key: "amount", label: "Amount (R)", type: "number", defaultValue: 0 },
-        { key: "status", label: "Status", type: "select", options: STATUSES, defaultValue: "draft" },
+        {
+          key: "status",
+          label: "Status",
+          type: "select",
+          options: STATUSES,
+          defaultValue: "draft",
+        },
         { key: "valid_until", label: "Valid until", type: "date" },
         { key: "notes", label: "Notes", type: "textarea" },
       ]}
       columns={[
-        { key: "number", label: "Number", render: (r) => <span className="font-medium">{r.number}</span> },
+        {
+          key: "number",
+          label: "Number",
+          render: (r) => <span className="font-medium">{r.number}</span>,
+        },
         { key: "customer", label: "Customer", render: (r) => r.customer ?? r.customer_id ?? "—" },
         { key: "service", label: "Service", render: (r) => r.service ?? "—" },
         { key: "amount", label: "Amount", render: (r) => fmtCurrency(r.amount) },
-        { key: "status", label: "Status", render: (r) => (
-          <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">{r.status}</span>
-        ) },
+        {
+          key: "status",
+          label: "Status",
+          render: (r) => (
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">
+              {r.status}
+            </span>
+          ),
+        },
         { key: "valid_until", label: "Valid until", render: (r) => fmtDate(r.valid_until) },
         { key: "created_at", label: "Created", render: (r) => fmtDate(r.created_at) },
       ]}
-      searchKeys={["number", "service", "description", "customer", "customer_id", "opportunity_id", "status", "notes"]}
+      searchKeys={[
+        "number",
+        "service",
+        "description",
+        "customer",
+        "customer_id",
+        "opportunity_id",
+        "status",
+        "notes",
+      ]}
     />
   );
 }

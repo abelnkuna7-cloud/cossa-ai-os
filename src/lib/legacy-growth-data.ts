@@ -78,7 +78,8 @@ const SOCIAL_SELECT = [
 function socialRow(payload: Partial<GrowthSocialPost>, creating = false): Record<string, unknown> {
   const row: Record<string, unknown> = {};
 
-  if (creating || payload.platform !== undefined) row.platform = required(payload.platform, "Platform").toLowerCase();
+  if (creating || payload.platform !== undefined)
+    row.platform = required(payload.platform, "Platform").toLowerCase();
   if (creating || payload.content !== undefined) row.content = required(payload.content, "Content");
   if (payload.title !== undefined) row.title = text(payload.title);
   if (payload.hashtags !== undefined) row.hashtags = text(payload.hashtags);
@@ -88,10 +89,13 @@ function socialRow(payload: Partial<GrowthSocialPost>, creating = false): Record
   if (payload.posted_at !== undefined) row.posted_at = text(payload.posted_at);
   if (payload.post_url !== undefined) row.post_url = text(payload.post_url);
   if (payload.reach !== undefined) row.reach = Math.max(0, Math.round(numberValue(payload.reach)));
-  if (payload.engagement !== undefined) row.engagement = Math.max(0, Math.round(numberValue(payload.engagement)));
-  if (payload.leads_generated !== undefined) row.leads_generated = Math.max(0, Math.round(numberValue(payload.leads_generated)));
+  if (payload.engagement !== undefined)
+    row.engagement = Math.max(0, Math.round(numberValue(payload.engagement)));
+  if (payload.leads_generated !== undefined)
+    row.leads_generated = Math.max(0, Math.round(numberValue(payload.leads_generated)));
 
-  const status = payload.status !== undefined ? lower(payload.status, "draft") : creating ? "draft" : null;
+  const status =
+    payload.status !== undefined ? lower(payload.status, "draft") : creating ? "draft" : null;
   if (status) {
     const allowed = ["draft", "scheduled", "published", "posted", "failed"];
     if (!allowed.includes(status)) throw new Error(`Unsupported social-post status: ${status}.`);
@@ -101,7 +105,9 @@ function socialRow(payload: Partial<GrowthSocialPost>, creating = false): Record
     }
 
     if (["published", "posted"].includes(status)) {
-      const hasEvidence = Boolean(text(payload.post_url) || text(payload.published_at) || text(payload.posted_at));
+      const hasEvidence = Boolean(
+        text(payload.post_url) || text(payload.published_at) || text(payload.posted_at),
+      );
       if (!hasEvidence) {
         throw new Error(
           "Publication evidence is required before a social post can be marked published. Add the real post URL or publication timestamp.",
@@ -117,7 +123,10 @@ function socialRow(payload: Partial<GrowthSocialPost>, creating = false): Record
 
 export const growthSocialPosts = {
   async list(): Promise<GrowthSocialPost[]> {
-    const { data, error } = await db.from("social_posts").select(SOCIAL_SELECT).order("created_at", { ascending: false });
+    const { data, error } = await db
+      .from("social_posts")
+      .select(SOCIAL_SELECT)
+      .order("created_at", { ascending: false });
     if (error) throw errorMessage("Unable to load social posts", error);
     return (data ?? []).map((row: Record<string, unknown>) => ({
       id: String(row.id),
@@ -139,18 +148,28 @@ export const growthSocialPosts = {
   },
 
   async create(payload: Partial<GrowthSocialPost>): Promise<GrowthSocialPost> {
-    const { data, error } = await db.from("social_posts").insert(socialRow(payload, true)).select(SOCIAL_SELECT).single();
+    const { data, error } = await db
+      .from("social_posts")
+      .insert(socialRow(payload, true))
+      .select(SOCIAL_SELECT)
+      .single();
     if (error) throw errorMessage("Unable to create social post", error);
     return (await this.list()).find((row) => row.id === data.id) ?? (data as GrowthSocialPost);
   },
 
   async update(id: string, payload: Partial<GrowthSocialPost>): Promise<void> {
     const existing = await db.from("social_posts").select(SOCIAL_SELECT).eq("id", id).maybeSingle();
-    if (existing.error) throw errorMessage("Unable to load social post before update", existing.error);
+    if (existing.error)
+      throw errorMessage("Unable to load social post before update", existing.error);
     if (!existing.data) throw new Error("Social post not found or access denied.");
 
     const merged = { ...existing.data, ...payload } as Partial<GrowthSocialPost>;
-    const { data, error } = await db.from("social_posts").update(socialRow(merged, false)).eq("id", id).select("id").maybeSingle();
+    const { data, error } = await db
+      .from("social_posts")
+      .update(socialRow(merged, false))
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
     if (error) throw errorMessage("Unable to update social post", error);
     if (!data) throw new Error("Social post not found or access denied.");
   },
@@ -188,9 +207,13 @@ const CONTENT_SELECT = [
   "created_at",
 ].join(",");
 
-function contentRow(payload: Partial<GrowthContentItem>, creating = false): Record<string, unknown> {
+function contentRow(
+  payload: Partial<GrowthContentItem>,
+  creating = false,
+): Record<string, unknown> {
   const row: Record<string, unknown> = {};
-  if (creating || payload.platform !== undefined) row.platform = required(payload.platform, "Platform").toLowerCase();
+  if (creating || payload.platform !== undefined)
+    row.platform = required(payload.platform, "Platform").toLowerCase();
   if (creating || payload.content !== undefined) row.content = required(payload.content, "Content");
   if (payload.title !== undefined) row.title = text(payload.title);
   if (payload.hashtags !== undefined) row.hashtags = text(payload.hashtags);
@@ -198,7 +221,8 @@ function contentRow(payload: Partial<GrowthContentItem>, creating = false): Reco
   if (payload.ai_prompt !== undefined) row.ai_prompt = text(payload.ai_prompt);
   if (payload.scheduled_for !== undefined) row.scheduled_for = text(payload.scheduled_for);
 
-  const status = payload.status !== undefined ? lower(payload.status, "draft") : creating ? "draft" : null;
+  const status =
+    payload.status !== undefined ? lower(payload.status, "draft") : creating ? "draft" : null;
   if (status) {
     const allowed = ["draft", "scheduled", "posted", "failed"];
     if (!allowed.includes(status)) throw new Error(`Unsupported content status: ${status}.`);
@@ -219,23 +243,39 @@ function contentRow(payload: Partial<GrowthContentItem>, creating = false): Reco
 
 export const growthContentCalendar = {
   async list(): Promise<GrowthContentItem[]> {
-    const { data, error } = await db.from("content_calendar").select(CONTENT_SELECT).order("created_at", { ascending: false });
+    const { data, error } = await db
+      .from("content_calendar")
+      .select(CONTENT_SELECT)
+      .order("created_at", { ascending: false });
     if (error) throw errorMessage("Unable to load content calendar", error);
     return (data ?? []) as GrowthContentItem[];
   },
 
   async create(payload: Partial<GrowthContentItem>): Promise<GrowthContentItem> {
-    const { data, error } = await db.from("content_calendar").insert(contentRow(payload, true)).select(CONTENT_SELECT).single();
+    const { data, error } = await db
+      .from("content_calendar")
+      .insert(contentRow(payload, true))
+      .select(CONTENT_SELECT)
+      .single();
     if (error) throw errorMessage("Unable to create content-calendar item", error);
     return data as GrowthContentItem;
   },
 
   async update(id: string, payload: Partial<GrowthContentItem>): Promise<void> {
-    const existing = await db.from("content_calendar").select(CONTENT_SELECT).eq("id", id).maybeSingle();
+    const existing = await db
+      .from("content_calendar")
+      .select(CONTENT_SELECT)
+      .eq("id", id)
+      .maybeSingle();
     if (existing.error) throw errorMessage("Unable to load content-calendar item", existing.error);
     if (!existing.data) throw new Error("Content-calendar item not found or access denied.");
     const merged = { ...existing.data, ...payload } as Partial<GrowthContentItem>;
-    const { data, error } = await db.from("content_calendar").update(contentRow(merged, false)).eq("id", id).select("id").maybeSingle();
+    const { data, error } = await db
+      .from("content_calendar")
+      .update(contentRow(merged, false))
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
     if (error) throw errorMessage("Unable to update content-calendar item", error);
     if (!data) throw new Error("Content-calendar item not found or access denied.");
   },
@@ -279,8 +319,10 @@ const REFERRAL_SELECT = [
 
 function referralRow(payload: Partial<GrowthReferral>, creating = false): Record<string, unknown> {
   const row: Record<string, unknown> = {};
-  if (creating || payload.referrer_name !== undefined) row.referrer_name = required(payload.referrer_name, "Referrer name");
-  if (creating || payload.referee_name !== undefined) row.referee_name = required(payload.referee_name, "Referred client name");
+  if (creating || payload.referrer_name !== undefined)
+    row.referrer_name = required(payload.referrer_name, "Referrer name");
+  if (creating || payload.referee_name !== undefined)
+    row.referee_name = required(payload.referee_name, "Referred client name");
   if (payload.referrer_phone !== undefined) row.referrer_phone = text(payload.referrer_phone);
   if (payload.referrer_email !== undefined) row.referrer_email = text(payload.referrer_email);
   if (payload.referee_phone !== undefined) row.referee_phone = text(payload.referee_phone);
@@ -288,14 +330,19 @@ function referralRow(payload: Partial<GrowthReferral>, creating = false): Record
   if (payload.service !== undefined) row.service = text(payload.service);
   if (payload.notes !== undefined) row.notes = text(payload.notes);
   if (payload.status !== undefined || creating) row.status = lower(payload.status, "pending");
-  if (payload.commission_percent !== undefined || creating) row.commission_percent = Math.max(0, numberValue(payload.commission_percent, 10));
-  if (payload.commission_amount !== undefined || creating) row.commission_amount = Math.max(0, numberValue(payload.commission_amount, 0));
+  if (payload.commission_percent !== undefined || creating)
+    row.commission_percent = Math.max(0, numberValue(payload.commission_percent, 10));
+  if (payload.commission_amount !== undefined || creating)
+    row.commission_amount = Math.max(0, numberValue(payload.commission_amount, 0));
   return row;
 }
 
 export const growthReferrals = {
   async list(): Promise<GrowthReferral[]> {
-    const { data, error } = await db.from("referrals").select(REFERRAL_SELECT).order("created_at", { ascending: false });
+    const { data, error } = await db
+      .from("referrals")
+      .select(REFERRAL_SELECT)
+      .order("created_at", { ascending: false });
     if (error) throw errorMessage("Unable to load referrals", error);
     return (data ?? []).map((row: Record<string, unknown>) => ({
       ...row,
@@ -317,13 +364,22 @@ export const growthReferrals = {
   },
 
   async create(payload: Partial<GrowthReferral>): Promise<GrowthReferral> {
-    const { data, error } = await db.from("referrals").insert(referralRow(payload, true)).select(REFERRAL_SELECT).single();
+    const { data, error } = await db
+      .from("referrals")
+      .insert(referralRow(payload, true))
+      .select(REFERRAL_SELECT)
+      .single();
     if (error) throw errorMessage("Unable to create referral", error);
     return data as GrowthReferral;
   },
 
   async update(id: string, payload: Partial<GrowthReferral>): Promise<void> {
-    const { data, error } = await db.from("referrals").update(referralRow(payload, false)).eq("id", id).select("id").maybeSingle();
+    const { data, error } = await db
+      .from("referrals")
+      .update(referralRow(payload, false))
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
     if (error) throw errorMessage("Unable to update referral", error);
     if (!data) throw new Error("Referral not found or access denied.");
   },

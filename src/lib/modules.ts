@@ -731,7 +731,13 @@ export const MODULES: ModuleGroup[] = [
         "Speak naturally with Cossa AI",
         "Cossa Voice AI can listen and respond by voice inside GROWTH. It does not place or receive telephone calls unless an authorised telephony integration is separately connected.",
         "Use one persistent voice-and-text conversation with page-aware Cossa intelligence.",
-        ["Voice input", "Editable transcription", "Spoken responses", "Shared conversation", "Page context"],
+        [
+          "Voice input",
+          "Editable transcription",
+          "Spoken responses",
+          "Shared conversation",
+          "Page context",
+        ],
         ["Telephone calling", "Voice cloning", "Real-time translation"],
       ),
       s(

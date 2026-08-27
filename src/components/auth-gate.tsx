@@ -8,11 +8,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (active) setSession(data.session);
-    }).catch(() => {
-      if (active) setSession(null);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (active) setSession(data.session);
+      })
+      .catch(() => {
+        if (active) setSession(null);
+      });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (active) setSession(nextSession);
     });
@@ -23,7 +26,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, []);
 
   if (session === undefined) {
-    return <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">Checking secure session…</div>;
+    return (
+      <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">
+        Checking secure session…
+      </div>
+    );
   }
   if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;

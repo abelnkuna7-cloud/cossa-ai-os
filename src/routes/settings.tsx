@@ -109,7 +109,9 @@ function SettingsPage() {
         </div>
         <h1 className="mt-4 font-display text-3xl font-semibold">Administration & Settings</h1>
         <p className="mt-2 max-w-3xl text-muted-foreground">
-          Browser-local workspace preferences are kept separate from persistent Supabase account profiles and role permissions. This prevents device settings from being mistaken for company-wide configuration.
+          Browser-local workspace preferences are kept separate from persistent Supabase account
+          profiles and role permissions. This prevents device settings from being mistaken for
+          company-wide configuration.
         </p>
       </section>
 
@@ -120,7 +122,8 @@ function SettingsPage() {
             <div>
               <h2 className="font-display text-lg font-semibold">Persistent Team & Access</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Manage your real Supabase profile and, for authorised admins, team role permissions. These settings persist across devices and sessions.
+                Manage your real Supabase profile and, for authorised admins, team role permissions.
+                These settings persist across devices and sessions.
               </p>
             </div>
           </div>
@@ -131,34 +134,69 @@ function SettingsPage() {
       </section>
 
       <section className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-muted-foreground">
-        <strong className="text-foreground">Device-local preference boundary:</strong> the fields below currently use browser localStorage. They are useful personal preferences, but they are not presented as authoritative company records or global Cossa AI knowledge.
+        <strong className="text-foreground">Device-local preference boundary:</strong> the fields
+        below currently use browser localStorage. They are useful personal preferences, but they are
+        not presented as authoritative company records or global Cossa AI knowledge.
       </section>
 
       <Section icon={Building2} title="Device business preferences">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Business name">
-            <Input value={state.businessName} onChange={(event) => set("businessName", event.target.value)} placeholder="Cossa Nexus Holdings" />
+            <Input
+              value={state.businessName}
+              onChange={(event) => set("businessName", event.target.value)}
+              placeholder="Cossa Nexus Holdings"
+            />
           </Field>
           <Field label="Industry">
-            <Input value={state.industry} onChange={(event) => set("industry", event.target.value)} placeholder="Construction" />
+            <Input
+              value={state.industry}
+              onChange={(event) => set("industry", event.target.value)}
+              placeholder="Construction"
+            />
           </Field>
           <Field label="Website">
-            <Input value={state.website} onChange={(event) => set("website", event.target.value)} placeholder="https://" />
+            <Input
+              value={state.website}
+              onChange={(event) => set("website", event.target.value)}
+              placeholder="https://"
+            />
           </Field>
           <Field label="Phone">
-            <Input value={state.phone} onChange={(event) => set("phone", event.target.value)} placeholder="+27" />
+            <Input
+              value={state.phone}
+              onChange={(event) => set("phone", event.target.value)}
+              placeholder="+27"
+            />
           </Field>
           <Field label="Email">
-            <Input type="email" value={state.email} onChange={(event) => set("email", event.target.value)} placeholder="hello@" />
+            <Input
+              type="email"
+              value={state.email}
+              onChange={(event) => set("email", event.target.value)}
+              placeholder="hello@"
+            />
           </Field>
           <Field label="Currency">
-            <Input value={state.currency} onChange={(event) => set("currency", event.target.value)} placeholder="ZAR" />
+            <Input
+              value={state.currency}
+              onChange={(event) => set("currency", event.target.value)}
+              placeholder="ZAR"
+            />
           </Field>
           <Field label="Timezone">
-            <Input value={state.timezone} onChange={(event) => set("timezone", event.target.value)} placeholder="Africa/Johannesburg" />
+            <Input
+              value={state.timezone}
+              onChange={(event) => set("timezone", event.target.value)}
+              placeholder="Africa/Johannesburg"
+            />
           </Field>
           <Field label="Address" className="sm:col-span-2">
-            <Textarea value={state.address} onChange={(event) => set("address", event.target.value)} rows={2} />
+            <Textarea
+              value={state.address}
+              onChange={(event) => set("address", event.target.value)}
+              rows={2}
+            />
           </Field>
         </div>
       </Section>
@@ -166,10 +204,18 @@ function SettingsPage() {
       <Section icon={Palette} title="Device brand preferences">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Primary color">
-            <Input value={state.brandPrimary} onChange={(event) => set("brandPrimary", event.target.value)} placeholder="#000000" />
+            <Input
+              value={state.brandPrimary}
+              onChange={(event) => set("brandPrimary", event.target.value)}
+              placeholder="#000000"
+            />
           </Field>
           <Field label="Accent color">
-            <Input value={state.brandAccent} onChange={(event) => set("brandAccent", event.target.value)} placeholder="#D4AF37" />
+            <Input
+              value={state.brandAccent}
+              onChange={(event) => set("brandAccent", event.target.value)}
+              placeholder="#D4AF37"
+            />
           </Field>
           <Field label="Brand voice" className="sm:col-span-2">
             <Textarea
@@ -208,7 +254,10 @@ function SettingsPage() {
       </Section>
 
       <div className="sticky bottom-4 flex justify-end">
-        <Button onClick={save} className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
+        <Button
+          onClick={save}
+          className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+        >
           <Save className="mr-1.5 h-4 w-4" /> Save device preferences
         </Button>
       </div>
@@ -216,7 +265,15 @@ function SettingsPage() {
   );
 }
 
-function Section({ icon: Icon, title, children }: { icon: typeof SettingsIcon; title: string; children: React.ReactNode }) {
+function Section({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: typeof SettingsIcon;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="glass-card p-6">
       <div className="flex items-center gap-2">
@@ -228,7 +285,15 @@ function Section({ icon: Icon, title, children }: { icon: typeof SettingsIcon; t
   );
 }
 
-function Field({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
+function Field({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       <Label className="text-xs uppercase tracking-widest text-muted-foreground">{label}</Label>

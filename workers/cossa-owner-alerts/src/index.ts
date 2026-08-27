@@ -42,7 +42,8 @@ const MAX_MESSAGE_LENGTH = 1_400;
 function constantTimeEquals(left: string, right: string) {
   if (left.length !== right.length) return false;
   let mismatch = 0;
-  for (let index = 0; index < left.length; index += 1) mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  for (let index = 0; index < left.length; index += 1)
+    mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
   return mismatch === 0;
 }
 
@@ -60,12 +61,22 @@ function truncate(value: string, max = 280) {
 
 function buildMessage(table: string, record: Record<string, unknown>) {
   const title = EVENT_LABELS[table] ?? "NEW COSSA REQUEST";
-  const name = stringValue(record.name ?? record.full_name ?? record.visitor_name ?? record.customer_name);
-  const phone = stringValue(record.phone ?? record.visitor_phone ?? record.customer_phone, "No phone supplied");
+  const name = stringValue(
+    record.name ?? record.full_name ?? record.visitor_name ?? record.customer_name,
+  );
+  const phone = stringValue(
+    record.phone ?? record.visitor_phone ?? record.customer_phone,
+    "No phone supplied",
+  );
   const email = stringValue(record.email, "No email supplied");
-  const service = stringValue(record.service ?? record.service_interest ?? record.subject, "General enquiry");
+  const service = stringValue(
+    record.service ?? record.service_interest ?? record.subject,
+    "General enquiry",
+  );
   const location = optionalValue(record.location ?? record.site_address ?? record.address);
-  const detail = optionalValue(record.project_details ?? record.message ?? record.notes ?? record.content);
+  const detail = optionalValue(
+    record.project_details ?? record.message ?? record.notes ?? record.content,
+  );
 
   return [
     `*COSSA NEXUS — ${title}*`,
@@ -112,29 +123,32 @@ async function writeDelivery(
   providerStatus: number | null,
   providerResponse: string | null,
 ) {
-  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/notification_deliveries?on_conflict=organisation_id,channel,idempotency_key`, {
-    method: "POST",
-    headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates,return=minimal",
+  const response = await fetch(
+    `${env.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/notification_deliveries?on_conflict=organisation_id,channel,idempotency_key`,
+    {
+      method: "POST",
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify({
+        organisation_id: env.COSSA_ORGANISATION_ID,
+        event_type: event.eventType,
+        entity_type: event.entityType,
+        entity_id: event.entityId,
+        source: event.source,
+        request_id: event.requestId,
+        channel: "callmebot_whatsapp",
+        status,
+        idempotency_key: event.idempotencyKey,
+        provider_status: providerStatus,
+        provider_response: providerResponse ? truncate(providerResponse, 800) : null,
+        occurred_at: event.occurredAt,
+      }),
     },
-    body: JSON.stringify({
-      organisation_id: env.COSSA_ORGANISATION_ID,
-      event_type: event.eventType,
-      entity_type: event.entityType,
-      entity_id: event.entityId,
-      source: event.source,
-      request_id: event.requestId,
-      channel: "callmebot_whatsapp",
-      status,
-      idempotency_key: event.idempotencyKey,
-      provider_status: providerStatus,
-      provider_response: providerResponse ? truncate(providerResponse, 800) : null,
-      occurred_at: event.occurredAt,
-    }),
-  });
+  );
 
   if (!response.ok) {
     throw new Error(`Supabase delivery audit failed with ${response.status}`);
@@ -177,14 +191,8 @@ function localDateLabel(value: Date) {
   }).format(value);
 }
 
-async function fetchExactCount(
-  env: Env,
-  table: string,
-  params: Record<string, string>,
-) {
-  const endpoint = new URL(
-    `${env.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${table}`,
-  );
+async function fetchExactCount(env: Env, table: string, params: Record<string, string>) {
+  const endpoint = new URL(`${env.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${table}`);
 
   endpoint.search = new URLSearchParams({
     select: "id",
@@ -253,33 +261,38 @@ async function buildDailyAttentionEvent(
   const organisation = `eq.${env.COSSA_ORGANISATION_ID}`;
   const createdSince = `gte.${since}`;
 
-  const [newLeads, awaitingApproval, failedRuns, failedNotifications] =
-    await Promise.all([
-      fetchExactCount(env, "leads", {
-        organisation_id: organisation,
-        created_at: createdSince,
-      }),
-      fetchExactCount(env, "missions", {
-        organisation_id: organisation,
-        status: "eq.awaiting_approval",
-      }),
-      fetchExactCount(env, "mission_runs", {
-        organisation_id: organisation,
-        status: "eq.failed",
-        completed_at: createdSince,
-      }),
-      fetchExactCount(env, "notification_deliveries", {
-        organisation_id: organisation,
-        status: "eq.failed",
-        created_at: createdSince,
-      }),
-    ]);
+  const [newLeads, awaitingApproval, failedRuns, failedNotifications] = await Promise.all([
+    fetchExactCount(env, "leads", {
+      organisation_id: organisation,
+      created_at: createdSince,
+    }),
+    fetchExactCount(env, "missions", {
+      organisation_id: organisation,
+      status: "eq.awaiting_approval",
+    }),
+    fetchExactCount(env, "mission_runs", {
+      organisation_id: organisation,
+      status: "eq.failed",
+      completed_at: createdSince,
+    }),
+    fetchExactCount(env, "notification_deliveries", {
+      organisation_id: organisation,
+      status: "eq.failed",
+      created_at: createdSince,
+    }),
+  ]);
 
   const attention = [
     newLeads ? `${newLeads} new lead${newLeads === 1 ? "" : "s"} in the last 24 hours` : null,
-    awaitingApproval ? `${awaitingApproval} mission${awaitingApproval === 1 ? "" : "s"} awaiting owner approval` : null,
-    failedRuns ? `${failedRuns} workforce run failure${failedRuns === 1 ? "" : "s"} in the last 24 hours` : null,
-    failedNotifications ? `${failedNotifications} notification delivery failure${failedNotifications === 1 ? "" : "s"} in the last 24 hours` : null,
+    awaitingApproval
+      ? `${awaitingApproval} mission${awaitingApproval === 1 ? "" : "s"} awaiting owner approval`
+      : null,
+    failedRuns
+      ? `${failedRuns} workforce run failure${failedRuns === 1 ? "" : "s"} in the last 24 hours`
+      : null,
+    failedNotifications
+      ? `${failedNotifications} notification delivery failure${failedNotifications === 1 ? "" : "s"} in the last 24 hours`
+      : null,
   ].filter((item): item is string => Boolean(item));
 
   return {
@@ -343,10 +356,12 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") return json({ status: "ok" });
-    if (request.method !== "POST" || url.pathname !== "/v1/supabase-alert") return json({ error: "Not found" }, 404);
+    if (request.method !== "POST" || url.pathname !== "/v1/supabase-alert")
+      return json({ error: "Not found" }, 404);
 
     const suppliedSecret = request.headers.get("x-cossa-alert-secret") ?? "";
-    if (!constantTimeEquals(suppliedSecret, env.ALERT_SHARED_SECRET)) return json({ error: "Unauthorized" }, 401);
+    if (!constantTimeEquals(suppliedSecret, env.ALERT_SHARED_SECRET))
+      return json({ error: "Unauthorized" }, 401);
 
     let webhook: SupabaseWebhook;
     try {
@@ -365,7 +380,10 @@ export default {
 
     try {
       await notifyOwner(env, event);
-      if (env.ALERT_DEDUP) await env.ALERT_DEDUP.put(event.idempotencyKey, "sent", { expirationTtl: 60 * 60 * 24 * 30 });
+      if (env.ALERT_DEDUP)
+        await env.ALERT_DEDUP.put(event.idempotencyKey, "sent", {
+          expirationTtl: 60 * 60 * 24 * 30,
+        });
       return json({ status: "sent", eventId: event.entityId }, 202);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Alert delivery failed";
@@ -378,16 +396,11 @@ export default {
     }
   },
 
-  async scheduled(
-    controller: ScheduledController,
-    env: Env,
-  ): Promise<void> {
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     try {
       await runDailyAttentionDigest(
         env,
-        Number.isFinite(controller.scheduledTime)
-          ? controller.scheduledTime
-          : Date.now(),
+        Number.isFinite(controller.scheduledTime) ? controller.scheduledTime : Date.now(),
       );
     } catch (error) {
       console.error("Daily attention briefing failed.", error);

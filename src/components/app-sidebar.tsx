@@ -1,7 +1,4 @@
-import {
-  Link,
-  useRouterState,
-} from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 
 import {
   Building2,
@@ -111,11 +108,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
         icon: Building2,
 
-        matchPrefixes: [
-          "/ai/workforce",
-          "/ai/ceo",
-          "/ai/orchestrator",
-        ],
+        matchPrefixes: ["/ai/workforce", "/ai/ceo", "/ai/orchestrator"],
       },
     ],
   },
@@ -134,9 +127,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
         icon: Store,
 
-        matchPrefixes: [
-          "/businesses/store",
-        ],
+        matchPrefixes: ["/businesses/store"],
       },
 
       {
@@ -149,9 +140,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
         icon: Code2,
 
-        matchPrefixes: [
-          "/businesses/tech",
-        ],
+        matchPrefixes: ["/businesses/tech"],
       },
 
       {
@@ -164,9 +153,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
         icon: HardHat,
 
-        matchPrefixes: [
-          "/businesses/construction",
-        ],
+        matchPrefixes: ["/businesses/construction"],
       },
 
       {
@@ -179,9 +166,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
         icon: Wrench,
 
-        matchPrefixes: [
-          "/businesses/facility-services",
-        ],
+        matchPrefixes: ["/businesses/facility-services"],
       },
 
       {
@@ -194,9 +179,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
         icon: FileStack,
 
-        matchPrefixes: [
-          "/businesses/nexdocs",
-        ],
+        matchPrefixes: ["/businesses/nexdocs"],
       },
     ],
   },
@@ -244,9 +227,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
         icon: TrendingUp,
 
-        matchPrefixes: [
-          "/sales",
-        ],
+        matchPrefixes: ["/sales"],
       },
 
       {
@@ -259,9 +240,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
         icon: Presentation,
 
-        matchPrefixes: [
-          "/marketing/showcase-library",
-        ],
+        matchPrefixes: ["/marketing/showcase-library"],
       },
     ],
   },
@@ -273,18 +252,13 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
       {
         title: "Workflows",
 
-        description:
-          "Cross-company workflow design, AI automation and coordinated execution.",
+        description: "Cross-company workflow design, AI automation and coordinated execution.",
 
         to: "/ai/workflow",
 
         icon: Workflow,
 
-        matchPrefixes: [
-          "/ai/workflow",
-          "/ai/automation",
-          "/operations/automation",
-        ],
+        matchPrefixes: ["/ai/workflow", "/ai/automation", "/operations/automation"],
       },
 
       {
@@ -297,9 +271,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
         icon: Sparkles,
 
-        matchPrefixes: [
-          "/operations",
-        ],
+        matchPrefixes: ["/operations"],
       },
     ],
   },
@@ -318,24 +290,19 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 
         icon: PackageSearch,
 
-        matchPrefixes: [
-          "/integrations",
-        ],
+        matchPrefixes: ["/integrations"],
       },
 
       {
         title: "Administration",
 
-        description:
-          "Workspace configuration, company settings and platform control.",
+        description: "Workspace configuration, company settings and platform control.",
 
         to: "/settings",
 
         icon: Settings2,
 
-        matchPrefixes: [
-          "/settings",
-        ],
+        matchPrefixes: ["/settings"],
       },
     ],
   },
@@ -345,67 +312,30 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
 /* PATH HELPERS                                                               */
 /* -------------------------------------------------------------------------- */
 
-function normalisePathname(
-  pathname: string,
-): string {
+function normalisePathname(pathname: string): string {
   if (pathname === "/") {
     return pathname;
   }
 
-  return pathname.replace(
-    /\/+$/,
-    "",
-  );
+  return pathname.replace(/\/+$/, "");
 }
 
-function pathMatchesPrefix(
-  pathname: string,
-  prefix: string,
-): boolean {
-  const normalisedPathname =
-    normalisePathname(
-      pathname,
-    );
+function pathMatchesPrefix(pathname: string, prefix: string): boolean {
+  const normalisedPathname = normalisePathname(pathname);
 
-  const normalisedPrefix =
-    normalisePathname(
-      prefix,
-    );
+  const normalisedPrefix = normalisePathname(prefix);
 
   return (
-    normalisedPathname ===
-      normalisedPrefix ||
-    normalisedPathname.startsWith(
-      `${normalisedPrefix}/`,
-    )
+    normalisedPathname === normalisedPrefix || normalisedPathname.startsWith(`${normalisedPrefix}/`)
   );
 }
 
-function isNavigationItemActive(
-  pathname: string,
-  item: SidebarNavigationItem,
-): boolean {
-  if (
-    pathMatchesPrefix(
-      pathname,
-      item.to,
-    )
-  ) {
+function isNavigationItemActive(pathname: string, item: SidebarNavigationItem): boolean {
+  if (pathMatchesPrefix(pathname, item.to)) {
     return true;
   }
 
-  return (
-    item.matchPrefixes?.some(
-      (
-        prefix,
-      ) =>
-        pathMatchesPrefix(
-          pathname,
-          prefix,
-        ),
-    ) ??
-    false
-  );
+  return item.matchPrefixes?.some((prefix) => pathMatchesPrefix(pathname, prefix)) ?? false;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -413,45 +343,24 @@ function isNavigationItemActive(
 /* -------------------------------------------------------------------------- */
 
 export function AppSidebar() {
-  const {
-    state,
-  } =
-    useSidebar();
+  const { state } = useSidebar();
 
-  const collapsed =
-    state ===
-    "collapsed";
+  const collapsed = state === "collapsed";
 
-  const pathname =
-    useRouterState({
-      select:
-        (
-          routerState,
-        ) =>
-          routerState.location.pathname,
-    });
+  const pathname = useRouterState({
+    select: (routerState) => routerState.location.pathname,
+  });
 
   return (
-    <Sidebar
-      collapsible="icon"
-      className="border-r border-sidebar-border"
-    >
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       {/* ------------------------------------------------------------------ */}
       {/* BRAND                                                              */}
       {/* ------------------------------------------------------------------ */}
 
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="px-2 py-2">
-          <Link
-            to="/command-center"
-            aria-label="GROWTH Command Center"
-            className="block"
-          >
-            {collapsed ? (
-              <GrowthSymbol className="mx-auto h-9 w-9" />
-            ) : (
-              <GrowthProductBrand />
-            )}
+          <Link to="/command-center" aria-label="GROWTH Command Center" className="block">
+            {collapsed ? <GrowthSymbol className="mx-auto h-9 w-9" /> : <GrowthProductBrand />}
           </Link>
         </div>
       </SidebarHeader>
@@ -461,130 +370,82 @@ export function AppSidebar() {
       {/* ------------------------------------------------------------------ */}
 
       <SidebarContent className="py-1">
-        {COMPANY_SIDEBAR.map(
-          (
-            group,
-          ) => (
-            <SidebarGroup
-              key={
-                group.label
-              }
-              className="py-1"
-            >
-              {!collapsed ? (
-                <SidebarGroupLabel className="h-7 px-2 text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
-                  {
-                    group.label
-                  }
-                </SidebarGroupLabel>
-              ) : null}
+        {COMPANY_SIDEBAR.map((group) => (
+          <SidebarGroup key={group.label} className="py-1">
+            {!collapsed ? (
+              <SidebarGroupLabel className="h-7 px-2 text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                {group.label}
+              </SidebarGroupLabel>
+            ) : null}
 
-              <SidebarGroupContent>
-                <SidebarMenu className="gap-1">
-                  {group.items.map(
-                    (
-                      item,
-                    ) => {
-                      const active =
-                        isNavigationItemActive(
-                          pathname,
-                          item,
-                        );
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-1">
+                {group.items.map((item) => {
+                  const active = isNavigationItemActive(pathname, item);
 
-                      const Icon =
-                        item.icon;
+                  const Icon = item.icon;
 
-                      return (
-                        <SidebarMenuItem
-                          key={
-                            `${group.label}-${item.title}`
-                          }
-                        >
-                          <SidebarMenuButton
-                            asChild
-                            isActive={
-                              active
-                            }
-                            tooltip={{
-                              children:
-                                (
-                                  <div className="max-w-64">
-                                    <p className="font-medium">
-                                      {
-                                        item.title
-                                      }
-                                    </p>
+                  return (
+                    <SidebarMenuItem key={`${group.label}-${item.title}`}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={{
+                          children: (
+                            <div className="max-w-64">
+                              <p className="font-medium">{item.title}</p>
 
-                                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                                      {
-                                        item.description
-                                      }
-                                    </p>
-                                  </div>
-                                ),
-                            }}
+                              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                {item.description}
+                              </p>
+                            </div>
+                          ),
+                        }}
+                        className={
+                          active
+                            ? [
+                                "min-h-10",
+                                "rounded-lg",
+                                "border",
+                                "border-primary/20",
+                                "bg-primary/10",
+                                "font-medium",
+                                "text-primary",
+                                "hover:bg-primary/15",
+                                "hover:text-primary",
+                              ].join(" ")
+                            : [
+                                "min-h-10",
+                                "rounded-lg",
+                                "border",
+                                "border-transparent",
+                                "text-sidebar-foreground/80",
+                                "transition-colors",
+                                "hover:border-sidebar-border",
+                                "hover:bg-sidebar-accent",
+                                "hover:text-sidebar-accent-foreground",
+                              ].join(" ")
+                        }
+                      >
+                        <Link to={item.to} className="flex w-full items-center gap-2">
+                          <Icon
                             className={
-                              active
-                                ? [
-                                    "min-h-10",
-                                    "rounded-lg",
-                                    "border",
-                                    "border-primary/20",
-                                    "bg-primary/10",
-                                    "font-medium",
-                                    "text-primary",
-                                    "hover:bg-primary/15",
-                                    "hover:text-primary",
-                                  ].join(
-                                    " ",
-                                  )
-                                : [
-                                    "min-h-10",
-                                    "rounded-lg",
-                                    "border",
-                                    "border-transparent",
-                                    "text-sidebar-foreground/80",
-                                    "transition-colors",
-                                    "hover:border-sidebar-border",
-                                    "hover:bg-sidebar-accent",
-                                    "hover:text-sidebar-accent-foreground",
-                                  ].join(
-                                    " ",
-                                  )
+                              active ? "h-4 w-4 shrink-0 text-primary" : "h-4 w-4 shrink-0"
                             }
-                          >
-                            <Link
-                              to={
-                                item.to
-                              }
-                              className="flex w-full items-center gap-2"
-                            >
-                              <Icon
-                                className={
-                                  active
-                                    ? "h-4 w-4 shrink-0 text-primary"
-                                    : "h-4 w-4 shrink-0"
-                                }
-                              />
+                          />
 
-                              {!collapsed ? (
-                                <span className="min-w-0 flex-1 truncate text-sm">
-                                  {
-                                    item.title
-                                  }
-                                </span>
-                              ) : null}
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    },
-                  )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ),
-        )}
+                          {!collapsed ? (
+                            <span className="min-w-0 flex-1 truncate text-sm">{item.title}</span>
+                          ) : null}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
 
       {/* ------------------------------------------------------------------ */}

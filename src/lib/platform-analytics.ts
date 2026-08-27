@@ -31,10 +31,7 @@ export interface PlatformAnalyticsReport {
   reporting_scope: string;
 }
 
-export type PlatformAnalyticsErrorCode =
-  | "configuration-pending"
-  | "forbidden"
-  | "request-failed";
+export type PlatformAnalyticsErrorCode = "configuration-pending" | "forbidden" | "request-failed";
 
 export class PlatformAnalyticsError extends Error {
   constructor(

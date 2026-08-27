@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
 
-const COSSA_INTERNAL_ORGANISATION_ID =
-  "00000000-0000-4000-8000-000000000001";
+const COSSA_INTERNAL_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 
 type CanonicalPlanCode =
   | "internal"
@@ -11,12 +11,7 @@ type CanonicalPlanCode =
   | "business"
   | "enterprise";
 
-type SaasFeature =
-  | "crm"
-  | "workflows"
-  | "marketing"
-  | "ai"
-  | "ai_workforce";
+type SaasFeature = "crm" | "workflows" | "marketing" | "ai" | "ai_workforce";
 
 interface SaasEntitlements {
   planCode: CanonicalPlanCode;
@@ -38,6 +33,24 @@ interface AccessDecision {
   entitlements: SaasEntitlements;
 }
 
+interface SaasSubscriptionRow {
+  plan_code: string;
+  status: string;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  monthly_price_zar: number | null;
+}
+
+interface SaasPlanEntitlementsRow {
+  crm_enabled: boolean;
+  workflows_enabled: boolean;
+  marketing_enabled: boolean;
+  ai_enabled: boolean;
+  ai_monthly_credits: number | null;
+  ai_fair_use: boolean;
+  max_users: number | null;
+}
+
 /**
  * Temporary compatibility wrapper.
  *
@@ -45,9 +58,7 @@ interface AccessDecision {
  * schema. Keep all access to these tables server-side until generated types
  * are refreshed.
  */
-const db = supabaseAdmin as unknown as {
-  from: (table: string) => any;
-};
+const db = asDynamicSupabaseClient(supabaseAdmin);
 
 function normalizePlanCode(value: unknown): CanonicalPlanCode {
   switch (value) {
@@ -78,9 +89,7 @@ function internalEntitlements(): SaasEntitlements {
   };
 }
 
-export async function resolveSaasEntitlements(
-  organisationId: string,
-): Promise<SaasEntitlements> {
+export async function resolveSaasEntitlements(organisationId: string): Promise<SaasEntitlements> {
   if (!organisationId) {
     throw new Error("organisationId is required to resolve SaaS entitlements.");
   }
@@ -93,10 +102,8 @@ export async function resolveSaasEntitlements(
   }
 
   const { data: subscription, error: subscriptionError } = await db
-    .from("saas_subscriptions")
-    .select(
-      "plan_code,status,trial_ends_at,current_period_end,monthly_price_zar",
-    )
+    .from<SaasSubscriptionRow>("saas_subscriptions")
+    .select("plan_code,status,trial_ends_at,current_period_end,monthly_price_zar")
     .eq("organisation_id", organisationId)
     .in("status", ["trialing", "active", "past_due"])
     .order("created_at", { ascending: false })
@@ -129,7 +136,7 @@ export async function resolveSaasEntitlements(
   const planCode = normalizePlanCode(subscription.plan_code);
 
   const { data: plan, error: planError } = await db
-    .from("saas_plan_entitlements")
+    .from<SaasPlanEntitlementsRow>("saas_plan_entitlements")
     .select(
       "crm_enabled,workflows_enabled,marketing_enabled,ai_enabled,ai_monthly_credits,ai_fair_use,max_users",
     )
@@ -148,9 +155,7 @@ export async function resolveSaasEntitlements(
   const now = Date.now();
   const trialEndsAt = subscription.trial_ends_at ?? null;
   const trialExpired =
-    subscription.status === "trialing" &&
-    trialEndsAt &&
-    new Date(trialEndsAt).getTime() <= now;
+    subscription.status === "trialing" && trialEndsAt && new Date(trialEndsAt).getTime() <= now;
 
   const periodExpired =
     subscription.status === "active" &&
@@ -158,25 +163,19 @@ export async function resolveSaasEntitlements(
     new Date(subscription.current_period_end).getTime() <= now;
 
   const subscriptionOperational =
-    !trialExpired &&
-    !periodExpired &&
-    subscription.status !== "past_due";
+    !trialExpired && !periodExpired && subscription.status !== "past_due";
 
   return {
     planCode,
     subscriptionStatus: subscription.status,
     crmEnabled: subscriptionOperational && Boolean(plan.crm_enabled),
-    workflowsEnabled:
-      subscriptionOperational && Boolean(plan.workflows_enabled),
-    marketingEnabled:
-      subscriptionOperational && Boolean(plan.marketing_enabled),
+    workflowsEnabled: subscriptionOperational && Boolean(plan.workflows_enabled),
+    marketingEnabled: subscriptionOperational && Boolean(plan.marketing_enabled),
     aiEnabled: subscriptionOperational && Boolean(plan.ai_enabled),
     aiMonthlyCredits: Number(plan.ai_monthly_credits ?? 0),
     aiFairUse: Boolean(plan.ai_fair_use),
     maxUsers:
-      plan.max_users === null || plan.max_users === undefined
-        ? null
-        : Number(plan.max_users),
+      plan.max_users === null || plan.max_users === undefined ? null : Number(plan.max_users),
     isInternal: false,
     trialEndsAt,
   };

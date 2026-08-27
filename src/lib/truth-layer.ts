@@ -46,10 +46,22 @@ export interface MetricDefinition {
   metric_key: string;
   name: string;
   description: string;
-  semantic_type: "fact" | "calculation" | "inference" | "recommendation" | "action" | "verified_result";
+  semantic_type:
+    | "fact"
+    | "calculation"
+    | "inference"
+    | "recommendation"
+    | "action"
+    | "verified_result";
   value_kind: "currency" | "count" | "percentage" | "duration" | "status";
   source_systems: string[];
-  availability_status: "available" | "partial" | "not_connected" | "stale" | "failed" | "not_assessed";
+  availability_status:
+    | "available"
+    | "partial"
+    | "not_connected"
+    | "stale"
+    | "failed"
+    | "not_assessed";
   last_verified_at: string | null;
 }
 

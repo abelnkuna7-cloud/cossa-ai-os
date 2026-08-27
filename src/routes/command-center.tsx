@@ -659,13 +659,11 @@ function Dashboard() {
             <ol className="mt-5 space-y-3">
               {storeQuotes.map((quote) => {
                 const itemLabels = quoteItemLabels(quote.items);
-                const requester = quote.contact_name?.trim() || quote.full_name?.trim() || "Store customer";
+                const requester =
+                  quote.contact_name?.trim() || quote.full_name?.trim() || "Store customer";
 
                 return (
-                  <li
-                    key={quote.id}
-                    className="rounded-xl border border-primary/25 bg-card/40 p-4"
-                  >
+                  <li key={quote.id} className="rounded-xl border border-primary/25 bg-card/40 p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -676,7 +674,9 @@ function Dashboard() {
                         </div>
 
                         {quote.company?.trim() ? (
-                          <p className="mt-0.5 text-xs text-muted-foreground">{quote.company.trim()}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {quote.company.trim()}
+                          </p>
                         ) : null}
                       </div>
 
@@ -710,7 +710,9 @@ function Dashboard() {
                         <dt className="text-[10px] uppercase tracking-widest text-muted-foreground">
                           Quantity
                         </dt>
-                        <dd className="mt-1">{quote.estimated_quantity?.trim() || "Not specified"}</dd>
+                        <dd className="mt-1">
+                          {quote.estimated_quantity?.trim() || "Not specified"}
+                        </dd>
                       </div>
                       <div>
                         <dt className="text-[10px] uppercase tracking-widest text-muted-foreground">

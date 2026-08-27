@@ -60,29 +60,29 @@
   --radius: 0.75rem;
 
   --black: #000000;
-  --charcoal: #1A1A1A;
-  --gold: #D4AF37;
-  --gold-shadow: #8C6A16;
-  --gold-highlight: #F2D16B;
+  --charcoal: #1a1a1a;
+  --gold: #d4af37;
+  --gold-shadow: #8c6a16;
+  --gold-highlight: #f2d16b;
 
   --background: var(--black);
-  --foreground: #FFFFFF;
+  --foreground: #ffffff;
 
   --card: var(--charcoal);
-  --card-foreground: #FFFFFF;
+  --card-foreground: #ffffff;
   --popover: var(--charcoal);
-  --popover-foreground: #FFFFFF;
+  --popover-foreground: #ffffff;
 
   --primary: var(--gold);
   --primary-foreground: var(--black);
   --secondary: #151515;
-  --secondary-foreground: #FFFFFF;
-  --muted: #1A1A1A;
-  --muted-foreground: #C9C9C9;
-  --accent: #2A2A2A;
-  --accent-foreground: #FFFFFF;
+  --secondary-foreground: #ffffff;
+  --muted: #1a1a1a;
+  --muted-foreground: #c9c9c9;
+  --accent: #2a2a2a;
+  --accent-foreground: #ffffff;
   --destructive: oklch(0.62 0.22 25);
-  --destructive-foreground: #FFFFFF;
+  --destructive-foreground: #ffffff;
   --success: oklch(0.72 0.16 155);
   --warning: oklch(0.82 0.16 80);
   --info: oklch(0.7 0.14 230);
@@ -98,24 +98,28 @@
   --chart-5: oklch(0.7 0.18 305);
 
   --sidebar: #000000;
-  --sidebar-foreground: #FFFFFF;
+  --sidebar-foreground: #ffffff;
   --sidebar-primary: var(--gold);
   --sidebar-primary-foreground: var(--black);
   --sidebar-accent: var(--charcoal);
-  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-accent-foreground: #ffffff;
   --sidebar-border: color-mix(in srgb, var(--gold) 14%, transparent);
   --sidebar-ring: color-mix(in srgb, var(--gold) 45%, transparent);
 
   --gradient-gold: linear-gradient(135deg, var(--gold-highlight), var(--gold), var(--gold-shadow));
-  --gradient-navy: linear-gradient(160deg, #000000, #1A1A1A);
-  --shadow-premium: 0 20px 50px -20px rgb(0 0 0 / 0.8), 0 8px 24px -12px color-mix(in srgb, var(--gold) 16%, transparent);
-  --shadow-gold-glow: 0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent), 0 8px 32px -8px color-mix(in srgb, var(--gold) 48%, transparent);
+  --gradient-navy: linear-gradient(160deg, #000000, #1a1a1a);
+  --shadow-premium:
+    0 20px 50px -20px rgb(0 0 0 / 0.8),
+    0 8px 24px -12px color-mix(in srgb, var(--gold) 16%, transparent);
+  --shadow-gold-glow:
+    0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent),
+    0 8px 32px -8px color-mix(in srgb, var(--gold) 48%, transparent);
 }
 
 /* We keep .dark mirroring root since app is dark-first */
 .dark {
   --background: var(--black);
-  --foreground: #FFFFFF;
+  --foreground: #ffffff;
 }
 
 @layer base {
@@ -123,14 +127,18 @@
     border-color: var(--color-border);
   }
 
-  html, body {
+  html,
+  body {
     background: var(--gradient-navy);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
 
-  h1, h2, h3, h4 {
+  h1,
+  h2,
+  h3,
+  h4 {
     font-family: var(--font-display);
     letter-spacing: -0.01em;
   }

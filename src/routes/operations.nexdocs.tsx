@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, FileText, Loader2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
 import { COSSA_ORGANISATION_ID } from "@/lib/workforce-data";
 
 type NexDocsActivity = {
@@ -13,13 +14,11 @@ type NexDocsActivity = {
   created_at: string;
 };
 
-const db = supabase as unknown as {
-  from: (table: string) => any;
-};
+const db = asDynamicSupabaseClient(supabase);
 
 async function loadNexDocsActivity(): Promise<NexDocsActivity[]> {
   const { data, error } = await db
-    .from("ops_documents")
+    .from<NexDocsActivity>("ops_documents")
     .select("id, title, category, status, notes, created_at")
     .eq("organisation_id", COSSA_ORGANISATION_ID)
     .not("nexdocs_document_id", "is", null)
@@ -37,8 +36,7 @@ export const Route = createFileRoute("/operations/nexdocs")({
       { title: "NexDocs documents — Cossa Growth" },
       {
         name: "description",
-        content:
-          "Private NexDocs document activity for the Cossa Growth operations workspace.",
+        content: "Private NexDocs document activity for the Cossa Growth operations workspace.",
       },
       { name: "robots", content: "noindex" },
     ],
@@ -60,11 +58,11 @@ function NexDocsOperations() {
               <FileText className="h-4 w-4" />
               Private operations feed
             </div>
-            <h1 className="mt-3 font-display text-3xl font-semibold">
-              NexDocs document activity
-            </h1>
+            <h1 className="mt-3 font-display text-3xl font-semibold">NexDocs document activity</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Documents created in the Cossa administrator workspace appear here for operational visibility. Visitor and white-label workspaces remain private and are never added to this feed.
+              Documents created in the Cossa administrator workspace appear here for operational
+              visibility. Visitor and white-label workspaces remain private and are never added to
+              this feed.
             </p>
           </div>
           <a
@@ -79,7 +77,8 @@ function NexDocsOperations() {
         </div>
         <div className="mt-6 flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
           <ShieldCheck className="h-5 w-5 shrink-0 text-primary" />
-          This is an internal activity view. It contains no customer documents or visitor account data.
+          This is an internal activity view. It contains no customer documents or visitor account
+          data.
         </div>
       </section>
 
@@ -88,7 +87,9 @@ function NexDocsOperations() {
           <div>
             <h2 className="font-display text-xl font-semibold">Recent generated documents</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              {activity.data ? `${activity.data.length} document${activity.data.length === 1 ? "" : "s"} visible` : "Loading document activity"}
+              {activity.data
+                ? `${activity.data.length} document${activity.data.length === 1 ? "" : "s"} visible`
+                : "Loading document activity"}
             </p>
           </div>
         </div>
@@ -100,7 +101,9 @@ function NexDocsOperations() {
           </div>
         ) : activity.isError ? (
           <div className="px-5 py-12 text-center">
-            <p className="text-sm text-destructive">The private document activity could not be loaded.</p>
+            <p className="text-sm text-destructive">
+              The private document activity could not be loaded.
+            </p>
             <button
               type="button"
               onClick={() => void activity.refetch()}
@@ -118,7 +121,12 @@ function NexDocsOperations() {
                     <div className="truncate font-medium">{document.title}</div>
                     <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
                       {document.category ? <span>{document.category}</span> : null}
-                      <span>{new Date(document.created_at).toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" })}</span>
+                      <span>
+                        {new Date(document.created_at).toLocaleString("en-ZA", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </span>
                     </div>
                   </div>
                   <span className="w-fit rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
@@ -136,7 +144,8 @@ function NexDocsOperations() {
             <FileText className="mx-auto h-8 w-8 text-primary/60" />
             <h3 className="mt-3 font-display text-lg">No Cossa documents yet</h3>
             <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-              Generate a document in the NexDocs administrator workspace and it will appear here automatically.
+              Generate a document in the NexDocs administrator workspace and it will appear here
+              automatically.
             </p>
           </div>
         )}

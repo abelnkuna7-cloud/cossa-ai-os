@@ -73,8 +73,7 @@ interface QuickLink {
 const HELP_SECTIONS: HelpSection[] = [
   {
     title: "1. Getting started",
-    description:
-      "Start from the company level before opening individual AI tools.",
+    description: "Start from the company level before opening individual AI tools.",
     icon: Sparkles,
 
     items: [
@@ -88,8 +87,7 @@ const HELP_SECTIONS: HelpSection[] = [
 
   {
     title: "2. Company navigation",
-    description:
-      "GROWTH separates company structure from individual AI capabilities.",
+    description: "GROWTH separates company structure from individual AI capabilities.",
     icon: Building2,
 
     items: [
@@ -119,8 +117,7 @@ const HELP_SECTIONS: HelpSection[] = [
 
   {
     title: "4. AI Workforce",
-    description:
-      "AI Workforce is the group-wide employee operating system.",
+    description: "AI Workforce is the group-wide employee operating system.",
     icon: UsersRound,
 
     items: [
@@ -150,8 +147,7 @@ const HELP_SECTIONS: HelpSection[] = [
 
   {
     title: "6. AI tools",
-    description:
-      "Use specialised AI tools when you already know the capability you need.",
+    description: "Use specialised AI tools when you already know the capability you need.",
     icon: Bot,
 
     items: [
@@ -169,8 +165,7 @@ const HELP_SECTIONS: HelpSection[] = [
 
   {
     title: "7. Workflows",
-    description:
-      "There are two different workflow concepts in GROWTH.",
+    description: "There are two different workflow concepts in GROWTH.",
     icon: Workflow,
 
     items: [
@@ -199,8 +194,7 @@ const HELP_SECTIONS: HelpSection[] = [
 
   {
     title: "9. Integrations",
-    description:
-      "Integrations are what turn internal AI planning into verified external actions.",
+    description: "Integrations are what turn internal AI planning into verified external actions.",
     icon: Network,
 
     items: [
@@ -213,8 +207,7 @@ const HELP_SECTIONS: HelpSection[] = [
 
   {
     title: "10. Owner approval and safety",
-    description:
-      "Routine internal work should move quickly. High-risk actions remain controlled.",
+    description: "Routine internal work should move quickly. High-risk actions remain controlled.",
     icon: ShieldCheck,
 
     items: [
@@ -253,48 +246,42 @@ const HELP_SECTIONS: HelpSection[] = [
 const QUICK_LINKS: QuickLink[] = [
   {
     title: "Command Center",
-    description:
-      "Open the group-wide operating overview.",
+    description: "Open the group-wide operating overview.",
     to: "/command-center",
     icon: Building2,
   },
 
   {
     title: "AI Workforce",
-    description:
-      "Departments, employees, missions and execution.",
+    description: "Departments, employees, missions and execution.",
     to: "/ai/workforce",
     icon: UsersRound,
   },
 
   {
     title: "AI CEO",
-    description:
-      "Delegate a result to the company AI leadership layer.",
+    description: "Delegate a result to the company AI leadership layer.",
     to: "/ai/ceo",
     icon: BrainCircuit,
   },
 
   {
     title: "Workflow Builder",
-    description:
-      "Design advanced repeatable workflows.",
+    description: "Design advanced repeatable workflows.",
     to: "/ai/workflow",
     icon: Workflow,
   },
 
   {
     title: "Integrations",
-    description:
-      "Manage connected systems and authorised accounts.",
+    description: "Manage connected systems and authorised accounts.",
     to: "/integrations",
     icon: Network,
   },
 
   {
     title: "Marketing & Growth",
-    description:
-      "Open campaigns, SEO, social and growth tools.",
+    description: "Open campaigns, SEO, social and growth tools.",
     to: "/marketing/ai-director",
     icon: Megaphone,
   },
@@ -307,40 +294,35 @@ const QUICK_LINKS: QuickLink[] = [
 const BUSINESS_LINKS: QuickLink[] = [
   {
     title: "Cossa Store",
-    description:
-      "Products, suppliers, merchandising, dropshipping and ecommerce.",
+    description: "Products, suppliers, merchandising, dropshipping and ecommerce.",
     to: "/businesses/store",
     icon: Store,
   },
 
   {
     title: "Cossa Tech",
-    description:
-      "Websites, software, automation and technical delivery.",
+    description: "Websites, software, automation and technical delivery.",
     to: "/businesses/tech",
     icon: PackageSearch,
   },
 
   {
     title: "Cossa Construction",
-    description:
-      "Construction leads, quotations, projects and tenders.",
+    description: "Construction leads, quotations, projects and tenders.",
     to: "/businesses/construction",
     icon: HardHat,
   },
 
   {
     title: "Facility Services",
-    description:
-      "Service customers, quotations, jobs and recurring operations.",
+    description: "Service customers, quotations, jobs and recurring operations.",
     to: "/businesses/facility-services",
     icon: Wrench,
   },
 
   {
     title: "NexDocs",
-    description:
-      "Document production, proposals, quotations and document workflows.",
+    description: "Document production, proposals, quotations and document workflows.",
     to: "/businesses/nexdocs",
     icon: FileText,
   },
@@ -370,17 +352,13 @@ function HelpCentre() {
           </p>
 
           <h1 className="mt-2 font-display text-3xl font-semibold md:text-4xl">
-            Help{" "}
-            <span className="text-gradient-gold">
-              Centre
-            </span>
+            Help <span className="text-gradient-gold">Centre</span>
           </h1>
 
           <p className="mt-3 max-w-4xl text-sm leading-relaxed text-muted-foreground">
-            Learn how to operate GROWTH as the Cossa Nexus Holdings business
-            operating system. This guide explains where to work, when to use
-            AI employees, when to use specialised AI tools, how workflows work
-            and which actions remain owner-controlled.
+            Learn how to operate GROWTH as the Cossa Nexus Holdings business operating system. This
+            guide explains where to work, when to use AI employees, when to use specialised AI
+            tools, how workflows work and which actions remain owner-controlled.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-2">
@@ -394,11 +372,7 @@ function HelpCentre() {
               </Link>
             </Button>
 
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary/40 text-primary"
-            >
+            <Button asChild variant="outline" className="border-primary/40 text-primary">
               <Link
                 to="/ai/workforce"
                 search={{
@@ -434,9 +408,8 @@ function HelpCentre() {
             </h2>
 
             <p className="mt-2 max-w-4xl text-sm leading-relaxed text-muted-foreground">
-              Do not start by opening random AI tools. Start with the business
-              objective, then move to the correct business workspace,
-              department or AI employee.
+              Do not start by opening random AI tools. Start with the business objective, then move
+              to the correct business workspace, department or AI employee.
             </p>
           </div>
         </div>
@@ -478,17 +451,12 @@ function HelpCentre() {
             Quick access
           </p>
 
-          <h2 className="mt-1 font-display text-2xl font-semibold">
-            Main GROWTH controls
-          </h2>
+          <h2 className="mt-1 font-display text-2xl font-semibold">Main GROWTH controls</h2>
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {QUICK_LINKS.map((item) => (
-            <HelpLinkCard
-              key={item.title}
-              item={item}
-            />
+            <HelpLinkCard key={item.title} item={item} />
           ))}
         </div>
       </section>
@@ -511,18 +479,15 @@ function HelpCentre() {
             </h2>
 
             <p className="mt-2 max-w-4xl text-sm text-muted-foreground">
-              Business workspaces organise the tools relevant to each
-              subsidiary so normal operations do not become mixed together.
+              Business workspaces organise the tools relevant to each subsidiary so normal
+              operations do not become mixed together.
             </p>
           </div>
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {BUSINESS_LINKS.map((item) => (
-            <HelpLinkCard
-              key={item.title}
-              item={item}
-            />
+            <HelpLinkCard key={item.title} item={item} />
           ))}
         </div>
       </section>
@@ -540,9 +505,7 @@ function HelpCentre() {
               Full operating guide
             </p>
 
-            <h2 className="mt-1 font-display text-2xl font-semibold">
-              How to use GROWTH
-            </h2>
+            <h2 className="mt-1 font-display text-2xl font-semibold">How to use GROWTH</h2>
           </div>
         </div>
 
@@ -561,9 +524,7 @@ function HelpCentre() {
                   </div>
 
                   <div>
-                    <h3 className="font-display text-lg font-semibold">
-                      {section.title}
-                    </h3>
+                    <h3 className="font-display text-lg font-semibold">{section.title}</h3>
 
                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                       {section.description}
@@ -579,9 +540,7 @@ function HelpCentre() {
                     >
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 
-                      <span>
-                        {item}
-                      </span>
+                      <span>{item}</span>
                     </div>
                   ))}
                 </div>
@@ -609,10 +568,9 @@ function HelpCentre() {
             </h2>
 
             <p className="mt-2 max-w-4xl text-sm leading-relaxed text-muted-foreground">
-              GROWTH should automate ordinary internal work aggressively, but it
-              must never pretend an external action happened. Research,
-              drafting, analysis, planning and coordination should move quickly.
-              Money, contracts, credentials, supplier commitments, destructive
+              GROWTH should automate ordinary internal work aggressively, but it must never pretend
+              an external action happened. Research, drafting, analysis, planning and coordination
+              should move quickly. Money, contracts, credentials, supplier commitments, destructive
               changes and irreversible external actions remain controlled.
             </p>
           </div>
@@ -635,28 +593,20 @@ function HelpCentre() {
             </h2>
 
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              If you do not know which employee, department or workflow should
-              handle a task, delegate the outcome through Cossa AI or the AI
-              CEO.
+              If you do not know which employee, department or workflow should handle a task,
+              delegate the outcome through Cossa AI or the AI CEO.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary/40 text-primary"
-            >
+            <Button asChild variant="outline" className="border-primary/40 text-primary">
               <Link to="/ai/cossa">
                 <Sparkles className="mr-1.5 h-4 w-4" />
                 Ask Cossa AI
               </Link>
             </Button>
 
-            <Button
-              asChild
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
+            <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
               <Link to="/ai/ceo">
                 <BrainCircuit className="mr-1.5 h-4 w-4" />
                 Ask AI CEO
@@ -688,22 +638,14 @@ function StepCard({
         {number}
       </div>
 
-      <h3 className="mt-3 text-sm font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-3 text-sm font-semibold">{title}</h3>
 
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }
 
-function HelpLinkCard({
-  item,
-}: {
-  item: QuickLink;
-}) {
+function HelpLinkCard({ item }: { item: QuickLink }) {
   const Icon = item.icon;
 
   return (
@@ -719,13 +661,9 @@ function HelpLinkCard({
         <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" />
       </div>
 
-      <h3 className="mt-4 text-sm font-semibold">
-        {item.title}
-      </h3>
+      <h3 className="mt-4 text-sm font-semibold">{item.title}</h3>
 
-      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-        {item.description}
-      </p>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
     </Link>
   );
 }

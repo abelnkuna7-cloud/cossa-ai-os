@@ -2,10 +2,37 @@ import { supabase } from "@/integrations/supabase/client";
 import { dashboardStats } from "@/lib/business-data";
 import { COSSA_ORGANISATION_ID } from "@/lib/workforce-data";
 
-const db = supabase as unknown as {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  from: (table: string) => any;
-};
+type GrowthQueryError = { message: string };
+
+interface GrowthQueryResult<T extends Record<string, unknown>> {
+  data: T[] | null;
+  count: number | null;
+  error: GrowthQueryError | null;
+}
+
+interface GrowthQuery<T extends Record<string, unknown>> extends PromiseLike<GrowthQueryResult<T>> {
+  select(columns: string, options?: { count?: "exact"; head?: boolean }): GrowthQuery<T>;
+  eq(column: string, value: string): GrowthQuery<T>;
+  limit(limit: number): GrowthQuery<T>;
+}
+
+interface GrowthDataReader {
+  from<T extends Record<string, unknown>>(table: string): GrowthQuery<T>;
+}
+
+const db = supabase as unknown as GrowthDataReader;
+
+interface LeadFunnelSourceRow extends Record<string, unknown> {
+  id: string;
+  stage: string | null;
+  status: string | null;
+  estimated_value: number | string | null;
+}
+
+interface NormalizedLeadFunnelRow {
+  stage: string;
+  estimatedValue: number;
+}
 
 export interface LeadFunnelStage {
   key: string;
@@ -15,17 +42,19 @@ export interface LeadFunnelStage {
   rawStages: string[];
 }
 
+export interface MarketingOperationCounts {
+  contentItems: number;
+  socialPosts: number;
+  socialAccounts: number;
+  referrals: number;
+  reviewRequests: number;
+}
+
 export interface ConsolidatedGrowthIntelligence {
   dashboard: Awaited<ReturnType<typeof dashboardStats>>;
   leadFunnel: LeadFunnelStage[];
   unmappedLeadStages: LeadFunnelStage[];
-  marketingOperations: {
-    contentItems: number;
-    socialPosts: number;
-    socialAccounts: number;
-    referrals: number;
-    reviewRequests: number;
-  };
+  marketingOperations: MarketingOperationCounts;
 }
 
 const LEAD_STAGE_GROUPS: Array<{
@@ -47,10 +76,12 @@ const LEAD_STAGE_GROUPS: Array<{
 ];
 
 function cleanStage(value: unknown): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_") || "unknown";
+  return (
+    String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_") || "unknown"
+  );
 }
 
 function money(value: unknown): number {
@@ -59,7 +90,9 @@ function money(value: unknown): number {
 }
 
 async function safeCount(table: string): Promise<number> {
-  const { count, error } = await db.from(table).select("id", { count: "exact", head: true });
+  const { count, error } = await db
+    .from<{ id: string }>(table)
+    .select("id", { count: "exact", head: true });
   if (error) {
     // Missing optional legacy operational tables must not make the core command
     // centre fail. The caller can still show zero rather than inventing data.
@@ -69,10 +102,18 @@ async function safeCount(table: string): Promise<number> {
 }
 
 export async function consolidatedGrowthIntelligence(): Promise<ConsolidatedGrowthIntelligence> {
-  const [dashboard, leadResult, contentItems, socialPosts, socialAccounts, referrals, reviewRequests] = await Promise.all([
+  const [
+    dashboard,
+    leadResult,
+    contentItems,
+    socialPosts,
+    socialAccounts,
+    referrals,
+    reviewRequests,
+  ] = await Promise.all([
     dashboardStats(),
     db
-      .from("leads")
+      .from<LeadFunnelSourceRow>("leads")
       .select("id,stage,status,estimated_value")
       .eq("organisation_id", COSSA_ORGANISATION_ID)
       .limit(5000),
@@ -87,7 +128,7 @@ export async function consolidatedGrowthIntelligence(): Promise<ConsolidatedGrow
     throw new Error(`Unable to load the canonical lead funnel: ${leadResult.error.message}`);
   }
 
-  const leadRows = (leadResult.data ?? []).map((row: Record<string, unknown>) => ({
+  const leadRows: NormalizedLeadFunnelRow[] = (leadResult.data ?? []).map((row) => ({
     stage: cleanStage(row.stage ?? row.status),
     estimatedValue: money(row.estimated_value),
   }));

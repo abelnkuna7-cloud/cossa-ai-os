@@ -569,7 +569,10 @@ async function logExecutionEvent(
   }
 }
 
-function capabilityForComponent(componentType: "provider" | "tool", componentKey: string): string | null {
+function capabilityForComponent(
+  componentType: "provider" | "tool",
+  componentKey: string,
+): string | null {
   if (componentType !== "tool") return null;
   if (componentKey === "cossa-lead-hunter") return "lead-hunter";
   if (componentKey === "cossa-crm") return "growth-crm";
@@ -1212,7 +1215,9 @@ async function modelWithFallback(
 
   await recordCapabilityOutcome(environment, "provider-router", {
     status: "degraded",
-    error: new Error(`No configured model provider could complete the task. ${failures.join(" | ")}`),
+    error: new Error(
+      `No configured model provider could complete the task. ${failures.join(" | ")}`,
+    ),
   });
   throw new AgentRuntimeError(
     "all_model_providers_failed",
@@ -1690,9 +1695,7 @@ function taskInput(task: RuntimeTask): LeadHunterInput {
   const payload = asRecord(task.payload);
   // Scheduled trigger tasks deliberately wrap mission fields in configuration.
   return validateLeadHunterInput(
-    task.task_type === "scheduled_lead_hunter_trigger"
-      ? asRecord(payload.configuration)
-      : payload,
+    task.task_type === "scheduled_lead_hunter_trigger" ? asRecord(payload.configuration) : payload,
   );
 }
 
@@ -2185,40 +2188,41 @@ export async function runAgentRuntimeTick(): Promise<{
 export async function orchestrationDashboard(actor: RuntimeActor): Promise<JsonObject> {
   const environment = requireRuntimeEnvironment();
   const organisationId = actor.organisationId;
-  const [agents, adapters, tasks, approvals, circuits, triggers, missions, heartbeats] = await Promise.all([
-    databaseRequest<JsonObject[]>(
-      environment,
-      `ai_agents?${new URLSearchParams({ select: "id,agent_key,name,purpose,status,employee_id", organisation_id: `eq.${organisationId}`, order: "agent_key.asc" })}`,
-    ),
-    databaseRequest<JsonObject[]>(
-      environment,
-      `agent_tool_adapters?${new URLSearchParams({ select: "id,tool_key,name,provider,capability,connection_state,risk_level,requires_approval,last_checked_at", organisation_id: `eq.${organisationId}`, order: "name.asc" })}`,
-    ),
-    databaseRequest<JsonObject[]>(
-      environment,
-      `agent_tasks?${new URLSearchParams({ select: "id,mission_id,task_type,action_key,status,priority,attempt_count,max_attempts,error_code,error_message,created_at,started_at,completed_at,result", organisation_id: `eq.${organisationId}`, order: "created_at.desc", limit: "30" })}`,
-    ),
-    databaseRequest<JsonObject[]>(
-      environment,
-      `approvals?${new URLSearchParams({ select: "id,mission_id,run_id,action_type,risk_level,justification,status,requested_at,decided_at,action_payload", organisation_id: `eq.${organisationId}`, order: "requested_at.desc", limit: "20" })}`,
-    ),
-    databaseRequest<JsonObject[]>(
-      environment,
-      `agent_circuit_breakers?${new URLSearchParams({ select: "component_type,component_key,state,failure_count,open_until,last_error_code,last_error_message,updated_at", organisation_id: `eq.${organisationId}`, order: "updated_at.desc" })}`,
-    ),
-    databaseRequest<JsonObject[]>(
-      environment,
-      `agent_triggers?${new URLSearchParams({ select: "id,name,trigger_type,status,interval_minutes,next_run_at,last_fired_at,configuration", organisation_id: `eq.${organisationId}`, order: "name.asc" })}`,
-    ),
-    databaseRequest<JsonObject[]>(
-      environment,
-      `missions?${new URLSearchParams({ select: "id,title,status,objective,target_service,target_location,created_at,updated_at", organisation_id: `eq.${organisationId}`, title: "ilike.Orchestrated Lead Hunter:*", order: "created_at.desc", limit: "12" })}`,
-    ),
-    databaseRequest<JsonObject[]>(
-      environment,
-      `agent_execution_events?${new URLSearchParams({ select: "created_at", organisation_id: `eq.${organisationId}`, event_type: "eq.runtime_worker_heartbeat", order: "created_at.desc", limit: "1" })}`,
-    ),
-  ]);
+  const [agents, adapters, tasks, approvals, circuits, triggers, missions, heartbeats] =
+    await Promise.all([
+      databaseRequest<JsonObject[]>(
+        environment,
+        `ai_agents?${new URLSearchParams({ select: "id,agent_key,name,purpose,status,employee_id", organisation_id: `eq.${organisationId}`, order: "agent_key.asc" })}`,
+      ),
+      databaseRequest<JsonObject[]>(
+        environment,
+        `agent_tool_adapters?${new URLSearchParams({ select: "id,tool_key,name,provider,capability,connection_state,risk_level,requires_approval,last_checked_at", organisation_id: `eq.${organisationId}`, order: "name.asc" })}`,
+      ),
+      databaseRequest<JsonObject[]>(
+        environment,
+        `agent_tasks?${new URLSearchParams({ select: "id,mission_id,task_type,action_key,status,priority,attempt_count,max_attempts,error_code,error_message,created_at,started_at,completed_at,result", organisation_id: `eq.${organisationId}`, order: "created_at.desc", limit: "30" })}`,
+      ),
+      databaseRequest<JsonObject[]>(
+        environment,
+        `approvals?${new URLSearchParams({ select: "id,mission_id,run_id,action_type,risk_level,justification,status,requested_at,decided_at,action_payload", organisation_id: `eq.${organisationId}`, order: "requested_at.desc", limit: "20" })}`,
+      ),
+      databaseRequest<JsonObject[]>(
+        environment,
+        `agent_circuit_breakers?${new URLSearchParams({ select: "component_type,component_key,state,failure_count,open_until,last_error_code,last_error_message,updated_at", organisation_id: `eq.${organisationId}`, order: "updated_at.desc" })}`,
+      ),
+      databaseRequest<JsonObject[]>(
+        environment,
+        `agent_triggers?${new URLSearchParams({ select: "id,name,trigger_type,status,interval_minutes,next_run_at,last_fired_at,configuration", organisation_id: `eq.${organisationId}`, order: "name.asc" })}`,
+      ),
+      databaseRequest<JsonObject[]>(
+        environment,
+        `missions?${new URLSearchParams({ select: "id,title,status,objective,target_service,target_location,created_at,updated_at", organisation_id: `eq.${organisationId}`, title: "ilike.Orchestrated Lead Hunter:*", order: "created_at.desc", limit: "12" })}`,
+      ),
+      databaseRequest<JsonObject[]>(
+        environment,
+        `agent_execution_events?${new URLSearchParams({ select: "created_at", organisation_id: `eq.${organisationId}`, event_type: "eq.runtime_worker_heartbeat", order: "created_at.desc", limit: "1" })}`,
+      ),
+    ]);
 
   const latestWorkerHeartbeat = readString(heartbeats[0]?.created_at);
   const workerDeploymentVerified =
@@ -2276,12 +2280,11 @@ export async function orchestrationDashboard(actor: RuntimeActor): Promise<JsonO
 
   return {
     runtime: {
-      server_execution:
-        workerDeploymentVerified
-          ? "active"
-          : environment.runtimeWorkerToken && environment.publicSiteUrl
-            ? "deployment_verification_required"
-            : "configuration_required",
+      server_execution: workerDeploymentVerified
+        ? "active"
+        : environment.runtimeWorkerToken && environment.publicSiteUrl
+          ? "deployment_verification_required"
+          : "configuration_required",
       device_independence:
         "After the hosted worker is deployed and its cron is verified, queued work continues while the CEO device is offline. External APIs still require hosted-server internet connectivity.",
       provider_order: configuredModelProviders(environment),

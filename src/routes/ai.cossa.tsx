@@ -128,7 +128,8 @@ function AiChatWorkspace() {
       if (conversationId) setActiveId(conversationId);
     }
     window.addEventListener("cossa-ai-conversation-change", handleConversationChange);
-    return () => window.removeEventListener("cossa-ai-conversation-change", handleConversationChange);
+    return () =>
+      window.removeEventListener("cossa-ai-conversation-change", handleConversationChange);
   }, []);
 
   useEffect(() => {

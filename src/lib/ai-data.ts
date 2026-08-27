@@ -1,13 +1,12 @@
 // Client-side data access for AI core (conversations, messages, prompts, knowledge).
 // These records are protected by Supabase authentication and organisation-scoped RLS.
 import { supabase } from "@/integrations/supabase/client";
+import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
 import { COSSA_ORGANISATION_ID } from "@/lib/workforce-data";
 
 // The generated Database types are still empty until Supabase regenerates them,
 // so we work with a locally-typed client cast to avoid TS friction.
-const db = supabase as unknown as {
-  from: (t: string) => any;
-};
+const db = asDynamicSupabaseClient(supabase);
 
 export type AiConversation = {
   id: string;

@@ -3,10 +3,7 @@ import { CalendarClock } from "lucide-react";
 
 import { CrudWorkspace, fmtDateTime } from "@/components/crud-workspace";
 import { Button } from "@/components/ui/button";
-import {
-  growthContentCalendar,
-  type GrowthContentItem,
-} from "@/lib/legacy-growth-data";
+import { growthContentCalendar, type GrowthContentItem } from "@/lib/legacy-growth-data";
 
 export const Route = createFileRoute("/marketing/content-calendar")({
   component: ContentCalendarPage,
@@ -15,8 +12,7 @@ export const Route = createFileRoute("/marketing/content-calendar")({
       { title: "Content Calendar — Cossa AI" },
       {
         name: "description",
-        content:
-          "Plan and manage Cossa social content using the existing Growth content calendar.",
+        content: "Plan and manage Cossa social content using the existing Growth content calendar.",
       },
     ],
   }),
@@ -62,21 +58,66 @@ function ContentCalendarPage() {
       remove={growthContentCalendar.remove}
       singular="content item"
       fields={[
-        { key: "platform", label: "Platform", type: "select", options: PLATFORMS, required: true, defaultValue: "facebook" },
+        {
+          key: "platform",
+          label: "Platform",
+          type: "select",
+          options: PLATFORMS,
+          required: true,
+          defaultValue: "facebook",
+        },
         { key: "title", label: "Title" },
         { key: "content", label: "Content", type: "textarea", required: true },
         { key: "hashtags", label: "Hashtags" },
         { key: "campaign", label: "Campaign" },
-        { key: "status", label: "Status", type: "select", options: EDITABLE_STATUSES, defaultValue: "draft" },
+        {
+          key: "status",
+          label: "Status",
+          type: "select",
+          options: EDITABLE_STATUSES,
+          defaultValue: "draft",
+        },
         { key: "scheduled_for", label: "Scheduled for", type: "datetime" },
       ]}
       columns={[
-        { key: "platform", label: "Platform", render: (row) => <span className="uppercase text-xs tracking-wider text-primary">{row.platform}</span> },
-        { key: "title", label: "Title", render: (row) => <span className="font-medium">{row.title || "Untitled"}</span> },
-        { key: "content", label: "Content", render: (row) => <span className="line-clamp-2 max-w-md inline-block">{row.content}</span> },
-        { key: "status", label: "Status", render: (row) => <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">{row.status}</span> },
-        { key: "scheduled_for", label: "Scheduled", render: (row) => fmtDateTime(row.scheduled_for) },
-        { key: "ai_generated", label: "Origin", render: (row) => row.ai_generated ? "Cossa AI" : "Manual" },
+        {
+          key: "platform",
+          label: "Platform",
+          render: (row) => (
+            <span className="uppercase text-xs tracking-wider text-primary">{row.platform}</span>
+          ),
+        },
+        {
+          key: "title",
+          label: "Title",
+          render: (row) => <span className="font-medium">{row.title || "Untitled"}</span>,
+        },
+        {
+          key: "content",
+          label: "Content",
+          render: (row) => (
+            <span className="line-clamp-2 max-w-md inline-block">{row.content}</span>
+          ),
+        },
+        {
+          key: "status",
+          label: "Status",
+          render: (row) => (
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">
+              {row.status}
+            </span>
+          ),
+        },
+        {
+          key: "scheduled_for",
+          label: "Scheduled",
+          render: (row) => fmtDateTime(row.scheduled_for),
+        },
+        {
+          key: "ai_generated",
+          label: "Origin",
+          render: (row) => (row.ai_generated ? "Cossa AI" : "Manual"),
+        },
       ]}
       searchKeys={["platform", "title", "content", "campaign", "status"]}
       Stats={CalendarStats}
@@ -85,7 +126,8 @@ function ContentCalendarPage() {
           <div>
             <h2 className="font-display text-lg font-semibold">Publication records</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Record real published URLs and performance in Social Media. This calendar does not claim external publishing occurred by itself.
+              Record real published URLs and performance in Social Media. This calendar does not
+              claim external publishing occurred by itself.
             </p>
           </div>
           <Button asChild variant="outline">

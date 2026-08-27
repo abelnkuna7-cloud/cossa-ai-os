@@ -1,12 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertCircle,
-  ArrowRight,
-  GitBranch,
-  Loader2,
-  RefreshCw,
-} from "lucide-react";
+import { AlertCircle, ArrowRight, GitBranch, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { StatusBadge } from "@/components/status-badge";
@@ -180,16 +174,13 @@ async function listLeadPipeline(): Promise<LeadPipelineRecord[]> {
 
   return (data ?? []).map((row: Record<string, unknown>) => ({
     id: String(row.id),
-    name:
-      String(row.name ?? row.full_name ?? "").trim() || "Unnamed lead",
+    name: String(row.name ?? row.full_name ?? "").trim() || "Unnamed lead",
     company: typeof row.company === "string" && row.company.trim() ? row.company.trim() : null,
     service: typeof row.service === "string" && row.service.trim() ? row.service.trim() : null,
     phone: typeof row.phone === "string" && row.phone.trim() ? row.phone.trim() : null,
     source: typeof row.source === "string" && row.source.trim() ? row.source.trim() : null,
     stage: cleanStage(row.stage ?? row.status ?? "new"),
-    estimatedValue: Number.isFinite(Number(row.estimated_value))
-      ? Number(row.estimated_value)
-      : 0,
+    estimatedValue: Number.isFinite(Number(row.estimated_value)) ? Number(row.estimated_value) : 0,
     createdAt: String(row.created_at ?? ""),
   }));
 }
@@ -241,8 +232,7 @@ function LeadPipelinePage() {
   });
 
   const stageMutation = useMutation({
-    mutationFn: ({ id, stage }: { id: string; stage: string }) =>
-      updateLeadStage(id, stage),
+    mutationFn: ({ id, stage }: { id: string; stage: string }) => updateLeadStage(id, stage),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["sales-lead-pipeline"] }),
@@ -253,8 +243,7 @@ function LeadPipelinePage() {
     },
     onError: (error) => {
       toast.error("Lead stage update failed", {
-        description:
-          error instanceof Error ? error.message : "The lead could not be updated.",
+        description: error instanceof Error ? error.message : "The lead could not be updated.",
       });
     },
   });
@@ -274,12 +263,10 @@ function LeadPipelinePage() {
               </div>
               <StatusBadge status={workspaceRuntimeStatus()} />
             </div>
-            <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
-              Lead Funnel
-            </h1>
+            <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">Lead Funnel</h1>
             <p className="mt-1 max-w-3xl text-muted-foreground">
-              The canonical lead-stage pipeline from the shared Cossa CRM. Legacy and newer
-              lead stages are shown together so records are never silently hidden.
+              The canonical lead-stage pipeline from the shared Cossa CRM. Legacy and newer lead
+              stages are shown together so records are never silently hidden.
             </p>
           </div>
 
@@ -311,23 +298,31 @@ function LeadPipelinePage() {
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="glass-card p-4">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">All leads</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            All leads
+          </div>
           <div className="mt-1 font-display text-3xl font-semibold">{rows.length}</div>
         </div>
         <div className="glass-card p-4">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Open funnel</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Open funnel
+          </div>
           <div className="mt-1 font-display text-3xl font-semibold">
             {rows.filter((lead) => !stageDefinition(lead.stage)?.terminal).length}
           </div>
         </div>
         <div className="glass-card p-4">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Won / converted</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Won / converted
+          </div>
           <div className="mt-1 font-display text-3xl font-semibold">
             {rows.filter((lead) => ["won", "converted"].includes(lead.stage)).length}
           </div>
         </div>
         <div className="glass-card p-4">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Unmapped stages</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Unmapped stages
+          </div>
           <div className="mt-1 font-display text-3xl font-semibold">{unmapped.length}</div>
         </div>
       </section>
@@ -380,7 +375,10 @@ function LeadPipelinePage() {
 
                   <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
                     {items.map((lead) => (
-                      <div key={lead.id} className="rounded-xl border border-border/60 bg-card/45 p-3">
+                      <div
+                        key={lead.id}
+                        className="rounded-xl border border-border/60 bg-card/45 p-3"
+                      >
                         <div className="font-medium">{lead.name}</div>
                         <div className="mt-1 text-xs text-muted-foreground">
                           {[lead.company, lead.service, lead.phone].filter(Boolean).join(" · ") ||
@@ -400,7 +398,9 @@ function LeadPipelinePage() {
                         <label className="mt-3 block text-[10px] uppercase tracking-wider text-muted-foreground">
                           Move stage
                           <select
-                            value={stage.key === "new" && lead.stage === "new_lead" ? "new" : lead.stage}
+                            value={
+                              stage.key === "new" && lead.stage === "new_lead" ? "new" : lead.stage
+                            }
                             disabled={stageMutation.isPending}
                             onChange={(event) => {
                               if (event.target.value === lead.stage) return;
@@ -419,7 +419,9 @@ function LeadPipelinePage() {
                     ))}
 
                     {items.length === 0 ? (
-                      <div className="py-8 text-center text-xs text-muted-foreground">No leads in this stage.</div>
+                      <div className="py-8 text-center text-xs text-muted-foreground">
+                        No leads in this stage.
+                      </div>
                     ) : null}
                   </div>
                 </article>
@@ -433,7 +435,8 @@ function LeadPipelinePage() {
                     <div>
                       <h2 className="font-display font-semibold">Needs Mapping</h2>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Real records using a stage that this funnel does not yet classify. They are shown rather than hidden.
+                        Real records using a stage that this funnel does not yet classify. They are
+                        shown rather than hidden.
                       </p>
                     </div>
                     <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
@@ -443,9 +446,14 @@ function LeadPipelinePage() {
                 </header>
                 <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
                   {unmapped.map((lead) => (
-                    <div key={lead.id} className="rounded-xl border border-border/60 bg-card/45 p-3">
+                    <div
+                      key={lead.id}
+                      className="rounded-xl border border-border/60 bg-card/45 p-3"
+                    >
                       <div className="font-medium">{lead.name}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">Current stage: {lead.stage}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Current stage: {lead.stage}
+                      </div>
                       <select
                         defaultValue=""
                         disabled={stageMutation.isPending}
