@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { FolderKanban } from "lucide-react";
-import { CrudWorkspace, fmtDate } from "@/components/crud-workspace";
+import { CrudWorkspace, fmtCurrency, fmtDate } from "@/components/crud-workspace";
 import { opsProjects, type OpsProject } from "@/lib/business-data";
 import { Progress } from "@/components/ui/progress";
 
@@ -56,6 +56,11 @@ function ProjectsPage() {
       Stats={Stats}
       fields={[
         { key: "name", label: "Name", required: true },
+        { key: "service", label: "Service / business division" },
+        { key: "customer", label: "Customer" },
+        { key: "location", label: "Location" },
+        { key: "budget", label: "Budget (R)", type: "number" },
+        { key: "description", label: "Description / scope", type: "textarea" },
         { key: "status", label: "Status", type: "select", options: STATUSES, defaultValue: "planning" },
         { key: "priority", label: "Priority", type: "select", options: PRIORITIES, defaultValue: "medium" },
         { key: "progress", label: "Progress %", type: "number", defaultValue: 0 },
@@ -65,6 +70,9 @@ function ProjectsPage() {
       ]}
       columns={[
         { key: "name", label: "Project", render: (r) => <span className="font-medium">{r.name}</span> },
+        { key: "service", label: "Service", render: (r) => r.service ?? "—" },
+        { key: "customer", label: "Customer", render: (r) => r.customer ?? r.customer_id ?? "—" },
+        { key: "budget", label: "Budget", render: (r) => r.budget === null ? "—" : fmtCurrency(r.budget) },
         { key: "status", label: "Status", render: (r) => (
           <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">{r.status}</span>
         ) },
@@ -79,7 +87,7 @@ function ProjectsPage() {
         ) },
         { key: "due_date", label: "Due", render: (r) => fmtDate(r.due_date) },
       ]}
-      searchKeys={["name", "status", "priority", "notes"]}
+      searchKeys={["name", "service", "customer", "customer_id", "location", "description", "status", "priority", "notes"]}
     />
   );
 }

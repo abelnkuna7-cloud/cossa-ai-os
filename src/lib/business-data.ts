@@ -82,6 +82,9 @@ export interface SalesOpportunity {
 export interface SalesQuotation {
   id: string;
   number: string;
+  service: string | null;
+  description: string | null;
+  customer: string | null;
   customer_id: string | null;
   opportunity_id: string | null;
   amount: number;
@@ -95,8 +98,13 @@ export interface SalesQuotation {
 export interface SalesAppointment {
   id: string;
   title: string;
+  appointment_type: string | null;
+  service: string | null;
+  customer: string | null;
   customer_id: string | null;
+  status: string | null;
   starts_at: string;
+  duration_minutes: number | null;
   ends_at: string | null;
   location: string | null;
   notes: string | null;
@@ -122,6 +130,11 @@ export interface SalesFollowUp {
 export interface OpsProject {
   id: string;
   name: string;
+  service: string | null;
+  location: string | null;
+  budget: number | null;
+  description: string | null;
+  customer: string | null;
   customer_id: string | null;
   status: string;
   priority: string;
@@ -1626,6 +1639,21 @@ export const salesQuotations =
           row.quote_number ??
           "Unnumbered",
 
+        service:
+          optionalText(
+            row.service,
+          ),
+
+        description:
+          optionalText(
+            row.description,
+          ),
+
+        customer:
+          optionalText(
+            row.customer,
+          ),
+
         customer_id:
           row.customer_id ??
           null,
@@ -1676,6 +1704,30 @@ export const salesQuotations =
           undefined && {
           customer_id:
             value.customer_id,
+        }),
+
+        ...(value.service !==
+          undefined && {
+          service:
+            optionalText(
+              value.service,
+            ),
+        }),
+
+        ...(value.description !==
+          undefined && {
+          description:
+            optionalText(
+              value.description,
+            ),
+        }),
+
+        ...(value.customer !==
+          undefined && {
+          customer:
+            optionalText(
+              value.customer,
+            ),
         }),
 
         ...(value.opportunity_id !==
@@ -1753,14 +1805,50 @@ export const salesAppointments =
           row.service ??
           "Appointment",
 
+        appointment_type:
+          optionalText(
+            row.appointment_type,
+          ),
+
+        service:
+          optionalText(
+            row.service,
+          ),
+
+        customer:
+          optionalText(
+            row.customer,
+          ),
+
         customer_id:
           row.customer_id ??
           null,
+
+        status:
+          optionalText(
+            row.status,
+          ),
 
         starts_at:
           row.scheduled_at ??
           row.appointment_date ??
           "",
+
+        duration_minutes:
+          row.duration_minutes ===
+          null ||
+          row.duration_minutes ===
+          undefined
+            ? null
+            : Math.max(
+                0,
+                Math.round(
+                  safeNumber(
+                    row.duration_minutes,
+                    0,
+                  ),
+                ),
+              ),
 
         ends_at:
           row.ends_at ??
@@ -1798,6 +1886,38 @@ export const salesAppointments =
             value.customer_id,
         }),
 
+        ...(value.appointment_type !==
+          undefined && {
+          appointment_type:
+            optionalText(
+              value.appointment_type,
+            ),
+        }),
+
+        ...(value.service !==
+          undefined && {
+          service:
+            optionalText(
+              value.service,
+            ),
+        }),
+
+        ...(value.customer !==
+          undefined && {
+          customer:
+            optionalText(
+              value.customer,
+            ),
+        }),
+
+        ...(value.status !==
+          undefined && {
+          status:
+            optionalText(
+              value.status,
+            ),
+        }),
+
         ...(value.starts_at !==
           undefined && {
           scheduled_at:
@@ -1811,6 +1931,23 @@ export const salesAppointments =
               value.starts_at,
               "Appointment start time",
             ),
+        }),
+
+        ...(value.duration_minutes !==
+          undefined && {
+          duration_minutes:
+            value.duration_minutes ===
+            null
+              ? null
+              : Math.max(
+                  0,
+                  Math.round(
+                    safeNumber(
+                      value.duration_minutes,
+                      0,
+                    ),
+                  ),
+                ),
         }),
 
         ...(value.ends_at !==
@@ -1865,24 +2002,6 @@ export const opsProjects =
     organisationScoped:
       true,
 
-    select: [
-      "id",
-      "customer_id",
-      "project_name",
-      "name",
-      "service",
-      "location",
-      "budget",
-      "status",
-      "priority",
-      "progress",
-      "start_date",
-      "end_date",
-      "notes",
-      "created_at",
-      "updated_at",
-    ].join(","),
-
     fromRow:
       (row) => ({
         id:
@@ -1892,6 +2011,40 @@ export const opsProjects =
           row.project_name ??
           row.name ??
           "Unnamed project",
+
+        service:
+          optionalText(
+            row.service,
+          ),
+
+        location:
+          optionalText(
+            row.location,
+          ),
+
+        budget:
+          row.budget ===
+          null ||
+          row.budget ===
+          undefined
+            ? null
+            : Math.max(
+                0,
+                safeNumber(
+                  row.budget,
+                  0,
+                ),
+              ),
+
+        description:
+          optionalText(
+            row.description,
+          ),
+
+        customer:
+          optionalText(
+            row.customer,
+          ),
 
         customer_id:
           row.customer_id ??
@@ -1921,6 +2074,7 @@ export const opsProjects =
 
         due_date:
           row.end_date ??
+          row.due_date ??
           null,
 
         notes:
@@ -1971,6 +2125,63 @@ export const opsProjects =
         }
 
         if (
+          value.customer !==
+          undefined
+        ) {
+          row.customer =
+            optionalText(
+              value.customer,
+            );
+        }
+
+        if (
+          value.service !==
+          undefined
+        ) {
+          row.service =
+            optionalText(
+              value.service,
+            );
+        }
+
+        if (
+          value.location !==
+          undefined
+        ) {
+          row.location =
+            optionalText(
+              value.location,
+            );
+        }
+
+        if (
+          value.budget !==
+          undefined
+        ) {
+          row.budget =
+            value.budget ===
+            null
+              ? null
+              : Math.max(
+                  0,
+                  safeNumber(
+                    value.budget,
+                    0,
+                  ),
+                );
+        }
+
+        if (
+          value.description !==
+          undefined
+        ) {
+          row.description =
+            optionalText(
+              value.description,
+            );
+        }
+
+        if (
           value.status !==
           undefined
         ) {
@@ -2017,6 +2228,10 @@ export const opsProjects =
           undefined
         ) {
           row.end_date =
+            value.due_date ||
+            null;
+
+          row.due_date =
             value.due_date ||
             null;
         }

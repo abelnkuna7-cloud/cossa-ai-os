@@ -4,13 +4,14 @@ import { CrudWorkspace, fmtCurrency, fmtDate } from "@/components/crud-workspace
 import { salesQuotations, type SalesQuotation } from "@/lib/business-data";
 
 interface QuotationSearch {
-  record: string | null;
+  record?: string;
 }
 
 export const Route = createFileRoute("/sales/quotations")({
-  validateSearch: (search: Record<string, unknown>): QuotationSearch => ({
-    record: typeof search.record === "string" && search.record.trim() ? search.record : null,
-  }),
+  validateSearch: (search: Record<string, unknown>): QuotationSearch => {
+    const record = typeof search.record === "string" ? search.record.trim() : "";
+    return record ? { record } : {};
+  },
   component: QuotationsPage,
   head: () => ({
     meta: [
@@ -49,7 +50,7 @@ function Stats({ rows }: { rows: SalesQuotation[] }) {
 }
 
 function QuotationsPage() {
-  const { record } = Route.useSearch();
+  const { record = null } = Route.useSearch();
 
   return (
     <CrudWorkspace<SalesQuotation>
@@ -66,6 +67,10 @@ function QuotationsPage() {
       Stats={Stats}
       fields={[
         { key: "number", label: "Quote number", required: true, placeholder: "Q-0001" },
+        { key: "service", label: "Service / business division", placeholder: "Cossa Tech, Construction, Facility Services…" },
+        { key: "description", label: "Description / scope", type: "textarea" },
+        { key: "customer", label: "Customer" },
+        { key: "opportunity_id", label: "Linked opportunity ID", placeholder: "Optional canonical opportunity ID" },
         { key: "amount", label: "Amount (R)", type: "number", defaultValue: 0 },
         { key: "status", label: "Status", type: "select", options: STATUSES, defaultValue: "draft" },
         { key: "valid_until", label: "Valid until", type: "date" },
@@ -73,6 +78,8 @@ function QuotationsPage() {
       ]}
       columns={[
         { key: "number", label: "Number", render: (r) => <span className="font-medium">{r.number}</span> },
+        { key: "customer", label: "Customer", render: (r) => r.customer ?? r.customer_id ?? "—" },
+        { key: "service", label: "Service", render: (r) => r.service ?? "—" },
         { key: "amount", label: "Amount", render: (r) => fmtCurrency(r.amount) },
         { key: "status", label: "Status", render: (r) => (
           <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">{r.status}</span>
@@ -80,7 +87,7 @@ function QuotationsPage() {
         { key: "valid_until", label: "Valid until", render: (r) => fmtDate(r.valid_until) },
         { key: "created_at", label: "Created", render: (r) => fmtDate(r.created_at) },
       ]}
-      searchKeys={["number", "status", "notes"]}
+      searchKeys={["number", "service", "description", "customer", "customer_id", "opportunity_id", "status", "notes"]}
     />
   );
 }

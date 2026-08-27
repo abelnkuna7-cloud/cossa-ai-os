@@ -38,6 +38,7 @@ import { Route as SalesPipelineRouteImport } from './routes/sales.pipeline'
 import { Route as SalesOpportunitiesRouteImport } from './routes/sales.opportunities'
 import { Route as SalesLeadsRouteImport } from './routes/sales.leads'
 import { Route as SalesLeadScoringRouteImport } from './routes/sales.lead-scoring'
+import { Route as SalesLeadPipelineRouteImport } from './routes/sales.lead-pipeline'
 import { Route as SalesLeadFinderRouteImport } from './routes/sales.lead-finder'
 import { Route as SalesForecastRouteImport } from './routes/sales.forecast'
 import { Route as SalesFollowUpsRouteImport } from './routes/sales.follow-ups'
@@ -62,6 +63,8 @@ import { Route as MarketingTrendsRouteImport } from './routes/marketing.trends'
 import { Route as MarketingSocialRouteImport } from './routes/marketing.social'
 import { Route as MarketingShowcaseLibraryRouteImport } from './routes/marketing.showcase-library'
 import { Route as MarketingSeoRouteImport } from './routes/marketing.seo'
+import { Route as MarketingReviewsRouteImport } from './routes/marketing.reviews'
+import { Route as MarketingReferralsRouteImport } from './routes/marketing.referrals'
 import { Route as MarketingMonitoringRouteImport } from './routes/marketing.monitoring'
 import { Route as MarketingMetaAdsRouteImport } from './routes/marketing.meta-ads'
 import { Route as MarketingLandingPagesRouteImport } from './routes/marketing.landing-pages'
@@ -69,6 +72,7 @@ import { Route as MarketingKeywordsRouteImport } from './routes/marketing.keywor
 import { Route as MarketingGoogleAdsRouteImport } from './routes/marketing.google-ads'
 import { Route as MarketingEmailRouteImport } from './routes/marketing.email'
 import { Route as MarketingContentStudioRouteImport } from './routes/marketing.content-studio'
+import { Route as MarketingContentCalendarRouteImport } from './routes/marketing.content-calendar'
 import { Route as MarketingCompetitorsRouteImport } from './routes/marketing.competitors'
 import { Route as MarketingCampaignsRouteImport } from './routes/marketing.campaigns'
 import { Route as MarketingBrandRouteImport } from './routes/marketing.brand'
@@ -107,8 +111,11 @@ import { Route as AiConsultantRouteImport } from './routes/ai.consultant'
 import { Route as AiCoachRouteImport } from './routes/ai.coach'
 import { Route as AiCeoRouteImport } from './routes/ai.ceo'
 import { Route as AiAutomationRouteImport } from './routes/ai.automation'
+import { Route as AdministrationTeamAccessRouteImport } from './routes/administration.team-access'
 import { Route as ApiLeadHunterSearchRouteImport } from './routes/api.lead-hunter.search'
+import { Route as ApiCreativeMediaGenerateRouteImport } from './routes/api/creative-media.generate'
 import { Route as ApiAgentRuntimeExecuteRouteImport } from './routes/api.agent-runtime.execute'
+import { Route as ApiPublicRTokenRouteImport } from './routes/api/public/r.$token'
 import { Route as ApiGrowthAnalyticsOauthStartRouteImport } from './routes/api/growth-analytics.oauth.start'
 import { Route as ApiGrowthAnalyticsOauthCallbackRouteImport } from './routes/api/growth-analytics.oauth.callback'
 
@@ -257,6 +264,11 @@ const SalesLeadScoringRoute = SalesLeadScoringRouteImport.update({
   path: '/sales/lead-scoring',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SalesLeadPipelineRoute = SalesLeadPipelineRouteImport.update({
+  id: '/sales/lead-pipeline',
+  path: '/sales/lead-pipeline',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SalesLeadFinderRoute = SalesLeadFinderRouteImport.update({
   id: '/sales/lead-finder',
   path: '/sales/lead-finder',
@@ -380,6 +392,16 @@ const MarketingSeoRoute = MarketingSeoRouteImport.update({
   path: '/marketing/seo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MarketingReviewsRoute = MarketingReviewsRouteImport.update({
+  id: '/marketing/reviews',
+  path: '/marketing/reviews',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingReferralsRoute = MarketingReferralsRouteImport.update({
+  id: '/marketing/referrals',
+  path: '/marketing/referrals',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MarketingMonitoringRoute = MarketingMonitoringRouteImport.update({
   id: '/marketing/monitoring',
   path: '/marketing/monitoring',
@@ -415,6 +437,12 @@ const MarketingContentStudioRoute = MarketingContentStudioRouteImport.update({
   path: '/marketing/content-studio',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MarketingContentCalendarRoute =
+  MarketingContentCalendarRouteImport.update({
+    id: '/marketing/content-calendar',
+    path: '/marketing/content-calendar',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const MarketingCompetitorsRoute = MarketingCompetitorsRouteImport.update({
   id: '/marketing/competitors',
   path: '/marketing/competitors',
@@ -606,15 +634,32 @@ const AiAutomationRoute = AiAutomationRouteImport.update({
   path: '/ai/automation',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdministrationTeamAccessRoute =
+  AdministrationTeamAccessRouteImport.update({
+    id: '/administration/team-access',
+    path: '/administration/team-access',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiLeadHunterSearchRoute = ApiLeadHunterSearchRouteImport.update({
   id: '/api/lead-hunter/search',
   path: '/api/lead-hunter/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCreativeMediaGenerateRoute =
+  ApiCreativeMediaGenerateRouteImport.update({
+    id: '/api/creative-media/generate',
+    path: '/api/creative-media/generate',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAgentRuntimeExecuteRoute = ApiAgentRuntimeExecuteRouteImport.update({
   id: '/execute',
   path: '/execute',
   getParentRoute: () => ApiAgentRuntimeRoute,
+} as any)
+const ApiPublicRTokenRoute = ApiPublicRTokenRouteImport.update({
+  id: '/api/public/r/$token',
+  path: '/api/public/r/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiGrowthAnalyticsOauthStartRoute =
   ApiGrowthAnalyticsOauthStartRouteImport.update({
@@ -653,6 +698,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sme-growth': typeof SmeGrowthRoute
   '/subscription': typeof SubscriptionRoute
+  '/administration/team-access': typeof AdministrationTeamAccessRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/coach': typeof AiCoachRoute
@@ -691,6 +737,7 @@ export interface FileRoutesByFullPath {
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
   '/marketing/competitors': typeof MarketingCompetitorsRoute
+  '/marketing/content-calendar': typeof MarketingContentCalendarRoute
   '/marketing/content-studio': typeof MarketingContentStudioRoute
   '/marketing/email': typeof MarketingEmailRoute
   '/marketing/google-ads': typeof MarketingGoogleAdsRoute
@@ -698,6 +745,8 @@ export interface FileRoutesByFullPath {
   '/marketing/landing-pages': typeof MarketingLandingPagesRoute
   '/marketing/meta-ads': typeof MarketingMetaAdsRoute
   '/marketing/monitoring': typeof MarketingMonitoringRoute
+  '/marketing/referrals': typeof MarketingReferralsRoute
+  '/marketing/reviews': typeof MarketingReviewsRoute
   '/marketing/seo': typeof MarketingSeoRoute
   '/marketing/showcase-library': typeof MarketingShowcaseLibraryRoute
   '/marketing/social': typeof MarketingSocialRoute
@@ -722,6 +771,7 @@ export interface FileRoutesByFullPath {
   '/sales/follow-ups': typeof SalesFollowUpsRoute
   '/sales/forecast': typeof SalesForecastRoute
   '/sales/lead-finder': typeof SalesLeadFinderRoute
+  '/sales/lead-pipeline': typeof SalesLeadPipelineRoute
   '/sales/lead-scoring': typeof SalesLeadScoringRoute
   '/sales/leads': typeof SalesLeadsRoute
   '/sales/opportunities': typeof SalesOpportunitiesRoute
@@ -729,9 +779,11 @@ export interface FileRoutesByFullPath {
   '/sales/quotations': typeof SalesQuotationsRoute
   '/sales/win-probability': typeof SalesWinProbabilityRoute
   '/api/agent-runtime/execute': typeof ApiAgentRuntimeExecuteRoute
+  '/api/creative-media/generate': typeof ApiCreativeMediaGenerateRoute
   '/api/lead-hunter/search': typeof ApiLeadHunterSearchRoute
   '/api/growth-analytics/oauth/callback': typeof ApiGrowthAnalyticsOauthCallbackRoute
   '/api/growth-analytics/oauth/start': typeof ApiGrowthAnalyticsOauthStartRoute
+  '/api/public/r/$token': typeof ApiPublicRTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -757,6 +809,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sme-growth': typeof SmeGrowthRoute
   '/subscription': typeof SubscriptionRoute
+  '/administration/team-access': typeof AdministrationTeamAccessRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/coach': typeof AiCoachRoute
@@ -795,6 +848,7 @@ export interface FileRoutesByTo {
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
   '/marketing/competitors': typeof MarketingCompetitorsRoute
+  '/marketing/content-calendar': typeof MarketingContentCalendarRoute
   '/marketing/content-studio': typeof MarketingContentStudioRoute
   '/marketing/email': typeof MarketingEmailRoute
   '/marketing/google-ads': typeof MarketingGoogleAdsRoute
@@ -802,6 +856,8 @@ export interface FileRoutesByTo {
   '/marketing/landing-pages': typeof MarketingLandingPagesRoute
   '/marketing/meta-ads': typeof MarketingMetaAdsRoute
   '/marketing/monitoring': typeof MarketingMonitoringRoute
+  '/marketing/referrals': typeof MarketingReferralsRoute
+  '/marketing/reviews': typeof MarketingReviewsRoute
   '/marketing/seo': typeof MarketingSeoRoute
   '/marketing/showcase-library': typeof MarketingShowcaseLibraryRoute
   '/marketing/social': typeof MarketingSocialRoute
@@ -826,6 +882,7 @@ export interface FileRoutesByTo {
   '/sales/follow-ups': typeof SalesFollowUpsRoute
   '/sales/forecast': typeof SalesForecastRoute
   '/sales/lead-finder': typeof SalesLeadFinderRoute
+  '/sales/lead-pipeline': typeof SalesLeadPipelineRoute
   '/sales/lead-scoring': typeof SalesLeadScoringRoute
   '/sales/leads': typeof SalesLeadsRoute
   '/sales/opportunities': typeof SalesOpportunitiesRoute
@@ -833,9 +890,11 @@ export interface FileRoutesByTo {
   '/sales/quotations': typeof SalesQuotationsRoute
   '/sales/win-probability': typeof SalesWinProbabilityRoute
   '/api/agent-runtime/execute': typeof ApiAgentRuntimeExecuteRoute
+  '/api/creative-media/generate': typeof ApiCreativeMediaGenerateRoute
   '/api/lead-hunter/search': typeof ApiLeadHunterSearchRoute
   '/api/growth-analytics/oauth/callback': typeof ApiGrowthAnalyticsOauthCallbackRoute
   '/api/growth-analytics/oauth/start': typeof ApiGrowthAnalyticsOauthStartRoute
+  '/api/public/r/$token': typeof ApiPublicRTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -862,6 +921,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/sme-growth': typeof SmeGrowthRoute
   '/subscription': typeof SubscriptionRoute
+  '/administration/team-access': typeof AdministrationTeamAccessRoute
   '/ai/automation': typeof AiAutomationRoute
   '/ai/ceo': typeof AiCeoRoute
   '/ai/coach': typeof AiCoachRoute
@@ -900,6 +960,7 @@ export interface FileRoutesById {
   '/marketing/brand': typeof MarketingBrandRoute
   '/marketing/campaigns': typeof MarketingCampaignsRoute
   '/marketing/competitors': typeof MarketingCompetitorsRoute
+  '/marketing/content-calendar': typeof MarketingContentCalendarRoute
   '/marketing/content-studio': typeof MarketingContentStudioRoute
   '/marketing/email': typeof MarketingEmailRoute
   '/marketing/google-ads': typeof MarketingGoogleAdsRoute
@@ -907,6 +968,8 @@ export interface FileRoutesById {
   '/marketing/landing-pages': typeof MarketingLandingPagesRoute
   '/marketing/meta-ads': typeof MarketingMetaAdsRoute
   '/marketing/monitoring': typeof MarketingMonitoringRoute
+  '/marketing/referrals': typeof MarketingReferralsRoute
+  '/marketing/reviews': typeof MarketingReviewsRoute
   '/marketing/seo': typeof MarketingSeoRoute
   '/marketing/showcase-library': typeof MarketingShowcaseLibraryRoute
   '/marketing/social': typeof MarketingSocialRoute
@@ -931,6 +994,7 @@ export interface FileRoutesById {
   '/sales/follow-ups': typeof SalesFollowUpsRoute
   '/sales/forecast': typeof SalesForecastRoute
   '/sales/lead-finder': typeof SalesLeadFinderRoute
+  '/sales/lead-pipeline': typeof SalesLeadPipelineRoute
   '/sales/lead-scoring': typeof SalesLeadScoringRoute
   '/sales/leads': typeof SalesLeadsRoute
   '/sales/opportunities': typeof SalesOpportunitiesRoute
@@ -938,9 +1002,11 @@ export interface FileRoutesById {
   '/sales/quotations': typeof SalesQuotationsRoute
   '/sales/win-probability': typeof SalesWinProbabilityRoute
   '/api/agent-runtime/execute': typeof ApiAgentRuntimeExecuteRoute
+  '/api/creative-media/generate': typeof ApiCreativeMediaGenerateRoute
   '/api/lead-hunter/search': typeof ApiLeadHunterSearchRoute
   '/api/growth-analytics/oauth/callback': typeof ApiGrowthAnalyticsOauthCallbackRoute
   '/api/growth-analytics/oauth/start': typeof ApiGrowthAnalyticsOauthStartRoute
+  '/api/public/r/$token': typeof ApiPublicRTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -968,6 +1034,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/sme-growth'
     | '/subscription'
+    | '/administration/team-access'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/coach'
@@ -1006,6 +1073,7 @@ export interface FileRouteTypes {
     | '/marketing/brand'
     | '/marketing/campaigns'
     | '/marketing/competitors'
+    | '/marketing/content-calendar'
     | '/marketing/content-studio'
     | '/marketing/email'
     | '/marketing/google-ads'
@@ -1013,6 +1081,8 @@ export interface FileRouteTypes {
     | '/marketing/landing-pages'
     | '/marketing/meta-ads'
     | '/marketing/monitoring'
+    | '/marketing/referrals'
+    | '/marketing/reviews'
     | '/marketing/seo'
     | '/marketing/showcase-library'
     | '/marketing/social'
@@ -1037,6 +1107,7 @@ export interface FileRouteTypes {
     | '/sales/follow-ups'
     | '/sales/forecast'
     | '/sales/lead-finder'
+    | '/sales/lead-pipeline'
     | '/sales/lead-scoring'
     | '/sales/leads'
     | '/sales/opportunities'
@@ -1044,9 +1115,11 @@ export interface FileRouteTypes {
     | '/sales/quotations'
     | '/sales/win-probability'
     | '/api/agent-runtime/execute'
+    | '/api/creative-media/generate'
     | '/api/lead-hunter/search'
     | '/api/growth-analytics/oauth/callback'
     | '/api/growth-analytics/oauth/start'
+    | '/api/public/r/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1072,6 +1145,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/sme-growth'
     | '/subscription'
+    | '/administration/team-access'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/coach'
@@ -1110,6 +1184,7 @@ export interface FileRouteTypes {
     | '/marketing/brand'
     | '/marketing/campaigns'
     | '/marketing/competitors'
+    | '/marketing/content-calendar'
     | '/marketing/content-studio'
     | '/marketing/email'
     | '/marketing/google-ads'
@@ -1117,6 +1192,8 @@ export interface FileRouteTypes {
     | '/marketing/landing-pages'
     | '/marketing/meta-ads'
     | '/marketing/monitoring'
+    | '/marketing/referrals'
+    | '/marketing/reviews'
     | '/marketing/seo'
     | '/marketing/showcase-library'
     | '/marketing/social'
@@ -1141,6 +1218,7 @@ export interface FileRouteTypes {
     | '/sales/follow-ups'
     | '/sales/forecast'
     | '/sales/lead-finder'
+    | '/sales/lead-pipeline'
     | '/sales/lead-scoring'
     | '/sales/leads'
     | '/sales/opportunities'
@@ -1148,9 +1226,11 @@ export interface FileRouteTypes {
     | '/sales/quotations'
     | '/sales/win-probability'
     | '/api/agent-runtime/execute'
+    | '/api/creative-media/generate'
     | '/api/lead-hunter/search'
     | '/api/growth-analytics/oauth/callback'
     | '/api/growth-analytics/oauth/start'
+    | '/api/public/r/$token'
   id:
     | '__root__'
     | '/'
@@ -1176,6 +1256,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/sme-growth'
     | '/subscription'
+    | '/administration/team-access'
     | '/ai/automation'
     | '/ai/ceo'
     | '/ai/coach'
@@ -1214,6 +1295,7 @@ export interface FileRouteTypes {
     | '/marketing/brand'
     | '/marketing/campaigns'
     | '/marketing/competitors'
+    | '/marketing/content-calendar'
     | '/marketing/content-studio'
     | '/marketing/email'
     | '/marketing/google-ads'
@@ -1221,6 +1303,8 @@ export interface FileRouteTypes {
     | '/marketing/landing-pages'
     | '/marketing/meta-ads'
     | '/marketing/monitoring'
+    | '/marketing/referrals'
+    | '/marketing/reviews'
     | '/marketing/seo'
     | '/marketing/showcase-library'
     | '/marketing/social'
@@ -1245,6 +1329,7 @@ export interface FileRouteTypes {
     | '/sales/follow-ups'
     | '/sales/forecast'
     | '/sales/lead-finder'
+    | '/sales/lead-pipeline'
     | '/sales/lead-scoring'
     | '/sales/leads'
     | '/sales/opportunities'
@@ -1252,9 +1337,11 @@ export interface FileRouteTypes {
     | '/sales/quotations'
     | '/sales/win-probability'
     | '/api/agent-runtime/execute'
+    | '/api/creative-media/generate'
     | '/api/lead-hunter/search'
     | '/api/growth-analytics/oauth/callback'
     | '/api/growth-analytics/oauth/start'
+    | '/api/public/r/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1281,6 +1368,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SmeGrowthRoute: typeof SmeGrowthRoute
   SubscriptionRoute: typeof SubscriptionRoute
+  AdministrationTeamAccessRoute: typeof AdministrationTeamAccessRoute
   AiAutomationRoute: typeof AiAutomationRoute
   AiCeoRoute: typeof AiCeoRoute
   AiCoachRoute: typeof AiCoachRoute
@@ -1319,6 +1407,7 @@ export interface RootRouteChildren {
   MarketingBrandRoute: typeof MarketingBrandRoute
   MarketingCampaignsRoute: typeof MarketingCampaignsRoute
   MarketingCompetitorsRoute: typeof MarketingCompetitorsRoute
+  MarketingContentCalendarRoute: typeof MarketingContentCalendarRoute
   MarketingContentStudioRoute: typeof MarketingContentStudioRoute
   MarketingEmailRoute: typeof MarketingEmailRoute
   MarketingGoogleAdsRoute: typeof MarketingGoogleAdsRoute
@@ -1326,6 +1415,8 @@ export interface RootRouteChildren {
   MarketingLandingPagesRoute: typeof MarketingLandingPagesRoute
   MarketingMetaAdsRoute: typeof MarketingMetaAdsRoute
   MarketingMonitoringRoute: typeof MarketingMonitoringRoute
+  MarketingReferralsRoute: typeof MarketingReferralsRoute
+  MarketingReviewsRoute: typeof MarketingReviewsRoute
   MarketingSeoRoute: typeof MarketingSeoRoute
   MarketingShowcaseLibraryRoute: typeof MarketingShowcaseLibraryRoute
   MarketingSocialRoute: typeof MarketingSocialRoute
@@ -1350,13 +1441,16 @@ export interface RootRouteChildren {
   SalesFollowUpsRoute: typeof SalesFollowUpsRoute
   SalesForecastRoute: typeof SalesForecastRoute
   SalesLeadFinderRoute: typeof SalesLeadFinderRoute
+  SalesLeadPipelineRoute: typeof SalesLeadPipelineRoute
   SalesLeadScoringRoute: typeof SalesLeadScoringRoute
   SalesLeadsRoute: typeof SalesLeadsRoute
   SalesOpportunitiesRoute: typeof SalesOpportunitiesRoute
   SalesPipelineRoute: typeof SalesPipelineRoute
   SalesQuotationsRoute: typeof SalesQuotationsRoute
   SalesWinProbabilityRoute: typeof SalesWinProbabilityRoute
+  ApiCreativeMediaGenerateRoute: typeof ApiCreativeMediaGenerateRoute
   ApiLeadHunterSearchRoute: typeof ApiLeadHunterSearchRoute
+  ApiPublicRTokenRoute: typeof ApiPublicRTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1564,6 +1658,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SalesLeadScoringRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sales/lead-pipeline': {
+      id: '/sales/lead-pipeline'
+      path: '/sales/lead-pipeline'
+      fullPath: '/sales/lead-pipeline'
+      preLoaderRoute: typeof SalesLeadPipelineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sales/lead-finder': {
       id: '/sales/lead-finder'
       path: '/sales/lead-finder'
@@ -1732,6 +1833,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketingSeoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/marketing/reviews': {
+      id: '/marketing/reviews'
+      path: '/marketing/reviews'
+      fullPath: '/marketing/reviews'
+      preLoaderRoute: typeof MarketingReviewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/referrals': {
+      id: '/marketing/referrals'
+      path: '/marketing/referrals'
+      fullPath: '/marketing/referrals'
+      preLoaderRoute: typeof MarketingReferralsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/marketing/monitoring': {
       id: '/marketing/monitoring'
       path: '/marketing/monitoring'
@@ -1779,6 +1894,13 @@ declare module '@tanstack/react-router' {
       path: '/marketing/content-studio'
       fullPath: '/marketing/content-studio'
       preLoaderRoute: typeof MarketingContentStudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing/content-calendar': {
+      id: '/marketing/content-calendar'
+      path: '/marketing/content-calendar'
+      fullPath: '/marketing/content-calendar'
+      preLoaderRoute: typeof MarketingContentCalendarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/marketing/competitors': {
@@ -2047,11 +2169,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AiAutomationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/administration/team-access': {
+      id: '/administration/team-access'
+      path: '/administration/team-access'
+      fullPath: '/administration/team-access'
+      preLoaderRoute: typeof AdministrationTeamAccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/lead-hunter/search': {
       id: '/api/lead-hunter/search'
       path: '/api/lead-hunter/search'
       fullPath: '/api/lead-hunter/search'
       preLoaderRoute: typeof ApiLeadHunterSearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/creative-media/generate': {
+      id: '/api/creative-media/generate'
+      path: '/api/creative-media/generate'
+      fullPath: '/api/creative-media/generate'
+      preLoaderRoute: typeof ApiCreativeMediaGenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/agent-runtime/execute': {
@@ -2060,6 +2196,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/agent-runtime/execute'
       preLoaderRoute: typeof ApiAgentRuntimeExecuteRouteImport
       parentRoute: typeof ApiAgentRuntimeRoute
+    }
+    '/api/public/r/$token': {
+      id: '/api/public/r/$token'
+      path: '/api/public/r/$token'
+      fullPath: '/api/public/r/$token'
+      preLoaderRoute: typeof ApiPublicRTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/growth-analytics/oauth/start': {
       id: '/api/growth-analytics/oauth/start'
@@ -2127,6 +2270,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   SmeGrowthRoute: SmeGrowthRoute,
   SubscriptionRoute: SubscriptionRoute,
+  AdministrationTeamAccessRoute: AdministrationTeamAccessRoute,
   AiAutomationRoute: AiAutomationRoute,
   AiCeoRoute: AiCeoRoute,
   AiCoachRoute: AiCoachRoute,
@@ -2165,6 +2309,7 @@ const rootRouteChildren: RootRouteChildren = {
   MarketingBrandRoute: MarketingBrandRoute,
   MarketingCampaignsRoute: MarketingCampaignsRoute,
   MarketingCompetitorsRoute: MarketingCompetitorsRoute,
+  MarketingContentCalendarRoute: MarketingContentCalendarRoute,
   MarketingContentStudioRoute: MarketingContentStudioRoute,
   MarketingEmailRoute: MarketingEmailRoute,
   MarketingGoogleAdsRoute: MarketingGoogleAdsRoute,
@@ -2172,6 +2317,8 @@ const rootRouteChildren: RootRouteChildren = {
   MarketingLandingPagesRoute: MarketingLandingPagesRoute,
   MarketingMetaAdsRoute: MarketingMetaAdsRoute,
   MarketingMonitoringRoute: MarketingMonitoringRoute,
+  MarketingReferralsRoute: MarketingReferralsRoute,
+  MarketingReviewsRoute: MarketingReviewsRoute,
   MarketingSeoRoute: MarketingSeoRoute,
   MarketingShowcaseLibraryRoute: MarketingShowcaseLibraryRoute,
   MarketingSocialRoute: MarketingSocialRoute,
@@ -2196,13 +2343,16 @@ const rootRouteChildren: RootRouteChildren = {
   SalesFollowUpsRoute: SalesFollowUpsRoute,
   SalesForecastRoute: SalesForecastRoute,
   SalesLeadFinderRoute: SalesLeadFinderRoute,
+  SalesLeadPipelineRoute: SalesLeadPipelineRoute,
   SalesLeadScoringRoute: SalesLeadScoringRoute,
   SalesLeadsRoute: SalesLeadsRoute,
   SalesOpportunitiesRoute: SalesOpportunitiesRoute,
   SalesPipelineRoute: SalesPipelineRoute,
   SalesQuotationsRoute: SalesQuotationsRoute,
   SalesWinProbabilityRoute: SalesWinProbabilityRoute,
+  ApiCreativeMediaGenerateRoute: ApiCreativeMediaGenerateRoute,
   ApiLeadHunterSearchRoute: ApiLeadHunterSearchRoute,
+  ApiPublicRTokenRoute: ApiPublicRTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

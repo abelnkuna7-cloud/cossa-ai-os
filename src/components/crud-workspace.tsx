@@ -271,7 +271,10 @@ export function CrudWorkspace<T extends { id: string; created_at?: string; updat
                       className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                     >
                       <option value="">—</option>
-                      {(f.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
+                      {[
+                        ...(value && !(f.options ?? []).includes(value) ? [value] : []),
+                        ...(f.options ?? []),
+                      ].map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   ) : (
                     <Input
