@@ -36,6 +36,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
+import { resolveLeadHuntOutcome } from "./operational-truth";
 
 /* -------------------------------------------------------------------------- */
 /* DATABASE                                                                   */
@@ -4310,16 +4311,16 @@ export async function huntProspects(
   return {
     hunt_id: cleanText(payload.hunt_id) ?? createClientId(),
 
-    status:
-      payload.status === "SUCCESS_WITH_RESULTS" ||
-      payload.status === "SUCCESS_NO_VERIFIED_RESULTS" ||
-      payload.status === "SUCCESS_WITH_PROVIDER_WARNINGS" ||
-      payload.status === "PARTIAL_PROVIDER_FAILURE" ||
-      payload.status === "FAILED"
-        ? payload.status
-        : acceptedProspects.length > 0
-          ? "SUCCESS_WITH_RESULTS"
-          : "SUCCESS_NO_VERIFIED_RESULTS",
+    status: resolveLeadHuntOutcome({
+      outcome: payload.status,
+      verifiedResultCount: acceptedProspects.length,
+      providerDiagnostics: Array.isArray(payload.provider_diagnostics)
+        ? payload.provider_diagnostics.map((entry) => ({
+            attempted: entry.attempted === true,
+            failed: entry.failed === true,
+          }))
+        : [],
+    }),
 
     searched_at: safeDateString(payload.searched_at) ?? new Date().toISOString(),
 

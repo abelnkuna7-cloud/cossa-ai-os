@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { hasPublicationEvidence } from "./operational-truth";
 
 const db = supabase as unknown as {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,9 +106,11 @@ function socialRow(payload: Partial<GrowthSocialPost>, creating = false): Record
     }
 
     if (["published", "posted"].includes(status)) {
-      const hasEvidence = Boolean(
-        text(payload.post_url) || text(payload.published_at) || text(payload.posted_at),
-      );
+      const hasEvidence = hasPublicationEvidence({
+        postUrl: payload.post_url,
+        publishedAt: payload.published_at,
+        postedAt: payload.posted_at,
+      });
       if (!hasEvidence) {
         throw new Error(
           "Publication evidence is required before a social post can be marked published. Add the real post URL or publication timestamp.",

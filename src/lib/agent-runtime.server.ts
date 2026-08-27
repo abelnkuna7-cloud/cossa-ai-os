@@ -1,3 +1,5 @@
+import { canScheduleAgentRetry } from "./operational-truth";
+
 const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 const MAX_TASKS_PER_TICK = 6;
 const TASK_LEASE_SECONDS = 420;
@@ -1923,26 +1925,11 @@ function retryDelaySeconds(attempt: number): number {
 
 function taskFailureIsRetryable(error: Error): boolean {
   if (error instanceof AgentRuntimeError) {
-    return ![
-      "invalid_lead_hunter_request",
-      "invalid_lead_hunter_company",
-      "invalid_lead_hunter_service",
-      "workforce_not_ready",
-      "model_not_configured",
-      "provider_configuration_required",
-      "provider_request_not_retryable",
-      "lead_hunter_worker_not_configured",
-      "agent_permission_missing",
-      "permission_class_missing",
-      "permission_class_mismatch",
-      "agent_action_denied",
-      "agent_approval_required",
-      "tool_route_missing",
-      "tool_route_disabled",
-      "tool_route_requires_approval",
-      "unsupported_task_type",
-      "missing_mission_run",
-    ].includes(error.code);
+    return canScheduleAgentRetry({
+      errorCode: error.code,
+      attemptCount: 0,
+      maxAttempts: 1,
+    });
   }
   return true;
 }
@@ -1983,7 +1970,11 @@ async function failTask(
   task: RuntimeTask,
   error: Error,
 ): Promise<"retry_scheduled" | "failed"> {
-  const retry = taskFailureIsRetryable(error) && task.attempt_count < task.max_attempts;
+  const retry = canScheduleAgentRetry({
+    errorCode: error instanceof AgentRuntimeError ? error.code : null,
+    attemptCount: task.attempt_count,
+    maxAttempts: task.max_attempts,
+  });
   const query = new URLSearchParams({
     id: `eq.${task.id}`,
     lease_token: `eq.${task.lease_token ?? ""}`,

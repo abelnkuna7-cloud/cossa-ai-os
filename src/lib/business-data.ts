@@ -9,6 +9,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { COSSA_ORGANISATION_ID } from "@/lib/workforce-data";
+import { revenueTruth } from "./operational-truth";
 
 /* -------------------------------------------------------------------------- */
 /* DATABASE CLIENT                                                            */
@@ -1453,6 +1454,8 @@ export async function dashboardStats() {
     .filter((quotation) => lower(quotation.status, "draft") === "accepted")
     .reduce((total, quotation) => total + safeNumber(quotation.amount, 0), 0);
 
+  const commercialTruth = revenueTruth({ acceptedQuotationValue });
+
   const stages = ["prospect", "qualified", "proposal", "negotiation", "won"] as const;
 
   const pipelineByStage = stages.map((stage) => {
@@ -1480,6 +1483,11 @@ export async function dashboardStats() {
      * is verified and connected.
      */
     acceptedQuotationValue,
+
+    // Cash collection remains unavailable until a verified payment evidence
+    // source is connected; it must not be inferred from accepted quotations.
+    cashReceived: commercialTruth.cashReceived,
+    cashReceivedEvidenceAvailable: false,
 
     newLeads: leads.filter((lead) => {
       const createdAt = new Date(lead.created_at).getTime();
