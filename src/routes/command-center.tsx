@@ -32,6 +32,7 @@ import { dashboardStats, opsTasks, salesAppointments } from "@/lib/business-data
 import { fmtCurrency, fmtDateTime } from "@/components/crud-workspace";
 import { GrowthEagleArtwork, ParentBrandEndorsement } from "@/components/brand/growth-brand";
 import { GROWTH_BRAND } from "@/lib/brand";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 import {
   listEmployeeHandoffs,
   listEmployees,
@@ -246,21 +247,24 @@ function Dashboard() {
   });
 
   const stats = statsQuery.data;
-  const storeQuotes = storeQuotesQuery.data ?? [];
-  const connectedBusiness = connectedBusinessQuery.data;
+  const verifiedStats = statsQuery.isSuccess ? stats : undefined;
+  const storeQuotes = storeQuotesQuery.isSuccess ? (storeQuotesQuery.data ?? []) : undefined;
+  const connectedBusiness = connectedBusinessQuery.isSuccess
+    ? connectedBusinessQuery.data
+    : undefined;
 
   const kpis = [
     {
-      label: "Recorded revenue",
-      value: fmtCurrency(stats?.recordedRevenue ?? 0),
+      label: "Accepted quote value",
+      value: verifiedStats ? fmtCurrency(verifiedStats.acceptedQuotationValue) : "Unavailable",
       icon: DollarSign,
       tone: "text-success",
       to: "/sales/quotations" as const,
-      description: "All recorded won opportunities and accepted quotations",
+      description: "Accepted quotations only — not cash received",
     },
     {
       label: "New Leads (7d)",
-      value: String(stats?.newLeads ?? 0),
+      value: verifiedStats ? String(verifiedStats.newLeads) : "Unavailable",
       icon: Users,
       tone: "text-info",
       to: "/sales/leads" as const,
@@ -268,7 +272,7 @@ function Dashboard() {
     },
     {
       label: "Pipeline Value",
-      value: fmtCurrency(stats?.pipelineValue ?? 0),
+      value: verifiedStats ? fmtCurrency(verifiedStats.pipelineValue) : "Unavailable",
       icon: TrendingUp,
       tone: "text-primary",
       to: "/sales/pipeline" as const,
@@ -276,7 +280,7 @@ function Dashboard() {
     },
     {
       label: "Active Projects",
-      value: String(stats?.activeProjects ?? 0),
+      value: verifiedStats ? String(verifiedStats.activeProjects) : "Unavailable",
       icon: Gauge,
       tone: "text-chart-5",
       to: "/operations/projects" as const,
@@ -332,7 +336,7 @@ function Dashboard() {
         <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <StatusBadge status="Production" />
+              <StatusBadge status={workspaceRuntimeStatus()} />
 
               <span className="text-xs text-muted-foreground">GROWTH Command Center</span>
             </div>
@@ -540,9 +544,13 @@ function Dashboard() {
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading pipeline…
             </div>
+          ) : !verifiedStats ? (
+            <p className="mt-6 rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+              Pipeline values are unavailable until the CRM snapshot loads successfully.
+            </p>
           ) : (
             <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
-              {(stats?.pipelineByStage ?? []).map((stage) => (
+              {verifiedStats.pipelineByStage.map((stage) => (
                 <Link
                   key={stage.stage}
                   to="/sales/pipeline"
@@ -576,32 +584,32 @@ function Dashboard() {
           <div className="mt-4 space-y-1 text-sm">
             <DashboardMetricRow
               label="Customers"
-              value={stats?.customers ?? 0}
+              value={verifiedStats?.customers ?? "Unavailable"}
               to="/sales/customers"
             />
 
             <DashboardMetricRow
               label="Open tasks"
-              value={stats?.openTasks ?? 0}
+              value={verifiedStats?.openTasks ?? "Unavailable"}
               to="/operations/tasks"
             />
 
             <DashboardMetricRow
               label="Overdue tasks"
-              value={stats?.overdueTasks ?? 0}
+              value={verifiedStats?.overdueTasks ?? "Unavailable"}
               to="/operations/tasks"
-              warning={(stats?.overdueTasks ?? 0) > 0}
+              warning={(verifiedStats?.overdueTasks ?? 0) > 0}
             />
 
             <DashboardMetricRow
               label="Open quotes"
-              value={stats?.quotesOpen ?? 0}
+              value={verifiedStats?.quotesOpen ?? "Unavailable"}
               to="/sales/quotations"
             />
 
             <DashboardMetricRow
               label="Total leads"
-              value={stats?.totalLeads ?? 0}
+              value={verifiedStats?.totalLeads ?? "Unavailable"}
               to="/sales/leads"
             />
           </div>
@@ -637,6 +645,11 @@ function Dashboard() {
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading Store quote requirements…
             </div>
+          ) : storeQuotes === undefined ? (
+            <p className="mt-5 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-muted-foreground">
+              Store quote requests are temporarily unavailable. Existing customer requests have not
+              been changed.
+            </p>
           ) : storeQuotes.length === 0 ? (
             <p className="mt-5 rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
               No Store quote requests have been submitted yet. New requests will appear here
@@ -646,13 +659,11 @@ function Dashboard() {
             <ol className="mt-5 space-y-3">
               {storeQuotes.map((quote) => {
                 const itemLabels = quoteItemLabels(quote.items);
-                const requester = quote.contact_name?.trim() || quote.full_name?.trim() || "Store customer";
+                const requester =
+                  quote.contact_name?.trim() || quote.full_name?.trim() || "Store customer";
 
                 return (
-                  <li
-                    key={quote.id}
-                    className="rounded-xl border border-primary/25 bg-card/40 p-4"
-                  >
+                  <li key={quote.id} className="rounded-xl border border-primary/25 bg-card/40 p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -663,7 +674,9 @@ function Dashboard() {
                         </div>
 
                         {quote.company?.trim() ? (
-                          <p className="mt-0.5 text-xs text-muted-foreground">{quote.company.trim()}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {quote.company.trim()}
+                          </p>
                         ) : null}
                       </div>
 
@@ -697,7 +710,9 @@ function Dashboard() {
                         <dt className="text-[10px] uppercase tracking-widest text-muted-foreground">
                           Quantity
                         </dt>
-                        <dd className="mt-1">{quote.estimated_quantity?.trim() || "Not specified"}</dd>
+                        <dd className="mt-1">
+                          {quote.estimated_quantity?.trim() || "Not specified"}
+                        </dd>
                       </div>
                       <div>
                         <dt className="text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -777,7 +792,7 @@ function Dashboard() {
                   <Globe2 className="h-4 w-4 text-primary" />
                 </div>
                 <div className="mt-3 font-display text-2xl font-semibold">
-                  {connectedBusiness?.mainWebsiteLeadCount ?? 0}
+                  {connectedBusiness ? connectedBusiness.mainWebsiteLeadCount : "Unavailable"}
                 </div>
                 <div className="text-xs text-muted-foreground">Recorded website leads</div>
               </Link>
@@ -796,11 +811,12 @@ function Dashboard() {
                   <Store className="h-4 w-4 text-primary" />
                 </div>
                 <div className="mt-3 font-display text-2xl font-semibold">
-                  {storeQuotes.length}
+                  {storeQuotes === undefined ? "Unavailable" : storeQuotes.length}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Quote requests · {connectedBusiness?.storeLeadCount ?? 0} Growth leads ·{" "}
-                  {connectedBusiness?.storeOrderCount ?? 0} orders
+                  {connectedBusiness
+                    ? `Quote requests · ${connectedBusiness.storeLeadCount} Growth leads · ${connectedBusiness.storeOrderCount} orders`
+                    : "Connected Store reporting is unavailable"}
                 </div>
               </Link>
 
@@ -850,7 +866,13 @@ function Dashboard() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link to="/ai/workforce">
+            <Link
+              to="/ai/workforce"
+              search={{
+                view: "command",
+                department: "all",
+              }}
+            >
               <Button
                 variant="outline"
                 className="border-primary/40 text-primary hover:bg-primary/10"
@@ -1101,7 +1123,7 @@ function DashboardMetricRow({
   warning = false,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   to: "/sales/customers" | "/operations/tasks" | "/sales/quotations" | "/sales/leads";
   warning?: boolean;
 }) {

@@ -64,9 +64,7 @@ export interface OfficialWebsiteHealthReport extends CossaWebsiteHealthCheck {
 
 export async function checkOfficialWebsite(): Promise<OfficialWebsiteHealthReport> {
   const report = await checkCossaWebsites();
-  const main =
-    report.checks.find((check) => check.id === "main") ??
-    report.checks[0];
+  const main = report.checks.find((check) => check.id === "main") ?? report.checks[0];
 
   if (!main) {
     throw new Error("The website health check returned no Cossa sites.");

@@ -269,7 +269,8 @@ export function PublicSiteShell({ children, showCallToAction = true }: PublicSit
                 Start with a focused 15-minute product conversation.
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                Tell us how your enquiries and follow-up work today. We will show you the relevant GROWTH workflow and discuss the right plan or custom setup.
+                Tell us how your enquiries and follow-up work today. We will show you the relevant
+                GROWTH workflow and discuss the right plan or custom setup.
               </p>
             </div>
 

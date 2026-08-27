@@ -1,21 +1,11 @@
-import {
-  createFileRoute,
-  Link,
-  useNavigate,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  useMemo,
-  useState,
-  type LucideIcon,
-  type ReactNode,
-} from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import {
   Activity,
@@ -27,6 +17,7 @@ import {
   Building2,
   ChevronRight,
   ClipboardList,
+  CircleStop,
   Code2,
   Command,
   FileCheck2,
@@ -46,6 +37,7 @@ import {
   Workflow,
   X,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -71,6 +63,8 @@ import {
   startControlledWorkforceRun,
   type AiEmployee,
   type Approval,
+  type CreateCoordinationMissionInput,
+  type CreateGrowthCoordinationMissionInput,
   type EmployeeHandoff,
   type Mission,
   type MissionRun,
@@ -96,49 +90,27 @@ import {
   type CossaAiProvider,
 } from "@/lib/ai-stream";
 
-import {
-  checkOfficialWebsite,
-  type OfficialWebsiteHealthReport,
-} from "@/lib/website-health";
+import { checkOfficialWebsite, type OfficialWebsiteHealthReport } from "@/lib/website-health";
 
 import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
+import { getAgentRuntimeDashboard } from "@/lib/agent-runtime";
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
 /* -------------------------------------------------------------------------- */
 
-type WorkforceView =
-  | "command"
-  | "departments"
-  | "employees"
-  | "workflows"
-  | "activity"
-  | "control";
+type WorkforceView = "command" | "departments" | "employees" | "workflows" | "activity" | "control";
 
-type WorkforceDepartment =
-  | "all"
-  | "executive"
-  | "growth"
-  | "store"
-  | "tech"
-  | "revenue";
+type WorkforceDepartment = "all" | "executive" | "growth" | "store" | "tech" | "revenue";
 
-type WorkforceKind =
-  | "growth"
-  | "revenue";
+type WorkforceKind = "growth" | "revenue";
 
 interface WorkforceSearch {
   view: WorkforceView;
   department: WorkforceDepartment;
 }
 
-type OperationalState =
-  | "working"
-  | "idle"
-  | "waiting"
-  | "approval"
-  | "attention"
-  | "inactive";
+type OperationalState = "working" | "idle" | "waiting" | "approval" | "attention" | "inactive";
 
 interface EmployeeOperationalView {
   state: OperationalState;
@@ -215,26 +187,12 @@ const WORKFORCE_DEPARTMENTS: readonly WorkforceDepartment[] = [
   "revenue",
 ];
 
-function isWorkforceView(
-  value: unknown,
-): value is WorkforceView {
-  return (
-    typeof value === "string" &&
-    WORKFORCE_VIEWS.includes(
-      value as WorkforceView,
-    )
-  );
+function isWorkforceView(value: unknown): value is WorkforceView {
+  return typeof value === "string" && WORKFORCE_VIEWS.includes(value as WorkforceView);
 }
 
-function isWorkforceDepartment(
-  value: unknown,
-): value is WorkforceDepartment {
-  return (
-    typeof value === "string" &&
-    WORKFORCE_DEPARTMENTS.includes(
-      value as WorkforceDepartment,
-    )
-  );
+function isWorkforceDepartment(value: unknown): value is WorkforceDepartment {
+  return typeof value === "string" && WORKFORCE_DEPARTMENTS.includes(value as WorkforceDepartment);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -242,18 +200,10 @@ function isWorkforceDepartment(
 /* -------------------------------------------------------------------------- */
 
 export const Route = createFileRoute("/ai/workforce")({
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): WorkforceSearch => ({
-    view: isWorkforceView(search.view)
-      ? search.view
-      : "command",
+  validateSearch: (search: Record<string, unknown>): WorkforceSearch => ({
+    view: isWorkforceView(search.view) ? search.view : "command",
 
-    department: isWorkforceDepartment(
-      search.department,
-    )
-      ? search.department
-      : "all",
+    department: isWorkforceDepartment(search.department) ? search.department : "all",
   }),
 
   component: AiWorkforce,
@@ -276,167 +226,151 @@ export const Route = createFileRoute("/ai/workforce")({
 /* CONSTANTS                                                                  */
 /* -------------------------------------------------------------------------- */
 
-const GROWTH_MISSION_PREFIX =
-  "Growth coordination:";
+const GROWTH_MISSION_PREFIX = "Growth coordination:";
 
-const REVENUE_MISSION_PREFIX =
-  "Revenue acquisition:";
+const REVENUE_MISSION_PREFIX = "Revenue acquisition:";
 
 /**
  * The Cossa AI gateway loads verified knowledge, authorised memory and
  * operational context before it selects a configured model provider. Provider
  * fallback belongs to that gateway, not to an individual browser employee.
  */
-const DEFAULT_WORKFORCE_PROVIDER:
-  CossaAiProvider =
-  "auto";
+const DEFAULT_WORKFORCE_PROVIDER: CossaAiProvider = "auto";
 
-const DEFAULT_WORKFORCE_MODEL =
-  "server-selected";
+const DEFAULT_WORKFORCE_MODEL = "server-selected";
 
-const LEAD_HUNTER_TOOL_PROVIDER =
-  "cossa_tool" as const;
+const LEAD_HUNTER_TOOL_PROVIDER = "cossa_tool" as const;
 
-const LEAD_HUNTER_TOOL_NAME =
-  "lead-hunter-evidence-engine-v1";
+const LEAD_HUNTER_TOOL_NAME = "lead-hunter-evidence-engine-v1";
 
-const MAX_STAGE_PROMPT_CHARS =
-  6_000;
+const MAX_STAGE_PROMPT_CHARS = 6_000;
 
-const MAX_PRIOR_OUTPUTS =
-  2;
+const MAX_PRIOR_OUTPUTS = 2;
 
-const MAX_PRIOR_OUTPUT_CHARS =
-  900;
+const MAX_PRIOR_OUTPUT_CHARS = 900;
 
-const MAX_AUTHORISED_EVIDENCE_ITEMS =
-  2;
+const MAX_AUTHORISED_EVIDENCE_ITEMS = 2;
 
-const MAX_AUTHORISED_EVIDENCE_CHARS =
-  1_200;
+const MAX_AUTHORISED_EVIDENCE_CHARS = 1_200;
 
-const MAX_HANDOFF_CONTEXT_CHARS =
-  700;
+const MAX_HANDOFF_CONTEXT_CHARS = 700;
 
-const MAX_RETAINED_RECORD_CONTEXT_CHARS =
-  1_200;
+const MAX_RETAINED_RECORD_CONTEXT_CHARS = 1_200;
 
 /**
  * One browser request enters the Cossa AI gateway. The gateway itself owns
  * configured-provider failover, so the client never repeats the whole chain
  * and burns additional requests after a provider failure.
  */
-const PROVIDER_MAX_ATTEMPTS =
-  1;
+const PROVIDER_MAX_ATTEMPTS = 1;
 
-const WORKFORCE_STAGE_DELAY_MS =
-  2_000;
+const WORKFORCE_STAGE_DELAY_MS = 2_000;
 
-const DEFAULT_WORKFORCE_HUNT_RESULTS =
-  10;
+const DEFAULT_WORKFORCE_HUNT_RESULTS = 10;
+const EMPTY_EMPLOYEES: AiEmployee[] = [];
+const EMPTY_MISSIONS: Mission[] = [];
+const EMPTY_HANDOFFS: EmployeeHandoff[] = [];
+const EMPTY_RUNS: MissionRun[] = [];
+const EMPTY_APPROVALS: Approval[] = [];
 
 /* -------------------------------------------------------------------------- */
 /* EXECUTABLE WORKFLOWS                                                       */
 /* -------------------------------------------------------------------------- */
 
-const EXECUTABLE_GROWTH_WORKFLOW:
-  readonly ExecutableWorkflowStep[] = [
-    {
-      key: "website-seo-monitor",
-      label: "Website intelligence",
-      description:
-        "Checks authorised Cossa web properties and passes verified website, SEO and content observations into the Growth system.",
-      icon: Globe2,
-    },
-    {
-      key: "social-strategy-planner",
-      label: "Social strategy",
-      description:
-        "Builds channel strategy, audience direction, campaign angles, positioning and marketing priorities.",
-      icon: Megaphone,
-    },
-    {
-      key: "content-writer",
-      label: "Content production",
-      description:
-        "Produces marketing, educational, awareness and conversion-focused written content.",
-      icon: FilePenLine,
-    },
-    {
-      key: "creative-media-producer",
-      label: "Creative media",
-      description:
-        "Creates production-ready visual requirements for graphics, campaigns, banners and media.",
-      icon: ImageIcon,
-    },
-    {
-      key: "social-schedule-coordinator",
-      label: "Content coordination",
-      description:
-        "Organises approved copy and creative packages into channel schedules and publishing queues.",
-      icon: PanelTop,
-    },
-    {
-      key: "social-media-manager",
-      label: "Social management",
-      description:
-        "Owns channel readiness, publishing preparation and authorised social execution.",
-      icon: Megaphone,
-    },
-    {
-      key: "account-growth-analyst",
-      label: "Growth analysis",
-      description:
-        "Analyses authorised account and campaign evidence for growth and conversion improvements.",
-      icon: BarChart3,
-    },
-    {
-      key: "paid-media-specialist",
-      label: "Paid media",
-      description:
-        "Prepares advertising strategy and optimisation recommendations without unauthorised spend.",
-      icon: KeyRound,
-    },
-    {
-      key: "ai-ceo",
-      label: "AI CEO",
-      description:
-        "Synthesises workforce outputs and escalates only genuine owner decisions.",
-      icon: BrainCircuit,
-    },
-  ];
+const EXECUTABLE_GROWTH_WORKFLOW: readonly ExecutableWorkflowStep[] = [
+  {
+    key: "website-seo-monitor",
+    label: "Website intelligence",
+    description:
+      "Checks authorised Cossa web properties and passes verified website, SEO and content observations into the Growth system.",
+    icon: Globe2,
+  },
+  {
+    key: "social-strategy-planner",
+    label: "Social strategy",
+    description:
+      "Builds channel strategy, audience direction, campaign angles, positioning and marketing priorities.",
+    icon: Megaphone,
+  },
+  {
+    key: "content-writer",
+    label: "Content production",
+    description:
+      "Produces marketing, educational, awareness and conversion-focused written content.",
+    icon: FilePenLine,
+  },
+  {
+    key: "creative-media-producer",
+    label: "Creative media",
+    description:
+      "Creates production-ready visual requirements for graphics, campaigns, banners and media.",
+    icon: ImageIcon,
+  },
+  {
+    key: "social-schedule-coordinator",
+    label: "Content coordination",
+    description:
+      "Organises approved copy and creative packages into channel schedules and publishing queues.",
+    icon: PanelTop,
+  },
+  {
+    key: "social-media-manager",
+    label: "Social management",
+    description: "Owns channel readiness, publishing preparation and authorised social execution.",
+    icon: Megaphone,
+  },
+  {
+    key: "account-growth-analyst",
+    label: "Growth analysis",
+    description:
+      "Analyses authorised account and campaign evidence for growth and conversion improvements.",
+    icon: BarChart3,
+  },
+  {
+    key: "paid-media-specialist",
+    label: "Paid media",
+    description:
+      "Prepares advertising strategy and optimisation recommendations without unauthorised spend.",
+    icon: KeyRound,
+  },
+  {
+    key: "ai-ceo",
+    label: "AI CEO",
+    description: "Synthesises workforce outputs and escalates only genuine owner decisions.",
+    icon: BrainCircuit,
+  },
+];
 
-const EXECUTABLE_REVENUE_WORKFLOW:
-  readonly ExecutableWorkflowStep[] = [
-    {
-      key: "lead-hunter",
-      label: "Lead Hunter",
-      description:
-        "Uses Cossa's authenticated evidence-backed search system to discover real commercial opportunities without fabricating prospects.",
-      icon: Search,
-    },
-    {
-      key: "lead-intake-coordinator",
-      label: "Lead Intake",
-      description:
-        "Preserves source records, checks routing and prepares verified Hunter results for sales work.",
-      icon: ClipboardList,
-    },
-    {
-      key: "sales-conversion-specialist",
-      label: "Sales & Conversion",
-      description:
-        "Turns verified leads into qualification, outreach, discovery, quotation and conversion next actions.",
-      icon: BarChart3,
-    },
-    {
-      key: "ai-ceo",
-      label: "AI CEO",
-      description:
-        "Reviews revenue evidence, prioritises opportunities and escalates only genuine owner-controlled actions.",
-      icon: BrainCircuit,
-    },
-  ];
+const EXECUTABLE_REVENUE_WORKFLOW: readonly ExecutableWorkflowStep[] = [
+  {
+    key: "lead-hunter",
+    label: "Lead Hunter",
+    description:
+      "Uses Cossa's authenticated evidence-backed search system to discover real commercial opportunities without fabricating prospects.",
+    icon: Search,
+  },
+  {
+    key: "lead-intake-coordinator",
+    label: "Lead Intake",
+    description:
+      "Preserves source records, checks routing and prepares verified Hunter results for sales work.",
+    icon: ClipboardList,
+  },
+  {
+    key: "sales-conversion-specialist",
+    label: "Sales & Conversion",
+    description:
+      "Turns verified leads into qualification, outreach, discovery, quotation and conversion next actions.",
+    icon: BarChart3,
+  },
+  {
+    key: "ai-ceo",
+    label: "AI CEO",
+    description:
+      "Reviews revenue evidence, prioritises opportunities and escalates only genuine owner-controlled actions.",
+    icon: BrainCircuit,
+  },
+];
 
 /* -------------------------------------------------------------------------- */
 /* DEPARTMENT MODEL                                                           */
@@ -450,9 +384,7 @@ const DEPARTMENTS: DepartmentDefinition[] = [
     description:
       "Company-wide coordination, owner briefing, escalation and executive decision support.",
     icon: BrainCircuit,
-    employeeKeys: [
-      "ai-ceo",
-    ],
+    employeeKeys: ["ai-ceo"],
   },
 
   {
@@ -530,539 +462,445 @@ const DEPARTMENTS: DepartmentDefinition[] = [
 /* RESPONSIBILITY / SEARCH MATRIX                                             */
 /* -------------------------------------------------------------------------- */
 
-const RESPONSIBILITY_MATRIX:
-  ResponsibilityDefinition[] = [
-    {
-      employeeKey: "ai-ceo",
-      label: "Executive coordination",
-      keywords: [
-        "ceo",
-        "boss",
-        "executive",
-        "company",
-        "coordinate",
-        "delegate",
-        "decision",
-        "briefing",
-        "strategy",
-        "manage team",
-        "who should do this",
-      ],
-    },
+const RESPONSIBILITY_MATRIX: ResponsibilityDefinition[] = [
+  {
+    employeeKey: "ai-ceo",
+    label: "Executive coordination",
+    keywords: [
+      "ceo",
+      "boss",
+      "executive",
+      "company",
+      "coordinate",
+      "delegate",
+      "decision",
+      "briefing",
+      "strategy",
+      "manage team",
+      "who should do this",
+    ],
+  },
 
-    {
-      employeeKey: "lead-hunter",
-      label: "Revenue hunting",
-      keywords: [
-        "hunter",
-        "lead hunter",
-        "find customers",
-        "find clients",
-        "prospects",
-        "prospecting",
-        "customer acquisition",
-        "find buyers",
-        "buyer intent",
-        "sales prospects",
-        "new customers",
-        "find opportunities",
-        "quick revenue",
-        "cash flow",
-        "commercial opportunity",
-        "tender search",
-        "rfq search",
-        "website prospects",
-        "maintenance prospects",
-        "cleaning prospects",
-        "construction prospects",
-      ],
-    },
+  {
+    employeeKey: "lead-hunter",
+    label: "Revenue hunting",
+    keywords: [
+      "hunter",
+      "lead hunter",
+      "find customers",
+      "find clients",
+      "prospects",
+      "prospecting",
+      "customer acquisition",
+      "find buyers",
+      "buyer intent",
+      "sales prospects",
+      "new customers",
+      "find opportunities",
+      "quick revenue",
+      "cash flow",
+      "commercial opportunity",
+      "tender search",
+      "rfq search",
+      "website prospects",
+      "maintenance prospects",
+      "cleaning prospects",
+      "construction prospects",
+    ],
+  },
 
-    {
-      employeeKey:
-        "sales-conversion-specialist",
-      label: "Sales & conversion",
-      keywords: [
-        "sales",
-        "conversion",
-        "close lead",
-        "close customer",
-        "qualify lead",
-        "follow up",
-        "sales follow up",
-        "discovery questions",
-        "objection handling",
-        "quotation",
-        "proposal",
-        "sales strategy",
-        "outreach",
-        "convert prospect",
-      ],
-    },
+  {
+    employeeKey: "sales-conversion-specialist",
+    label: "Sales & conversion",
+    keywords: [
+      "sales",
+      "conversion",
+      "close lead",
+      "close customer",
+      "qualify lead",
+      "follow up",
+      "sales follow up",
+      "discovery questions",
+      "objection handling",
+      "quotation",
+      "proposal",
+      "sales strategy",
+      "outreach",
+      "convert prospect",
+    ],
+  },
 
-    {
-      employeeKey: "website-seo-monitor",
-      label: "Website & SEO monitoring",
-      keywords: [
-        "seo",
-        "website seo",
-        "ranking",
-        "website health",
-        "website audit",
-        "search engine",
-        "meta title",
-        "meta description",
-        "website performance",
-        "keywords",
-      ],
-    },
+  {
+    employeeKey: "website-seo-monitor",
+    label: "Website & SEO monitoring",
+    keywords: [
+      "seo",
+      "website seo",
+      "ranking",
+      "website health",
+      "website audit",
+      "search engine",
+      "meta title",
+      "meta description",
+      "website performance",
+      "keywords",
+    ],
+  },
 
-    {
-      employeeKey: "social-strategy-planner",
-      label: "Social strategy",
-      keywords: [
-        "social strategy",
-        "marketing strategy",
-        "campaign strategy",
-        "audience",
-        "content pillars",
-        "marketing angle",
-        "social plan",
-        "facebook strategy",
-        "instagram strategy",
-        "tiktok strategy",
-      ],
-    },
+  {
+    employeeKey: "social-strategy-planner",
+    label: "Social strategy",
+    keywords: [
+      "social strategy",
+      "marketing strategy",
+      "campaign strategy",
+      "audience",
+      "content pillars",
+      "marketing angle",
+      "social plan",
+      "facebook strategy",
+      "instagram strategy",
+      "tiktok strategy",
+    ],
+  },
 
-    {
-      employeeKey: "content-writer",
-      label: "Content & copywriting",
-      keywords: [
-        "content",
-        "write",
-        "writing",
-        "post",
-        "caption",
-        "copy",
-        "article",
-        "blog",
-        "website copy",
-        "landing page",
-        "script",
-        "headline",
-        "description",
-        "marketing copy",
-      ],
-    },
+  {
+    employeeKey: "content-writer",
+    label: "Content & copywriting",
+    keywords: [
+      "content",
+      "write",
+      "writing",
+      "post",
+      "caption",
+      "copy",
+      "article",
+      "blog",
+      "website copy",
+      "landing page",
+      "script",
+      "headline",
+      "description",
+      "marketing copy",
+    ],
+  },
 
-    {
-      employeeKey: "creative-media-producer",
-      label: "Creative & design production",
-      keywords: [
-        "flyer",
-        "poster",
-        "graphic",
-        "design",
-        "image",
-        "creative",
-        "brochure",
-        "banner",
-        "visual",
-        "reel",
-        "video",
-        "thumbnail",
-        "advert",
-        "ad creative",
-        "social graphic",
-      ],
-    },
+  {
+    employeeKey: "creative-media-producer",
+    label: "Creative & design production",
+    keywords: [
+      "flyer",
+      "poster",
+      "graphic",
+      "design",
+      "image",
+      "creative",
+      "brochure",
+      "banner",
+      "visual",
+      "reel",
+      "video",
+      "thumbnail",
+      "advert",
+      "ad creative",
+      "social graphic",
+    ],
+  },
 
-    {
-      employeeKey: "social-schedule-coordinator",
-      label: "Content scheduling",
-      keywords: [
-        "schedule",
-        "calendar",
-        "content calendar",
-        "posting time",
-        "publishing plan",
-        "queue",
-        "social calendar",
-      ],
-    },
+  {
+    employeeKey: "social-schedule-coordinator",
+    label: "Content scheduling",
+    keywords: [
+      "schedule",
+      "calendar",
+      "content calendar",
+      "posting time",
+      "publishing plan",
+      "queue",
+      "social calendar",
+    ],
+  },
 
-    {
-      employeeKey: "social-media-manager",
-      label: "Social media management",
-      keywords: [
-        "social media",
-        "facebook",
-        "instagram",
-        "tiktok",
-        "linkedin",
-        "youtube",
-        "whatsapp status",
-        "publish",
-        "social account",
-        "community",
-        "posting",
-      ],
-    },
+  {
+    employeeKey: "social-media-manager",
+    label: "Social media management",
+    keywords: [
+      "social media",
+      "facebook",
+      "instagram",
+      "tiktok",
+      "linkedin",
+      "youtube",
+      "whatsapp status",
+      "publish",
+      "social account",
+      "community",
+      "posting",
+    ],
+  },
 
-    {
-      employeeKey: "account-growth-analyst",
-      label: "Growth analytics",
-      keywords: [
-        "analytics",
-        "growth",
-        "performance",
-        "engagement",
-        "conversion",
-        "account growth",
-        "audience growth",
-        "metrics",
-        "results",
-        "improve account",
-      ],
-    },
+  {
+    employeeKey: "account-growth-analyst",
+    label: "Growth analytics",
+    keywords: [
+      "analytics",
+      "growth",
+      "performance",
+      "engagement",
+      "conversion",
+      "account growth",
+      "audience growth",
+      "metrics",
+      "results",
+      "improve account",
+    ],
+  },
 
-    {
-      employeeKey: "paid-media-specialist",
-      label: "Paid advertising",
-      keywords: [
-        "ads",
-        "advertising",
-        "google ads",
-        "meta ads",
-        "facebook ads",
-        "paid media",
-        "campaign budget",
-        "targeting",
-        "cpc",
-        "roas",
-        "ad strategy",
-      ],
-    },
+  {
+    employeeKey: "paid-media-specialist",
+    label: "Paid advertising",
+    keywords: [
+      "ads",
+      "advertising",
+      "google ads",
+      "meta ads",
+      "facebook ads",
+      "paid media",
+      "campaign budget",
+      "targeting",
+      "cpc",
+      "roas",
+      "ad strategy",
+    ],
+  },
 
-    {
-      employeeKey: "store-operations-manager",
-      label: "Store operations",
-      keywords: [
-        "store",
-        "catalogue",
-        "catalog",
-        "merchandising",
-        "store quality",
-        "ecommerce operations",
-        "shop",
-      ],
-    },
+  {
+    employeeKey: "store-operations-manager",
+    label: "Store operations",
+    keywords: [
+      "store",
+      "catalogue",
+      "catalog",
+      "merchandising",
+      "store quality",
+      "ecommerce operations",
+      "shop",
+    ],
+  },
 
-    {
-      employeeKey: "product-intelligence-analyst",
-      label: "Product intelligence",
-      keywords: [
-        "product",
-        "products",
-        "product research",
-        "trending product",
-        "product demand",
-        "pricing research",
-        "product opportunity",
-        "what to sell",
-        "dropshipping product",
-      ],
-    },
+  {
+    employeeKey: "product-intelligence-analyst",
+    label: "Product intelligence",
+    keywords: [
+      "product",
+      "products",
+      "product research",
+      "trending product",
+      "product demand",
+      "pricing research",
+      "product opportunity",
+      "what to sell",
+      "dropshipping product",
+    ],
+  },
 
-    {
-      employeeKey: "supplier-sourcing-analyst",
-      label: "Supplier sourcing",
-      keywords: [
-        "supplier",
-        "suppliers",
-        "source product",
-        "sourcing",
-        "manufacturer",
-        "wholesaler",
-        "vendor",
-        "dropshipping supplier",
-      ],
-    },
+  {
+    employeeKey: "supplier-sourcing-analyst",
+    label: "Supplier sourcing",
+    keywords: [
+      "supplier",
+      "suppliers",
+      "source product",
+      "sourcing",
+      "manufacturer",
+      "wholesaler",
+      "vendor",
+      "dropshipping supplier",
+    ],
+  },
 
-    {
-      employeeKey: "broker-deal-intelligence-analyst",
-      label: "Deals & partnerships",
-      keywords: [
-        "deal",
-        "broker",
-        "partner",
-        "partnership",
-        "buyer",
-        "distributor",
-        "commercial opportunity",
-        "business opportunity",
-      ],
-    },
+  {
+    employeeKey: "broker-deal-intelligence-analyst",
+    label: "Deals & partnerships",
+    keywords: [
+      "deal",
+      "broker",
+      "partner",
+      "partnership",
+      "buyer",
+      "distributor",
+      "commercial opportunity",
+      "business opportunity",
+    ],
+  },
 
-    {
-      employeeKey: "procurement-intelligence-analyst",
-      label: "Procurement intelligence",
-      keywords: [
-        "tender",
-        "rfq",
-        "procurement",
-        "quotation opportunity",
-        "bid",
-        "government tender",
-        "supplier opportunity",
-      ],
-    },
+  {
+    employeeKey: "procurement-intelligence-analyst",
+    label: "Procurement intelligence",
+    keywords: [
+      "tender",
+      "rfq",
+      "procurement",
+      "quotation opportunity",
+      "bid",
+      "government tender",
+      "supplier opportunity",
+    ],
+  },
 
-    {
-      employeeKey: "customer-reactivation-analyst",
-      label: "Customer reactivation",
-      keywords: [
-        "reactivate customer",
-        "old customer",
-        "dormant customer",
-        "retention",
-        "repeat customer",
-        "follow up customer",
-        "win back",
-      ],
-    },
+  {
+    employeeKey: "customer-reactivation-analyst",
+    label: "Customer reactivation",
+    keywords: [
+      "reactivate customer",
+      "old customer",
+      "dormant customer",
+      "retention",
+      "repeat customer",
+      "follow up customer",
+      "win back",
+    ],
+  },
 
-    {
-      employeeKey: "lead-intake-coordinator",
-      label: "Lead intake",
-      keywords: [
-        "lead",
-        "new lead",
-        "enquiry",
-        "inquiry",
-        "qualification",
-        "customer enquiry",
-        "sales lead",
-        "lead intake",
-        "route lead",
-      ],
-    },
+  {
+    employeeKey: "lead-intake-coordinator",
+    label: "Lead intake",
+    keywords: [
+      "lead",
+      "new lead",
+      "enquiry",
+      "inquiry",
+      "qualification",
+      "customer enquiry",
+      "sales lead",
+      "lead intake",
+      "route lead",
+    ],
+  },
 
-    {
-      employeeKey: "tech-solutions-specialist",
-      label: "Technology solutions",
-      keywords: [
-        "tech",
-        "technology",
-        "software",
-        "technical",
-        "system",
-        "solution",
-        "implementation",
-        "automation",
-      ],
-    },
+  {
+    employeeKey: "tech-solutions-specialist",
+    label: "Technology solutions",
+    keywords: [
+      "tech",
+      "technology",
+      "software",
+      "technical",
+      "system",
+      "solution",
+      "implementation",
+      "automation",
+    ],
+  },
 
-    {
-      employeeKey: "website-delivery-specialist",
-      label: "Website delivery",
-      keywords: [
-        "website",
-        "build website",
-        "web development",
-        "landing page implementation",
-        "client website",
-        "web design",
-        "website delivery",
-      ],
-    },
-  ];
+  {
+    employeeKey: "website-delivery-specialist",
+    label: "Website delivery",
+    keywords: [
+      "website",
+      "build website",
+      "web development",
+      "landing page implementation",
+      "client website",
+      "web design",
+      "website delivery",
+    ],
+  },
+];
 
 /* -------------------------------------------------------------------------- */
 /* GENERIC HELPERS                                                            */
 /* -------------------------------------------------------------------------- */
 
-function sleep(
-  milliseconds: number,
-): Promise<void> {
+function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
-    window.setTimeout(
-      resolve,
-      milliseconds,
-    );
+    window.setTimeout(resolve, milliseconds);
   });
 }
 
-function clampText(
-  value: string,
-  maxCharacters: number,
-): string {
-  const cleaned =
-    value.trim();
+function clampText(value: string, maxCharacters: number): string {
+  const cleaned = value.trim();
 
-  if (
-    cleaned.length <=
-    maxCharacters
-  ) {
+  if (cleaned.length <= maxCharacters) {
     return cleaned;
   }
 
-  return `${cleaned.slice(
-    0,
-    Math.max(
-      0,
-      maxCharacters - 80,
-    ),
-  )}\n\n[Context truncated by Cossa AI.]`;
+  return `${cleaned.slice(0, Math.max(0, maxCharacters - 80))}\n\n[Context truncated by Cossa AI.]`;
 }
 
-function formatStatus(
-  value:
-    | string
-    | null
-    | undefined,
-): string {
+function formatStatus(value: string | null | undefined): string {
   if (!value) {
     return "Unknown";
   }
 
-  return value
-    .replace(
-      /_/g,
-      " ",
-    )
-    .replace(
-      /\b\w/g,
-      (letter) =>
-        letter.toUpperCase(),
-    );
+  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function formatDateTime(
-  value:
-    | string
-    | null
-    | undefined,
-): string {
+function formatDateTime(value: string | null | undefined): string {
   if (!value) {
     return "No activity recorded";
   }
 
-  const date =
-    new Date(value);
+  const date = new Date(value);
 
-  if (
-    Number.isNaN(
-      date.getTime(),
-    )
-  ) {
+  if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  return date.toLocaleString(
-    "en-ZA",
-    {
-      dateStyle: "medium",
-      timeStyle: "short",
-    },
-  );
+  return date.toLocaleString("en-ZA", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
-function latestRunTime(
-  run: MissionRun,
-): string {
-  return (
-    run.completed_at ??
-    run.started_at ??
-    run.created_at ??
-    ""
-  );
+function latestRunTime(run: MissionRun): string {
+  return run.completed_at ?? run.started_at ?? run.created_at ?? "";
 }
 
-function employeeDepartment(
-  employee: AiEmployee,
-): string {
-  return (
-    employee.department?.trim() ||
-    "Department not recorded"
-  );
+function employeeDepartment(employee: AiEmployee): string {
+  return employee.department?.trim() || "Department not recorded";
 }
 
-function employeeBusinessUnit(
-  employee: AiEmployee,
-): string {
-  return employee.business_unit_id
-    ? "Assigned business unit"
-    : "Group-wide";
+function employeeBusinessUnit(employee: AiEmployee): string {
+  return employee.business_unit_id ? "Assigned business unit" : "Group-wide";
 }
 
-function normaliseErrorMessage(
-  error: unknown,
-): string {
-  if (
-    error instanceof Error
-  ) {
+function normaliseErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
     return error.message;
   }
 
-  if (
-    typeof error ===
-    "string"
-  ) {
+  if (typeof error === "string") {
     return error;
   }
 
   return "Unknown workforce execution error.";
 }
 
-function uniqueStrings(
-  values: string[],
-): string[] {
-  return [
-    ...new Set(
-      values
-        .map(
-          (value) =>
-            value.trim(),
-        )
-        .filter(Boolean),
-    ),
-  ];
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 /* -------------------------------------------------------------------------- */
 /* MISSION / WORKFLOW HELPERS                                                 */
 /* -------------------------------------------------------------------------- */
 
-function missionWorkforceKind(
-  mission: Mission | null,
-): WorkforceKind {
-  if (
-    mission?.title.startsWith(
-      REVENUE_MISSION_PREFIX,
-    )
-  ) {
+function missionWorkforceKind(mission: Mission | null): WorkforceKind {
+  if (mission?.title.startsWith(REVENUE_MISSION_PREFIX)) {
     return "revenue";
   }
 
   return "growth";
 }
 
-function workflowForMission(
-  mission: Mission | null,
-): readonly ExecutableWorkflowStep[] {
-  return missionWorkforceKind(
-    mission,
-  ) === "revenue"
+function workflowForMission(mission: Mission | null): readonly ExecutableWorkflowStep[] {
+  return missionWorkforceKind(mission) === "revenue"
     ? EXECUTABLE_REVENUE_WORKFLOW
     : EXECUTABLE_GROWTH_WORKFLOW;
 }
 
-function commandLooksLikeRevenueWork(
-  command: string,
-): boolean {
-  const value =
-    command.toLowerCase();
+function commandLooksLikeRevenueWork(command: string): boolean {
+  const value = command.toLowerCase();
 
   return [
     "find customer",
@@ -1087,88 +925,39 @@ function commandLooksLikeRevenueWork(
     "customer acquisition",
     "buyer",
     "buyers",
-  ].some(
-    (marker) =>
-      value.includes(
-        marker,
-      ),
-  );
+  ].some((marker) => value.includes(marker));
 }
 
 /* -------------------------------------------------------------------------- */
 /* SEARCH HELPERS                                                             */
 /* -------------------------------------------------------------------------- */
 
-function departmentKeysForEmployee(
-  employeeKey: string,
-): string[] {
-  const canonicalKey =
-    canonicalEmployeeKey(
-      employeeKey,
-    );
+function departmentKeysForEmployee(employeeKey: string): string[] {
+  const canonicalKey = canonicalEmployeeKey(employeeKey);
 
-  return DEPARTMENTS.filter(
-    (department) =>
-      department.employeeKeys.includes(
-        canonicalKey,
-      ),
-  ).map(
-    (department) =>
-      department.key,
+  return DEPARTMENTS.filter((department) => department.employeeKeys.includes(canonicalKey)).map(
+    (department) => department.key,
   );
 }
 
-function responsibilityLabelsForEmployee(
-  employeeKey: string,
-): string[] {
-  const canonicalKey =
-    canonicalEmployeeKey(
-      employeeKey,
-    );
+function responsibilityLabelsForEmployee(employeeKey: string): string[] {
+  const canonicalKey = canonicalEmployeeKey(employeeKey);
 
-  return RESPONSIBILITY_MATRIX.filter(
-    (item) =>
-      item.employeeKey ===
-      canonicalKey,
-  ).map(
-    (item) =>
-      item.label,
+  return RESPONSIBILITY_MATRIX.filter((item) => item.employeeKey === canonicalKey).map(
+    (item) => item.label,
   );
 }
 
-function searchTermsForEmployee(
-  employee: AiEmployee,
-): string {
-  const canonicalKey =
-    canonicalEmployeeKey(
-      employee.employee_key,
-    );
+function searchTermsForEmployee(employee: AiEmployee): string {
+  const canonicalKey = canonicalEmployeeKey(employee.employee_key);
 
-  const responsibilityTerms =
-    RESPONSIBILITY_MATRIX.filter(
-      (item) =>
-        item.employeeKey ===
-        canonicalKey,
-    ).flatMap(
-      (item) => [
-        item.label,
-        ...item.keywords,
-      ],
-    );
+  const responsibilityTerms = RESPONSIBILITY_MATRIX.filter(
+    (item) => item.employeeKey === canonicalKey,
+  ).flatMap((item) => [item.label, ...item.keywords]);
 
-  const departmentTerms =
-    DEPARTMENTS.filter(
-      (department) =>
-        department.employeeKeys.includes(
-          canonicalKey,
-        ),
-    ).flatMap(
-      (department) => [
-        department.name,
-        department.shortName,
-        department.description,
-      ],
-    );
+  const departmentTerms = DEPARTMENTS.filter((department) =>
+    department.employeeKeys.includes(canonicalKey),
+  ).flatMap((department) => [department.name, department.shortName, department.description]);
 
   return [
     employee.name,
@@ -1183,14 +972,8 @@ function searchTermsForEmployee(
     .toLowerCase();
 }
 
-function searchScore(
-  employee: EmployeeDirectoryItem,
-  query: string,
-): number {
-  const q =
-    query
-      .trim()
-      .toLowerCase();
+function searchScore(employee: EmployeeDirectoryItem, query: string): number {
+  const q = query.trim().toLowerCase();
 
   if (!q) {
     return 0;
@@ -1198,88 +981,49 @@ function searchScore(
 
   let score = 0;
 
-  const employeeName =
-    employee.employee.name.toLowerCase();
+  const employeeName = employee.employee.name.toLowerCase();
 
-  const employeeTitle =
-    employee.employee.title.toLowerCase();
+  const employeeTitle = employee.employee.title.toLowerCase();
 
-  const employeeKey =
-    canonicalEmployeeKey(
-      employee.employee.employee_key,
-    ).toLowerCase();
+  const employeeKey = canonicalEmployeeKey(employee.employee.employee_key).toLowerCase();
 
-  if (
-    employeeName === q ||
-    employeeTitle === q
-  ) {
+  if (employeeName === q || employeeTitle === q) {
     score += 200;
   }
 
-  if (
-    employeeName.includes(q)
-  ) {
+  if (employeeName.includes(q)) {
     score += 100;
   }
 
-  if (
-    employeeTitle.includes(q)
-  ) {
+  if (employeeTitle.includes(q)) {
     score += 90;
   }
 
-  if (
-    employeeKey.includes(q)
-  ) {
+  if (employeeKey.includes(q)) {
     score += 80;
   }
 
-  for (
-    const responsibility
-    of RESPONSIBILITY_MATRIX
-  ) {
-    if (
-      responsibility.employeeKey !==
-      employeeKey
-    ) {
+  for (const responsibility of RESPONSIBILITY_MATRIX) {
+    if (responsibility.employeeKey !== employeeKey) {
       continue;
     }
 
-    if (
-      responsibility.label
-        .toLowerCase()
-        .includes(q)
-    ) {
+    if (responsibility.label.toLowerCase().includes(q)) {
       score += 75;
     }
 
-    for (
-      const keyword
-      of responsibility.keywords
-    ) {
-      const keywordLower =
-        keyword.toLowerCase();
+    for (const keyword of responsibility.keywords) {
+      const keywordLower = keyword.toLowerCase();
 
-      if (
-        keywordLower === q
-      ) {
+      if (keywordLower === q) {
         score += 120;
-      } else if (
-        keywordLower.includes(q) ||
-        q.includes(
-          keywordLower,
-        )
-      ) {
+      } else if (keywordLower.includes(q) || q.includes(keywordLower)) {
         score += 55;
       }
     }
   }
 
-  if (
-    employee.searchText.includes(
-      q,
-    )
-  ) {
+  if (employee.searchText.includes(q)) {
     score += 20;
   }
 
@@ -1290,75 +1034,37 @@ function searchScore(
 /* CONTEXT COMPACTION                                                         */
 /* -------------------------------------------------------------------------- */
 
-function compactPriorOutputsForPrompt(
-  outputs: string[],
-): string[] {
+function compactPriorOutputsForPrompt(outputs: string[]): string[] {
   return outputs
-    .map(
-      (output) =>
-        output.trim(),
-    )
+    .map((output) => output.trim())
     .filter(Boolean)
-    .slice(
-      -MAX_PRIOR_OUTPUTS,
-    )
-    .map(
-      (output) =>
-        clampText(
-          output,
-          MAX_PRIOR_OUTPUT_CHARS,
-        ),
-    );
+    .slice(-MAX_PRIOR_OUTPUTS)
+    .map((output) => clampText(output, MAX_PRIOR_OUTPUT_CHARS));
 }
 
-function compactAuthorisedEvidence(
-  evidence: string[],
-): string[] {
+function compactAuthorisedEvidence(evidence: string[]): string[] {
   return evidence
-    .map(
-      (item) =>
-        item.trim(),
-    )
+    .map((item) => item.trim())
     .filter(Boolean)
-    .slice(
-      0,
-      MAX_AUTHORISED_EVIDENCE_ITEMS,
-    )
-    .map(
-      (item) =>
-        clampText(
-          item,
-          MAX_AUTHORISED_EVIDENCE_CHARS,
-        ),
-    );
+    .slice(0, MAX_AUTHORISED_EVIDENCE_ITEMS)
+    .map((item) => clampText(item, MAX_AUTHORISED_EVIDENCE_CHARS));
 }
 
 /* -------------------------------------------------------------------------- */
 /* WORKFLOW HELPERS                                                           */
 /* -------------------------------------------------------------------------- */
 
-function handoffStageNumber(
-  handoff: EmployeeHandoff,
-): number | null {
-  const stage =
-    handoff.context?.stage;
+function handoffStageNumber(handoff: EmployeeHandoff): number | null {
+  const stage = handoff.context?.stage;
 
-  if (
-    typeof stage === "number" &&
-    Number.isFinite(stage)
-  ) {
+  if (typeof stage === "number" && Number.isFinite(stage)) {
     return stage;
   }
 
-  if (
-    typeof stage === "string"
-  ) {
-    const parsed =
-      Number(stage);
+  if (typeof stage === "string") {
+    const parsed = Number(stage);
 
-    if (
-      Number.isFinite(parsed)
-    ) {
+    if (Number.isFinite(parsed)) {
       return parsed;
     }
   }
@@ -1366,43 +1072,18 @@ function handoffStageNumber(
   return null;
 }
 
-function sortWorkflowHandoffs(
-  handoffs: EmployeeHandoff[],
-): EmployeeHandoff[] {
-  return [
-    ...handoffs,
-  ].sort(
-    (
-      left,
-      right,
-    ) => {
-      const leftStage =
-        handoffStageNumber(
-          left,
-        );
+function sortWorkflowHandoffs(handoffs: EmployeeHandoff[]): EmployeeHandoff[] {
+  return [...handoffs].sort((left, right) => {
+    const leftStage = handoffStageNumber(left);
 
-      const rightStage =
-        handoffStageNumber(
-          right,
-        );
+    const rightStage = handoffStageNumber(right);
 
-      if (
-        leftStage !== null &&
-        rightStage !== null &&
-        leftStage !==
-          rightStage
-      ) {
-        return (
-          leftStage -
-          rightStage
-        );
-      }
+    if (leftStage !== null && rightStage !== null && leftStage !== rightStage) {
+      return leftStage - rightStage;
+    }
 
-      return left.created_at.localeCompare(
-        right.created_at,
-      );
-    },
-  );
+    return left.created_at.localeCompare(right.created_at);
+  });
 }
 
 function nextWorkflowHandoffForHandoff({
@@ -1412,31 +1093,15 @@ function nextWorkflowHandoffForHandoff({
   currentHandoff: EmployeeHandoff;
   workflowHandoffs: EmployeeHandoff[];
 }): EmployeeHandoff | null {
-  const ordered =
-    sortWorkflowHandoffs(
-      workflowHandoffs,
-    );
+  const ordered = sortWorkflowHandoffs(workflowHandoffs);
 
-  const currentIndex =
-    ordered.findIndex(
-      (handoff) =>
-        handoff.id ===
-        currentHandoff.id,
-    );
+  const currentIndex = ordered.findIndex((handoff) => handoff.id === currentHandoff.id);
 
-  if (
-    currentIndex < 0 ||
-    currentIndex >=
-      ordered.length - 1
-  ) {
+  if (currentIndex < 0 || currentIndex >= ordered.length - 1) {
     return null;
   }
 
-  return (
-    ordered[
-      currentIndex + 1
-    ] ?? null
-  );
+  return ordered[currentIndex + 1] ?? null;
 }
 
 function nextWorkflowEmployeeForHandoff({
@@ -1448,25 +1113,16 @@ function nextWorkflowEmployeeForHandoff({
   workflowHandoffs: EmployeeHandoff[];
   employees: AiEmployee[];
 }): AiEmployee | null {
-  const nextHandoff =
-    nextWorkflowHandoffForHandoff({
-      currentHandoff,
-      workflowHandoffs,
-    });
+  const nextHandoff = nextWorkflowHandoffForHandoff({
+    currentHandoff,
+    workflowHandoffs,
+  });
 
-  if (
-    !nextHandoff
-  ) {
+  if (!nextHandoff) {
     return null;
   }
 
-  return (
-    employees.find(
-      (employee) =>
-        employee.id ===
-        nextHandoff.to_employee_id,
-    ) ?? null
-  );
+  return employees.find((employee) => employee.id === nextHandoff.to_employee_id) ?? null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1486,317 +1142,154 @@ function employeeOperationalView({
   runs: MissionRun[];
   approvals: Approval[];
 }): EmployeeOperationalView {
-  const employeeHandoffs =
-    handoffs.filter(
-      (handoff) =>
-        handoff.to_employee_id ===
-        employee.id,
-    );
+  const employeeHandoffs = handoffs.filter((handoff) => handoff.to_employee_id === employee.id);
 
-  const activeMissionIds =
-    new Set(
-      missions
-        .filter(
-          (mission) =>
-            [
-              "queued",
-              "running",
-              "awaiting_approval",
-            ].includes(
-              mission.status,
-            ),
-        )
-        .map(
-          (mission) =>
-            mission.id,
-        ),
-    );
-
-  const operationalHandoffs =
-    employeeHandoffs.filter(
-      (handoff) =>
-        activeMissionIds.has(
-          handoff.mission_id,
-        ),
-    );
-
-  const employeeRuns =
-    runs.filter(
-      (run) =>
-        run.employee_id ===
-        employee.id,
-    );
-
-  const employeeRunIds =
-    new Set(
-      employeeRuns.map(
-        (run) =>
-          run.id,
-      ),
-    );
-
-  const employeeApprovals =
-    approvals.filter(
-      (approval) =>
-        approval.requested_by_employee_id ===
-          employee.id ||
-        (
-          approval.run_id !==
-            null &&
-          employeeRunIds.has(
-            approval.run_id,
-          )
-        ),
-    );
-
-  const pendingHandoffs =
-    operationalHandoffs.filter(
-      (handoff) =>
-        handoff.status ===
-        "pending",
-    );
-
-  const acceptedHandoffs =
-    operationalHandoffs.filter(
-      (handoff) =>
-        handoff.status ===
-        "accepted",
-    );
-
-  const activeRuns =
-    employeeRuns.filter(
-      (run) =>
-        run.status ===
-        "running",
-    );
-
-  const failedRuns =
-    employeeRuns.filter(
-      (run) =>
-        run.status ===
-        "failed",
-    );
-
-  const orderedHandoffs = [
-    ...employeeHandoffs,
-  ].sort(
-    (
-      left,
-      right,
-    ) =>
-      right.created_at.localeCompare(
-        left.created_at,
-      ),
+  const activeMissionIds = new Set(
+    missions
+      .filter((mission) => ["queued", "running", "awaiting_approval"].includes(mission.status))
+      .map((mission) => mission.id),
   );
 
-  const orderedRuns = [
-    ...employeeRuns,
-  ].sort(
-    (
-      left,
-      right,
-    ) =>
-      latestRunTime(
-        right,
-      ).localeCompare(
-        latestRunTime(
-          left,
-        ),
-      ),
+  const operationalHandoffs = employeeHandoffs.filter((handoff) =>
+    activeMissionIds.has(handoff.mission_id),
   );
 
-  const latestHandoff =
-    orderedHandoffs[0];
+  const employeeRuns = runs.filter((run) => run.employee_id === employee.id);
 
-  const latestRun =
-    orderedRuns[0];
+  const employeeRunIds = new Set(employeeRuns.map((run) => run.id));
+
+  const employeeApprovals = approvals.filter(
+    (approval) =>
+      approval.requested_by_employee_id === employee.id ||
+      (approval.run_id !== null && employeeRunIds.has(approval.run_id)),
+  );
+
+  const pendingHandoffs = operationalHandoffs.filter((handoff) => handoff.status === "pending");
+
+  const acceptedHandoffs = operationalHandoffs.filter((handoff) => handoff.status === "accepted");
+
+  const activeRuns = employeeRuns.filter((run) => run.status === "running");
+
+  const failedRuns = employeeRuns.filter((run) => run.status === "failed");
+
+  const orderedHandoffs = [...employeeHandoffs].sort((left, right) =>
+    right.created_at.localeCompare(left.created_at),
+  );
+
+  const orderedRuns = [...employeeRuns].sort((left, right) =>
+    latestRunTime(right).localeCompare(latestRunTime(left)),
+  );
+
+  const latestHandoff = orderedHandoffs[0];
+
+  const latestRun = orderedRuns[0];
 
   const latestFailure =
-    latestRun?.status ===
-    "failed"
-      ? latestRun.error_message ||
-        latestRun.error_code ||
-        "The latest recorded run failed."
+    latestRun?.status === "failed"
+      ? latestRun.error_message || latestRun.error_code || "The latest recorded run failed."
       : null;
 
-  const retryReady =
-    latestRun?.status ===
-      "failed" &&
-    pendingHandoffs.length >
-      0;
+  const retryReady = latestRun?.status === "failed" && pendingHandoffs.length > 0;
 
-  const latestActivityCandidates =
-    [
-      latestRun
-        ? latestRunTime(
-            latestRun,
-          )
-        : "",
-      latestHandoff?.completed_at ??
-        "",
-      latestHandoff?.accepted_at ??
-        "",
-      latestHandoff?.created_at ??
-        "",
-    ].filter(Boolean);
+  const latestActivityCandidates = [
+    latestRun ? latestRunTime(latestRun) : "",
+    latestHandoff?.completed_at ?? "",
+    latestHandoff?.accepted_at ?? "",
+    latestHandoff?.created_at ?? "",
+  ].filter(Boolean);
 
   const latestActivity =
-    latestActivityCandidates.sort(
-      (
-        left,
-        right,
-      ) =>
-        right.localeCompare(
-          left,
-        ),
-    )[0] ?? null;
+    latestActivityCandidates.sort((left, right) => right.localeCompare(left))[0] ?? null;
 
   const currentTask =
-    acceptedHandoffs[0]
-      ?.reason ??
-    pendingHandoffs[0]
-      ?.reason ??
-    latestHandoff
-      ?.reason ??
+    acceptedHandoffs[0]?.reason ??
+    pendingHandoffs[0]?.reason ??
+    latestHandoff?.reason ??
     "No task currently assigned";
 
   const common = {
     currentTask,
-    lastActivity:
-      latestActivity,
-    assignedCount:
-      operationalHandoffs.length,
-    pendingCount:
-      pendingHandoffs.length,
-    runningCount:
-      activeRuns.length +
-      acceptedHandoffs.length,
-    failedCount:
-      failedRuns.length,
-    historicalFailureCount:
-      failedRuns.length,
-    approvalCount:
-      employeeApprovals.length,
-    latestProvider:
-      latestRun?.model_provider ??
-      null,
-    latestModel:
-      latestRun?.model_name ??
-      null,
+    lastActivity: latestActivity,
+    assignedCount: operationalHandoffs.length,
+    pendingCount: pendingHandoffs.length,
+    runningCount: activeRuns.length + acceptedHandoffs.length,
+    failedCount: failedRuns.length,
+    historicalFailureCount: failedRuns.length,
+    approvalCount: employeeApprovals.length,
+    latestProvider: latestRun?.model_provider ?? null,
+    latestModel: latestRun?.model_name ?? null,
     latestFailure,
     retryReady,
   };
 
-  if (
-    employee.status !==
-    "active"
-  ) {
+  if (employee.status !== "active") {
     return {
       ...common,
-      state:
-        "inactive",
-      label: `${formatStatus(
-        employee.status,
-      )} — Not operational`,
+      state: "inactive",
+      label: "Disabled",
       detail:
-        employee.status ===
-        "paused"
+        employee.status === "paused"
           ? "This employee is paused and cannot receive new work."
-          : employee.status ===
-              "retired"
+          : employee.status === "retired"
             ? "This employee is retired."
             : "This employee profile is not currently active.",
     };
   }
 
-  if (
-    activeRuns.length >
-      0 ||
-    acceptedHandoffs.length >
-      0
-  ) {
+  if (activeRuns.length > 0 || acceptedHandoffs.length > 0) {
     return {
       ...common,
-      state:
-        "working",
-      label:
-        "Active — Working",
-      detail:
-        "A real workforce run or accepted handoff is currently recorded.",
+      state: "working",
+      label: "Working",
+      detail: "A real workforce run or accepted handoff is currently recorded.",
     };
   }
 
-  if (
-    employeeApprovals.length >
-    0
-  ) {
+  if (employeeApprovals.length > 0) {
     return {
       ...common,
-      state:
-        "approval",
-      label:
-        "Active — Approval required",
-      detail:
-        "Recorded work has reached an owner-controlled approval checkpoint.",
+      state: "approval",
+      label: "Awaiting approval",
+      detail: "Recorded work has reached an owner-controlled approval checkpoint.",
     };
   }
 
-  if (
-    retryReady
-  ) {
+  if (retryReady) {
     return {
       ...common,
-      state:
-        "waiting",
-      label:
-        "Active — Retry ready",
-      detail:
-        "The previous attempt failed, but the task safely returned to pending.",
+      state: "waiting",
+      label: "Waiting",
+      detail: "The previous attempt failed, but the task safely returned to pending.",
     };
   }
 
-  if (
-    latestRun?.status ===
-    "failed"
-  ) {
+  if (latestRun?.status === "failed") {
     return {
       ...common,
-      state:
-        "attention",
-      label:
-        "Active — Needs attention",
+      state: "attention",
+      label: "Failed",
       detail:
         latestFailure ??
         "The latest workforce run failed and has not returned to a retryable state.",
     };
   }
 
-  if (
-    pendingHandoffs.length >
-    0
-  ) {
+  if (pendingHandoffs.length > 0) {
     return {
       ...common,
-      state:
-        "waiting",
-      label:
-        "Active — Assigned",
-      detail:
-        "A real task is assigned and waiting for the workforce executor.",
+      state: "waiting",
+      label: "Waiting",
+      detail: "A real task is assigned and waiting for the workforce executor.",
     };
   }
 
   return {
     ...common,
-    state:
-      "idle",
-    label:
-      "Active — Available",
-    currentTask:
-      "No task currently assigned",
+    state: "idle",
+    label: "Ready",
+    currentTask: "No task currently assigned",
     detail:
-      employeeHandoffs.length >
-      0
+      employeeHandoffs.length > 0
         ? "This employee is available for the next appropriate task."
         : "This employee is active and available.",
   };
@@ -1806,14 +1299,8 @@ function employeeOperationalView({
 /* OUTPUT HELPERS                                                             */
 /* -------------------------------------------------------------------------- */
 
-function reviewableOutputContent(
-  run: MissionRun,
-): string | null {
-  if (
-    !run.output ||
-    typeof run.output !==
-      "object"
-  ) {
+function reviewableOutputContent(run: MissionRun): string | null {
+  if (!run.output || typeof run.output !== "object") {
     return null;
   }
 
@@ -1823,18 +1310,10 @@ function reviewableOutputContent(
     }
   ).content;
 
-  return (
-    typeof content ===
-      "string" &&
-    content.trim()
-  )
-    ? content
-    : null;
+  return typeof content === "string" && content.trim() ? content : null;
 }
 
-function websiteReportEvidence(
-  report: OfficialWebsiteHealthReport,
-): string {
+function websiteReportEvidence(report: OfficialWebsiteHealthReport): string {
   return [
     "Official Cossa website health",
     `Website: ${report.website}`,
@@ -1843,13 +1322,7 @@ function websiteReportEvidence(
     `Response: ${report.response_time_ms ?? "unknown"} ms`,
     `Title: ${report.page_title ?? "not detected"}`,
     `Noindex: ${report.noindex_detected ? "yes" : "no"}`,
-    `Issues: ${
-      report.issues.length > 0
-        ? report.issues.join(
-            "; ",
-          )
-        : "none"
-    }`,
+    `Issues: ${report.issues.length > 0 ? report.issues.join("; ") : "none"}`,
   ].join("\n");
 }
 
@@ -1857,470 +1330,262 @@ function websiteReportEvidence(
 /* LEAD HUNTER INTELLIGENCE                                                   */
 /* -------------------------------------------------------------------------- */
 
-const LEAD_HUNTER_SERVICE_RULES:
-  Array<{
-    service: LeadHunterServiceCategory;
-    pattern: RegExp;
-  }> = [
-    {
-      service:
-        "construction",
-      pattern:
-        /\bconstruction\b|\bbuilding\b|\bcontractor\b/i,
-    },
-    {
-      service:
-        "renovation",
-      pattern:
-        /\brenovation\b|\brenovations\b|\brefurbish/i,
-    },
-    {
-      service:
-        "property_maintenance",
-      pattern:
-        /\bproperty maintenance\b|\bmaintenance\b|\brepairs?\b/i,
-    },
-    {
-      service:
-        "painting",
-      pattern:
-        /\bpainting\b|\brepainting\b/i,
-    },
-    {
-      service:
-        "tiling",
-      pattern:
-        /\btiling\b|\btiles?\b/i,
-    },
-    {
-      service:
-        "ceilings",
-      pattern:
-        /\bceilings?\b|\bdrywall\b/i,
-    },
-    {
-      service:
-        "roofing",
-      pattern:
-        /\broofing\b|\broof repair/i,
-    },
-    {
-      service:
-        "plumbing",
-      pattern:
-        /\bplumbing\b|\bplumber\b/i,
-    },
-    {
-      service:
-        "facility_management",
-      pattern:
-        /\bfacility management\b|\bfacilities management\b/i,
-    },
-    {
-      service:
-        "commercial_cleaning",
-      pattern:
-        /\bcommercial cleaning\b|\boffice cleaning\b|\bcleaning contract\b/i,
-    },
-    {
-      service:
-        "deep_cleaning",
-      pattern:
-        /\bdeep cleaning\b/i,
-    },
-    {
-      service:
-        "hygiene",
-      pattern:
-        /\bhygiene\b|\bsanitation\b/i,
-    },
-    {
-      service:
-        "landscaping",
-      pattern:
-        /\blandscap/i,
-    },
-    {
-      service:
-        "waste_management",
-      pattern:
-        /\bwaste management\b|\bwaste removal\b/i,
-    },
-    {
-      service:
-        "website_design",
-      pattern:
-        /\bwebsite\b|\bweb design\b|\bweb development\b|\bsite redesign\b/i,
-    },
-    {
-      service:
-        "logo_design",
-      pattern:
-        /\blogo\b|\blogo design\b/i,
-    },
-    {
-      service:
-        "branding",
-      pattern:
-        /\bbranding\b|\bbrand identity\b/i,
-    },
-    {
-      service:
-        "seo",
-      pattern:
-        /\bseo\b|\bsearch engine optimisation\b|\bsearch engine optimization\b/i,
-    },
-    {
-      service:
-        "digital_marketing",
-      pattern:
-        /\bdigital marketing\b|\bonline marketing\b/i,
-    },
-    {
-      service:
-        "social_media_management",
-      pattern:
-        /\bsocial media\b|\bfacebook management\b|\binstagram management\b/i,
-    },
-    {
-      service:
-        "google_business_profile",
-      pattern:
-        /\bgoogle business\b|\bgoogle profile\b|\bgoogle maps\b/i,
-    },
-    {
-      service:
-        "lead_generation",
-      pattern:
-        /\blead generation\b|\bget leads\b|\bprospecting\b/i,
-    },
-    {
-      service:
-        "crm",
-      pattern:
-        /\bcrm\b|\bcustomer relationship management\b/i,
-    },
-    {
-      service:
-        "ai_automation",
-      pattern:
-        /\bai automation\b|\bautomation\b|\bai assistant\b|\bchatbot\b/i,
-    },
-    {
-      service:
-        "business_documents",
-      pattern:
-        /\bbusiness documents?\b|\bnexdocs\b/i,
-    },
-    {
-      service:
-        "quotations",
-      pattern:
-        /\bquotations?\b|\bquote document\b/i,
-    },
-    {
-      service:
-        "proposals",
-      pattern:
-        /\bbusiness proposals?\b|\bproposal document\b/i,
-    },
-    {
-      service:
-        "contracts",
-      pattern:
-        /\bcontracts?\b|\bagreement document\b/i,
-    },
-    {
-      service:
-        "ecommerce",
-      pattern:
-        /\becommerce\b|\be-commerce\b|\bonline store\b/i,
-    },
-  ];
+const LEAD_HUNTER_SERVICE_RULES: Array<{
+  service: LeadHunterServiceCategory;
+  pattern: RegExp;
+}> = [
+  {
+    service: "construction",
+    pattern: /\bconstruction\b|\bbuilding\b|\bcontractor\b/i,
+  },
+  {
+    service: "renovation",
+    pattern: /\brenovation\b|\brenovations\b|\brefurbish/i,
+  },
+  {
+    service: "property_maintenance",
+    pattern: /\bproperty maintenance\b|\bmaintenance\b|\brepairs?\b/i,
+  },
+  {
+    service: "painting",
+    pattern: /\bpainting\b|\brepainting\b/i,
+  },
+  {
+    service: "tiling",
+    pattern: /\btiling\b|\btiles?\b/i,
+  },
+  {
+    service: "ceilings",
+    pattern: /\bceilings?\b|\bdrywall\b/i,
+  },
+  {
+    service: "roofing",
+    pattern: /\broofing\b|\broof repair/i,
+  },
+  {
+    service: "plumbing",
+    pattern: /\bplumbing\b|\bplumber\b/i,
+  },
+  {
+    service: "facility_management",
+    pattern: /\bfacility management\b|\bfacilities management\b/i,
+  },
+  {
+    service: "commercial_cleaning",
+    pattern: /\bcommercial cleaning\b|\boffice cleaning\b|\bcleaning contract\b/i,
+  },
+  {
+    service: "deep_cleaning",
+    pattern: /\bdeep cleaning\b/i,
+  },
+  {
+    service: "hygiene",
+    pattern: /\bhygiene\b|\bsanitation\b/i,
+  },
+  {
+    service: "landscaping",
+    pattern: /\blandscap/i,
+  },
+  {
+    service: "waste_management",
+    pattern: /\bwaste management\b|\bwaste removal\b/i,
+  },
+  {
+    service: "website_design",
+    pattern: /\bwebsite\b|\bweb design\b|\bweb development\b|\bsite redesign\b/i,
+  },
+  {
+    service: "logo_design",
+    pattern: /\blogo\b|\blogo design\b/i,
+  },
+  {
+    service: "branding",
+    pattern: /\bbranding\b|\bbrand identity\b/i,
+  },
+  {
+    service: "seo",
+    pattern: /\bseo\b|\bsearch engine optimisation\b|\bsearch engine optimization\b/i,
+  },
+  {
+    service: "digital_marketing",
+    pattern: /\bdigital marketing\b|\bonline marketing\b/i,
+  },
+  {
+    service: "social_media_management",
+    pattern: /\bsocial media\b|\bfacebook management\b|\binstagram management\b/i,
+  },
+  {
+    service: "google_business_profile",
+    pattern: /\bgoogle business\b|\bgoogle profile\b|\bgoogle maps\b/i,
+  },
+  {
+    service: "lead_generation",
+    pattern: /\blead generation\b|\bget leads\b|\bprospecting\b/i,
+  },
+  {
+    service: "crm",
+    pattern: /\bcrm\b|\bcustomer relationship management\b/i,
+  },
+  {
+    service: "ai_automation",
+    pattern: /\bai automation\b|\bautomation\b|\bai assistant\b|\bchatbot\b/i,
+  },
+  {
+    service: "business_documents",
+    pattern: /\bbusiness documents?\b|\bnexdocs\b/i,
+  },
+  {
+    service: "quotations",
+    pattern: /\bquotations?\b|\bquote document\b/i,
+  },
+  {
+    service: "proposals",
+    pattern: /\bbusiness proposals?\b|\bproposal document\b/i,
+  },
+  {
+    service: "contracts",
+    pattern: /\bcontracts?\b|\bagreement document\b/i,
+  },
+  {
+    service: "ecommerce",
+    pattern: /\becommerce\b|\be-commerce\b|\bonline store\b/i,
+  },
+];
 
-function inferHunterServices(
-  text: string,
-): LeadHunterServiceCategory[] {
-  const matches =
-    LEAD_HUNTER_SERVICE_RULES
-      .filter(
-        ({ pattern }) =>
-          pattern.test(
-            text,
-          ),
-      )
-      .map(
-        ({ service }) =>
-          service,
-      );
+function inferHunterServices(text: string): LeadHunterServiceCategory[] {
+  const matches = LEAD_HUNTER_SERVICE_RULES.filter(({ pattern }) => pattern.test(text)).map(
+    ({ service }) => service,
+  );
 
-  if (
-    matches.length >
-    0
-  ) {
-    return uniqueStrings(
-      matches,
-    ) as LeadHunterServiceCategory[];
+  if (matches.length > 0) {
+    return uniqueStrings(matches) as LeadHunterServiceCategory[];
   }
 
-  return [
-    ...DEFAULT_LEAD_HUNTER_REQUEST.services,
-  ];
+  return [...DEFAULT_LEAD_HUNTER_REQUEST.services];
 }
 
-function inferHunterCompanies(
-  services: LeadHunterServiceCategory[],
-): LeadHunterCompany[] {
-  const result:
-    LeadHunterCompany[] = [];
+function inferHunterCompanies(services: LeadHunterServiceCategory[]): LeadHunterCompany[] {
+  const result: LeadHunterCompany[] = [];
 
-  const constructionServices =
-    new Set<LeadHunterServiceCategory>([
-      "construction",
-      "renovation",
-      "property_maintenance",
-      "painting",
-      "tiling",
-      "ceilings",
-      "roofing",
-      "plumbing",
-    ]);
+  const constructionServices = new Set<LeadHunterServiceCategory>([
+    "construction",
+    "renovation",
+    "property_maintenance",
+    "painting",
+    "tiling",
+    "ceilings",
+    "roofing",
+    "plumbing",
+  ]);
 
-  const facilityServices =
-    new Set<LeadHunterServiceCategory>([
-      "property_maintenance",
-      "facility_management",
-      "commercial_cleaning",
-      "deep_cleaning",
-      "hygiene",
-      "landscaping",
-      "waste_management",
-    ]);
+  const facilityServices = new Set<LeadHunterServiceCategory>([
+    "property_maintenance",
+    "facility_management",
+    "commercial_cleaning",
+    "deep_cleaning",
+    "hygiene",
+    "landscaping",
+    "waste_management",
+  ]);
 
-  const techServices =
-    new Set<LeadHunterServiceCategory>([
-      "website_design",
-      "logo_design",
-      "branding",
-      "seo",
-      "digital_marketing",
-      "social_media_management",
-      "google_business_profile",
-      "lead_generation",
-      "crm",
-      "ai_automation",
-      "ecommerce",
-    ]);
+  const techServices = new Set<LeadHunterServiceCategory>([
+    "website_design",
+    "logo_design",
+    "branding",
+    "seo",
+    "digital_marketing",
+    "social_media_management",
+    "google_business_profile",
+    "lead_generation",
+    "crm",
+    "ai_automation",
+    "ecommerce",
+  ]);
 
-  const documentServices =
-    new Set<LeadHunterServiceCategory>([
-      "business_documents",
-      "quotations",
-      "proposals",
-      "contracts",
-    ]);
+  const documentServices = new Set<LeadHunterServiceCategory>([
+    "business_documents",
+    "quotations",
+    "proposals",
+    "contracts",
+  ]);
 
-  if (
-    services.some(
-      (service) =>
-        constructionServices.has(
-          service,
-        ),
-    )
-  ) {
-    result.push(
-      "cossa_nexus_construction",
-    );
+  if (services.some((service) => constructionServices.has(service))) {
+    result.push("cossa_nexus_construction");
   }
 
-  if (
-    services.some(
-      (service) =>
-        facilityServices.has(
-          service,
-        ),
-    )
-  ) {
-    result.push(
-      "cossa_facility_services",
-    );
+  if (services.some((service) => facilityServices.has(service))) {
+    result.push("cossa_facility_services");
   }
 
-  if (
-    services.some(
-      (service) =>
-        techServices.has(
-          service,
-        ),
-    )
-  ) {
-    result.push(
-      "cossa_tech",
-    );
+  if (services.some((service) => techServices.has(service))) {
+    result.push("cossa_tech");
   }
 
-  if (
-    services.some(
-      (service) =>
-        documentServices.has(
-          service,
-        ),
-    )
-  ) {
-    result.push(
-      "nexdocs",
-    );
+  if (services.some((service) => documentServices.has(service))) {
+    result.push("nexdocs");
   }
 
-  if (
-    result.length ===
-    0
-  ) {
-    return [
-      ...DEFAULT_LEAD_HUNTER_REQUEST.companies,
-    ];
+  if (result.length === 0) {
+    return [...DEFAULT_LEAD_HUNTER_REQUEST.companies];
   }
 
-  return uniqueStrings(
-    result,
-  ) as LeadHunterCompany[];
+  return uniqueStrings(result) as LeadHunterCompany[];
 }
 
-function inferHunterObjectives(
-  text: string,
-): LeadHunterObjective[] {
-  const value =
-    text.toLowerCase();
+function inferHunterObjectives(text: string): LeadHunterObjective[] {
+  const value = text.toLowerCase();
 
-  const objectives:
-    LeadHunterObjective[] = [
-      "find_customers",
-    ];
+  const objectives: LeadHunterObjective[] = ["find_customers"];
 
-  if (
-    /\btender\b|\brfq\b|\brfp\b|\bprocurement\b/.test(
-      value,
-    )
-  ) {
-    objectives.push(
-      "find_active_tenders",
-      "find_rfqs",
-    );
+  if (/\btender\b|\brfq\b|\brfp\b|\bprocurement\b/.test(value)) {
+    objectives.push("find_active_tenders", "find_rfqs");
   }
 
-  if (
-    /\bsupplier registration\b|\bsupplier database\b/.test(
-      value,
-    )
-  ) {
-    objectives.push(
-      "find_supplier_registrations",
-    );
+  if (/\bsupplier registration\b|\bsupplier database\b/.test(value)) {
+    objectives.push("find_supplier_registrations");
   }
 
-  if (
-    /\bsubcontract\b|\bsubcontractor\b/.test(
-      value,
-    )
-  ) {
-    objectives.push(
-      "find_subcontracting",
-    );
+  if (/\bsubcontract\b|\bsubcontractor\b/.test(value)) {
+    objectives.push("find_subcontracting");
   }
 
-  if (
-    /\bpartner\b|\bpartnership\b/.test(
-      value,
-    )
-  ) {
-    objectives.push(
-      "find_partners",
-    );
+  if (/\bpartner\b|\bpartnership\b/.test(value)) {
+    objectives.push("find_partners");
   }
 
-  if (
-    /\bwebsite\b|\bweb design\b|\boutdated site\b/.test(
-      value,
-    )
-  ) {
-    objectives.push(
-      "find_weak_websites",
-    );
+  if (/\bwebsite\b|\bweb design\b|\boutdated site\b/.test(value)) {
+    objectives.push("find_weak_websites");
   }
 
-  if (
-    /\bbranding\b|\blogo\b/.test(
-      value,
-    )
-  ) {
-    objectives.push(
-      "find_branding_gaps",
-    );
+  if (/\bbranding\b|\blogo\b/.test(value)) {
+    objectives.push("find_branding_gaps");
   }
 
-  if (
-    /\bmarketing\b|\bsocial media\b|\bseo\b/.test(
-      value,
-    )
-  ) {
-    objectives.push(
-      "find_marketing_gaps",
-    );
+  if (/\bmarketing\b|\bsocial media\b|\bseo\b/.test(value)) {
+    objectives.push("find_marketing_gaps");
   }
 
-  if (
-    /\bmaintenance\b|\brepair\b|\brenovation\b/.test(
-      value,
-    )
-  ) {
-    objectives.push(
-      "find_maintenance_needs",
-      "find_projects",
-    );
+  if (/\bmaintenance\b|\brepair\b|\brenovation\b/.test(value)) {
+    objectives.push("find_maintenance_needs", "find_projects");
   }
 
-  if (
-    /\bcleaning\b|\bhygiene\b/.test(
-      value,
-    )
-  ) {
-    objectives.push(
-      "find_cleaning_contracts",
-    );
+  if (/\bcleaning\b|\bhygiene\b/.test(value)) {
+    objectives.push("find_cleaning_contracts");
   }
 
-  if (
-    /\brecurring\b|\bretainer\b|\bcontract\b/.test(
-      value,
-    )
-  ) {
-    objectives.push(
-      "find_recurring_contracts",
-    );
+  if (/\brecurring\b|\bretainer\b|\bcontract\b/.test(value)) {
+    objectives.push("find_recurring_contracts");
   }
 
-  if (
-    /\bquick revenue\b|\bcash flow\b|\bcashflow\b|\bimmediate\b|\burgent\b/.test(
-      value,
-    )
-  ) {
-    objectives.push(
-      "find_immediate_cashflow",
-    );
+  if (/\bquick revenue\b|\bcash flow\b|\bcashflow\b|\bimmediate\b|\burgent\b/.test(value)) {
+    objectives.push("find_immediate_cashflow");
   }
 
-  return [
-    ...new Set(
-      objectives,
-    ),
-  ];
+  return [...new Set(objectives)];
 }
 
-function inferHunterRevenueMode(
-  text: string,
-): LeadHunterRevenueMode {
-  const value =
-    text.toLowerCase();
+function inferHunterRevenueMode(text: string): LeadHunterRevenueMode {
+  const value = text.toLowerCase();
 
   if (
     /\bquick revenue\b|\bcash flow\b|\bcashflow\b|\bfast\b|\bimmediate\b|\bsmall project\b/.test(
@@ -2330,60 +1595,31 @@ function inferHunterRevenueMode(
     return "quick_revenue";
   }
 
-  if (
-    /\beasy win\b|\beasy wins\b|\blow effort\b/.test(
-      value,
-    )
-  ) {
+  if (/\beasy win\b|\beasy wins\b|\blow effort\b/.test(value)) {
     return "easy_wins";
   }
 
-  if (
-    /\brecurring\b|\bretainer\b|\bmaintenance contract\b|\bcleaning contract\b/.test(
-      value,
-    )
-  ) {
+  if (/\brecurring\b|\bretainer\b|\bmaintenance contract\b|\bcleaning contract\b/.test(value)) {
     return "recurring_revenue";
   }
 
-  if (
-    /\bhigh value\b|\blarge project\b|\bbig contract\b/.test(
-      value,
-    )
-  ) {
+  if (/\bhigh value\b|\blarge project\b|\bbig contract\b/.test(value)) {
     return "high_value";
   }
 
-  if (
-    /\bstrategic\b|\bframework\b|\blong term\b|\blong-term\b/.test(
-      value,
-    )
-  ) {
+  if (/\bstrategic\b|\bframework\b|\blong term\b|\blong-term\b/.test(value)) {
     return "strategic";
   }
 
   return "balanced";
 }
 
-function locationTokens(
-  value:
-    | string
-    | null,
-): string[] {
+function locationTokens(value: string | null): string[] {
   if (!value) {
     return [];
   }
 
-  return uniqueStrings(
-    value
-      .split(
-        /[,;/|]+/g,
-      )
-      .map(
-        (item) =>
-          item.trim(),
-      ),
-  );
+  return uniqueStrings(value.split(/[,;/|]+/g).map((item) => item.trim()));
 }
 
 function buildLeadHunterRequest(
@@ -2393,81 +1629,39 @@ function buildLeadHunterRequest(
   const combinedText = [
     mission.objective,
     mission.instruction,
-    mission.target_service ??
-      "",
-    mission.target_market ??
-      "",
-    mission.target_location ??
-      "",
+    mission.target_service ?? "",
+    mission.target_market ?? "",
+    mission.target_location ?? "",
     handoff.reason,
-  ].join(
-    "\n",
-  );
+  ].join("\n");
 
-  const services =
-    inferHunterServices(
-      combinedText,
-    );
+  const services = inferHunterServices(combinedText);
 
-  const companies =
-    inferHunterCompanies(
-      services,
-    );
+  const companies = inferHunterCompanies(services);
 
-  const objectives =
-    inferHunterObjectives(
-      combinedText,
-    );
+  const objectives = inferHunterObjectives(combinedText);
 
-  const revenueMode =
-    inferHunterRevenueMode(
-      combinedText,
-    );
+  const revenueMode = inferHunterRevenueMode(combinedText);
 
   const tenderFocused =
-    objectives.includes(
-      "find_active_tenders",
-    ) ||
-    objectives.includes(
-      "find_rfqs",
-    );
+    objectives.includes("find_active_tenders") || objectives.includes("find_rfqs");
 
-  const minimumDepth =
-    minimumDepthForServiceCount(
-      services.length,
-    );
+  const minimumDepth = minimumDepthForServiceCount(services.length);
 
-  const searchDepth =
-    tenderFocused
-      ? "deep"
-      : minimumDepth;
+  const searchDepth = tenderFocused ? "deep" : minimumDepth;
 
-  const locations =
-    locationTokens(
-      mission.target_location,
-    );
+  const locations = locationTokens(mission.target_location);
 
-  const resultCount =
-    Math.max(
-      1,
-      Math.min(
-        20,
-        mission.required_result_count ??
-          DEFAULT_WORKFORCE_HUNT_RESULTS,
-      ),
-    );
+  const resultCount = Math.max(
+    1,
+    Math.min(20, mission.required_result_count ?? DEFAULT_WORKFORCE_HUNT_RESULTS),
+  );
 
   const searchInstruction = [
     mission.objective,
-    mission.target_market
-      ? `Target market: ${mission.target_market}.`
-      : null,
-    mission.target_location
-      ? `Target location: ${mission.target_location}.`
-      : null,
-    mission.target_service
-      ? `Target service: ${mission.target_service}.`
-      : null,
+    mission.target_market ? `Target market: ${mission.target_market}.` : null,
+    mission.target_location ? `Target location: ${mission.target_location}.` : null,
+    mission.target_service ? `Target service: ${mission.target_service}.` : null,
     "Find legitimate organisations and opportunities that Cossa can realistically serve.",
     "Prioritise buyer intent, current pain signals, urgency, public contactability, revenue potential, ease to close, recurring value and geographic fit.",
     "Reject competitors, directories, duplicate CRM leads, unsupported assumptions and unverifiable prospects.",
@@ -2476,9 +1670,7 @@ function buildLeadHunterRequest(
     "Return only prospects that survive the Lead Hunter verification rules.",
   ]
     .filter(Boolean)
-    .join(
-      " ",
-    );
+    .join(" ");
 
   return validateSearchRequest({
     ...DEFAULT_LEAD_HUNTER_REQUEST,
@@ -2487,103 +1679,60 @@ function buildLeadHunterRequest(
 
     services,
 
-    locations:
-      locations.length >
-      0
-        ? locations
-        : DEFAULT_LEAD_HUNTER_REQUEST.locations,
+    locations: locations.length > 0 ? locations : DEFAULT_LEAD_HUNTER_REQUEST.locations,
 
-    result_count:
-      resultCount,
+    result_count: resultCount,
 
-    minimum_score:
-      tenderFocused
-        ? 70
-        : 60,
+    minimum_score: tenderFocused ? 70 : 60,
 
-    minimum_evidence_sources:
-      2,
+    minimum_evidence_sources: 2,
 
-    require_public_phone_or_email:
-      true,
+    require_public_phone_or_email: true,
 
-    require_opportunity_signal:
-      true,
+    require_opportunity_signal: true,
 
-    verified_sources_only:
-      true,
+    verified_sources_only: true,
 
-    exclude_existing_crm_leads:
-      true,
+    exclude_existing_crm_leads: true,
 
-    search_instruction:
-      searchInstruction,
+    search_instruction: searchInstruction,
 
-    revenue_mode:
-      revenueMode,
+    revenue_mode: revenueMode,
 
     objectives,
 
-    search_depth:
-      searchDepth,
+    search_depth: searchDepth,
 
-    search_scope:
-      locations.length >
-      0
-        ? "custom"
-        : DEFAULT_LEAD_HUNTER_REQUEST.search_scope,
+    search_scope: locations.length > 0 ? "custom" : DEFAULT_LEAD_HUNTER_REQUEST.search_scope,
 
-    revenue_first:
-      true,
+    revenue_first: true,
 
-    easy_wins_only:
-      revenueMode ===
-        "easy_wins" ||
-      revenueMode ===
-        "quick_revenue",
+    easy_wins_only: revenueMode === "easy_wins" || revenueMode === "quick_revenue",
 
-    exclude_competitors:
-      true,
+    exclude_competitors: true,
 
-    exclude_directories:
-      true,
+    exclude_directories: true,
 
-    exclude_expired_procurement:
-      true,
+    exclude_expired_procurement: true,
 
-    use_cached_results:
-      true,
+    use_cached_results: true,
 
-    notes:
-      `Cossa AI workforce mission ${mission.id}.`,
+    notes: `Cossa AI workforce mission ${mission.id}.`,
   });
 }
 
-function formatHunterProspect(
-  prospect: LeadHunterProspect,
-  index: number,
-): string {
+function formatHunterProspect(prospect: LeadHunterProspect, index: number): string {
   const contact =
     prospect.public_phone ||
     prospect.public_email ||
     prospect.contact_page_url ||
     "No public direct contact retained";
 
-  const location = [
-    prospect.suburb,
-    prospect.city,
-    prospect.province,
-    prospect.country,
-  ]
+  const location = [prospect.suburb, prospect.city, prospect.province, prospect.country]
     .filter(Boolean)
-    .join(
-      ", ",
-    );
+    .join(", ");
 
-  const independentSources =
-    prospect.verification_meta
-      ?.independent_source_count ??
-    0;
+  const independentSources = prospect.verification_meta?.independent_source_count ?? 0;
 
   return [
     `${index + 1}. ${prospect.organisation_name}`,
@@ -2594,19 +1743,12 @@ function formatHunterProspect(
     `Contact route: ${contact}`,
     `Opportunity: ${prospect.opportunity_summary}`,
     `Why contact: ${
-      prospect.why_contact.length >
-      0
-        ? prospect.why_contact.join(
-            " ",
-          )
-        : prospect.service_fit_reason
+      prospect.why_contact.length > 0 ? prospect.why_contact.join(" ") : prospect.service_fit_reason
     }`,
     `Independent sources: ${independentSources}`,
     `Primary evidence: ${prospect.primary_source_url}`,
     `Next action: ${prospect.next_action}`,
-  ].join(
-    "\n",
-  );
+  ].join("\n");
 }
 
 async function executeLeadHunterTool({
@@ -2618,132 +1760,71 @@ async function executeLeadHunterTool({
   handoff: EmployeeHandoff;
   workflowHandoffs: EmployeeHandoff[];
 }): Promise<LeadHunterExecutionResult> {
-  const request =
-    buildLeadHunterRequest(
-      mission,
-      handoff,
-    );
+  const request = buildLeadHunterRequest(mission, handoff);
 
-  const response =
-    await huntProspects(
-      request,
-    );
+  const response = await huntProspects(request);
 
-  const crmResult =
-    await saveProspectsToCrm(
-      response.prospects,
-    );
+  const crmResult = await saveProspectsToCrm(response.prospects);
 
-  const createdLeadIds =
-    crmResult.created.map(
-      (item) =>
-        item.lead_id,
-    );
+  const createdLeadIds = crmResult.created.map((item) => item.lead_id);
 
-  const duplicateLeadIds =
-    crmResult.duplicates.map(
-      (item) =>
-        item.lead_id,
-    );
+  const duplicateLeadIds = crmResult.duplicates.map((item) => item.lead_id);
 
-  const leadIds =
-    uniqueStrings([
-      ...createdLeadIds,
-      ...duplicateLeadIds,
-    ]);
+  const leadIds = uniqueStrings([...createdLeadIds, ...duplicateLeadIds]);
 
-  const prospectIds =
-    uniqueStrings(
-      response.prospects.map(
-        (prospect) =>
-          prospect.id,
-      ),
-    );
+  const prospectIds = uniqueStrings(response.prospects.map((prospect) => prospect.id));
 
-  const retainedRecordIds:
-    Record<string, unknown> = {
-      hunt_id:
-        response.hunt_id,
+  const retainedRecordIds: Record<string, unknown> = {
+    hunt_id: response.hunt_id,
 
-      prospect_ids:
-        prospectIds,
+    prospect_ids: prospectIds,
 
-      lead_ids:
-        leadIds,
+    lead_ids: leadIds,
 
-      crm_created_lead_ids:
-        createdLeadIds,
+    crm_created_lead_ids: createdLeadIds,
 
-      crm_existing_lead_ids:
-        duplicateLeadIds,
-    };
+    crm_existing_lead_ids: duplicateLeadIds,
+  };
 
   await mergeHandoffRetainedRecordIds({
-    handoffId:
-      handoff.id,
+    handoffId: handoff.id,
 
-    missionId:
-      mission.id,
+    missionId: mission.id,
 
-    recordIds:
-      retainedRecordIds,
+    recordIds: retainedRecordIds,
   });
 
   handoff.retained_record_ids = {
-    ...(handoff.retained_record_ids ??
-      {}),
+    ...(handoff.retained_record_ids ?? {}),
     ...retainedRecordIds,
   };
 
-  const nextHandoff =
-    nextWorkflowHandoffForHandoff({
-      currentHandoff:
-        handoff,
-      workflowHandoffs,
-    });
+  const nextHandoff = nextWorkflowHandoffForHandoff({
+    currentHandoff: handoff,
+    workflowHandoffs,
+  });
 
-  if (
-    nextHandoff
-  ) {
+  if (nextHandoff) {
     await mergeHandoffRetainedRecordIds({
-      handoffId:
-        nextHandoff.id,
+      handoffId: nextHandoff.id,
 
-      missionId:
-        mission.id,
+      missionId: mission.id,
 
-      recordIds:
-        retainedRecordIds,
+      recordIds: retainedRecordIds,
     });
 
     nextHandoff.retained_record_ids = {
-      ...(nextHandoff.retained_record_ids ??
-        {}),
+      ...(nextHandoff.retained_record_ids ?? {}),
       ...retainedRecordIds,
     };
   }
 
   const prospectSummary =
-    response.prospects.length >
-    0
+    response.prospects.length > 0
       ? response.prospects
-          .slice(
-            0,
-            10,
-          )
-          .map(
-            (
-              prospect,
-              index,
-            ) =>
-              formatHunterProspect(
-                prospect,
-                index,
-              ),
-          )
-          .join(
-            "\n\n",
-          )
+          .slice(0, 10)
+          .map((prospect, index) => formatHunterProspect(prospect, index))
+          .join("\n\n")
       : "No prospect passed the current verification and qualification rules.";
 
   const content = [
@@ -2751,16 +1832,15 @@ async function executeLeadHunterTool({
     "",
     "Verified inputs",
     `Hunt ID: ${response.hunt_id}`,
+    `Workflow outcome: ${response.status}`,
     `Execution engine: ${LEAD_HUNTER_TOOL_NAME}`,
     `Providers used: ${
-      response.providers_used.length >
-      0
-        ? response.providers_used.join(
-            ", ",
-          )
+      response.providers_used.length > 0
+        ? response.providers_used.join(", ")
         : "Server route did not report provider names"
     }`,
     `Public evidence sources processed: ${response.source_count}`,
+    `Provider diagnostics: ${response.provider_diagnostics.map((item) => `${item.provider}=${item.configuration_required ? "configuration required" : item.failed ? "failed" : item.succeeded ? "succeeded" : "not attempted"} (${item.result_count} results)`).join("; ") || "None reported"}`,
     "",
     "Work completed",
     `Verified prospects accepted: ${response.accepted_count}`,
@@ -2774,52 +1854,21 @@ async function executeLeadHunterTool({
     "",
     "Retained record identifiers",
     `Lead Hunter hunt ID: ${response.hunt_id}`,
-    `Prospect IDs: ${
-      prospectIds.length >
-      0
-        ? prospectIds.join(
-            ", ",
-          )
-        : "None"
-    }`,
-    `CRM lead IDs: ${
-      leadIds.length >
-      0
-        ? leadIds.join(
-            ", ",
-          )
-        : "None"
-    }`,
+    `Prospect IDs: ${prospectIds.length > 0 ? prospectIds.join(", ") : "None"}`,
+    `CRM lead IDs: ${leadIds.length > 0 ? leadIds.join(", ") : "None"}`,
     "",
     "Warnings",
-    response.warnings.length >
-    0
-      ? response.warnings
-          .map(
-            (warning) =>
-              `- ${warning}`,
-          )
-          .join(
-            "\n",
-          )
+    response.warnings.length > 0
+      ? response.warnings.map((warning) => `- ${warning}`).join("\n")
       : "No server warnings returned.",
-    crmResult.failed.length >
-    0
+    crmResult.failed.length > 0
       ? [
           "",
           "CRM save issues",
           ...crmResult.failed
-            .slice(
-              0,
-              5,
-            )
-            .map(
-              (failure) =>
-                `- ${failure.prospect.organisation_name}: ${failure.error}`,
-            ),
-        ].join(
-          "\n",
-        )
+            .slice(0, 5)
+            .map((failure) => `- ${failure.prospect.organisation_name}: ${failure.error}`),
+        ].join("\n")
       : "",
     "",
     "Handoff to next employee",
@@ -2833,16 +1882,8 @@ async function executeLeadHunterTool({
     "External actions status",
     "No prospect was contacted. No email, WhatsApp message, phone call, quotation, proposal, tender submission, contract, payment or external commitment was performed.",
   ]
-    .filter(
-      (
-        value,
-      ) =>
-        value !==
-        "",
-    )
-    .join(
-      "\n",
-    );
+    .filter((value) => value !== "")
+    .join("\n");
 
   return {
     content,
@@ -2869,93 +1910,47 @@ function controlledStagePrompt({
   priorOutputs: string[];
   authorisedEvidence: string[];
 }): string {
-  const compactPrevious =
-    compactPriorOutputsForPrompt(
-      priorOutputs,
-    );
+  const compactPrevious = compactPriorOutputsForPrompt(priorOutputs);
 
-  const compactEvidence =
-    compactAuthorisedEvidence(
-      authorisedEvidence,
-    );
+  const compactEvidence = compactAuthorisedEvidence(authorisedEvidence);
 
-  const stage =
-    handoffStageNumber(
-      handoff,
-    );
+  const stage = handoffStageNumber(handoff);
 
   const totalStages =
-    typeof handoff.context
-      ?.total_stages ===
-    "number"
-      ? handoff.context
-          .total_stages
-      : null;
+    typeof handoff.context?.total_stages === "number" ? handoff.context.total_stages : null;
 
-  const safeHandoffContext =
-    clampText(
-      JSON.stringify(
-        handoff.context,
-      ),
-      MAX_HANDOFF_CONTEXT_CHARS,
-    );
+  const safeHandoffContext = clampText(JSON.stringify(handoff.context), MAX_HANDOFF_CONTEXT_CHARS);
 
-  const retainedRecordContext =
-    clampText(
-      JSON.stringify(
-        handoff.retained_record_ids ??
-          {},
-      ),
-      MAX_RETAINED_RECORD_CONTEXT_CHARS,
-    );
+  const retainedRecordContext = clampText(
+    JSON.stringify(handoff.retained_record_ids ?? {}),
+    MAX_RETAINED_RECORD_CONTEXT_CHARS,
+  );
 
-  const nextInstruction =
-    nextEmployee
-      ? `Next recorded worker: ${nextEmployee.name} (${canonicalEmployeeKey(
-          nextEmployee.employee_key,
-        )}). Hand work only to that worker.`
-      : "This is the final recorded stage. Do not invent another worker.";
+  const nextInstruction = nextEmployee
+    ? `Next recorded worker: ${nextEmployee.name} (${canonicalEmployeeKey(
+        nextEmployee.employee_key,
+      )}). Hand work only to that worker.`
+    : "This is the final recorded stage. Do not invent another worker.";
 
   const evidence =
-    compactEvidence.length >
-    0
-      ? compactEvidence.join(
-          "\n\n",
-        )
-      : "No extra authorised evidence.";
+    compactEvidence.length > 0 ? compactEvidence.join("\n\n") : "No extra authorised evidence.";
 
   const previous =
-    compactPrevious.length >
-    0
-      ? compactPrevious
-          .map(
-            (
-              output,
-              index,
-            ) =>
-              `Prior output ${index + 1}:\n${output}`,
-          )
-          .join(
-            "\n\n",
-          )
+    compactPrevious.length > 0
+      ? compactPrevious.map((output, index) => `Prior output ${index + 1}:\n${output}`).join("\n\n")
       : "No prior output required.";
 
-  const employeeKey =
-    canonicalEmployeeKey(
-      employee.employee_key,
-    );
+  const employeeKey = canonicalEmployeeKey(employee.employee_key);
 
   const specialistInstructions =
-    employeeKey ===
-    "lead-intake-coordinator"
+    employeeKey === "lead-intake-coordinator"
       ? [
           "Use retained Hunt, prospect and CRM lead IDs as authoritative record references.",
           "Do not create replacement fictional leads.",
           "Separate newly created CRM records from existing duplicate CRM records.",
           "Classify and route only what is supported by the Lead Hunter evidence.",
         ]
-      : employeeKey ===
-          "sales-conversion-specialist"
+      : employeeKey === "sales-conversion-specialist"
         ? [
             "Use only verified prospect and CRM information supplied by prior stages.",
             "Prioritise HOT and WARM opportunities using evidence, value, urgency and contactability.",
@@ -2967,21 +1962,11 @@ function controlledStagePrompt({
   const prompt = [
     `Role: ${employee.title} (${employeeKey}).`,
     `Department: ${employee.department}.`,
-    stage !== null
-      ? `Workflow stage: ${stage}${
-          totalStages
-            ? `/${totalStages}`
-            : ""
-        }.`
-      : "",
+    stage !== null ? `Workflow stage: ${stage}${totalStages ? `/${totalStages}` : ""}.` : "",
     `Assigned work: ${handoff.reason}`,
     `Mission objective: ${mission.objective}`,
-    `Target: ${
-      mission.target_market ||
-      "unspecified"
-    } / ${
-      mission.target_location ||
-      "unspecified"
+    `Target: ${mission.target_market || "unspecified"} / ${
+      mission.target_location || "unspecified"
     }.`,
     nextInstruction,
 
@@ -3012,14 +1997,9 @@ function controlledStagePrompt({
     previous,
   ]
     .filter(Boolean)
-    .join(
-      "\n\n",
-    );
+    .join("\n\n");
 
-  return clampText(
-    prompt,
-    MAX_STAGE_PROMPT_CHARS,
-  );
+  return clampText(prompt, MAX_STAGE_PROMPT_CHARS);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -3027,872 +2007,498 @@ function controlledStagePrompt({
 /* -------------------------------------------------------------------------- */
 
 function AiWorkforce() {
-  const queryClient =
-    useQueryClient();
+  const queryClient = useQueryClient();
 
-  const navigate =
-    useNavigate({
-      from:
-        "/ai/workforce",
-    });
+  const navigate = useNavigate({
+    from: "/ai/workforce",
+  });
 
-  const search =
-    Route.useSearch();
+  const search = Route.useSearch();
 
-  const view =
-    search.view;
+  const view = search.view;
 
-  const selectedDepartment =
-    search.department;
+  const selectedDepartment = search.department;
 
-  const [
-    employeeSearch,
-    setEmployeeSearch,
-  ] =
-    useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
 
-  const [
-    selectedEmployeeId,
-    setSelectedEmployeeId,
-  ] =
-    useState<
-      string | null
-    >(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
 
-  const [
-    objective,
-    setObjective,
-  ] =
-    useState(
-      "Build and continuously improve Cossa Nexus Holdings' professional social, digital growth, customer-acquisition and commercial operating system using verified company information.",
-    );
+  const [objective, setObjective] = useState(
+    "Build and continuously improve Cossa Nexus Holdings' professional social, digital growth, customer-acquisition and commercial operating system using verified company information.",
+  );
 
-  const [
-    targetMarket,
-    setTargetMarket,
-  ] =
-    useState(
-      "South Africa",
-    );
+  const [targetMarket, setTargetMarket] = useState("South Africa");
 
-  const [
-    targetLocation,
-    setTargetLocation,
-  ] =
-    useState(
-      "Gauteng",
-    );
+  const [targetLocation, setTargetLocation] = useState("Gauteng");
 
-  const [
-    selectedMissionId,
-    setSelectedMissionId,
-  ] =
-    useState<
-      string | null
-    >(null);
+  const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null);
 
-  const [
-    ceoCommand,
-    setCeoCommand,
-  ] =
-    useState("");
+  const [ceoCommand, setCeoCommand] = useState("");
+
+  const [refreshState, setRefreshState] = useState<"idle" | "refreshing" | "success" | "error">(
+    "idle",
+  );
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshWarning, setRefreshWarning] = useState<string | null>(null);
 
   /* ------------------------------------------------------------------------ */
   /* URL NAVIGATION                                                           */
   /* ------------------------------------------------------------------------ */
 
-  function setView(
-    nextView: WorkforceView,
-  ) {
+  function setView(nextView: WorkforceView) {
     void navigate({
-      search:
-        (
-          previous,
-        ) => ({
-          ...previous,
-          view:
-            nextView,
-        }),
+      search: (previous) => ({
+        ...previous,
+        view: nextView,
+      }),
     });
   }
 
-  function setSelectedDepartment(
-    department: WorkforceDepartment,
-  ) {
+  function setSelectedDepartment(department: WorkforceDepartment) {
     void navigate({
-      search:
-        (
-          previous,
-        ) => ({
-          ...previous,
-          department,
-        }),
+      search: (previous) => ({
+        ...previous,
+        department,
+      }),
     });
   }
 
-  function openEmployees(
-    department: WorkforceDepartment = "all",
-  ) {
+  function openEmployees(department: WorkforceDepartment = "all") {
     void navigate({
-      search:
-        (
-          previous,
-        ) => ({
-          ...previous,
-          view:
-            "employees",
-          department,
-        }),
+      search: (previous) => ({
+        ...previous,
+        view: "employees",
+        department,
+      }),
     });
   }
 
-  function openDepartment(
-    department:
-      Exclude<
-        WorkforceDepartment,
-        "all"
-      >,
-  ) {
-    setEmployeeSearch(
-      "",
-    );
+  function openDepartment(department: Exclude<WorkforceDepartment, "all">) {
+    setEmployeeSearch("");
 
-    setSelectedEmployeeId(
-      null,
-    );
+    setSelectedEmployeeId(null);
 
-    openEmployees(
-      department,
-    );
+    openEmployees(department);
   }
 
   /* ------------------------------------------------------------------------ */
   /* QUERIES                                                                  */
   /* ------------------------------------------------------------------------ */
 
-  const employeesQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-employees",
-      ],
-      queryFn: () =>
-        listEmployees(),
-    });
+  const employeesQuery = useQuery({
+    queryKey: ["ai-workforce-employees"],
+    queryFn: () => listEmployees(),
+  });
 
-  const missionsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-missions",
-      ],
-      queryFn: () =>
-        listMissions(),
-    });
+  const missionsQuery = useQuery({
+    queryKey: ["ai-workforce-missions"],
+    queryFn: () => listMissions(),
+  });
 
-  const handoffsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-handoffs",
-      ],
-      queryFn: () =>
-        listEmployeeHandoffs(),
-    });
+  const handoffsQuery = useQuery({
+    queryKey: ["ai-workforce-handoffs"],
+    queryFn: () => listEmployeeHandoffs(),
+  });
 
-  const runsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-runs",
-      ],
-      queryFn: () =>
-        listWorkforceRuns(),
-    });
+  const runsQuery = useQuery({
+    queryKey: ["ai-workforce-runs"],
+    queryFn: () => listWorkforceRuns(),
+  });
 
-  const approvalsQuery =
-    useQuery({
-      queryKey: [
-        "ai-workforce-approvals",
-      ],
-      queryFn: () =>
-        listPendingApprovals(),
-    });
+  const approvalsQuery = useQuery({
+    queryKey: ["ai-workforce-approvals"],
+    queryFn: () => listPendingApprovals(),
+  });
+
+  const runtimeQuery = useQuery({
+    queryKey: ["cossa-agent-runtime"],
+    queryFn: getAgentRuntimeDashboard,
+  });
 
   /* ------------------------------------------------------------------------ */
   /* REFRESH                                                                  */
   /* ------------------------------------------------------------------------ */
 
-  const refreshWorkforce =
-    async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-employees",
-          ],
-        }),
+  const refreshWorkforce = async () => {
+    if (refreshState === "refreshing") return;
 
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-missions",
-          ],
-        }),
+    setRefreshState("refreshing");
+    setRefreshError(null);
+    setRefreshWarning(null);
 
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-handoffs",
-          ],
-        }),
+    const sources = [
+      { label: "employees", critical: true, request: employeesQuery.refetch() },
+      { label: "missions", critical: true, request: missionsQuery.refetch() },
+      { label: "handoffs", critical: true, request: handoffsQuery.refetch() },
+      { label: "runs and failures", critical: true, request: runsQuery.refetch() },
+      { label: "approvals", critical: true, request: approvalsQuery.refetch() },
+      { label: "hosted agent runtime", critical: false, request: runtimeQuery.refetch() },
+      {
+        label: "current tasks",
+        critical: false,
+        request: queryClient.refetchQueries({ queryKey: ["ops-tasks"], type: "active" }),
+      },
+      {
+        label: "integrations",
+        critical: false,
+        request: queryClient.refetchQueries({ queryKey: ["integrations"], type: "active" }),
+      },
+      {
+        label: "notifications",
+        critical: false,
+        request: queryClient.refetchQueries({ queryKey: ["notifications"], type: "active" }),
+      },
+    ];
+    const results = await Promise.allSettled(sources.map((source) => source.request));
 
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-runs",
-          ],
-        }),
+    const failedSources = results.flatMap((result, index) => {
+      const failed =
+        result.status === "rejected" ||
+        (result.status === "fulfilled" &&
+          typeof result.value === "object" &&
+          result.value !== null &&
+          "isError" in result.value &&
+          result.value.isError === true);
+      return failed ? [sources[index]] : [];
+    });
 
-        queryClient.invalidateQueries({
-          queryKey: [
-            "ai-workforce-approvals",
-          ],
-        }),
-      ]);
-    };
+    const failed = failedSources.find((source) => source.critical);
+
+    if (failed) {
+      const message = `Critical workforce source failed: ${failed.label}.`;
+      setRefreshError(message);
+      setRefreshState("error");
+      toast.error("Workforce refresh failed", { description: message });
+      return;
+    }
+
+    const completedAt = new Date().toISOString();
+    setLastRefreshedAt(completedAt);
+    setRefreshState("success");
+    const optionalFailures = failedSources
+      .filter((source) => !source.critical)
+      .map((source) => source.label);
+    if (optionalFailures.length)
+      setRefreshWarning(`Configuration warning: ${optionalFailures.join(", ")} unavailable.`);
+    toast.success("Workforce refreshed", {
+      description:
+        "Employees, missions, assignments, runs, approvals and runtime state were refetched.",
+    });
+  };
 
   /* ------------------------------------------------------------------------ */
   /* SETUP                                                                    */
   /* ------------------------------------------------------------------------ */
 
-  const installMutation =
-    useMutation({
-      mutationFn:
-        installCossaGrowthWorkforce,
+  const installMutation = useMutation({
+    mutationFn: () => installCossaGrowthWorkforce(),
 
-      onSuccess:
-        async (
-          result,
-        ) => {
-          await refreshWorkforce();
+    onSuccess: async (result) => {
+      await refreshWorkforce();
 
-          const activeCount =
-            result.filter(
-              (employee) =>
-                employee.status ===
-                "active",
-            ).length;
+      const activeCount = result.filter((employee) => employee.status === "active").length;
 
-          toast.success(
-            "Cossa workforce synchronised",
-            {
-              description: `${result.length} employee records are available and ${activeCount} are active. Existing custom employees were preserved.`,
-            },
-          );
-        },
+      toast.success("Cossa workforce synchronised", {
+        description: `${result.length} employee records are available and ${activeCount} are active. Existing custom employees were preserved.`,
+      });
+    },
 
-      onError:
-        (error) => {
-          toast.error(
-            "Workforce setup could not be completed",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
+    onError: (error) => {
+      toast.error("Workforce setup could not be completed", {
+        description: normaliseErrorMessage(error),
+      });
+    },
+  });
 
   /* ------------------------------------------------------------------------ */
   /* WORKFLOW CREATION                                                        */
   /* ------------------------------------------------------------------------ */
 
-  const coordinationMutation =
-    useMutation({
-      mutationFn:
-        createGrowthCoordinationMission,
+  const coordinationMutation = useMutation({
+    mutationFn: (input: CreateGrowthCoordinationMissionInput) =>
+      createGrowthCoordinationMission(input),
 
-      onSuccess:
-        async ({
-          mission,
-          handoffs:
-            createdHandoffs,
-        }) => {
-          setSelectedMissionId(
-            mission.id,
-          );
+    onSuccess: async ({ mission, handoffs: createdHandoffs }) => {
+      setSelectedMissionId(mission.id);
 
-          await refreshWorkforce();
+      await refreshWorkforce();
 
-          toast.success(
-            "Growth mission created",
-            {
-              description: `${createdHandoffs.length} real Growth workforce stages were created.`,
-            },
-          );
+      toast.success("Growth mission created", {
+        description: `${createdHandoffs.length} real Growth workforce stages were created.`,
+      });
 
-          setView(
-            "workflows",
-          );
-        },
+      setView("workflows");
+    },
 
-      onError:
-        (error) => {
-          toast.error(
-            "Growth mission could not be created",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
+    onError: (error) => {
+      toast.error("Growth mission could not be created", {
+        description: normaliseErrorMessage(error),
+      });
+    },
+  });
 
-  const revenueMutation =
-    useMutation({
-      mutationFn:
-        createRevenueAcquisitionMission,
+  const revenueMutation = useMutation({
+    mutationFn: (input: CreateCoordinationMissionInput) => createRevenueAcquisitionMission(input),
 
-      onSuccess:
-        async ({
-          mission,
-          handoffs:
-            createdHandoffs,
-        }) => {
-          setSelectedMissionId(
-            mission.id,
-          );
+    onSuccess: async ({ mission, handoffs: createdHandoffs }) => {
+      setSelectedMissionId(mission.id);
 
-          await refreshWorkforce();
+      await refreshWorkforce();
 
-          toast.success(
-            "Revenue hunt created",
-            {
-              description: `${createdHandoffs.length} real revenue stages were created: Lead Hunter → Lead Intake → Sales & Conversion → AI CEO.`,
-            },
-          );
+      toast.success("Revenue hunt created", {
+        description: `${createdHandoffs.length} real revenue stages were created: Lead Hunter → Lead Intake → Sales & Conversion → AI CEO.`,
+      });
 
-          setView(
-            "workflows",
-          );
-        },
+      setView("workflows");
+    },
 
-      onError:
-        (error) => {
-          toast.error(
-            "Revenue hunt could not be created",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
+    onError: (error) => {
+      toast.error("Revenue hunt could not be created", {
+        description: normaliseErrorMessage(error),
+      });
+    },
+  });
 
   /* ------------------------------------------------------------------------ */
   /* SOURCE DATA                                                              */
   /* ------------------------------------------------------------------------ */
 
-  const employees =
-    employeesQuery.data ??
-    [];
+  const employees = employeesQuery.data ?? EMPTY_EMPLOYEES;
 
-  const missions =
-    missionsQuery.data ??
-    [];
+  const missions = missionsQuery.data ?? EMPTY_MISSIONS;
 
-  const handoffs =
-    handoffsQuery.data ??
-    [];
+  const handoffs = handoffsQuery.data ?? EMPTY_HANDOFFS;
 
-  const runs =
-    runsQuery.data ??
-    [];
+  const runs = runsQuery.data ?? EMPTY_RUNS;
 
-  const approvals =
-    approvalsQuery.data ??
-    [];
+  const approvals = approvalsQuery.data ?? EMPTY_APPROVALS;
 
-  const employeesByKey =
-    useMemo(
-      () => {
-        const map =
-          new Map<
-            string,
-            AiEmployee
-          >();
+  const employeesByKey = useMemo(() => {
+    const map = new Map<string, AiEmployee>();
 
-        for (
-          const employee
-          of employees
-        ) {
-          const key =
-            canonicalEmployeeKey(
-              employee.employee_key,
-            );
+    for (const employee of employees) {
+      const key = canonicalEmployeeKey(employee.employee_key);
 
-          const existing =
-            map.get(
-              key,
-            );
+      const existing = map.get(key);
 
-          if (
-            !existing ||
-            employee.employee_key ===
-              key
-          ) {
-            map.set(
-              key,
-              employee,
-            );
-          }
-        }
+      if (!existing || employee.employee_key === key) {
+        map.set(key, employee);
+      }
+    }
 
-        return map;
-      },
-      [
-        employees,
-      ],
-    );
+    return map;
+  }, [employees]);
 
   /* ------------------------------------------------------------------------ */
   /* OPERATIONAL DIRECTORY                                                    */
   /* ------------------------------------------------------------------------ */
 
-  const employeeOperationalViews =
-    useMemo(
-      () =>
-        employees.map(
-          (
-            employee,
-          ) => ({
-            employee,
+  const employeeOperationalViews = useMemo(
+    () =>
+      employees.map((employee) => ({
+        employee,
 
-            operational:
-              employeeOperationalView({
-                employee,
-                missions,
-                handoffs,
-                runs,
-                approvals,
-              }),
-          }),
-        ),
-      [
-        employees,
-        handoffs,
-        runs,
-        approvals,
-      ],
-    );
+        operational: employeeOperationalView({
+          employee,
+          missions,
+          handoffs,
+          runs,
+          approvals,
+        }),
+      })),
+    [employees, missions, handoffs, runs, approvals],
+  );
 
-  const employeeDirectory =
-    useMemo<
-      EmployeeDirectoryItem[]
-    >(
-      () =>
-        employeeOperationalViews.map(
-          ({
-            employee,
-            operational,
-          }) => ({
-            employee,
-            operational,
+  const employeeDirectory = useMemo<EmployeeDirectoryItem[]>(
+    () =>
+      employeeOperationalViews.map(({ employee, operational }) => ({
+        employee,
+        operational,
 
-            departmentKeys:
-              departmentKeysForEmployee(
-                employee.employee_key,
-              ),
+        departmentKeys: departmentKeysForEmployee(employee.employee_key),
 
-            responsibilityLabels:
-              responsibilityLabelsForEmployee(
-                employee.employee_key,
-              ),
+        responsibilityLabels: responsibilityLabelsForEmployee(employee.employee_key),
 
-            searchText:
-              searchTermsForEmployee(
-                employee,
-              ),
-          }),
-        ),
-      [
-        employeeOperationalViews,
-      ],
-    );
+        searchText: searchTermsForEmployee(employee),
+      })),
+    [employeeOperationalViews],
+  );
 
-  const workforceCounts =
-    useMemo(() => {
-      let working = 0;
-      let idle = 0;
-      let waiting = 0;
-      let approval = 0;
-      let attention = 0;
-      let inactive = 0;
+  const workforceCounts = useMemo(() => {
+    let working = 0;
+    let idle = 0;
+    let waiting = 0;
+    let approval = 0;
+    let attention = 0;
+    let inactive = 0;
 
-      for (
-        const item
-        of employeeOperationalViews
-      ) {
-        switch (
-          item.operational
-            .state
-        ) {
-          case "working":
-            working += 1;
-            break;
+    for (const item of employeeOperationalViews) {
+      switch (item.operational.state) {
+        case "working":
+          working += 1;
+          break;
 
-          case "idle":
-            idle += 1;
-            break;
+        case "idle":
+          idle += 1;
+          break;
 
-          case "waiting":
-            waiting += 1;
-            break;
+        case "waiting":
+          waiting += 1;
+          break;
 
-          case "approval":
-            approval += 1;
-            break;
+        case "approval":
+          approval += 1;
+          break;
 
-          case "attention":
-            attention += 1;
-            break;
+        case "attention":
+          attention += 1;
+          break;
 
-          case "inactive":
-            inactive += 1;
-            break;
+        case "inactive":
+          inactive += 1;
+          break;
 
-          default:
-            break;
-        }
+        default:
+          break;
       }
+    }
 
-      return {
-        working,
-        idle,
-        waiting,
-        approval,
-        attention,
-        inactive,
-      };
-    }, [
-      employeeOperationalViews,
-    ]);
+    return {
+      working,
+      idle,
+      waiting,
+      approval,
+      attention,
+      inactive,
+    };
+  }, [employeeOperationalViews]);
 
-  const departments =
-    useMemo(
-      () =>
-        Array.from(
-          new Set(
-            employees.map(
-              (
-                employee,
-              ) =>
-                employeeDepartment(
-                  employee,
-                ),
-            ),
-          ),
-        ).sort(),
-      [
-        employees,
-      ],
-    );
+  const departments = useMemo(
+    () => Array.from(new Set(employees.map((employee) => employeeDepartment(employee)))).sort(),
+    [employees],
+  );
 
-  const searchedEmployees =
-    useMemo(() => {
-      const query =
-        employeeSearch
-          .trim()
-          .toLowerCase();
+  const searchedEmployees = useMemo(() => {
+    const query = employeeSearch.trim().toLowerCase();
 
-      return employeeDirectory
-        .filter(
-          (item) => {
-            if (
-              selectedDepartment !==
-                "all" &&
-              !item.departmentKeys.includes(
-                selectedDepartment,
-              )
-            ) {
-              return false;
-            }
+    return employeeDirectory
+      .filter((item) => {
+        if (selectedDepartment !== "all" && !item.departmentKeys.includes(selectedDepartment)) {
+          return false;
+        }
 
-            if (!query) {
-              return true;
-            }
+        if (!query) {
+          return true;
+        }
 
-            return (
-              searchScore(
-                item,
-                query,
-              ) > 0
-            );
-          },
-        )
-        .sort(
-          (
-            left,
-            right,
-          ) => {
-            if (!query) {
-              if (
-                left.operational
-                  .state ===
-                  "working" &&
-                right.operational
-                  .state !==
-                  "working"
-              ) {
-                return -1;
-              }
+        return searchScore(item, query) > 0;
+      })
+      .sort((left, right) => {
+        if (!query) {
+          if (left.operational.state === "working" && right.operational.state !== "working") {
+            return -1;
+          }
 
-              if (
-                right.operational
-                  .state ===
-                  "working" &&
-                left.operational
-                  .state !==
-                  "working"
-              ) {
-                return 1;
-              }
+          if (right.operational.state === "working" && left.operational.state !== "working") {
+            return 1;
+          }
 
-              return left.employee.name.localeCompare(
-                right.employee
-                  .name,
-              );
-            }
+          return left.employee.name.localeCompare(right.employee.name);
+        }
 
-            return (
-              searchScore(
-                right,
-                query,
-              ) -
-              searchScore(
-                left,
-                query,
-              )
-            );
-          },
-        );
-    }, [
-      employeeDirectory,
-      employeeSearch,
-      selectedDepartment,
-    ]);
+        return searchScore(right, query) - searchScore(left, query);
+      });
+  }, [employeeDirectory, employeeSearch, selectedDepartment]);
 
   const selectedEmployee =
-    employeeDirectory.find(
-      (item) =>
-        item.employee.id ===
-        selectedEmployeeId,
-    ) ?? null;
+    employeeDirectory.find((item) => item.employee.id === selectedEmployeeId) ?? null;
 
   /* ------------------------------------------------------------------------ */
   /* READINESS                                                                */
   /* ------------------------------------------------------------------------ */
 
-  const installedDefaultEmployees =
-    COSSA_GROWTH_WORKFORCE.filter(
-      (
-        profile,
-      ) =>
-        employeesByKey.has(
-          profile.employee_key,
-        ),
-    );
+  const installedDefaultEmployees = COSSA_GROWTH_WORKFORCE.filter((profile) =>
+    employeesByKey.has(profile.employee_key),
+  );
 
-  const activeDefaultEmployees =
-    COSSA_GROWTH_WORKFORCE.filter(
-      (
-        profile,
-      ) =>
-        employeesByKey.get(
-          profile.employee_key,
-        )?.status ===
-        "active",
-    );
+  const activeDefaultEmployees = COSSA_GROWTH_WORKFORCE.filter(
+    (profile) => employeesByKey.get(profile.employee_key)?.status === "active",
+  );
 
-  const activeExecutableGrowthEmployees =
-    EXECUTABLE_GROWTH_WORKFLOW.filter(
-      (
-        step,
-      ) =>
-        employeesByKey.get(
-          step.key,
-        )?.status ===
-        "active",
-    );
+  const activeExecutableGrowthEmployees = EXECUTABLE_GROWTH_WORKFLOW.filter(
+    (step) => employeesByKey.get(step.key)?.status === "active",
+  );
 
-  const activeExecutableRevenueEmployees =
-    EXECUTABLE_REVENUE_WORKFLOW.filter(
-      (
-        step,
-      ) =>
-        employeesByKey.get(
-          step.key,
-        )?.status ===
-        "active",
-    );
+  const activeExecutableRevenueEmployees = EXECUTABLE_REVENUE_WORKFLOW.filter(
+    (step) => employeesByKey.get(step.key)?.status === "active",
+  );
 
   /* ------------------------------------------------------------------------ */
   /* MISSION DATA                                                             */
   /* ------------------------------------------------------------------------ */
 
-  const coordinationMissions =
-    missions.filter(
-      (
-        mission,
-      ) =>
-        mission.title.startsWith(
-          GROWTH_MISSION_PREFIX,
-        ) ||
-        mission.title.startsWith(
-          REVENUE_MISSION_PREFIX,
-        ),
-    );
+  const coordinationMissions = missions.filter(
+    (mission) =>
+      mission.title.startsWith(GROWTH_MISSION_PREFIX) ||
+      mission.title.startsWith(REVENUE_MISSION_PREFIX),
+  );
 
   const selectedMission =
-    coordinationMissions.find(
-      (
-        mission,
-      ) =>
-        mission.id ===
-        selectedMissionId,
-    ) ??
+    coordinationMissions.find((mission) => mission.id === selectedMissionId) ??
     coordinationMissions[0] ??
     null;
 
-  const selectedWorkflowKind =
-    missionWorkforceKind(
-      selectedMission,
-    );
+  const selectedWorkflowKind = missionWorkforceKind(selectedMission);
 
-  const selectedWorkflowSteps =
-    workflowForMission(
-      selectedMission,
-    );
+  const selectedWorkflowSteps = workflowForMission(selectedMission);
 
-  const selectedMissionHandoffs =
-    selectedMission
-      ? sortWorkflowHandoffs(
-          handoffs.filter(
-            (
-              handoff,
-            ) =>
-              handoff.mission_id ===
-              selectedMission.id,
-          ),
-        )
-      : [];
+  const selectedMissionHandoffs = selectedMission
+    ? sortWorkflowHandoffs(handoffs.filter((handoff) => handoff.mission_id === selectedMission.id))
+    : [];
 
   const firstIncompleteHandoff =
-    selectedMissionHandoffs.find(
-      (
-        handoff,
-      ) =>
-        handoff.status !==
-        "completed",
-    ) ?? null;
+    selectedMissionHandoffs.find((handoff) => handoff.status !== "completed") ?? null;
 
-  const nextHandoff =
-    firstIncompleteHandoff
-      ?.status ===
-    "pending"
-      ? firstIncompleteHandoff
-      : null;
+  const nextHandoff = firstIncompleteHandoff?.status === "pending" ? firstIncompleteHandoff : null;
 
   const blockedHandoff =
-    firstIncompleteHandoff &&
-    firstIncompleteHandoff.status !==
-      "pending"
+    firstIncompleteHandoff && firstIncompleteHandoff.status !== "pending"
       ? firstIncompleteHandoff
       : null;
 
-  const nextEmployee =
-    firstIncompleteHandoff
-      ? employees.find(
-          (
-            employee,
-          ) =>
-            employee.id ===
-            firstIncompleteHandoff.to_employee_id,
-        ) ?? null
-      : null;
+  const nextEmployee = firstIncompleteHandoff
+    ? (employees.find((employee) => employee.id === firstIncompleteHandoff.to_employee_id) ?? null)
+    : null;
 
-  const selectedMissionRuns =
-    selectedMission
-      ? runs
-          .filter(
-            (
-              run,
-            ) =>
-              run.mission_id ===
-              selectedMission.id,
-          )
-          .sort(
-            (
-              left,
-              right,
-            ) =>
-              latestRunTime(
-                left,
-              ).localeCompare(
-                latestRunTime(
-                  right,
-                ),
-              ),
-          )
-      : [];
+  const selectedMissionRuns = selectedMission
+    ? runs
+        .filter((run) => run.mission_id === selectedMission.id)
+        .sort((left, right) => latestRunTime(left).localeCompare(latestRunTime(right)))
+    : [];
 
-  const reviewableOutputs =
-    selectedMissionRuns
-      .map(
-        (
-          run,
-        ) => ({
-          run,
+  const reviewableOutputs = selectedMissionRuns
+    .map((run) => ({
+      run,
 
-          content:
-            reviewableOutputContent(
-              run,
-            ),
-        }),
-      )
-      .filter(
-        (
-          item,
-        ): item is {
-          run: MissionRun;
-          content: string;
-        } =>
-          Boolean(
-            item.content,
-          ),
-      );
-
-  const displayReviewableOutputs =
-    [
-      ...reviewableOutputs,
-    ].reverse();
-
-  const selectedMissionFailedRuns =
-    selectedMissionRuns.filter(
+      content: reviewableOutputContent(run),
+    }))
+    .filter(
       (
-        run,
-      ) =>
-        run.status ===
-        "failed",
+        item,
+      ): item is {
+        run: MissionRun;
+        content: string;
+      } => Boolean(item.content),
     );
 
-  const selectedMissionCompletedRuns =
-    selectedMissionRuns.filter(
-      (
-        run,
-      ) =>
-        run.status ===
-        "completed",
-    );
+  const displayReviewableOutputs = [...reviewableOutputs].reverse();
+
+  const selectedMissionFailedRuns = selectedMissionRuns.filter((run) => run.status === "failed");
+
+  const selectedMissionCompletedRuns = selectedMissionRuns.filter(
+    (run) => run.status === "completed",
+  );
 
   const isLoading =
     employeesQuery.isLoading ||
@@ -3902,100 +2508,66 @@ function AiWorkforce() {
     approvalsQuery.isLoading;
 
   const canCreateGrowth =
-    activeExecutableGrowthEmployees.length ===
-      EXECUTABLE_GROWTH_WORKFLOW.length &&
-    objective.trim().length >
-      0;
+    activeExecutableGrowthEmployees.length === EXECUTABLE_GROWTH_WORKFLOW.length &&
+    objective.trim().length > 0;
 
   const canCreateRevenue =
-    activeExecutableRevenueEmployees.length ===
-      EXECUTABLE_REVENUE_WORKFLOW.length &&
-    objective.trim().length >
-      0;
+    activeExecutableRevenueEmployees.length === EXECUTABLE_REVENUE_WORKFLOW.length &&
+    objective.trim().length > 0;
 
-  const workflowCreationPending =
-    coordinationMutation.isPending ||
-    revenueMutation.isPending;
+  const workflowCreationPending = coordinationMutation.isPending || revenueMutation.isPending;
 
   /* ------------------------------------------------------------------------ */
   /* CEO COMMAND                                                              */
   /* ------------------------------------------------------------------------ */
 
   function submitCeoCommand() {
-    const command =
-      ceoCommand.trim();
+    const command = ceoCommand.trim();
 
     if (!command) {
       return;
     }
 
-    const revenueRequest =
-      commandLooksLikeRevenueWork(
-        command,
-      );
+    const revenueRequest = commandLooksLikeRevenueWork(command);
 
-    if (
-      revenueRequest
-    ) {
-      if (
-        activeExecutableRevenueEmployees.length !==
-        EXECUTABLE_REVENUE_WORKFLOW.length
-      ) {
-        toast.error(
-          "Revenue workforce is not fully active",
-          {
-            description: `${activeExecutableRevenueEmployees.length} of ${EXECUTABLE_REVENUE_WORKFLOW.length} revenue employees are active.`,
-          },
-        );
+    if (revenueRequest) {
+      if (activeExecutableRevenueEmployees.length !== EXECUTABLE_REVENUE_WORKFLOW.length) {
+        toast.error("Revenue workforce is not fully active", {
+          description: `${activeExecutableRevenueEmployees.length} of ${EXECUTABLE_REVENUE_WORKFLOW.length} revenue employees are active.`,
+        });
 
         return;
       }
 
-      setObjective(
-        command,
-      );
+      setObjective(command);
 
       revenueMutation.mutate({
-        objective:
-          command,
+        objective: command,
 
-        target_market:
-          targetMarket,
+        target_market: targetMarket,
 
-        target_location:
-          targetLocation,
+        target_location: targetLocation,
       });
 
       return;
     }
 
-    if (
-      activeExecutableGrowthEmployees.length !==
-      EXECUTABLE_GROWTH_WORKFLOW.length
-    ) {
-      toast.error(
-        "Growth workforce is not fully active",
-        {
-          description: `${activeExecutableGrowthEmployees.length} of ${EXECUTABLE_GROWTH_WORKFLOW.length} Growth employees are active.`,
-        },
-      );
+    if (activeExecutableGrowthEmployees.length !== EXECUTABLE_GROWTH_WORKFLOW.length) {
+      toast.error("Growth workforce is not fully active", {
+        description: `${activeExecutableGrowthEmployees.length} of ${EXECUTABLE_GROWTH_WORKFLOW.length} Growth employees are active.`,
+      });
 
       return;
     }
 
-    setObjective(
-      command,
-    );
+    setObjective(command);
 
     coordinationMutation.mutate({
-      objective:
-        command,
+      objective: command,
 
-      target_market:
-        targetMarket,
+      target_market: targetMarket,
 
-      target_location:
-        targetLocation,
+      target_location: targetLocation,
     });
   }
 
@@ -4018,44 +2590,29 @@ function AiWorkforce() {
      * Cossa knowledge/memory, then selects OpenAI, Gemini or Groq according
      * to the server-owned configured-provider route.
      */
-    const result =
-      await streamChatWithMetadata(
-        [
-          {
-            role:
-              "user",
-
-            content:
-              prompt,
-          },
-        ],
-
-        () =>
-          undefined,
-
+    const result = await streamChatWithMetadata(
+      [
         {
-          system:
-            employee.system_instructions,
-
-          provider:
-            DEFAULT_WORKFORCE_PROVIDER,
+          role: "user",
+          content: prompt,
         },
-      );
+      ],
+      () => undefined,
+      {
+        system: employee.system_instructions,
+        provider: DEFAULT_WORKFORCE_PROVIDER,
+      },
+    );
 
-    const content =
-      result.content.trim();
+    const content = result.content.trim();
 
     if (!content) {
-      throw new Error(
-        `${employee.name} did not return a usable workforce output.`,
-      );
+      throw new Error(`${employee.name} did not return a usable workforce output.`);
     }
 
     return {
       content,
-
-      metadata:
-        result.metadata,
+      metadata: result.metadata,
     };
   }
 
@@ -4078,205 +2635,126 @@ function AiWorkforce() {
     metadata: AiExecutionMetadata | null;
     finalStage: boolean;
   }> {
-    if (
-      employee.status !==
-      "active"
-    ) {
-      throw new Error(
-        `${employee.name} is ${employee.status} and cannot execute this stage.`,
-      );
+    if (employee.status !== "active") {
+      throw new Error(`${employee.name} is ${employee.status} and cannot execute this stage.`);
     }
 
-    if (
-      handoff.status !==
-      "pending"
-    ) {
+    if (handoff.status !== "pending") {
       throw new Error(
         `${employee.name}'s handoff is ${handoff.status}, not pending. The workflow will not skip or duplicate this stage.`,
       );
     }
 
-    const employeeKey =
-      canonicalEmployeeKey(
-        employee.employee_key,
-      );
+    const employeeKey = canonicalEmployeeKey(employee.employee_key);
 
-    const leadHunterStage =
-      employeeKey ===
-      "lead-hunter";
+    const leadHunterStage = employeeKey === "lead-hunter";
 
-    const actualNextEmployee =
-      nextWorkflowEmployeeForHandoff({
-        currentHandoff:
-          handoff,
+    const actualNextEmployee = nextWorkflowEmployeeForHandoff({
+      currentHandoff: handoff,
 
-        workflowHandoffs:
-          selectedMissionHandoffs,
+      workflowHandoffs: selectedMissionHandoffs,
 
-        employees,
-      });
+      employees,
+    });
 
     const authorisedEvidence =
-      employeeKey ===
-      "website-seo-monitor"
-        ? [
-            websiteReportEvidence(
-              await checkOfficialWebsite(),
-            ),
-          ]
+      employeeKey === "website-seo-monitor"
+        ? [websiteReportEvidence(await checkOfficialWebsite())]
         : [];
 
-    const compactPrevious =
-      compactPriorOutputsForPrompt(
-        priorOutputs,
-      );
+    const compactPrevious = compactPriorOutputsForPrompt(priorOutputs);
 
-    const compactEvidence =
-      compactAuthorisedEvidence(
-        authorisedEvidence,
-      );
+    const compactEvidence = compactAuthorisedEvidence(authorisedEvidence);
 
-    const run =
-      await startControlledWorkforceRun({
-        mission,
-        handoff,
-        employee,
+    const run = await startControlledWorkforceRun({
+      mission,
+      handoff,
+      employee,
 
-        provider:
-          leadHunterStage
-            ? LEAD_HUNTER_TOOL_PROVIDER
-            : "cossa_ai_gateway",
+      provider: leadHunterStage ? LEAD_HUNTER_TOOL_PROVIDER : "cossa_ai_gateway",
 
-        modelName:
-          leadHunterStage
-            ? LEAD_HUNTER_TOOL_NAME
-            : DEFAULT_WORKFORCE_MODEL,
+      modelName: leadHunterStage ? LEAD_HUNTER_TOOL_NAME : DEFAULT_WORKFORCE_MODEL,
 
-        executionKind:
-          leadHunterStage
-            ? "tool"
-            : "language_model",
+      executionKind: leadHunterStage ? "tool" : "language_model",
 
-        priorOutputs:
-          compactPrevious,
+      priorOutputs: compactPrevious,
 
-        authorisedEvidence:
-          compactEvidence,
-      });
+      authorisedEvidence: compactEvidence,
+    });
 
     try {
-      let content:
-        string;
+      let content: string;
 
-      let executionMetadata:
-        AiExecutionMetadata |
-        null =
-        null;
+      let executionMetadata: AiExecutionMetadata | null = null;
 
-      if (
-        leadHunterStage
-      ) {
-        const hunterResult =
-          await executeLeadHunterTool({
-            mission,
-            handoff,
-            workflowHandoffs:
-              selectedMissionHandoffs,
-          });
+      if (leadHunterStage) {
+        const hunterResult = await executeLeadHunterTool({
+          mission,
+          handoff,
+          workflowHandoffs: selectedMissionHandoffs,
+        });
 
-        content =
-          hunterResult.content;
+        content = hunterResult.content;
       } else {
-        const prompt =
-          controlledStagePrompt({
-            mission,
-            handoff,
-            employee,
+        const prompt = controlledStagePrompt({
+          mission,
+          handoff,
+          employee,
 
-            nextEmployee:
-              actualNextEmployee,
+          nextEmployee: actualNextEmployee,
 
-            priorOutputs:
-              compactPrevious,
+          priorOutputs: compactPrevious,
 
-            authorisedEvidence:
-              compactEvidence,
-          });
+          authorisedEvidence: compactEvidence,
+        });
 
-        if (
-          prompt.length >
-          MAX_STAGE_PROMPT_CHARS
-        ) {
+        if (prompt.length > MAX_STAGE_PROMPT_CHARS) {
           throw new Error(
             `Cossa AI prompt safety check failed. Prompt length ${prompt.length} exceeds ${MAX_STAGE_PROMPT_CHARS}.`,
           );
         }
 
-        const execution =
-          await executeProviderWithRetry({
-            prompt,
-            employee,
-          });
+        const execution = await executeProviderWithRetry({
+          prompt,
+          employee,
+        });
 
-        content =
-          execution.content;
-
-        executionMetadata =
-          execution.metadata;
+        content = execution.content;
+        executionMetadata = execution.metadata;
       }
 
-      const result =
-        await completeControlledWorkforceRun({
-          run,
-          handoff,
-          employee,
-          content,
-
-          execution:
-            executionMetadata
-              ? {
-                  provider:
-                    executionMetadata.provider,
-
-                  modelName:
-                    executionMetadata.model,
-
-                  requestId:
-                    executionMetadata.requestId,
-                }
-              : null,
-        });
+      const result = await completeControlledWorkforceRun({
+        run,
+        handoff,
+        employee,
+        content,
+        missionObjective: mission.objective,
+        execution: executionMetadata
+          ? {
+              provider: executionMetadata.provider,
+              modelName: executionMetadata.model,
+              requestId: executionMetadata.requestId,
+            }
+          : null,
+      });
 
       return {
         content,
-
-        metadata:
-          executionMetadata,
-
-        finalStage:
-          result.finalStage,
+        metadata: executionMetadata,
+        finalStage: result.finalStage,
       };
     } catch (error) {
-      const message =
-        normaliseErrorMessage(
-          error,
-        );
+      const message = normaliseErrorMessage(error);
 
       try {
         await failControlledWorkforceRun({
           run,
           handoff,
 
-          errorMessage:
-            message,
+          errorMessage: message,
         });
-      } catch (
-        cleanupError
-      ) {
-        console.error(
-          "Unable to record controlled workforce failure",
-          cleanupError,
-        );
+      } catch (cleanupError) {
+        console.error("Unable to record controlled workforce failure", cleanupError);
       }
 
       throw error;
@@ -4287,121 +2765,80 @@ function AiWorkforce() {
   /* DIRECT EMPLOYEE ASSIGNMENT                                               */
   /* ------------------------------------------------------------------------ */
 
-  const directAssignmentMutation =
-    useMutation({
-      mutationFn:
-        async ({
-          employee,
-          objective:
-            directObjective,
-        }: {
-          employee: AiEmployee;
-          objective: string;
-        }) => {
-          const assignment =
-            await createDirectEmployeeMission({
-              employeeId:
-                employee.id,
+  const directAssignmentMutation = useMutation({
+    mutationFn: async ({
+      employee,
+      objective: directObjective,
+    }: {
+      employee: AiEmployee;
+      objective: string;
+    }) => {
+      const assignment = await createDirectEmployeeMission({
+        employeeId: employee.id,
 
-              objective:
-                directObjective,
+        objective: directObjective,
 
-              target_market:
-                targetMarket,
+        target_market: targetMarket,
 
-              target_location:
-                targetLocation,
+        target_location: targetLocation,
 
-              context: {
-                requested_from:
-                  "ai_workforce_employee_drawer",
+        context: {
+          requested_from: "ai_workforce_employee_drawer",
 
-                source:
-                  "owner_direct_assignment",
-              },
-            });
-
-          const outcome =
-            await executeControlledHandoff({
-              mission:
-                assignment.mission,
-
-              handoff:
-                assignment.handoff,
-
-              employee:
-                assignment.employee,
-
-              priorOutputs:
-                [],
-            });
-
-          return {
-            employee:
-              assignment.employee,
-
-            mission:
-              assignment.mission,
-
-            content:
-              outcome.content,
-
-            metadata:
-              outcome.metadata,
-          };
+          source: "owner_direct_assignment",
         },
+      });
 
-      onSuccess:
-        async ({
-          employee,
-          metadata,
-        }) => {
-          await refreshWorkforce();
+      const outcome = await executeControlledHandoff({
+        mission: assignment.mission,
 
-          toast.success(
-            "Employee task completed",
-            {
-              description:
-                metadata
-                  ? employee.name +
-                    " completed a recorded result through " +
-                    metadata.provider +
-                    (metadata.model
-                      ? " (" +
-                        metadata.model +
-                        ")."
-                      : ".")
-                  : employee.name +
-                    " completed a recorded Cossa tool result.",
-            },
-          );
-        },
+        handoff: assignment.handoff,
 
-      onError:
-        (error) => {
-          toast.error(
-            "Employee task could not run",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
+        employee: assignment.employee,
+
+        priorOutputs: [],
+      });
+
+      return {
+        employee: assignment.employee,
+
+        mission: assignment.mission,
+
+        content: outcome.content,
+
+        metadata: outcome.metadata,
+      };
+    },
+
+    onSuccess: async ({ employee, metadata }) => {
+      await refreshWorkforce();
+
+      toast.success("Employee task completed", {
+        description: metadata
+          ? employee.name +
+            " completed a recorded result through " +
+            metadata.provider +
+            (metadata.model ? " (" + metadata.model + ")." : ".")
+          : employee.name + " completed a recorded Cossa tool result.",
+      });
+    },
+
+    onError: (error) => {
+      toast.error("Employee task could not run", {
+        description: normaliseErrorMessage(error),
+      });
+    },
+  });
 
   async function runDirectEmployeeAssignment(
     employee: AiEmployee,
     directObjective: string,
   ): Promise<string> {
-    const result =
-      await directAssignmentMutation.mutateAsync({
-        employee,
+    const result = await directAssignmentMutation.mutateAsync({
+      employee,
 
-        objective:
-          directObjective,
-      });
+      objective: directObjective,
+    });
 
     return result.content;
   }
@@ -4410,342 +2847,185 @@ function AiWorkforce() {
   /* RUN NEXT STAGE                                                           */
   /* ------------------------------------------------------------------------ */
 
-  const runNextStageMutation =
-    useMutation({
-      mutationFn:
-        async () => {
-          if (
-            !selectedMission
-          ) {
-            throw new Error(
-              "Select a workforce mission first.",
-            );
-          }
+  const runNextStageMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedMission) {
+        throw new Error("Select a workforce mission first.");
+      }
 
-          if (
-            blockedHandoff
-          ) {
-            throw new Error(
-              `The next workflow stage is ${blockedHandoff.status}. Cossa AI will not skip it.`,
-            );
-          }
+      if (blockedHandoff) {
+        throw new Error(
+          `The next workflow stage is ${blockedHandoff.status}. Cossa AI will not skip it.`,
+        );
+      }
 
-          if (
-            !nextHandoff ||
-            !nextEmployee
-          ) {
-            throw new Error(
-              "This mission has no executable pending stage.",
-            );
-          }
+      if (!nextHandoff || !nextEmployee) {
+        throw new Error("This mission has no executable pending stage.");
+      }
 
-          const priorOutputs =
-            compactPriorOutputsForPrompt(
-              reviewableOutputs.map(
-                (
-                  item,
-                ) =>
-                  item.content,
-              ),
-            );
+      const priorOutputs = compactPriorOutputsForPrompt(
+        reviewableOutputs.map((item) => item.content),
+      );
 
-          return executeControlledHandoff({
-            mission:
-              selectedMission,
+      return executeControlledHandoff({
+        mission: selectedMission,
 
-            handoff:
-              nextHandoff,
+        handoff: nextHandoff,
 
-            employee:
-              nextEmployee,
+        employee: nextEmployee,
 
-            priorOutputs,
-          });
-        },
+        priorOutputs,
+      });
+    },
 
-      onSuccess:
-        async ({
-          finalStage,
-        }) => {
-          await refreshWorkforce();
+    onSuccess: async ({ finalStage }) => {
+      await refreshWorkforce();
 
-          toast.success(
-            finalStage
-              ? "Workforce workflow completed"
-              : "Employee stage completed",
-            {
-              description:
-                finalStage
-                  ? "All recorded stages completed successfully."
-                  : "The employee completed the stage and handed work forward.",
-            },
-          );
-        },
+      toast.success(finalStage ? "Workforce workflow completed" : "Employee stage completed", {
+        description: finalStage
+          ? "All recorded stages completed successfully."
+          : "The employee completed the stage and handed work forward.",
+      });
+    },
 
-      onError:
-        (error) => {
-          toast.error(
-            "Workforce stage could not run",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
+    onError: (error) => {
+      toast.error("Workforce stage could not run", {
+        description: normaliseErrorMessage(error),
+      });
+    },
+  });
 
   /* ------------------------------------------------------------------------ */
   /* AUTOMATIC SAFE CHAIN                                                     */
   /* ------------------------------------------------------------------------ */
 
-  const runSafeWorkflowMutation =
-    useMutation({
-      mutationFn:
-        async () => {
-          if (
-            !selectedMission
-          ) {
-            throw new Error(
-              "Select a workforce mission first.",
-            );
-          }
+  const runSafeWorkflowMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedMission) {
+        throw new Error("Select a workforce mission first.");
+      }
 
-          if (
-            selectedMission.status ===
-            "completed"
-          ) {
-            throw new Error(
-              "This mission is already completed.",
-            );
-          }
+      if (selectedMission.status === "completed") {
+        throw new Error("This mission is already completed.");
+      }
 
-          if (
-            selectedMission.status ===
-            "awaiting_approval"
-          ) {
-            throw new Error(
-              "This mission is paused at an owner approval checkpoint.",
-            );
-          }
+      if (selectedMission.status === "awaiting_approval") {
+        throw new Error("This mission is paused at an owner approval checkpoint.");
+      }
 
-          const incomplete =
-            selectedMissionHandoffs.filter(
-              (
-                handoff,
-              ) =>
-                handoff.status !==
-                "completed",
-            );
+      const incomplete = selectedMissionHandoffs.filter(
+        (handoff) => handoff.status !== "completed",
+      );
 
-          if (
-            incomplete.length ===
-            0
-          ) {
-            throw new Error(
-              "This mission has no incomplete stages.",
-            );
-          }
+      if (incomplete.length === 0) {
+        throw new Error("This mission has no incomplete stages.");
+      }
 
-          const firstIncomplete =
-            incomplete[0];
+      const firstIncomplete = incomplete[0];
 
-          if (
-            firstIncomplete.status ===
-            "accepted"
-          ) {
-            const employee =
-              employees.find(
-                (
-                  candidate,
-                ) =>
-                  candidate.id ===
-                  firstIncomplete.to_employee_id,
-              );
+      if (firstIncomplete.status === "accepted") {
+        const employee = employees.find(
+          (candidate) => candidate.id === firstIncomplete.to_employee_id,
+        );
 
-            throw new Error(
-              `${
-                employee?.name ??
-                "The next employee"
-              } already owns the next stage. The chain will not skip it.`,
-            );
-          }
+        throw new Error(
+          `${
+            employee?.name ?? "The next employee"
+          } already owns the next stage. The chain will not skip it.`,
+        );
+      }
 
-          if (
-            firstIncomplete.status !==
-            "pending"
-          ) {
-            throw new Error(
-              `The next workflow stage is ${firstIncomplete.status}. Automatic execution will not skip it.`,
-            );
-          }
+      if (firstIncomplete.status !== "pending") {
+        throw new Error(
+          `The next workflow stage is ${firstIncomplete.status}. Automatic execution will not skip it.`,
+        );
+      }
 
-          const pendingSequence:
-            EmployeeHandoff[] =
-            [];
+      const pendingSequence: EmployeeHandoff[] = [];
 
-          for (
-            const handoff
-            of incomplete
-          ) {
-            if (
-              handoff.status !==
-              "pending"
-            ) {
-              break;
-            }
+      for (const handoff of incomplete) {
+        if (handoff.status !== "pending") {
+          break;
+        }
 
-            pendingSequence.push(
-              handoff,
-            );
-          }
+        pendingSequence.push(handoff);
+      }
 
-          if (
-            pendingSequence.length ===
-            0
-          ) {
-            throw new Error(
-              "No executable pending workflow stage is available.",
-            );
-          }
+      if (pendingSequence.length === 0) {
+        throw new Error("No executable pending workflow stage is available.");
+      }
 
-          let accumulatedOutputs =
-            compactPriorOutputsForPrompt(
-              reviewableOutputs.map(
-                (
-                  item,
-                ) =>
-                  item.content,
-              ),
-            );
+      let accumulatedOutputs = compactPriorOutputsForPrompt(
+        reviewableOutputs.map((item) => item.content),
+      );
 
-          let completedStages =
-            0;
+      let completedStages = 0;
 
-          let reachedFinalStage =
-            false;
+      let reachedFinalStage = false;
 
-          for (
-            let index = 0;
-            index <
-            pendingSequence.length;
-            index += 1
-          ) {
-            const handoff =
-              pendingSequence[
-                index
-              ];
+      for (let index = 0; index < pendingSequence.length; index += 1) {
+        const handoff = pendingSequence[index];
 
-            const employee =
-              employees.find(
-                (
-                  candidate,
-                ) =>
-                  candidate.id ===
-                  handoff.to_employee_id,
-              );
+        const employee = employees.find((candidate) => candidate.id === handoff.to_employee_id);
 
-            if (!employee) {
-              throw new Error(
-                `Pending handoff references missing employee ${handoff.to_employee_id}.`,
-              );
-            }
+        if (!employee) {
+          throw new Error(`Pending handoff references missing employee ${handoff.to_employee_id}.`);
+        }
 
-            if (
-              employee.status !==
-              "active"
-            ) {
-              throw new Error(
-                `${employee.name} is ${employee.status}. Automatic execution stopped.`,
-              );
-            }
+        if (employee.status !== "active") {
+          throw new Error(`${employee.name} is ${employee.status}. Automatic execution stopped.`);
+        }
 
-            const result =
-              await executeControlledHandoff({
-                mission:
-                  selectedMission,
+        const result = await executeControlledHandoff({
+          mission: selectedMission,
 
-                handoff,
+          handoff,
 
-                employee,
+          employee,
 
-                priorOutputs:
-                  accumulatedOutputs,
-              });
+          priorOutputs: accumulatedOutputs,
+        });
 
-            accumulatedOutputs =
-              compactPriorOutputsForPrompt(
-                [
-                  ...accumulatedOutputs,
-                  result.content,
-                ],
-              );
+        accumulatedOutputs = compactPriorOutputsForPrompt([...accumulatedOutputs, result.content]);
 
-            completedStages +=
-              1;
+        completedStages += 1;
 
-            reachedFinalStage =
-              result.finalStage;
+        reachedFinalStage = result.finalStage;
 
-            if (
-              reachedFinalStage
-            ) {
-              break;
-            }
+        if (reachedFinalStage) {
+          break;
+        }
 
-            if (
-              index <
-              pendingSequence.length -
-                1
-            ) {
-              await sleep(
-                WORKFORCE_STAGE_DELAY_MS,
-              );
-            }
-          }
+        if (index < pendingSequence.length - 1) {
+          await sleep(WORKFORCE_STAGE_DELAY_MS);
+        }
+      }
 
-          return {
-            completedStages,
-            reachedFinalStage,
-          };
+      return {
+        completedStages,
+        reachedFinalStage,
+      };
+    },
+
+    onSuccess: async ({ completedStages, reachedFinalStage }) => {
+      await refreshWorkforce();
+
+      toast.success(
+        reachedFinalStage ? "Workforce mission completed" : "Workforce mission progressed",
+        {
+          description: `${completedStages} employee stage${
+            completedStages === 1 ? "" : "s"
+          } completed.`,
         },
+      );
+    },
 
-      onSuccess:
-        async ({
-          completedStages,
-          reachedFinalStage,
-        }) => {
-          await refreshWorkforce();
-
-          toast.success(
-            reachedFinalStage
-              ? "Workforce mission completed"
-              : "Workforce mission progressed",
-            {
-              description: `${completedStages} employee stage${
-                completedStages ===
-                1
-                  ? ""
-                  : "s"
-              } completed.`,
-            },
-          );
-        },
-
-      onError:
-        (error) => {
-          toast.error(
-            "Automatic workforce chain stopped",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
+    onError: (error) => {
+      toast.error("Automatic workforce chain stopped", {
+        description: normaliseErrorMessage(error),
+      });
+    },
+  });
 
   /* ------------------------------------------------------------------------ */
   /* RENDER                                                                   */
@@ -4766,23 +3046,16 @@ function AiWorkforce() {
                   <Building2 className="h-5 w-5" />
                 </div>
 
-                <StatusBadge
-                  status={workspaceRuntimeStatus()}
-                />
+                <StatusBadge status={workspaceRuntimeStatus()} />
               </div>
 
               <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
-                Cossa{" "}
-                <span className="text-gradient-gold">
-                  AI Company
-                </span>
+                Cossa <span className="text-gradient-gold">AI Company</span>
               </h1>
 
               <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-                Find the right department or employee,
-                delegate work to the AI CEO, run the real
-                Lead Hunter revenue system and monitor
-                company execution without pretending that
+                Find the right department or employee, delegate work to the AI CEO, run the real
+                Lead Hunter revenue system and monitor company execution without pretending that
                 missing integrations exist.
               </p>
             </div>
@@ -4791,14 +3064,14 @@ function AiWorkforce() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() =>
-                  void refreshWorkforce()
-                }
-                disabled={isLoading}
+                onClick={() => void refreshWorkforce()}
+                disabled={isLoading || refreshState === "refreshing"}
                 className="border-primary/40 text-primary hover:bg-primary/10"
               >
-                <RefreshCw className="mr-1.5 h-4 w-4" />
-                Refresh
+                <RefreshCw
+                  className={`mr-1.5 h-4 w-4 ${refreshState === "refreshing" ? "animate-spin" : ""}`}
+                />
+                {refreshState === "refreshing" ? "Refreshing" : "Refresh"}
               </Button>
 
               <Button
@@ -4813,25 +3086,51 @@ function AiWorkforce() {
             </div>
           </div>
 
+          <div
+            className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground"
+            aria-live="polite"
+          >
+            <span
+              className={
+                refreshState === "error"
+                  ? "text-destructive"
+                  : refreshState === "success"
+                    ? "text-primary"
+                    : ""
+              }
+            >
+              {refreshState === "refreshing"
+                ? "REFRESHING"
+                : refreshState === "success"
+                  ? "SUCCESS"
+                  : refreshState === "error"
+                    ? "ERROR"
+                    : "READY"}
+            </span>
+            <span>
+              LAST REFRESHED:{" "}
+              {lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleString("en-ZA") : "Not yet"}
+            </span>
+            {refreshError ? (
+              <span className="normal-case tracking-normal text-destructive">{refreshError}</span>
+            ) : null}
+            {refreshWarning ? (
+              <span className="normal-case tracking-normal text-warning">{refreshWarning}</span>
+            ) : null}
+          </div>
+
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
 
             <input
               value={employeeSearch}
               onChange={(event) => {
-                const value =
-                  event.target.value;
+                const value = event.target.value;
 
-                setEmployeeSearch(
-                  value,
-                );
+                setEmployeeSearch(value);
 
-                if (
-                  value.trim()
-                ) {
-                  openEmployees(
-                    "all",
-                  );
+                if (value.trim()) {
+                  openEmployees("all");
                 }
               }}
               placeholder='Find anyone by name or responsibility — try "Lead Hunter", "customers", "sales", "SEO", "supplier", "website"...'
@@ -4841,11 +3140,7 @@ function AiWorkforce() {
             {employeeSearch ? (
               <button
                 type="button"
-                onClick={() =>
-                  setEmployeeSearch(
-                    "",
-                  )
-                }
+                onClick={() => setEmployeeSearch("")}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 aria-label="Clear search"
               >
@@ -4861,87 +3156,45 @@ function AiWorkforce() {
       <section className="glass-card overflow-x-auto p-2">
         <div className="flex min-w-max gap-1">
           <TopNavButton
-            active={
-              view ===
-              "command"
-            }
+            active={view === "command"}
             icon={Command}
             label="Command Centre"
-            onClick={() =>
-              setView(
-                "command",
-              )
-            }
+            onClick={() => setView("command")}
           />
 
           <TopNavButton
-            active={
-              view ===
-              "departments"
-            }
+            active={view === "departments"}
             icon={Building2}
             label="Departments"
-            onClick={() =>
-              setView(
-                "departments",
-              )
-            }
+            onClick={() => setView("departments")}
           />
 
           <TopNavButton
-            active={
-              view ===
-              "employees"
-            }
+            active={view === "employees"}
             icon={UsersRound}
             label="Employees"
-            onClick={() =>
-              openEmployees(
-                selectedDepartment,
-              )
-            }
+            onClick={() => openEmployees(selectedDepartment)}
           />
 
           <TopNavButton
-            active={
-              view ===
-              "workflows"
-            }
+            active={view === "workflows"}
             icon={Workflow}
             label="Workflows"
-            onClick={() =>
-              setView(
-                "workflows",
-              )
-            }
+            onClick={() => setView("workflows")}
           />
 
           <TopNavButton
-            active={
-              view ===
-              "activity"
-            }
+            active={view === "activity"}
             icon={Activity}
             label="Activity"
-            onClick={() =>
-              setView(
-                "activity",
-              )
-            }
+            onClick={() => setView("activity")}
           />
 
           <TopNavButton
-            active={
-              view ===
-              "control"
-            }
+            active={view === "control"}
             icon={ShieldCheck}
             label="Control Room"
-            onClick={() =>
-              setView(
-                "control",
-              )
-            }
+            onClick={() => setView("control")}
           />
         </div>
       </section>
@@ -4949,65 +3202,29 @@ function AiWorkforce() {
       {/* COMPANY METRICS */}
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Metric
-          label="Employees"
-          value={String(
-            employees.length,
-          )}
-        />
+        <Metric label="Employees" value={String(employees.length)} />
 
         <Metric
           label="Active"
-          value={String(
-            employees.filter(
-              (
-                employee,
-              ) =>
-                employee.status ===
-                "active",
-            ).length,
-          )}
+          value={String(employees.filter((employee) => employee.status === "active").length)}
         />
 
-        <Metric
-          label="Working now"
-          value={String(
-            workforceCounts.working,
-          )}
-        />
+        <Metric label="Working now" value={String(workforceCounts.working)} />
 
-        <Metric
-          label="Assigned"
-          value={String(
-            workforceCounts.waiting,
-          )}
-        />
+        <Metric label="Assigned" value={String(workforceCounts.waiting)} />
 
-        <Metric
-          label="Available"
-          value={String(
-            workforceCounts.idle,
-          )}
-        />
+        <Metric label="Available" value={String(workforceCounts.idle)} />
 
         <Metric
           label="Needs attention"
-          value={String(
-            workforceCounts.attention +
-              workforceCounts.approval,
-          )}
-          warning={
-            workforceCounts.attention +
-              workforceCounts.approval >
-            0
-          }
+          value={String(workforceCounts.attention + workforceCounts.approval)}
+          warning={workforceCounts.attention + workforceCounts.approval > 0}
         />
       </section>
 
       {/* COMMAND CENTRE */}
 
-      {view ===
-      "command" ? (
+      {view === "command" ? (
         <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
           <section className="glass-card p-5 sm:p-6">
             <div className="flex items-start gap-3">
@@ -5025,10 +3242,8 @@ function AiWorkforce() {
                 </h2>
 
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  Customer and lead-hunting commands are
-                  automatically routed to the real Revenue
-                  workflow. Marketing and campaign work stays
-                  in the Growth workflow.
+                  Customer and lead-hunting commands are automatically routed to the real Revenue
+                  workflow. Marketing and campaign work stays in the Growth workflow.
                 </p>
               </div>
             </div>
@@ -5036,11 +3251,7 @@ function AiWorkforce() {
             <div className="mt-5 rounded-2xl border border-primary/25 bg-primary/5 p-3">
               <textarea
                 value={ceoCommand}
-                onChange={(event) =>
-                  setCeoCommand(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => setCeoCommand(event.target.value)}
                 rows={4}
                 placeholder="Example: Find 10 verified businesses in Pretoria and Centurion that are likely to need construction, commercial cleaning or website services. Prioritise quick revenue and do not contact anyone."
                 className="w-full resize-y bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
@@ -5048,25 +3259,15 @@ function AiWorkforce() {
 
               <div className="mt-3 flex flex-col gap-2 border-t border-primary/15 pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-xs text-muted-foreground">
-                  Target:{" "}
-                  <strong className="text-foreground">
-                    {targetMarket}
-                  </strong>
+                  Target: <strong className="text-foreground">{targetMarket}</strong>
                   {" · "}
-                  <strong className="text-foreground">
-                    {targetLocation}
-                  </strong>
+                  <strong className="text-foreground">{targetLocation}</strong>
                 </div>
 
                 <Button
                   type="button"
-                  onClick={
-                    submitCeoCommand
-                  }
-                  disabled={
-                    !ceoCommand.trim() ||
-                    workflowCreationPending
-                  }
+                  onClick={submitCeoCommand}
+                  disabled={!ceoCommand.trim() || workflowCreationPending}
                   className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
                 >
                   {workflowCreationPending ? (
@@ -5075,9 +3276,7 @@ function AiWorkforce() {
                     <Send className="mr-1.5 h-4 w-4" />
                   )}
 
-                  {workflowCreationPending
-                    ? "CEO is organising the team…"
-                    : "Delegate to AI CEO"}
+                  {workflowCreationPending ? "CEO is organising the team…" : "Delegate to AI CEO"}
                 </Button>
               </div>
             </div>
@@ -5098,10 +3297,8 @@ function AiWorkforce() {
                   </h3>
 
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    The Lead Hunter uses the authenticated
-                    Cossa search and verification engine,
-                    applies buyer-fit and evidence rules,
-                    protects CRM duplicates and carries real
+                    The Lead Hunter uses the authenticated Cossa search and verification engine,
+                    applies buyer-fit and evidence rules, protects CRM duplicates and carries real
                     lead IDs into Sales.
                   </p>
                 </div>
@@ -5116,13 +3313,9 @@ function AiWorkforce() {
                     "Find 10 verified businesses in Pretoria, Centurion, Midrand and Johannesburg that Cossa Nexus Construction, Cossa Facility Services or Cossa Tech can realistically serve. Prioritise current pain signals, public contactability, quick revenue, recurring revenue and strong evidence. Do not contact anyone.",
                   );
 
-                  setTargetMarket(
-                    "South Africa",
-                  );
+                  setTargetMarket("South Africa");
 
-                  setTargetLocation(
-                    "Pretoria, Centurion, Midrand, Johannesburg",
-                  );
+                  setTargetLocation("Pretoria, Centurion, Midrand, Johannesburg");
                 }}
               >
                 <Search className="mr-1.5 h-4 w-4" />
@@ -5143,34 +3336,20 @@ function AiWorkforce() {
                   "Audit our website and prepare SEO improvements.",
                   "Build a 7-day social-media content plan.",
                   "Prepare a paid-media recommendation without spending money.",
-                ].map(
-                  (
-                    request,
-                  ) => (
-                    <button
-                      key={
-                        request
-                      }
-                      type="button"
-                      onClick={() =>
-                        setCeoCommand(
-                          request,
-                        )
-                      }
-                      className="rounded-xl border border-border/60 bg-card/40 p-3 text-left text-xs leading-relaxed transition hover:border-primary/40 hover:bg-primary/5"
-                    >
-                      <div className="flex items-start gap-2">
-                        <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                ].map((request) => (
+                  <button
+                    key={request}
+                    type="button"
+                    onClick={() => setCeoCommand(request)}
+                    className="rounded-xl border border-border/60 bg-card/40 p-3 text-left text-xs leading-relaxed transition hover:border-primary/40 hover:bg-primary/5"
+                  >
+                    <div className="flex items-start gap-2">
+                      <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
 
-                        <span>
-                          {
-                            request
-                          }
-                        </span>
-                      </div>
-                    </button>
-                  ),
-                )}
+                      <span>{request}</span>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           </section>
@@ -5182,88 +3361,53 @@ function AiWorkforce() {
                   Company departments
                 </p>
 
-                <h2 className="mt-1 font-display text-xl font-semibold">
-                  Go straight to the team
-                </h2>
+                <h2 className="mt-1 font-display text-xl font-semibold">Go straight to the team</h2>
               </div>
 
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() =>
-                  setView(
-                    "departments",
-                  )
-                }
+                onClick={() => setView("departments")}
                 className="text-primary"
               >
                 View all
-
                 <ArrowRight className="ml-1.5 h-4 w-4" />
               </Button>
             </div>
 
             <div className="mt-4 space-y-2">
-              {DEPARTMENTS.map(
-                (
-                  department,
-                ) => {
-                  const Icon =
-                    department.icon;
+              {DEPARTMENTS.map((department) => {
+                const Icon = department.icon;
 
-                  const activeCount =
-                    department.employeeKeys.filter(
-                      (
-                        key,
-                      ) =>
-                        employeesByKey.get(
-                          key,
-                        )?.status ===
-                        "active",
-                    ).length;
+                const activeCount = department.employeeKeys.filter(
+                  (key) => employeesByKey.get(key)?.status === "active",
+                ).length;
 
-                  return (
-                    <button
-                      key={
-                        department.key
-                      }
-                      type="button"
-                      onClick={() =>
-                        openDepartment(
-                          department.key,
-                        )
-                      }
-                      className="group flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card/40 p-3 text-left transition hover:border-primary/40 hover:bg-primary/5"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <Icon className="h-5 w-5" />
-                      </div>
+                return (
+                  <button
+                    key={department.key}
+                    type="button"
+                    onClick={() => openDepartment(department.key)}
+                    className="group flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card/40 p-3 text-left transition hover:border-primary/40 hover:bg-primary/5"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Icon className="h-5 w-5" />
+                    </div>
 
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">
-                          {
-                            department.name
-                          }
-                        </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{department.name}</p>
 
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {
-                            activeCount
-                          }{" "}
-                          active team member
-                          {activeCount ===
-                          1
-                            ? ""
-                            : "s"}
-                        </p>
-                      </div>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {activeCount} active team member
+                        {activeCount === 1 ? "" : "s"}
+                      </p>
+                    </div>
 
-                      <ChevronRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" />
-                    </button>
-                  );
-                },
-              )}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" />
+                  </button>
+                );
+              })}
             </div>
           </section>
 
@@ -5282,11 +3426,7 @@ function AiWorkforce() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() =>
-                  setView(
-                    "activity",
-                  )
-                }
+                onClick={() => setView("activity")}
                 className="border-primary/30 text-primary"
               >
                 <Activity className="mr-1.5 h-4 w-4" />
@@ -5298,34 +3438,23 @@ function AiWorkforce() {
               <QueueCard
                 icon={Play}
                 title="Working"
-                value={
-                  workforceCounts.working
-                }
+                value={workforceCounts.working}
                 description="Employees with a real running record."
               />
 
               <QueueCard
                 icon={ClipboardList}
                 title="Assigned"
-                value={
-                  workforceCounts.waiting
-                }
+                value={workforceCounts.waiting}
                 description="Tasks waiting or ready to retry."
               />
 
               <QueueCard
                 icon={AlertTriangle}
                 title="Needs attention"
-                value={
-                  workforceCounts.attention +
-                  workforceCounts.approval
-                }
+                value={workforceCounts.attention + workforceCounts.approval}
                 description="Failures or owner-controlled checkpoints."
-                warning={
-                  workforceCounts.attention +
-                    workforceCounts.approval >
-                  0
-                }
+                warning={workforceCounts.attention + workforceCounts.approval > 0}
               />
             </div>
           </section>
@@ -5334,8 +3463,7 @@ function AiWorkforce() {
 
       {/* DEPARTMENTS */}
 
-      {view ===
-      "departments" ? (
+      {view === "departments" ? (
         <section className="glass-card p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -5343,145 +3471,86 @@ function AiWorkforce() {
                 Organisation
               </p>
 
-              <h2 className="mt-1 font-display text-2xl font-semibold">
-                Departments
-              </h2>
+              <h2 className="mt-1 font-display text-2xl font-semibold">Departments</h2>
 
               <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                Choose the business function first.
-                Revenue now includes the real Lead Hunter,
-                Lead Intake and Sales & Conversion chain.
+                Choose the business function first. Revenue now includes the real Lead Hunter, Lead
+                Intake and Sales & Conversion chain.
               </p>
             </div>
 
             <span className="text-xs text-muted-foreground">
-              {
-                DEPARTMENTS.length
-              }{" "}
-              operating groups
+              {DEPARTMENTS.length} operating groups
             </span>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {DEPARTMENTS.map(
-              (
-                department,
-              ) => {
-                const Icon =
-                  department.icon;
+            {DEPARTMENTS.map((department) => {
+              const Icon = department.icon;
 
-                const team =
-                  employeeDirectory.filter(
-                    (
-                      item,
-                    ) =>
-                      department.employeeKeys.includes(
-                        canonicalEmployeeKey(
-                          item.employee.employee_key,
-                        ),
-                      ),
-                  );
+              const team = employeeDirectory.filter((item) =>
+                department.employeeKeys.includes(canonicalEmployeeKey(item.employee.employee_key)),
+              );
 
-                const activeTeam =
-                  team.filter(
-                    (
-                      item,
-                    ) =>
-                      item.employee.status ===
-                      "active",
-                  );
+              const activeTeam = team.filter((item) => item.employee.status === "active");
 
-                return (
-                  <article
-                    key={
-                      department.key
-                    }
-                    className="group rounded-2xl border border-border/60 bg-card/40 p-5 transition hover:border-primary/40 hover:bg-primary/5"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                        <Icon className="h-6 w-6" />
-                      </div>
+              return (
+                <article
+                  key={department.key}
+                  className="group rounded-2xl border border-border/60 bg-card/40 p-5 transition hover:border-primary/40 hover:bg-primary/5"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                      <Icon className="h-6 w-6" />
+                    </div>
 
-                      <span className="rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[10px] text-success">
-                        {
-                          activeTeam.length
-                        }{" "}
-                        active
+                    <span className="rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[10px] text-success">
+                      {activeTeam.length} active
+                    </span>
+                  </div>
+
+                  <h3 className="mt-4 font-display text-xl font-semibold">{department.name}</h3>
+
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {department.description}
+                  </p>
+
+                  <div className="mt-4 flex flex-wrap gap-1.5">
+                    {team.slice(0, 5).map((item) => (
+                      <span
+                        key={item.employee.id}
+                        className="rounded-full border border-border/60 bg-background/50 px-2 py-1 text-[10px] text-muted-foreground"
+                      >
+                        {item.employee.name}
                       </span>
-                    </div>
+                    ))}
 
-                    <h3 className="mt-4 font-display text-xl font-semibold">
-                      {
-                        department.name
-                      }
-                    </h3>
+                    {team.length > 5 ? (
+                      <span className="rounded-full border border-border/60 bg-background/50 px-2 py-1 text-[10px] text-muted-foreground">
+                        +{team.length - 5}
+                      </span>
+                    ) : null}
+                  </div>
 
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                      {
-                        department.description
-                      }
-                    </p>
-
-                    <div className="mt-4 flex flex-wrap gap-1.5">
-                      {team
-                        .slice(
-                          0,
-                          5,
-                        )
-                        .map(
-                          (
-                            item,
-                          ) => (
-                            <span
-                              key={
-                                item.employee.id
-                              }
-                              className="rounded-full border border-border/60 bg-background/50 px-2 py-1 text-[10px] text-muted-foreground"
-                            >
-                              {
-                                item.employee.name
-                              }
-                            </span>
-                          ),
-                        )}
-
-                      {team.length >
-                      5 ? (
-                        <span className="rounded-full border border-border/60 bg-background/50 px-2 py-1 text-[10px] text-muted-foreground">
-                          +
-                          {team.length -
-                            5}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        openDepartment(
-                          department.key,
-                        )
-                      }
-                      className="mt-5 w-full bg-primary/10 text-primary hover:bg-primary/20"
-                      variant="ghost"
-                    >
-                      Open department
-
-                      <ArrowRight className="ml-1.5 h-4 w-4" />
-                    </Button>
-                  </article>
-                );
-              },
-            )}
+                  <Button
+                    type="button"
+                    onClick={() => openDepartment(department.key)}
+                    className="mt-5 w-full bg-primary/10 text-primary hover:bg-primary/20"
+                    variant="ghost"
+                  >
+                    Open department
+                    <ArrowRight className="ml-1.5 h-4 w-4" />
+                  </Button>
+                </article>
+              );
+            })}
           </div>
         </section>
       ) : null}
 
       {/* EMPLOYEES */}
 
-      {view ===
-      "employees" ? (
+      {view === "employees" ? (
         <section className="glass-card p-4 sm:p-5">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -5495,86 +3564,46 @@ function AiWorkforce() {
                 </h2>
 
                 <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                  Search by employee, responsibility or
-                  normal business language. Try Lead Hunter,
-                  customers, sales, flyer, SEO, supplier,
-                  website or tender.
+                  Search by employee, responsibility or normal business language. Try Lead Hunter,
+                  customers, sales, flyer, SEO, supplier, website or tender.
                 </p>
               </div>
 
               <span className="text-xs text-muted-foreground">
-                {
-                  searchedEmployees.length
-                }{" "}
-                matching employee
-                {searchedEmployees.length ===
-                1
-                  ? ""
-                  : "s"}
+                {searchedEmployees.length} matching employee
+                {searchedEmployees.length === 1 ? "" : "s"}
               </span>
             </div>
 
             <div className="flex gap-2 overflow-x-auto pb-1">
               <FilterChip
-                active={
-                  selectedDepartment ===
-                  "all"
-                }
+                active={selectedDepartment === "all"}
                 label={`All employees (${employees.length})`}
-                onClick={() =>
-                  setSelectedDepartment(
-                    "all",
-                  )
-                }
+                onClick={() => setSelectedDepartment("all")}
               />
 
-              {DEPARTMENTS.map(
-                (
-                  department,
-                ) => {
-                  const count =
-                    employeeDirectory.filter(
-                      (
-                        item,
-                      ) =>
-                        item.departmentKeys.includes(
-                          department.key,
-                        ),
-                    ).length;
+              {DEPARTMENTS.map((department) => {
+                const count = employeeDirectory.filter((item) =>
+                  item.departmentKeys.includes(department.key),
+                ).length;
 
-                  return (
-                    <FilterChip
-                      key={
-                        department.key
-                      }
-                      active={
-                        selectedDepartment ===
-                        department.key
-                      }
-                      label={`${department.shortName} (${count})`}
-                      onClick={() =>
-                        setSelectedDepartment(
-                          department.key,
-                        )
-                      }
-                    />
-                  );
-                },
-              )}
+                return (
+                  <FilterChip
+                    key={department.key}
+                    active={selectedDepartment === department.key}
+                    label={`${department.shortName} (${count})`}
+                    onClick={() => setSelectedDepartment(department.key)}
+                  />
+                );
+              })}
             </div>
 
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
               <input
-                value={
-                  employeeSearch
-                }
-                onChange={(event) =>
-                  setEmployeeSearch(
-                    event.target.value,
-                  )
-                }
+                value={employeeSearch}
+                onChange={(event) => setEmployeeSearch(event.target.value)}
                 placeholder="Search employee or responsibility…"
                 className="w-full rounded-xl border border-border/60 bg-background/50 py-3 pl-10 pr-10 text-sm outline-none focus:border-primary/50"
               />
@@ -5582,11 +3611,7 @@ function AiWorkforce() {
               {employeeSearch ? (
                 <button
                   type="button"
-                  onClick={() =>
-                    setEmployeeSearch(
-                      "",
-                    )
-                  }
+                  onClick={() => setEmployeeSearch("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   aria-label="Clear employee search"
                 >
@@ -5599,42 +3624,26 @@ function AiWorkforce() {
               <div className="rounded-xl border border-border/60 bg-card/30 p-6 text-sm text-muted-foreground">
                 Loading employees…
               </div>
-            ) : searchedEmployees.length ===
-              0 ? (
+            ) : searchedEmployees.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border/60 p-8 text-center">
                 <Search className="mx-auto h-6 w-6 text-muted-foreground" />
 
-                <p className="mt-3 text-sm font-medium">
-                  No employee matched that search
-                </p>
+                <p className="mt-3 text-sm font-medium">No employee matched that search</p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Try Lead Hunter, customers, sales,
-                  flyer, website, SEO, supplier, tender,
-                  Facebook or leads.
+                  Try Lead Hunter, customers, sales, flyer, website, SEO, supplier, tender, Facebook
+                  or leads.
                 </p>
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {searchedEmployees.map(
-                  (
-                    item,
-                  ) => (
-                    <EmployeeCard
-                      key={
-                        item.employee.id
-                      }
-                      item={
-                        item
-                      }
-                      onOpen={() =>
-                        setSelectedEmployeeId(
-                          item.employee.id,
-                        )
-                      }
-                    />
-                  ),
-                )}
+                {searchedEmployees.map((item) => (
+                  <EmployeeCard
+                    key={item.employee.id}
+                    item={item}
+                    onOpen={() => setSelectedEmployeeId(item.employee.id)}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -5643,8 +3652,7 @@ function AiWorkforce() {
 
       {/* WORKFLOWS */}
 
-      {view ===
-      "workflows" ? (
+      {view === "workflows" ? (
         <div className="grid gap-5">
           <section className="glass-card p-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -5654,62 +3662,34 @@ function AiWorkforce() {
                 </p>
 
                 <h2 className="mt-1 font-display text-2xl font-semibold">
-                  {selectedWorkflowKind ===
-                  "revenue"
+                  {selectedWorkflowKind === "revenue"
                     ? "Revenue acquisition execution"
                     : "Growth workforce execution"}
                 </h2>
 
                 <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                  {selectedWorkflowKind ===
-                  "revenue"
+                  {selectedWorkflowKind === "revenue"
                     ? "Revenue missions run through the real Lead Hunter tool first, then Lead Intake, Sales & Conversion and the AI CEO."
                     : "Growth missions coordinate website intelligence, strategy, content, creative, social operations and growth analysis."}
                 </p>
               </div>
 
-              {coordinationMissions.length >
-              0 ? (
+              {coordinationMissions.length > 0 ? (
                 <label className="grid gap-1 text-xs text-muted-foreground">
                   Mission
-
                   <select
-                    value={
-                      selectedMission?.id ??
-                      ""
-                    }
-                    onChange={(event) =>
-                      setSelectedMissionId(
-                        event.target.value ||
-                          null,
-                      )
-                    }
+                    value={selectedMission?.id ?? ""}
+                    onChange={(event) => setSelectedMissionId(event.target.value || null)}
                     className="min-w-72 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
                   >
-                    {coordinationMissions.map(
-                      (
-                        mission,
-                      ) => (
-                        <option
-                          key={
-                            mission.id
-                          }
-                          value={
-                            mission.id
-                          }
-                        >
-                          {mission.title.startsWith(
-                            REVENUE_MISSION_PREFIX,
-                          )
-                            ? "[Revenue] "
-                            : "[Growth] "}
-                          {mission.objective.slice(
-                            0,
-                            90,
-                          )}
-                        </option>
-                      ),
-                    )}
+                    {coordinationMissions.map((mission) => (
+                      <option key={mission.id} value={mission.id}>
+                        {mission.title.startsWith(REVENUE_MISSION_PREFIX)
+                          ? "[Revenue] "
+                          : "[Growth] "}
+                        {mission.objective.slice(0, 90)}
+                      </option>
+                    ))}
                   </select>
                 </label>
               ) : null}
@@ -5717,80 +3697,53 @@ function AiWorkforce() {
 
             <div
               className={
-                selectedWorkflowSteps.length <=
-                4
+                selectedWorkflowSteps.length <= 4
                   ? "mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-4"
                   : "mt-5 grid gap-2 md:grid-cols-3 xl:grid-cols-9"
               }
             >
-              {selectedWorkflowSteps.map(
-                (
-                  step,
-                  index,
-                ) => {
-                  const Icon =
-                    step.icon;
+              {selectedWorkflowSteps.map((step, index) => {
+                const Icon = step.icon;
 
-                  const handoff =
-                    selectedMissionHandoffs[
-                      index
-                    ];
+                const handoff = selectedMissionHandoffs[index];
 
-                  const status =
-                    handoff?.status ??
-                    "not_created";
+                const status = handoff?.status ?? "not_created";
 
-                  return (
-                    <div
-                      key={
-                        step.key
-                      }
-                      className="relative rounded-xl border border-border/60 bg-card/40 p-3"
-                    >
-                      {index <
-                      selectedWorkflowSteps.length -
-                        1 ? (
-                        <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 rounded-full bg-background p-1 text-primary xl:block" />
-                      ) : null}
+                return (
+                  <div
+                    key={step.key}
+                    className="relative rounded-xl border border-border/60 bg-card/40 p-3"
+                  >
+                    {index < selectedWorkflowSteps.length - 1 ? (
+                      <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 rounded-full bg-background p-1 text-primary xl:block" />
+                    ) : null}
 
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                        <Icon className="h-4 w-4" />
-                      </div>
-
-                      <p className="mt-2 text-xs font-medium">
-                        {
-                          step.label
-                        }
-                      </p>
-
-                      <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">
-                        {
-                          step.description
-                        }
-                      </p>
-
-                      <p
-                        className={
-                          status ===
-                          "completed"
-                            ? "mt-2 text-[9px] uppercase tracking-widest text-success"
-                            : status ===
-                                "accepted"
-                              ? "mt-2 text-[9px] uppercase tracking-widest text-warning"
-                              : status ===
-                                  "pending"
-                                ? "mt-2 text-[9px] uppercase tracking-widest text-primary"
-                                : "mt-2 text-[9px] uppercase tracking-widest text-muted-foreground"
-                        }
-                      >
-                        {formatStatus(
-                          status,
-                        )}
-                      </p>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                      <Icon className="h-4 w-4" />
                     </div>
-                  );
-                },
-              )}
+
+                    <p className="mt-2 text-xs font-medium">{step.label}</p>
+
+                    <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">
+                      {step.description}
+                    </p>
+
+                    <p
+                      className={
+                        status === "completed"
+                          ? "mt-2 text-[9px] uppercase tracking-widest text-success"
+                          : status === "accepted"
+                            ? "mt-2 text-[9px] uppercase tracking-widest text-warning"
+                            : status === "pending"
+                              ? "mt-2 text-[9px] uppercase tracking-widest text-primary"
+                              : "mt-2 text-[9px] uppercase tracking-widest text-muted-foreground"
+                      }
+                    >
+                      {formatStatus(status)}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
 
             {!selectedMission ? (
@@ -5813,25 +3766,19 @@ function AiWorkforce() {
                   </h3>
 
                   <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                    {firstIncompleteHandoff?.reason ??
-                      "No incomplete handoff remains."}
+                    {firstIncompleteHandoff?.reason ?? "No incomplete handoff remains."}
                   </p>
 
                   {nextEmployee &&
-                  canonicalEmployeeKey(
-                    nextEmployee.employee_key,
-                  ) ===
-                    "lead-hunter" ? (
+                  canonicalEmployeeKey(nextEmployee.employee_key) === "lead-hunter" ? (
                     <div className="mt-4 rounded-lg border border-primary/30 bg-primary/10 p-3">
                       <p className="text-xs font-medium text-primary">
                         Real Lead Hunter tool stage
                       </p>
 
                       <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                        This employee will execute the
-                        authenticated Lead Hunter engine.
-                        It will not use Groq to invent
-                        prospects.
+                        This employee will execute the authenticated Lead Hunter engine. It will not
+                        use Groq to invent prospects.
                       </p>
                     </div>
                   ) : null}
@@ -5839,13 +3786,8 @@ function AiWorkforce() {
                   {blockedHandoff ? (
                     <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3">
                       <p className="text-xs text-warning">
-                        Earlier stage is{" "}
-                        <strong>
-                          {formatStatus(
-                            blockedHandoff.status,
-                          )}
-                        </strong>
-                        . Cossa AI will not skip it.
+                        Earlier stage is <strong>{formatStatus(blockedHandoff.status)}</strong>.
+                        Cossa AI will not skip it.
                       </p>
                     </div>
                   ) : null}
@@ -5853,20 +3795,14 @@ function AiWorkforce() {
                   <div className="mt-4 grid gap-2">
                     <Button
                       type="button"
-                      onClick={() =>
-                        runSafeWorkflowMutation.mutate()
-                      }
+                      onClick={() => runSafeWorkflowMutation.mutate()}
                       disabled={
                         !nextHandoff ||
-                        Boolean(
-                          blockedHandoff,
-                        ) ||
+                        Boolean(blockedHandoff) ||
                         runSafeWorkflowMutation.isPending ||
                         runNextStageMutation.isPending ||
-                        selectedMission.status ===
-                          "awaiting_approval" ||
-                        selectedMission.status ===
-                          "completed"
+                        selectedMission.status === "awaiting_approval" ||
+                        selectedMission.status === "completed"
                       }
                       className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
                     >
@@ -5876,31 +3812,22 @@ function AiWorkforce() {
                         <Workflow className="mr-1.5 h-4 w-4" />
                       )}
 
-                      {runSafeWorkflowMutation.isPending
-                        ? "Team is working…"
-                        : "Run safe workflow"}
+                      {runSafeWorkflowMutation.isPending ? "Team is working…" : "Run safe workflow"}
                     </Button>
 
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() =>
-                        runNextStageMutation.mutate()
-                      }
+                      onClick={() => runNextStageMutation.mutate()}
                       disabled={
                         !nextHandoff ||
                         !nextEmployee ||
-                        Boolean(
-                          blockedHandoff,
-                        ) ||
-                        nextEmployee.status !==
-                          "active" ||
+                        Boolean(blockedHandoff) ||
+                        nextEmployee.status !== "active" ||
                         runNextStageMutation.isPending ||
                         runSafeWorkflowMutation.isPending ||
-                        selectedMission.status ===
-                          "awaiting_approval" ||
-                        selectedMission.status ===
-                          "completed"
+                        selectedMission.status === "awaiting_approval" ||
+                        selectedMission.status === "completed"
                       }
                       className="border-primary/40 text-primary"
                     >
@@ -5909,7 +3836,6 @@ function AiWorkforce() {
                       ) : (
                         <Play className="mr-1.5 h-4 w-4" />
                       )}
-
                       Run next employee only
                     </Button>
                   </div>
@@ -5923,14 +3849,8 @@ function AiWorkforce() {
                       </p>
 
                       <h3 className="text-sm font-semibold">
-                        {
-                          reviewableOutputs.length
-                        }{" "}
-                        saved employee output
-                        {reviewableOutputs.length ===
-                        1
-                          ? ""
-                          : "s"}
+                        {reviewableOutputs.length} saved employee output
+                        {reviewableOutputs.length === 1 ? "" : "s"}
                       </h3>
                     </div>
 
@@ -5938,93 +3858,60 @@ function AiWorkforce() {
                   </div>
 
                   <div className="mt-3 grid grid-cols-3 gap-2">
-                    <MiniMetric
-                      label="Completed"
-                      value={
-                        selectedMissionCompletedRuns.length
-                      }
-                    />
+                    <MiniMetric label="Completed" value={selectedMissionCompletedRuns.length} />
 
                     <MiniMetric
                       label="Pending"
                       value={
-                        selectedMissionHandoffs.filter(
-                          (
-                            handoff,
-                          ) =>
-                            handoff.status ===
-                            "pending",
-                        ).length
+                        selectedMissionHandoffs.filter((handoff) => handoff.status === "pending")
+                          .length
                       }
                     />
 
                     <MiniMetric
                       label="Failed history"
-                      value={
-                        selectedMissionFailedRuns.length
-                      }
-                      warning={
-                        selectedMissionFailedRuns.length >
-                        0
-                      }
+                      value={selectedMissionFailedRuns.length}
+                      warning={selectedMissionFailedRuns.length > 0}
                     />
                   </div>
 
-                  {displayReviewableOutputs.length >
-                  0 ? (
+                  {displayReviewableOutputs.length > 0 ? (
                     <div className="mt-4 max-h-96 space-y-3 overflow-y-auto pr-1">
-                      {displayReviewableOutputs.map(
-                        ({
-                          run,
-                          content,
-                        }) => {
-                          const worker =
-                            employees.find(
-                              (
-                                employee,
-                              ) =>
-                                employee.id ===
-                                run.employee_id,
-                            );
+                      {displayReviewableOutputs.map(({ run, content }) => {
+                        const worker = employees.find(
+                          (employee) => employee.id === run.employee_id,
+                        );
 
-                          return (
-                            <article
-                              key={
-                                run.id
-                              }
-                              className="rounded-lg border border-border/60 bg-background/40 p-3"
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <div>
-                                  <span className="text-xs font-medium">
-                                    {worker?.name ??
-                                      "Recorded worker"}
-                                  </span>
-
-                                  {run.model_provider ? (
-                                    <p className="mt-0.5 text-[9px] text-muted-foreground">
-                                      {run.model_provider}
-                                      {run.model_name
-                                        ? ` · ${run.model_name}`
-                                        : ""}
-                                    </p>
-                                  ) : null}
-                                </div>
-
-                                <span className="text-[9px] uppercase tracking-widest text-success">
-                                  completed
+                        return (
+                          <article
+                            key={run.id}
+                            className="rounded-lg border border-border/60 bg-background/40 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <span className="text-xs font-medium">
+                                  {worker?.name ?? "Recorded worker"}
                                 </span>
+
+                                {run.model_provider ? (
+                                  <p className="mt-0.5 text-[9px] text-muted-foreground">
+                                    {run.model_provider}
+                                    {run.model_name ? ` · ${run.model_name}` : ""}
+                                  </p>
+                                ) : null}
                               </div>
 
-                              <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-                                {
-                                  content
-                                }
-                              </p>
-                            </article>
-                          );
-                        },
-                      )}
+                              <span className="text-[9px] uppercase tracking-widest text-success">
+                                completed
+                              </span>
+                            </div>
+
+                            <div className="mt-2 text-xs leading-relaxed text-muted-foreground [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:mt-2 [&_p:first-child]:mt-0 [&_ul]:ml-4 [&_ul]:list-disc">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                            </div>
+                          </article>
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="mt-4 text-xs text-muted-foreground">
@@ -6055,14 +3942,8 @@ function AiWorkforce() {
 
             <div className="mt-4 grid gap-4">
               <textarea
-                value={
-                  objective
-                }
-                onChange={(event) =>
-                  setObjective(
-                    event.target.value,
-                  )
-                }
+                value={objective}
+                onChange={(event) => setObjective(event.target.value)}
                 rows={4}
                 className="w-full resize-y rounded-xl border border-input bg-background px-3 py-3 text-sm outline-none focus:border-primary/50"
               />
@@ -6070,32 +3951,18 @@ function AiWorkforce() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1 text-xs text-muted-foreground">
                   Target market
-
                   <input
-                    value={
-                      targetMarket
-                    }
-                    onChange={(event) =>
-                      setTargetMarket(
-                        event.target.value,
-                      )
-                    }
+                    value={targetMarket}
+                    onChange={(event) => setTargetMarket(event.target.value)}
                     className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
                   />
                 </label>
 
                 <label className="grid gap-1 text-xs text-muted-foreground">
                   Target location
-
                   <input
-                    value={
-                      targetLocation
-                    }
-                    onChange={(event) =>
-                      setTargetLocation(
-                        event.target.value,
-                      )
-                    }
+                    value={targetLocation}
+                    onChange={(event) => setTargetLocation(event.target.value)}
                     className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
                   />
                 </label>
@@ -6105,22 +3972,15 @@ function AiWorkforce() {
                 <Button
                   type="button"
                   onClick={() =>
-                    coordinationMutation.mutate(
-                      {
-                        objective,
+                    coordinationMutation.mutate({
+                      objective,
 
-                        target_market:
-                          targetMarket,
+                      target_market: targetMarket,
 
-                        target_location:
-                          targetLocation,
-                      },
-                    )
+                      target_location: targetLocation,
+                    })
                   }
-                  disabled={
-                    !canCreateGrowth ||
-                    workflowCreationPending
-                  }
+                  disabled={!canCreateGrowth || workflowCreationPending}
                   variant="outline"
                   className="border-primary/40 text-primary hover:bg-primary/10"
                 >
@@ -6134,29 +3994,20 @@ function AiWorkforce() {
                 <Button
                   type="button"
                   onClick={() =>
-                    revenueMutation.mutate(
-                      {
-                        objective,
+                    revenueMutation.mutate({
+                      objective,
 
-                        target_market:
-                          targetMarket,
+                      target_market: targetMarket,
 
-                        target_location:
-                          targetLocation,
-                      },
-                    )
+                      target_location: targetLocation,
+                    })
                   }
-                  disabled={
-                    !canCreateRevenue ||
-                    workflowCreationPending
-                  }
+                  disabled={!canCreateRevenue || workflowCreationPending}
                   className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
                 >
                   <Search className="mr-1.5 h-4 w-4" />
 
-                  {revenueMutation.isPending
-                    ? "Creating revenue hunt…"
-                    : "Create Revenue Hunt"}
+                  {revenueMutation.isPending ? "Creating revenue hunt…" : "Create Revenue Hunt"}
                 </Button>
               </div>
             </div>
@@ -6166,89 +4017,50 @@ function AiWorkforce() {
 
       {/* ACTIVITY */}
 
-      {view ===
-      "activity" ? (
+      {view === "activity" ? (
         <section className="glass-card p-5">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
               Company activity
             </p>
 
-            <h2 className="mt-1 font-display text-2xl font-semibold">
-              Employee work status
-            </h2>
+            <h2 className="mt-1 font-display text-2xl font-semibold">Employee work status</h2>
 
             <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              Current state is based on recorded handoffs,
-              runs and approvals. Lead Hunter tool runs appear
-              as cossa_tool instead of being falsely reported
-              as Groq model execution.
+              Current state is based on recorded handoffs, runs and approvals. Lead Hunter tool runs
+              appear as cossa_tool instead of being falsely reported as Groq model execution.
             </p>
           </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {employeeDirectory
               .slice()
-              .sort(
-                (
-                  left,
-                  right,
-                ) => {
-                  const priority: Record<
-                    OperationalState,
-                    number
-                  > = {
-                    working:
-                      0,
-                    attention:
-                      1,
-                    approval:
-                      2,
-                    waiting:
-                      3,
-                    idle:
-                      4,
-                    inactive:
-                      5,
-                  };
+              .sort((left, right) => {
+                const priority: Record<OperationalState, number> = {
+                  working: 0,
+                  attention: 1,
+                  approval: 2,
+                  waiting: 3,
+                  idle: 4,
+                  inactive: 5,
+                };
 
-                  return (
-                    priority[
-                      left.operational.state
-                    ] -
-                    priority[
-                      right.operational.state
-                    ]
-                  );
-                },
-              )
-              .map(
-                (
-                  item,
-                ) => (
-                  <EmployeeActivityCard
-                    key={
-                      item.employee.id
-                    }
-                    item={
-                      item
-                    }
-                    onOpen={() =>
-                      setSelectedEmployeeId(
-                        item.employee.id,
-                      )
-                    }
-                  />
-                ),
-              )}
+                return priority[left.operational.state] - priority[right.operational.state];
+              })
+              .map((item) => (
+                <EmployeeActivityCard
+                  key={item.employee.id}
+                  item={item}
+                  onOpen={() => setSelectedEmployeeId(item.employee.id)}
+                />
+              ))}
           </div>
         </section>
       ) : null}
 
       {/* CONTROL ROOM */}
 
-      {view ===
-      "control" ? (
+      {view === "control" ? (
         <div className="grid gap-5">
           <section className="glass-card p-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -6262,60 +4074,45 @@ function AiWorkforce() {
                 </h2>
 
                 <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                  Technical controls remain available,
-                  but they do not block ordinary safe
-                  internal business work.
+                  Technical controls remain available, but they do not block ordinary safe internal
+                  business work.
                 </p>
               </div>
 
               <Button
                 type="button"
-                onClick={() =>
-                  installMutation.mutate()
-                }
-                disabled={
-                  installMutation.isPending
-                }
+                onClick={() => installMutation.mutate()}
+                disabled={installMutation.isPending}
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 <UsersRound className="mr-1.5 h-4 w-4" />
 
-                {installMutation.isPending
-                  ? "Synchronising…"
-                  : "Synchronise workforce"}
+                {installMutation.isPending ? "Synchronising…" : "Synchronise workforce"}
               </Button>
             </div>
 
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <ControlMetric
                 label="Source profiles"
-                value={
-                  COSSA_GROWTH_WORKFORCE.length
-                }
+                value={COSSA_GROWTH_WORKFORCE.length}
                 description="Profiles defined in Cossa source."
               />
 
               <ControlMetric
                 label="Installed"
-                value={
-                  installedDefaultEmployees.length
-                }
+                value={installedDefaultEmployees.length}
                 description="Source profiles recorded."
               />
 
               <ControlMetric
                 label="Active source"
-                value={
-                  activeDefaultEmployees.length
-                }
+                value={activeDefaultEmployees.length}
                 description="Installed and active."
               />
 
               <ControlMetric
                 label="Departments"
-                value={
-                  departments.length
-                }
+                value={departments.length}
                 description="Recorded employee departments."
               />
             </div>
@@ -6338,25 +4135,22 @@ function AiWorkforce() {
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <OwnerRule>
-                Lead Hunter uses the authenticated Cossa
-                Hunter route instead of generic LLM
+                Lead Hunter uses the authenticated Cossa Hunter route instead of generic LLM
                 prospect generation.
               </OwnerRule>
 
               <OwnerRule>
-                Verified Hunter prospects are passed forward
-                using Hunt IDs, prospect IDs and CRM lead IDs.
+                Verified Hunter prospects are passed forward using Hunt IDs, prospect IDs and CRM
+                lead IDs.
               </OwnerRule>
 
               <OwnerRule>
-                Existing CRM matches are retained rather
-                than duplicated to inflate pipeline counts.
+                Existing CRM matches are retained rather than duplicated to inflate pipeline counts.
               </OwnerRule>
 
               <OwnerRule>
-                External prospect contact remains disabled
-                until a verified communication workflow and
-                approval boundary permits it.
+                External prospect contact remains disabled until a verified communication workflow
+                and approval boundary permits it.
               </OwnerRule>
             </div>
           </section>
@@ -6378,49 +4172,34 @@ function AiWorkforce() {
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <OwnerRule>
-                Spending money, supplier orders and
-                advertising budget changes remain
+                Spending money, supplier orders and advertising budget changes remain
                 owner-controlled.
               </OwnerRule>
 
               <OwnerRule>
-                Contracts, legal commitments, signatures
-                and binding commercial terms remain
+                Contracts, legal commitments, signatures and binding commercial terms remain
                 owner-controlled.
               </OwnerRule>
 
               <OwnerRule>
-                Credentials, destructive operations and
-                irreversible account changes remain
+                Credentials, destructive operations and irreversible account changes remain
                 owner-controlled.
               </OwnerRule>
 
-              <OwnerRule>
-                Missing integrations must be reported,
-                never simulated.
-              </OwnerRule>
+              <OwnerRule>Missing integrations must be reported, never simulated.</OwnerRule>
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              <Button
-                asChild
-                variant="outline"
-                className="border-primary/40 text-primary"
-              >
+              <Button asChild variant="outline" className="border-primary/40 text-primary">
                 <Link to="/integrations">
                   <Send className="mr-1.5 h-4 w-4" />
-
                   Connections
                 </Link>
               </Button>
 
-              <Button
-                asChild
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
+              <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
                 <Link to="/ai/ceo">
                   <BrainCircuit className="mr-1.5 h-4 w-4" />
-
                   AI CEO
                 </Link>
               </Button>
@@ -6445,34 +4224,25 @@ function AiWorkforce() {
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <ControlMetric
                 label="Prompt ceiling"
-                value={
-                  MAX_STAGE_PROMPT_CHARS
-                }
+                value={MAX_STAGE_PROMPT_CHARS}
                 description="Maximum characters per language-model stage."
               />
 
               <ControlMetric
                 label="Prior outputs"
-                value={
-                  MAX_PRIOR_OUTPUTS
-                }
+                value={MAX_PRIOR_OUTPUTS}
                 description={`Maximum ${MAX_PRIOR_OUTPUT_CHARS} characters each.`}
               />
 
               <ControlMetric
                 label="Provider attempts"
-                value={
-                  PROVIDER_MAX_ATTEMPTS
-                }
+                value={PROVIDER_MAX_ATTEMPTS}
                 description="One Cossa AI gateway call; configured provider fallback is server-owned."
               />
 
               <ControlMetric
                 label="Stage delay"
-                value={
-                  WORKFORCE_STAGE_DELAY_MS /
-                  1_000
-                }
+                value={WORKFORCE_STAGE_DELAY_MS / 1_000}
                 suffix=" sec"
                 description="Delay between automatic employees."
               />
@@ -6492,140 +4262,63 @@ function AiWorkforce() {
               </div>
 
               <span className="text-xs text-muted-foreground">
-                {
-                  coordinationMissions.length
-                }{" "}
-                saved
+                {coordinationMissions.length} saved
               </span>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {coordinationMissions
-                .slice(
-                  0,
-                  9,
-                )
-                .map(
-                  (
-                    mission,
-                  ) => {
-                    const missionHandoffs =
-                      handoffs.filter(
-                        (
-                          handoff,
-                        ) =>
-                          handoff.mission_id ===
-                          mission.id,
-                      );
+              {coordinationMissions.slice(0, 9).map((mission) => {
+                const missionHandoffs = handoffs.filter(
+                  (handoff) => handoff.mission_id === mission.id,
+                );
 
-                    const missionRuns =
-                      runs.filter(
-                        (
-                          run,
-                        ) =>
-                          run.mission_id ===
-                          mission.id,
-                      );
+                const missionRuns = runs.filter((run) => run.mission_id === mission.id);
 
-                    const completed =
-                      missionHandoffs.filter(
-                        (
-                          handoff,
-                        ) =>
-                          handoff.status ===
-                          "completed",
-                      ).length;
+                const completed = missionHandoffs.filter(
+                  (handoff) => handoff.status === "completed",
+                ).length;
 
-                    const failed =
-                      missionRuns.filter(
-                        (
-                          run,
-                        ) =>
-                          run.status ===
-                          "failed",
-                      ).length;
+                const failed = missionRuns.filter((run) => run.status === "failed").length;
 
-                    return (
-                      <button
-                        key={
-                          mission.id
-                        }
-                        type="button"
-                        onClick={() => {
-                          setSelectedMissionId(
-                            mission.id,
-                          );
+                return (
+                  <button
+                    key={mission.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedMissionId(mission.id);
 
-                          setView(
-                            "workflows",
-                          );
-                        }}
-                        className="rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-[10px] uppercase tracking-widest text-primary">
-                            {mission.title.startsWith(
-                              REVENUE_MISSION_PREFIX,
-                            )
-                              ? "Revenue"
-                              : "Growth"}
-                            {" · "}
-                            {formatStatus(
-                              mission.status,
-                            )}
-                          </span>
+                      setView("workflows");
+                    }}
+                    className="rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] uppercase tracking-widest text-primary">
+                        {mission.title.startsWith(REVENUE_MISSION_PREFIX) ? "Revenue" : "Growth"}
+                        {" · "}
+                        {formatStatus(mission.status)}
+                      </span>
 
-                          <span className="text-xs text-muted-foreground">
-                            {
-                              completed
-                            }
-                            /
-                            {
-                              missionHandoffs.length
-                            }
-                          </span>
-                        </div>
+                      <span className="text-xs text-muted-foreground">
+                        {completed}/{missionHandoffs.length}
+                      </span>
+                    </div>
 
-                        <p className="mt-2 line-clamp-2 text-sm font-medium">
-                          {
-                            mission.objective
-                          }
-                        </p>
+                    <p className="mt-2 line-clamp-2 text-sm font-medium">{mission.objective}</p>
 
-                        <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground">
-                          <span>
-                            {
-                              missionRuns.length
-                            }{" "}
-                            run
-                            {missionRuns.length ===
-                            1
-                              ? ""
-                              : "s"}
-                          </span>
+                    <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>
+                        {missionRuns.length} run
+                        {missionRuns.length === 1 ? "" : "s"}
+                      </span>
 
-                          <span
-                            className={
-                              failed >
-                              0
-                                ? "text-warning"
-                                : ""
-                            }
-                          >
-                            {
-                              failed
-                            }{" "}
-                            failure
-                            {failed ===
-                            1
-                              ? ""
-                              : "s"}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  },
-                )}
+                      <span className={failed > 0 ? "text-warning" : ""}>
+                        {failed} failure
+                        {failed === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </section>
         </div>
@@ -6635,37 +4328,19 @@ function AiWorkforce() {
 
       {selectedEmployee ? (
         <EmployeeDrawer
-          item={
-            selectedEmployee
-          }
-          onClose={() =>
-            setSelectedEmployeeId(
-              null,
-            )
-          }
-          directAssignmentPending={
-            directAssignmentMutation.isPending
-          }
-          onRunDirectAssignment={
-            runDirectEmployeeAssignment
-          }
+          item={selectedEmployee}
+          onClose={() => setSelectedEmployeeId(null)}
+          directAssignmentPending={directAssignmentMutation.isPending}
+          onRunDirectAssignment={runDirectEmployeeAssignment}
           onOpenDepartment={() => {
-            const firstDepartment =
-              selectedEmployee.departmentKeys[
-                0
-              ];
+            const firstDepartment = selectedEmployee.departmentKeys[0];
 
             if (
               firstDepartment &&
-              isWorkforceDepartment(
-                firstDepartment,
-              ) &&
-              firstDepartment !==
-                "all"
+              isWorkforceDepartment(firstDepartment) &&
+              firstDepartment !== "all"
             ) {
-              openDepartment(
-                firstDepartment,
-              );
+              openDepartment(firstDepartment);
             }
           }}
         />
@@ -6692,9 +4367,7 @@ function TopNavButton({
   return (
     <button
       type="button"
-      onClick={
-        onClick
-      }
+      onClick={onClick}
       className={
         active
           ? "flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
@@ -6720,9 +4393,7 @@ function FilterChip({
   return (
     <button
       type="button"
-      onClick={
-        onClick
-      }
+      onClick={onClick}
       className={
         active
           ? "shrink-0 rounded-full border border-primary bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary"
@@ -6734,31 +4405,15 @@ function FilterChip({
   );
 }
 
-function EmployeeCard({
-  item,
-  onOpen,
-}: {
-  item: EmployeeDirectoryItem;
-  onOpen: () => void;
-}) {
-  const {
-    employee,
-    operational,
-  } =
-    item;
+function EmployeeCard({ item, onOpen }: { item: EmployeeDirectoryItem; onOpen: () => void }) {
+  const { employee, operational } = item;
 
-  const isHunter =
-    canonicalEmployeeKey(
-      employee.employee_key,
-    ) ===
-    "lead-hunter";
+  const isHunter = canonicalEmployeeKey(employee.employee_key) === "lead-hunter";
 
   return (
     <button
       type="button"
-      onClick={
-        onOpen
-      }
+      onClick={onOpen}
       className={
         isHunter
           ? "group rounded-xl border border-primary/40 bg-primary/5 p-4 text-left transition hover:border-primary/70 hover:bg-primary/10"
@@ -6767,17 +4422,9 @@ function EmployeeCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold">
-            {
-              employee.name
-            }
-          </p>
+          <p className="text-sm font-semibold">{employee.name}</p>
 
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {
-              employee.title
-            }
-          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{employee.title}</p>
 
           {isHunter ? (
             <p className="mt-1 text-[9px] font-medium uppercase tracking-widest text-primary">
@@ -6786,60 +4433,33 @@ function EmployeeCard({
           ) : null}
         </div>
 
-        <OperationalBadge
-          state={
-            operational.state
-          }
-          label={
-            operational.label
-          }
-        />
+        <OperationalBadge state={operational.state} label={operational.label} />
       </div>
 
-      {item.responsibilityLabels.length >
-      0 ? (
+      {item.responsibilityLabels.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {item.responsibilityLabels.map(
-            (
-              label,
-            ) => (
-              <span
-                key={
-                  label
-                }
-                className="rounded-full border border-primary/20 bg-primary/5 px-2 py-1 text-[9px] text-primary"
-              >
-                {
-                  label
-                }
-              </span>
-            ),
-          )}
+          {item.responsibilityLabels.map((label) => (
+            <span
+              key={label}
+              className="rounded-full border border-primary/20 bg-primary/5 px-2 py-1 text-[9px] text-primary"
+            >
+              {label}
+            </span>
+          ))}
         </div>
       ) : null}
 
       <div className="mt-4 rounded-lg border border-border/50 bg-background/30 p-3">
-        <p className="text-[9px] uppercase tracking-widest text-muted-foreground">
-          Current work
-        </p>
+        <p className="text-[9px] uppercase tracking-widest text-muted-foreground">Current work</p>
 
-        <p className="mt-1 line-clamp-2 text-xs leading-relaxed">
-          {
-            operational.currentTask
-          }
-        </p>
+        <p className="mt-1 line-clamp-2 text-xs leading-relaxed">{operational.currentTask}</p>
       </div>
 
       <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3">
-        <span className="text-[10px] text-muted-foreground">
-          {employeeDepartment(
-            employee,
-          )}
-        </span>
+        <span className="text-[10px] text-muted-foreground">{employeeDepartment(employee)}</span>
 
         <span className="flex items-center gap-1 text-[10px] font-medium text-primary">
           Open employee
-
           <ChevronRight className="h-3.5 w-3.5" />
         </span>
       </div>
@@ -6857,78 +4477,39 @@ function EmployeeActivityCard({
   return (
     <button
       type="button"
-      onClick={
-        onOpen
-      }
+      onClick={onOpen}
       className="rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold">
-            {
-              item.employee.name
-            }
-          </p>
+          <p className="text-sm font-semibold">{item.employee.name}</p>
 
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {
-              item.employee.title
-            }
-          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{item.employee.title}</p>
 
           {item.operational.latestProvider ? (
             <p className="mt-1 text-[9px] text-muted-foreground">
-              Latest executor:{" "}
-              {
-                item.operational.latestProvider
-              }
-              {item.operational.latestModel
-                ? ` · ${item.operational.latestModel}`
-                : ""}
+              Latest executor: {item.operational.latestProvider}
+              {item.operational.latestModel ? ` · ${item.operational.latestModel}` : ""}
             </p>
           ) : null}
         </div>
 
-        <OperationalBadge
-          state={
-            item.operational.state
-          }
-          label={
-            item.operational.label
-          }
-        />
+        <OperationalBadge state={item.operational.state} label={item.operational.label} />
       </div>
 
       <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-        {
-          item.operational.currentTask
-        }
+        {item.operational.currentTask}
       </p>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <MiniMetric
-          label="Pending"
-          value={
-            item.operational.pendingCount
-          }
-        />
+        <MiniMetric label="Pending" value={item.operational.pendingCount} />
 
-        <MiniMetric
-          label="Running"
-          value={
-            item.operational.runningCount
-          }
-        />
+        <MiniMetric label="Running" value={item.operational.runningCount} />
 
         <MiniMetric
           label="Failures"
-          value={
-            item.operational.historicalFailureCount
-          }
-          warning={
-            item.operational.latestFailure !==
-            null
-          }
+          value={item.operational.historicalFailureCount}
+          warning={item.operational.latestFailure !== null}
         />
       </div>
     </button>
@@ -6945,55 +4526,23 @@ function EmployeeDrawer({
   item: EmployeeDirectoryItem;
   onClose: () => void;
   onOpenDepartment: () => void;
-  onRunDirectAssignment: (
-    employee: AiEmployee,
-    objective: string,
-  ) => Promise<string>;
+  onRunDirectAssignment: (employee: AiEmployee, objective: string) => Promise<string>;
   directAssignmentPending: boolean;
 }) {
-  const [
-    directObjective,
-    setDirectObjective,
-  ] =
-    useState("");
+  const [directObjective, setDirectObjective] = useState("");
+  const [directResult, setDirectResult] = useState<string | null>(null);
+  const [directError, setDirectError] = useState<string | null>(null);
+  const { employee, operational } = item;
 
-  const [
-    directResult,
-    setDirectResult,
-  ] =
-    useState<string | null>(
-      null,
-    );
+  const employeeKey = canonicalEmployeeKey(employee.employee_key);
 
-  const [
-    directError,
-    setDirectError,
-  ] =
-    useState<string | null>(
-      null,
-    );
-  const {
-    employee,
-    operational,
-  } =
-    item;
-
-  const employeeKey =
-    canonicalEmployeeKey(
-      employee.employee_key,
-    );
-
-  const isHunter =
-    employeeKey ===
-    "lead-hunter";
+  const isHunter = employeeKey === "lead-hunter";
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
       <button
         type="button"
-        onClick={
-          onClose
-        }
+        onClick={onClose}
         className="absolute inset-0 cursor-default"
         aria-label="Close employee profile"
       />
@@ -7002,21 +4551,16 @@ function EmployeeDrawer({
         <div className="flex items-start justify-between gap-4">
           <button
             type="button"
-            onClick={
-              onClose
-            }
+            onClick={onClose}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
-
             Back
           </button>
 
           <button
             type="button"
-            onClick={
-              onClose
-            }
+            onClick={onClose}
             className="rounded-lg border border-border/60 p-2 text-muted-foreground hover:text-foreground"
             aria-label="Close employee profile"
           >
@@ -7026,24 +4570,12 @@ function EmployeeDrawer({
 
         <div className="mt-6">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary gold-glow">
-            {isHunter ? (
-              <Search className="h-6 w-6" />
-            ) : (
-              <UsersRound className="h-6 w-6" />
-            )}
+            {isHunter ? <Search className="h-6 w-6" /> : <UsersRound className="h-6 w-6" />}
           </div>
 
-          <h2 className="mt-4 font-display text-2xl font-semibold">
-            {
-              employee.name
-            }
-          </h2>
+          <h2 className="mt-4 font-display text-2xl font-semibold">{employee.name}</h2>
 
-          <p className="mt-1 text-sm text-muted-foreground">
-            {
-              employee.title
-            }
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{employee.title}</p>
 
           {isHunter ? (
             <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.18em] text-primary">
@@ -7052,14 +4584,7 @@ function EmployeeDrawer({
           ) : null}
 
           <div className="mt-3">
-            <OperationalBadge
-              state={
-                operational.state
-              }
-              label={
-                operational.label
-              }
-            />
+            <OperationalBadge state={operational.state} label={operational.label} />
           </div>
         </div>
 
@@ -7070,35 +4595,23 @@ function EmployeeDrawer({
             </p>
 
             <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
-              <p>
-                • Searches through the authenticated Cossa
-                Lead Hunter server route.
-              </p>
+              <p>• Searches through the authenticated Cossa Lead Hunter server route.</p>
 
               <p>
-                • Prioritises evidence, buyer intent,
-                urgency, contactability, revenue potential,
+                • Prioritises evidence, buyer intent, urgency, contactability, revenue potential,
                 recurring value and geographic fit.
               </p>
 
               <p>
-                • Rejects unsupported prospects,
-                competitors, directories and existing CRM
+                • Rejects unsupported prospects, competitors, directories and existing CRM
                 duplicates according to Hunter rules.
               </p>
 
-              <p>
-                • Carries Hunt IDs, prospect IDs and CRM
-                lead IDs into Lead Intake and Sales.
-              </p>
+              <p>• Carries Hunt IDs, prospect IDs and CRM lead IDs into Lead Intake and Sales.</p>
 
-              <p>
-                • Does not use Groq to manufacture leads.
-              </p>
+              <p>• Does not use Groq to manufacture leads.</p>
 
-              <p>
-                • Does not automatically contact prospects.
-              </p>
+              <p>• Does not automatically contact prospects.</p>
             </div>
           </section>
         ) : null}
@@ -7108,25 +4621,16 @@ function EmployeeDrawer({
             What this employee owns
           </p>
 
-          {item.responsibilityLabels.length >
-          0 ? (
+          {item.responsibilityLabels.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">
-              {item.responsibilityLabels.map(
-                (
-                  label,
-                ) => (
-                  <span
-                    key={
-                      label
-                    }
-                    className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-xs text-primary"
-                  >
-                    {
-                      label
-                    }
-                  </span>
-                ),
-              )}
+              {item.responsibilityLabels.map((label) => (
+                <span
+                  key={label}
+                  className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-xs text-primary"
+                >
+                  {label}
+                </span>
+              ))}
             </div>
           ) : (
             <p className="mt-2 text-sm text-muted-foreground">
@@ -7134,11 +4638,7 @@ function EmployeeDrawer({
             </p>
           )}
 
-          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-            {
-              employee.mission
-            }
-          </p>
+          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{employee.mission}</p>
         </section>
 
         <section className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4">
@@ -7146,48 +4646,20 @@ function EmployeeDrawer({
             Current task
           </p>
 
-          <p className="mt-2 text-sm leading-relaxed">
-            {
-              operational.currentTask
-            }
-          </p>
+          <p className="mt-2 text-sm leading-relaxed">{operational.currentTask}</p>
 
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            {
-              operational.detail
-            }
-          </p>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{operational.detail}</p>
         </section>
 
         <section className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4">
           <div className="grid gap-3 text-xs">
-            <EmployeeDetail
-              label="Employee key"
-              value={
-                employeeKey
-              }
-            />
+            <EmployeeDetail label="Employee key" value={employeeKey} />
 
-            <EmployeeDetail
-              label="Department"
-              value={employeeDepartment(
-                employee,
-              )}
-            />
+            <EmployeeDetail label="Department" value={employeeDepartment(employee)} />
 
-            <EmployeeDetail
-              label="Business unit"
-              value={employeeBusinessUnit(
-                employee,
-              )}
-            />
+            <EmployeeDetail label="Business unit" value={employeeBusinessUnit(employee)} />
 
-            <EmployeeDetail
-              label="Status"
-              value={formatStatus(
-                employee.status,
-              )}
-            />
+            <EmployeeDetail label="Status" value={formatStatus(employee.status)} />
 
             <EmployeeDetail
               label="Approval default"
@@ -7200,140 +4672,89 @@ function EmployeeDrawer({
 
             <EmployeeDetail
               label="Latest provider"
-              value={
-                operational.latestProvider ??
-                "No execution recorded"
-              }
+              value={operational.latestProvider ?? "No execution recorded"}
             />
 
             <EmployeeDetail
               label="Latest model / tool"
-              value={
-                operational.latestModel ??
-                "No execution recorded"
-              }
+              value={operational.latestModel ?? "No execution recorded"}
             />
 
             <EmployeeDetail
               label="Last activity"
-              value={formatDateTime(
-                operational.lastActivity,
-              )}
+              value={formatDateTime(operational.lastActivity)}
             />
           </div>
         </section>
 
         <section className="mt-4 grid grid-cols-4 gap-2">
-          <MiniMetric
-            label="Assigned"
-            value={
-              operational.assignedCount
-            }
-          />
+          <MiniMetric label="Assigned" value={operational.assignedCount} />
 
-          <MiniMetric
-            label="Pending"
-            value={
-              operational.pendingCount
-            }
-          />
+          <MiniMetric label="Pending" value={operational.pendingCount} />
 
-          <MiniMetric
-            label="Running"
-            value={
-              operational.runningCount
-            }
-          />
+          <MiniMetric label="Running" value={operational.runningCount} />
 
           <MiniMetric
             label="Failures"
-            value={
-              operational.historicalFailureCount
-            }
-            warning={
-              operational.latestFailure !==
-              null
-            }
+            value={operational.historicalFailureCount}
+            warning={operational.latestFailure !== null}
           />
         </section>
 
         {operational.latestFailure ? (
           <section className="mt-4 rounded-xl border border-warning/30 bg-warning/10 p-4">
             <p className="text-[10px] uppercase tracking-widest text-warning">
-              {operational.retryReady
-                ? "Previous attempt — retry ready"
-                : "Latest failure"}
+              {operational.retryReady ? "Previous attempt — retry ready" : "Latest failure"}
             </p>
 
-            <p className="mt-2 text-xs leading-relaxed text-warning">
-              {
-                operational.latestFailure
-              }
-            </p>
+            <p className="mt-2 text-xs leading-relaxed text-warning">{operational.latestFailure}</p>
           </section>
         ) : null}
+
+        <EmployeeConversation employee={employee} />
 
         <div className="mt-6 grid gap-2 sm:grid-cols-2">
           <Button
             type="button"
             variant="outline"
-            onClick={
-              onOpenDepartment
-            }
+            onClick={onOpenDepartment}
             className="border-primary/40 text-primary"
           >
             <Building2 className="mr-1.5 h-4 w-4" />
-
             Open team
           </Button>
 
-          <Button
-            asChild
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-          >
+          <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
             <Link to="/ai/ceo">
               <BrainCircuit className="mr-1.5 h-4 w-4" />
-
               Delegate through CEO
             </Link>
           </Button>
         </div>
 
         <section className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
-          <p className="text-[10px] uppercase tracking-widest text-primary">
-            Direct assignment
-          </p>
+          <p className="text-[10px] uppercase tracking-widest text-primary">Direct assignment</p>
 
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Send a safe internal task directly to this employee. Cossa AI
-            records the mission, run, resolved provider/model and result.
-            High-risk external actions remain blocked for owner approval.
+            Send a safe internal task directly to this employee. Cossa AI records the mission, run,
+            resolved provider/model and result. High-risk external actions remain blocked for owner
+            approval.
           </p>
 
           {isHunter ? (
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Lead Hunter uses the authenticated Cossa research route and may
-              create deduplicated CRM lead records from verified public
-              evidence. It never contacts prospects automatically.
+              Lead Hunter uses the authenticated Cossa research route and may create deduplicated
+              CRM lead records from verified public evidence. It never contacts prospects
+              automatically.
             </p>
           ) : null}
 
           <textarea
-            value={
-              directObjective
-            }
+            value={directObjective}
             onChange={(event) => {
-              setDirectObjective(
-                event.target.value,
-              );
-
-              setDirectResult(
-                null,
-              );
-
-              setDirectError(
-                null,
-              );
+              setDirectObjective(event.target.value);
+              setDirectResult(null);
+              setDirectError(null);
             }}
             maxLength={6_000}
             placeholder={
@@ -7348,46 +4769,24 @@ function EmployeeDrawer({
             type="button"
             className="mt-3 w-full bg-primary text-primary-foreground hover:bg-primary/90"
             disabled={
-              directAssignmentPending ||
-              employee.status !==
-                "active" ||
-              !directObjective.trim()
+              directAssignmentPending || employee.status !== "active" || !directObjective.trim()
             }
             onClick={() => {
-              const objective =
-                directObjective.trim();
+              const objective = directObjective.trim();
 
               if (!objective) {
                 return;
               }
 
               void (async () => {
-                setDirectError(
-                  null,
-                );
-
-                setDirectResult(
-                  null,
-                );
+                setDirectError(null);
+                setDirectResult(null);
 
                 try {
-                  const result =
-                    await onRunDirectAssignment(
-                      employee,
-                      objective,
-                    );
-
-                  setDirectResult(
-                    result,
-                  );
-                } catch (
-                  error
-                ) {
-                  setDirectError(
-                    normaliseErrorMessage(
-                      error,
-                    ),
-                  );
+                  const result = await onRunDirectAssignment(employee, objective);
+                  setDirectResult(result);
+                } catch (error) {
+                  setDirectError(normaliseErrorMessage(error));
                 }
               })();
             }}
@@ -7398,9 +4797,7 @@ function EmployeeDrawer({
               <Play className="mr-1.5 h-4 w-4" />
             )}
 
-            {directAssignmentPending
-              ? "Working…"
-              : "Run safe internal task"}
+            {directAssignmentPending ? "Working…" : "Run safe internal task"}
           </Button>
 
           {directError ? (
@@ -7421,8 +4818,148 @@ function EmployeeDrawer({
             </div>
           ) : null}
         </section>
+
+        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+          The employee conversation remains internal advice and drafting. Direct assignments above
+          create a recorded workforce mission; they do not publish, send, pay, or change a customer
+          record without the required approval.
+        </p>
       </aside>
     </div>
+  );
+}
+
+type EmployeeConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+function employeeConversationSystem(employee: AiEmployee): string {
+  return [
+    `You are ${employee.name}, ${employee.title}, an AI employee in Cossa Nexus Holdings.`,
+    "Cossa Nexus Holdings coordinates Cossa Store, Cossa Growth, NexDocs, Cossa Tech, Cossa Construction and Cossa Facility Services.",
+    "Write like a capable Cossa colleague: warm, specific and natural. Avoid robotic filler, generic hype and unsupported certainty.",
+    "Use South African business context where helpful. Treat company facts, prices, customers, performance, integrations and completed work as unknown unless supplied or verified in the conversation.",
+    "Work hand-in-hand with other Cossa employees by naming the practical next handoff when one is needed.",
+    "This is an internal conversation. You may analyse, plan and draft, but you must not claim you sent, published, paid, contacted, changed or executed anything.",
+    `Your assigned mission: ${employee.mission}`,
+    `Your operating instructions: ${employee.system_instructions.slice(0, 1_800)}`,
+  ].join("\n\n");
+}
+
+function EmployeeConversation({ employee }: { employee: AiEmployee }) {
+  const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<EmployeeConversationMessage[]>([]);
+  const [streaming, setStreaming] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  async function sendMessage() {
+    const content = draft.trim();
+    if (!content || sending) return;
+
+    const prior = [...messages.slice(-6), { role: "user" as const, content }];
+    setDraft("");
+    setMessages(prior);
+    setSending(true);
+    setStreaming("");
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const result = await streamChatWithMetadata(
+        prior,
+        (chunk) => setStreaming((current) => `${current ?? ""}${chunk}`),
+        {
+          signal: controller.signal,
+          provider: "auto",
+          system: employeeConversationSystem(employee),
+        },
+      );
+      setMessages((current) => [...current, { role: "assistant", content: result.content }]);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        toast.error(`${employee.name} could not reply`, {
+          description: error instanceof Error ? error.message : "Try again shortly.",
+        });
+      }
+    } finally {
+      abortRef.current = null;
+      setStreaming(null);
+      setSending(false);
+    }
+  }
+
+  return (
+    <section className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
+      <p className="text-[10px] font-medium uppercase tracking-widest text-primary">
+        Talk with {employee.name}
+      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+        Ask for a plan, draft, explanation or the next internal handoff. This conversation remains
+        inside Growth.
+      </p>
+
+      {messages.length > 0 || streaming !== null ? (
+        <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+          {messages.map((message, index) => (
+            <div
+              key={`${message.role}-${index}`}
+              className={
+                message.role === "user"
+                  ? "ml-6 rounded-lg bg-background/80 p-2 text-xs leading-relaxed"
+                  : "mr-3 rounded-lg border border-border/60 bg-card/60 p-2 text-xs leading-relaxed text-muted-foreground"
+              }
+            >
+              {message.content}
+            </div>
+          ))}
+          {streaming !== null ? (
+            <div className="mr-3 rounded-lg border border-border/60 bg-card/60 p-2 text-xs leading-relaxed text-muted-foreground">
+              {streaming || "Thinking…"}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-3 flex items-end gap-2 rounded-lg border border-border/60 bg-background/60 p-2 focus-within:border-primary/50">
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void sendMessage();
+            }
+          }}
+          rows={2}
+          placeholder={`Message ${employee.name}…`}
+          className="min-h-12 flex-1 resize-none bg-transparent px-1 py-1 text-sm outline-none"
+          disabled={sending}
+        />
+        {sending ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => abortRef.current?.abort()}
+            aria-label="Stop employee response"
+          >
+            <CircleStop className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void sendMessage()}
+            disabled={!draft.trim()}
+            aria-label={`Send message to ${employee.name}`}
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -7437,9 +4974,7 @@ function Metric({
 }) {
   return (
     <div className="glass-card min-w-0 p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-        {label}
-      </div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
 
       <div
         className={
@@ -7465,13 +5000,7 @@ function MiniMetric({
 }) {
   return (
     <div className="rounded-lg border border-border/50 bg-background/30 p-2 text-center">
-      <div
-        className={
-          warning
-            ? "text-sm font-semibold text-warning"
-            : "text-sm font-semibold"
-        }
-      >
+      <div className={warning ? "text-sm font-semibold text-warning" : "text-sm font-semibold"}>
         {value}
       </div>
 
@@ -7519,13 +5048,9 @@ function QueueCard({
         </span>
       </div>
 
-      <p className="mt-3 text-sm font-medium">
-        {title}
-      </p>
+      <p className="mt-3 text-sm font-medium">{title}</p>
 
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -7543,34 +5068,22 @@ function ControlMetric({
 }) {
   return (
     <div className="rounded-xl border border-border/60 bg-card/40 p-4">
-      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-        {label}
-      </p>
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
 
       <p className="mt-2 font-display text-2xl font-semibold">
         {value.toLocaleString()}
         {suffix}
       </p>
 
-      <p className="mt-1 text-xs text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
     </div>
   );
 }
 
-function EmployeeDetail({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function EmployeeDetail({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-      <span className="text-muted-foreground">
-        {label}
-      </span>
+      <span className="text-muted-foreground">{label}</span>
 
       <span className="break-words font-medium text-foreground sm:max-w-[60%] sm:text-right">
         {value}
@@ -7579,29 +5092,17 @@ function EmployeeDetail({
   );
 }
 
-function OwnerRule({
-  children,
-}: {
-  children: ReactNode;
-}) {
+function OwnerRule({ children }: { children: ReactNode }) {
   return (
     <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-card/40 p-3 text-sm text-muted-foreground">
       <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 
-      <span>
-        {children}
-      </span>
+      <span>{children}</span>
     </div>
   );
 }
 
-function OperationalBadge({
-  state,
-  label,
-}: {
-  state: OperationalState;
-  label: string;
-}) {
+function OperationalBadge({ state, label }: { state: OperationalState; label: string }) {
   const className =
     state === "working"
       ? "border-success/35 bg-success/10 text-success"

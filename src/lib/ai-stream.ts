@@ -12,34 +12,21 @@ import { supabase } from "@/integrations/supabase/client";
  *
  * Let /api/chat select the best available reasoning provider.
  */
-export type CossaAiProvider =
-  | "auto"
-  | "groq"
-  | "gemini"
-  | "openai";
+export type CossaAiProvider = "auto" | "groq" | "gemini" | "openai";
 
 /**
  * Providers that can actually execute a request.
  *
  * "auto" is a routing instruction, not an execution provider.
  */
-export type CossaAiExecutionProvider =
-  Exclude<
-    CossaAiProvider,
-    "auto"
-  >;
+export type CossaAiExecutionProvider = Exclude<CossaAiProvider, "auto">;
 
-export type ChatMessageRole =
-  | "system"
-  | "user"
-  | "assistant";
+export type ChatMessageRole = "system" | "user" | "assistant";
 
 export interface ChatMessage {
-  role:
-    ChatMessageRole;
+  role: ChatMessageRole;
 
-  content:
-    string;
+  content: string;
 }
 
 /**
@@ -51,19 +38,13 @@ export interface ChatMessage {
  *
  * They do not prove that any external Cossa business action occurred.
  */
-export type ProviderAttemptStatus =
-  | "starting"
-  | "streaming"
-  | "completed"
-  | "failed"
-  | "fallback";
+export type ProviderAttemptStatus = "starting" | "streaming" | "completed" | "failed" | "fallback";
 
 export interface ProviderAttemptEvent {
   /**
    * Actual execution provider reported by /api/chat.
    */
-  provider:
-    CossaAiExecutionProvider;
+  provider: CossaAiExecutionProvider;
 
   /**
    * Provider route originally requested by the browser.
@@ -73,37 +54,31 @@ export interface ProviderAttemptEvent {
    * requestedProvider = "auto"
    * provider = "gemini"
    */
-  requestedProvider:
-    CossaAiProvider;
+  requestedProvider: CossaAiProvider;
 
-  status:
-    ProviderAttemptStatus;
+  status: ProviderAttemptStatus;
 
   /**
    * True when /api/chat reports that provider failover occurred.
    */
-  fallback:
-    boolean;
+  fallback: boolean;
 
   /**
    * Actual model reported by the server.
    */
-  model?:
-    string;
+  model?: string;
 
   /**
    * Optional safe execution error.
    */
-  error?:
-    string;
+  error?: string;
 }
 
 export interface AiExecutionMetadata {
   /**
    * Route requested by the browser.
    */
-  requestedProvider:
-    CossaAiProvider;
+  requestedProvider: CossaAiProvider;
 
   /**
    * Actual provider that returned the response.
@@ -112,20 +87,17 @@ export interface AiExecutionMetadata {
    *
    * The browser does not invent a provider.
    */
-  provider:
-    CossaAiExecutionProvider;
+  provider: CossaAiExecutionProvider;
 
   /**
    * Actual model reported by /api/chat.
    */
-  model:
-    string | null;
+  model: string | null;
 
   /**
    * Whether /api/chat reports provider fallback.
    */
-  fallback:
-    boolean;
+  fallback: boolean;
 
   /**
    * Optional server routing description.
@@ -136,32 +108,26 @@ export interface AiExecutionMetadata {
    *
    * The current server may not expose this yet.
    */
-  providerRoute:
-    string | null;
+  providerRoute: string | null;
 
   /**
    * Optional server request/run identifier.
    *
    * The current server may not expose this yet.
    */
-  requestId:
-    string | null;
+  requestId: string | null;
 }
 
 export interface StreamChatResult {
-  content:
-    string;
+  content: string;
 
-  metadata:
-    AiExecutionMetadata;
+  metadata: AiExecutionMetadata;
 }
 
 export interface StreamChatOptions {
-  signal?:
-    AbortSignal;
+  signal?: AbortSignal;
 
-  system?:
-    string;
+  system?: string;
 
   /**
    * Provider routing request.
@@ -172,8 +138,7 @@ export interface StreamChatOptions {
    *
    * The server gateway owns final provider selection and fallback.
    */
-  provider?:
-    CossaAiProvider;
+  provider?: CossaAiProvider;
 
   /**
    * Legacy compatibility field.
@@ -190,24 +155,21 @@ export interface StreamChatOptions {
    * Remove this property later after all Cossa callers have migrated to
    * server-owned provider routing.
    */
-  fallbackProvider?:
-    CossaAiExecutionProvider;
+  fallbackProvider?: CossaAiExecutionProvider;
 
   /**
    * Prevent a browser request from hanging forever.
    *
    * Default: 120 seconds.
    */
-  timeoutMs?:
-    number;
+  timeoutMs?: number;
 
   /**
    * Require a non-empty assistant response.
    *
    * Default: true.
    */
-  requireContent?:
-    boolean;
+  requireContent?: boolean;
 
   /**
    * Optional provider lifecycle callback.
@@ -217,11 +179,7 @@ export interface StreamChatOptions {
    * The client never assumes that a requested provider necessarily executed
    * the request.
    */
-  onProviderAttempt?:
-    (
-      event:
-        ProviderAttemptEvent,
-    ) => void;
+  onProviderAttempt?: (event: ProviderAttemptEvent) => void;
 
   /**
    * Optional callback exposing final provider/model metadata.
@@ -235,11 +193,7 @@ export interface StreamChatOptions {
    * - CEO execution truth;
    * - audit records.
    */
-  onExecutionMetadata?:
-    (
-      metadata:
-        AiExecutionMetadata,
-    ) => void;
+  onExecutionMetadata?: (metadata: AiExecutionMetadata) => void;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -247,43 +201,29 @@ export interface StreamChatOptions {
 /* -------------------------------------------------------------------------- */
 
 interface StreamGatewayInput {
-  messages:
-    ChatMessage[];
+  messages: ChatMessage[];
 
-  onToken:
-    (
-      chunk:
-        string,
-    ) => void;
+  onToken: (chunk: string) => void;
 
-  signal?:
-    AbortSignal;
+  signal?: AbortSignal;
 
-  system?:
-    string;
+  system?: string;
 
-  provider:
-    CossaAiProvider;
+  provider: CossaAiProvider;
 
-  timeoutMs:
-    number;
+  timeoutMs: number;
 
-  requireContent:
-    boolean;
+  requireContent: boolean;
 
-  onProviderAttempt?:
-    StreamChatOptions["onProviderAttempt"];
+  onProviderAttempt?: StreamChatOptions["onProviderAttempt"];
 
-  onExecutionMetadata?:
-    StreamChatOptions["onExecutionMetadata"];
+  onExecutionMetadata?: StreamChatOptions["onExecutionMetadata"];
 }
 
 interface StreamGatewayResult {
-  content:
-    string;
+  content: string;
 
-  metadata:
-    AiExecutionMetadata;
+  metadata: AiExecutionMetadata;
 }
 
 /**
@@ -293,16 +233,12 @@ interface StreamGatewayResult {
  *
  * The browser must not react by calling another provider itself.
  */
-export class ChatHttpError
-  extends Error {
-  readonly status:
-    number;
+export class ChatHttpError extends Error {
+  readonly status: number;
 
-  readonly requestedProvider:
-    CossaAiProvider;
+  readonly requestedProvider: CossaAiProvider;
 
-  readonly actualProvider:
-    CossaAiExecutionProvider | null;
+  readonly actualProvider: CossaAiExecutionProvider | null;
 
   constructor({
     status,
@@ -310,33 +246,23 @@ export class ChatHttpError
     requestedProvider,
     actualProvider,
   }: {
-    status:
-      number;
+    status: number;
 
-    message:
-      string;
+    message: string;
 
-    requestedProvider:
-      CossaAiProvider;
+    requestedProvider: CossaAiProvider;
 
-    actualProvider:
-      CossaAiExecutionProvider | null;
+    actualProvider: CossaAiExecutionProvider | null;
   }) {
-    super(
-      message,
-    );
+    super(message);
 
-    this.name =
-      "ChatHttpError";
+    this.name = "ChatHttpError";
 
-    this.status =
-      status;
+    this.status = status;
 
-    this.requestedProvider =
-      requestedProvider;
+    this.requestedProvider = requestedProvider;
 
-    this.actualProvider =
-      actualProvider;
+    this.actualProvider = actualProvider;
   }
 }
 
@@ -349,15 +275,11 @@ export class ChatHttpError
  *
  * send one request to /api/chat and allow the server gateway to route it.
  */
-const DEFAULT_PROVIDER:
-  CossaAiProvider =
-  "auto";
+const DEFAULT_PROVIDER: CossaAiProvider = "auto";
 
-const DEFAULT_TIMEOUT_MS =
-  120_000;
+const DEFAULT_TIMEOUT_MS = 120_000;
 
-const MIN_TIMEOUT_MS =
-  5_000;
+const MIN_TIMEOUT_MS = 5_000;
 
 /* -------------------------------------------------------------------------- */
 /* RESPONSE HEADERS                                                           */
@@ -368,20 +290,17 @@ const MIN_TIMEOUT_MS =
  *
  * The upgraded /api/chat gateway returns this.
  */
-const HEADER_PROVIDER =
-  "x-cossa-ai-provider";
+const HEADER_PROVIDER = "x-cossa-ai-provider";
 
 /**
  * Actual model selected by /api/chat.
  */
-const HEADER_MODEL =
-  "x-cossa-ai-model";
+const HEADER_MODEL = "x-cossa-ai-model";
 
 /**
  * Whether provider failover occurred.
  */
-const HEADER_FALLBACK =
-  "x-cossa-ai-fallback";
+const HEADER_FALLBACK = "x-cossa-ai-fallback";
 
 /**
  * Optional future routing chain.
@@ -390,120 +309,56 @@ const HEADER_FALLBACK =
  *
  * groq>gemini
  */
-const HEADER_PROVIDER_ROUTE =
-  "x-cossa-ai-provider-route";
+const HEADER_PROVIDER_ROUTE = "x-cossa-ai-provider-route";
 
 /**
  * Optional future server execution/request identifier.
  */
-const HEADER_REQUEST_ID =
-  "x-cossa-ai-request-id";
+const HEADER_REQUEST_ID = "x-cossa-ai-request-id";
 
 /* -------------------------------------------------------------------------- */
 /* MESSAGE VALIDATION                                                         */
 /* -------------------------------------------------------------------------- */
 
-function requireMessages(
-  messages:
-    ChatMessage[],
-): ChatMessage[] {
-  if (
-    !Array.isArray(
-      messages,
-    ) ||
-    messages.length ===
-      0
-  ) {
-    throw new Error(
-      "At least one chat message is required.",
-    );
+function requireMessages(messages: ChatMessage[]): ChatMessage[] {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    throw new Error("At least one chat message is required.");
   }
 
-  return messages.map(
-    (
-      message,
-      index,
-    ) => {
-      if (
-        !message ||
-        typeof message !==
-          "object"
-      ) {
-        throw new Error(
-          `Chat message ${index + 1} is invalid.`,
-        );
-      }
+  return messages.map((message, index) => {
+    if (!message || typeof message !== "object") {
+      throw new Error(`Chat message ${index + 1} is invalid.`);
+    }
 
-      if (
-        ![
-          "system",
-          "user",
-          "assistant",
-        ].includes(
-          message.role,
-        )
-      ) {
-        throw new Error(
-          `Chat message ${index + 1} has an invalid role.`,
-        );
-      }
+    if (!["system", "user", "assistant"].includes(message.role)) {
+      throw new Error(`Chat message ${index + 1} has an invalid role.`);
+    }
 
-      const content =
-        message.content
-          ?.trim();
+    const content = message.content?.trim();
 
-      if (
-        !content
-      ) {
-        throw new Error(
-          `Chat message ${index + 1} has no content.`,
-        );
-      }
+    if (!content) {
+      throw new Error(`Chat message ${index + 1} has no content.`);
+    }
 
-      return {
-        role:
-          message.role,
+    return {
+      role: message.role,
 
-        content,
-      };
-    },
-  );
+      content,
+    };
+  });
 }
 
 /* -------------------------------------------------------------------------- */
 /* PROVIDER VALIDATION                                                        */
 /* -------------------------------------------------------------------------- */
 
-function isExecutionProvider(
-  value:
-    unknown,
-): value is CossaAiExecutionProvider {
-  return (
-    value ===
-      "groq" ||
-    value ===
-      "gemini" ||
-    value ===
-      "openai"
-  );
+function isExecutionProvider(value: unknown): value is CossaAiExecutionProvider {
+  return value === "groq" || value === "gemini" || value === "openai";
 }
 
-function requireProvider(
-  value:
-    CossaAiProvider,
-): CossaAiProvider {
-  if (
-    value !==
-      "auto" &&
-    !isExecutionProvider(
-      value,
-    )
-  ) {
-    throw new Error(
-      `Unsupported Cossa AI provider: ${String(
-        value,
-      )}`,
-    );
+function requireProvider(value: CossaAiProvider): CossaAiProvider {
+  if (value !== "auto" && !isExecutionProvider(value)) {
+    throw new Error(`Unsupported Cossa AI provider: ${String(value)}`);
   }
 
   return value;
@@ -514,30 +369,16 @@ function requireProvider(
 /* -------------------------------------------------------------------------- */
 
 async function getAccessToken(): Promise<string> {
-  const {
-    data,
-    error,
-  } =
-    await supabase.auth.getSession();
+  const { data, error } = await supabase.auth.getSession();
 
-  if (
-    error
-  ) {
-    throw new Error(
-      `Unable to read the authenticated session: ${error.message}`,
-    );
+  if (error) {
+    throw new Error(`Unable to read the authenticated session: ${error.message}`);
   }
 
-  const accessToken =
-    data.session
-      ?.access_token;
+  const accessToken = data.session?.access_token;
 
-  if (
-    !accessToken
-  ) {
-    throw new Error(
-      "Your session has expired. Please sign in again.",
-    );
+  if (!accessToken) {
+    throw new Error("Your session has expired. Please sign in again.");
   }
 
   return accessToken;
@@ -547,76 +388,40 @@ async function getAccessToken(): Promise<string> {
 /* ERROR HELPERS                                                              */
 /* -------------------------------------------------------------------------- */
 
-function normaliseErrorMessage(
-  value:
-    unknown,
-): string | null {
-  if (
-    typeof value ===
-    "string"
-  ) {
-    const cleaned =
-      value.trim();
+function normaliseErrorMessage(value: unknown): string | null {
+  if (typeof value === "string") {
+    const cleaned = value.trim();
 
-    return (
-      cleaned ||
-      null
-    );
+    return cleaned || null;
   }
 
-  if (
-    value &&
-    typeof value ===
-      "object"
-  ) {
-    const candidate =
-      value as {
-        error?: unknown;
+  if (value && typeof value === "object") {
+    const candidate = value as {
+      error?: unknown;
 
-        message?: unknown;
+      message?: unknown;
 
-        detail?: unknown;
-      };
+      detail?: unknown;
+    };
 
-    if (
-      typeof candidate.message ===
-        "string" &&
-      candidate.message.trim()
-    ) {
+    if (typeof candidate.message === "string" && candidate.message.trim()) {
       return candidate.message.trim();
     }
 
-    if (
-      typeof candidate.detail ===
-        "string" &&
-      candidate.detail.trim()
-    ) {
+    if (typeof candidate.detail === "string" && candidate.detail.trim()) {
       return candidate.detail.trim();
     }
 
-    if (
-      typeof candidate.error ===
-        "string" &&
-      candidate.error.trim()
-    ) {
+    if (typeof candidate.error === "string" && candidate.error.trim()) {
       return candidate.error.trim();
     }
 
-    if (
-      candidate.error &&
-      typeof candidate.error ===
-        "object"
-    ) {
-      const nested =
-        candidate.error as {
-          message?: unknown;
-        };
+    if (candidate.error && typeof candidate.error === "object") {
+      const nested = candidate.error as {
+        message?: unknown;
+      };
 
-      if (
-        typeof nested.message ===
-          "string" &&
-        nested.message.trim()
-      ) {
+      if (typeof nested.message === "string" && nested.message.trim()) {
         return nested.message.trim();
       }
     }
@@ -625,56 +430,32 @@ function normaliseErrorMessage(
   return null;
 }
 
-function errorMessage(
-  error:
-    unknown,
-): string {
-  if (
-    error instanceof
-    Error
-  ) {
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
     return error.message;
   }
 
-  if (
-    typeof error ===
-      "string"
-  ) {
+  if (typeof error === "string") {
     return error;
   }
 
   return "Unknown Cossa AI gateway error.";
 }
 
-async function readErrorResponse(
-  response:
-    Response,
-): Promise<string> {
-  const fallback =
-    `Chat request failed (${response.status})`;
+async function readErrorResponse(response: Response): Promise<string> {
+  const fallback = `Chat request failed (${response.status})`;
 
   try {
-    const text =
-      await response.text();
+    const text = await response.text();
 
-    if (
-      !text.trim()
-    ) {
+    if (!text.trim()) {
       return fallback;
     }
 
     try {
-      const parsed =
-        JSON.parse(
-          text,
-        ) as unknown;
+      const parsed = JSON.parse(text) as unknown;
 
-      return (
-        normaliseErrorMessage(
-          parsed,
-        ) ??
-        text.trim()
-      );
+      return normaliseErrorMessage(parsed) ?? text.trim();
     } catch {
       return text.trim();
     }
@@ -683,16 +464,8 @@ async function readErrorResponse(
   }
 }
 
-function isAbortError(
-  error:
-    unknown,
-): boolean {
-  return (
-    error instanceof
-      DOMException &&
-    error.name ===
-      "AbortError"
-  );
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -700,62 +473,40 @@ function isAbortError(
 /* -------------------------------------------------------------------------- */
 
 function notifyProviderAttempt(
-  callback:
-    StreamChatOptions["onProviderAttempt"],
+  callback: StreamChatOptions["onProviderAttempt"],
 
-  event:
-    ProviderAttemptEvent,
+  event: ProviderAttemptEvent,
 ): void {
-  if (
-    !callback
-  ) {
+  if (!callback) {
     return;
   }
 
   try {
-    callback(
-      event,
-    );
-  } catch (
-    error
-  ) {
+    callback(event);
+  } catch (error) {
     /*
      * Monitoring UI must never break the actual reasoning request.
      */
-    console.warn(
-      "Cossa AI provider-status callback failed.",
-      error,
-    );
+    console.warn("Cossa AI provider-status callback failed.", error);
   }
 }
 
 function notifyExecutionMetadata(
-  callback:
-    StreamChatOptions["onExecutionMetadata"],
+  callback: StreamChatOptions["onExecutionMetadata"],
 
-  metadata:
-    AiExecutionMetadata,
+  metadata: AiExecutionMetadata,
 ): void {
-  if (
-    !callback
-  ) {
+  if (!callback) {
     return;
   }
 
   try {
-    callback(
-      metadata,
-    );
-  } catch (
-    error
-  ) {
+    callback(metadata);
+  } catch (error) {
     /*
      * Metadata consumers must never break the actual reasoning request.
      */
-    console.warn(
-      "Cossa AI execution-metadata callback failed.",
-      error,
-    );
+    console.warn("Cossa AI execution-metadata callback failed.", error);
   }
 }
 
@@ -764,100 +515,56 @@ function notifyExecutionMetadata(
 /* -------------------------------------------------------------------------- */
 
 function createCombinedAbortSignal(
-  externalSignal:
-    AbortSignal | undefined,
+  externalSignal: AbortSignal | undefined,
 
-  timeoutMs:
-    number,
+  timeoutMs: number,
 ): {
-  signal:
-    AbortSignal;
+  signal: AbortSignal;
 
-  cleanup:
-    () => void;
+  cleanup: () => void;
 
-  didTimeout:
-    () => boolean;
+  didTimeout: () => boolean;
 } {
-  const controller =
-    new AbortController();
+  const controller = new AbortController();
 
-  let timedOut =
-    false;
+  let timedOut = false;
 
-  const abortFromExternal =
-    () => {
-      if (
-        !controller.signal
-          .aborted
-      ) {
-        controller.abort(
-          externalSignal
-            ?.reason,
-        );
-      }
-    };
+  const abortFromExternal = () => {
+    if (!controller.signal.aborted) {
+      controller.abort(externalSignal?.reason);
+    }
+  };
 
-  if (
-    externalSignal
-      ?.aborted
-  ) {
-    controller.abort(
-      externalSignal.reason,
-    );
+  if (externalSignal?.aborted) {
+    controller.abort(externalSignal.reason);
   } else {
-    externalSignal
-      ?.addEventListener(
-        "abort",
-        abortFromExternal,
-        {
-          once:
-            true,
-        },
-      );
+    externalSignal?.addEventListener("abort", abortFromExternal, {
+      once: true,
+    });
   }
 
-  const timeout =
-    window.setTimeout(
-      () => {
-        timedOut =
-          true;
+  const timeout = window.setTimeout(
+    () => {
+      timedOut = true;
 
-        if (
-          !controller.signal
-            .aborted
-        ) {
-          controller.abort(
-            new DOMException(
-              "Chat request timed out.",
-              "TimeoutError",
-            ),
-          );
-        }
-      },
-
-      timeoutMs,
-    );
-
-  return {
-    signal:
-      controller.signal,
-
-    cleanup: () => {
-      window.clearTimeout(
-        timeout,
-      );
-
-      externalSignal
-        ?.removeEventListener(
-          "abort",
-          abortFromExternal,
-        );
+      if (!controller.signal.aborted) {
+        controller.abort(new DOMException("Chat request timed out.", "TimeoutError"));
+      }
     },
 
-    didTimeout:
-      () =>
-        timedOut,
+    timeoutMs,
+  );
+
+  return {
+    signal: controller.signal,
+
+    cleanup: () => {
+      window.clearTimeout(timeout);
+
+      externalSignal?.removeEventListener("abort", abortFromExternal);
+    },
+
+    didTimeout: () => timedOut,
   };
 }
 
@@ -865,157 +572,82 @@ function createCombinedAbortSignal(
 /* SSE PARSING                                                                */
 /* -------------------------------------------------------------------------- */
 
-function parseServerSentEventData(
-  block:
-    string,
-): string | null {
-  const lines =
-    block.split(
-      /\r?\n/,
-    );
+function parseServerSentEventData(block: string): string | null {
+  const lines = block.split(/\r?\n/);
 
-  const dataLines =
-    lines
-      .filter(
-        (
-          line,
-        ) =>
-          line.startsWith(
-            "data:",
-          ),
-      )
-      .map(
-        (
-          line,
-        ) =>
-          line
-            .slice(
-              5,
-            )
-            .trimStart(),
-      );
+  const dataLines = lines
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart());
 
-  if (
-    dataLines.length ===
-    0
-  ) {
+  if (dataLines.length === 0) {
     return null;
   }
 
-  const data =
-    dataLines.join(
-      "\n",
-    );
+  const data = dataLines.join("\n");
 
-  if (
-    data ===
-    "[DONE]"
-  ) {
+  if (data === "[DONE]") {
     return "";
   }
 
   try {
-    const parsed =
-      JSON.parse(
-        data,
-      ) as unknown;
+    const parsed = JSON.parse(data) as unknown;
 
-    if (
-      typeof parsed ===
-      "string"
-    ) {
+    if (typeof parsed === "string") {
       return parsed;
     }
 
-    if (
-      parsed &&
-      typeof parsed ===
-        "object"
-    ) {
-      const event =
-        parsed as {
-          text?: unknown;
+    if (parsed && typeof parsed === "object") {
+      const event = parsed as {
+        text?: unknown;
 
-          content?: unknown;
+        content?: unknown;
 
-          token?: unknown;
+        token?: unknown;
 
-          delta?: unknown;
+        delta?: unknown;
 
-          error?: unknown;
-        };
+        error?: unknown;
+      };
 
-      const eventError =
-        normaliseErrorMessage(
-          event.error,
-        );
+      const eventError = normaliseErrorMessage(event.error);
 
-      if (
-        eventError
-      ) {
-        throw new Error(
-          eventError,
-        );
+      if (eventError) {
+        throw new Error(eventError);
       }
 
-      if (
-        typeof event.text ===
-        "string"
-      ) {
+      if (typeof event.text === "string") {
         return event.text;
       }
 
-      if (
-        typeof event.content ===
-        "string"
-      ) {
+      if (typeof event.content === "string") {
         return event.content;
       }
 
-      if (
-        typeof event.token ===
-        "string"
-      ) {
+      if (typeof event.token === "string") {
         return event.token;
       }
 
-      if (
-        typeof event.delta ===
-        "string"
-      ) {
+      if (typeof event.delta === "string") {
         return event.delta;
       }
 
-      if (
-        event.delta &&
-        typeof event.delta ===
-          "object"
-      ) {
-        const nestedDelta =
-          event.delta as {
-            content?: unknown;
+      if (event.delta && typeof event.delta === "object") {
+        const nestedDelta = event.delta as {
+          content?: unknown;
 
-            text?: unknown;
-          };
+          text?: unknown;
+        };
 
-        if (
-          typeof nestedDelta.content ===
-          "string"
-        ) {
+        if (typeof nestedDelta.content === "string") {
           return nestedDelta.content;
         }
 
-        if (
-          typeof nestedDelta.text ===
-          "string"
-        ) {
+        if (typeof nestedDelta.text === "string") {
           return nestedDelta.text;
         }
       }
     }
-  } catch (
-    error
-  ) {
+  } catch (error) {
     /*
      * Plain-text SSE payloads remain valid.
      *
@@ -1023,14 +655,7 @@ function parseServerSentEventData(
      * into text because doing so could expose malformed provider protocol data
      * directly inside a Cossa AI answer.
      */
-    if (
-      !data.startsWith(
-        "{",
-      ) &&
-      !data.startsWith(
-        "[",
-      )
-    ) {
+    if (!data.startsWith("{") && !data.startsWith("[")) {
       return data;
     }
 
@@ -1045,83 +670,47 @@ function parseServerSentEventData(
 /* -------------------------------------------------------------------------- */
 
 async function readPlainTextStream(
-  response:
-    Response,
+  response: Response,
 
-  onToken:
-    (
-      chunk:
-        string,
-    ) => void,
+  onToken: (chunk: string) => void,
 ): Promise<string> {
-  if (
-    !response.body
-  ) {
-    throw new Error(
-      "The AI response did not contain a readable stream.",
-    );
+  if (!response.body) {
+    throw new Error("The AI response did not contain a readable stream.");
   }
 
-  const reader =
-    response.body.getReader();
+  const reader = response.body.getReader();
 
-  const decoder =
-    new TextDecoder();
+  const decoder = new TextDecoder();
 
-  let full =
-    "";
+  let full = "";
 
   try {
-    while (
-      true
-    ) {
-      const {
-        value,
-        done,
-      } =
-        await reader.read();
+    while (true) {
+      const { value, done } = await reader.read();
 
-      if (
-        done
-      ) {
+      if (done) {
         break;
       }
 
-      const chunk =
-        decoder.decode(
-          value,
-          {
-            stream:
-              true,
-          },
-        );
+      const chunk = decoder.decode(value, {
+        stream: true,
+      });
 
-      if (
-        !chunk
-      ) {
+      if (!chunk) {
         continue;
       }
 
-      full +=
-        chunk;
+      full += chunk;
 
-      onToken(
-        chunk,
-      );
+      onToken(chunk);
     }
 
-    const finalChunk =
-      decoder.decode();
+    const finalChunk = decoder.decode();
 
-    if (
-      finalChunk
-    ) {
-      full +=
-        finalChunk;
+    if (finalChunk) {
+      full += finalChunk;
 
-      onToken(
-        finalChunk,
-      );
+      onToken(finalChunk);
     }
   } finally {
     reader.releaseLock();
@@ -1131,133 +720,71 @@ async function readPlainTextStream(
 }
 
 async function readEventStream(
-  response:
-    Response,
+  response: Response,
 
-  onToken:
-    (
-      chunk:
-        string,
-    ) => void,
+  onToken: (chunk: string) => void,
 ): Promise<string> {
-  if (
-    !response.body
-  ) {
-    throw new Error(
-      "The AI response did not contain a readable stream.",
-    );
+  if (!response.body) {
+    throw new Error("The AI response did not contain a readable stream.");
   }
 
-  const reader =
-    response.body.getReader();
+  const reader = response.body.getReader();
 
-  const decoder =
-    new TextDecoder();
+  const decoder = new TextDecoder();
 
-  let buffer =
-    "";
+  let buffer = "";
 
-  let full =
-    "";
+  let full = "";
 
-  let finished =
-    false;
+  let finished = false;
 
-  const processBlock =
-    (
-      block:
-        string,
-    ) => {
-      const data =
-        parseServerSentEventData(
-          block,
-        );
+  const processBlock = (block: string) => {
+    const data = parseServerSentEventData(block);
 
-      if (
-        data ===
-        null
-      ) {
-        return;
-      }
+    if (data === null) {
+      return;
+    }
 
-      if (
-        data ===
-        ""
-      ) {
-        finished =
-          true;
+    if (data === "") {
+      finished = true;
 
-        return;
-      }
+      return;
+    }
 
-      full +=
-        data;
+    full += data;
 
-      onToken(
-        data,
-      );
-    };
+    onToken(data);
+  };
 
   try {
-    while (
-      !finished
-    ) {
-      const {
-        value,
-        done,
-      } =
-        await reader.read();
+    while (!finished) {
+      const { value, done } = await reader.read();
 
-      if (
-        done
-      ) {
+      if (done) {
         break;
       }
 
-      buffer +=
-        decoder.decode(
-          value,
-          {
-            stream:
-              true,
-          },
-        );
+      buffer += decoder.decode(value, {
+        stream: true,
+      });
 
-      const blocks =
-        buffer.split(
-          /\r?\n\r?\n/,
-        );
+      const blocks = buffer.split(/\r?\n\r?\n/);
 
-      buffer =
-        blocks.pop() ??
-        "";
+      buffer = blocks.pop() ?? "";
 
-      for (
-        const block of
-          blocks
-      ) {
-        processBlock(
-          block,
-        );
+      for (const block of blocks) {
+        processBlock(block);
 
-        if (
-          finished
-        ) {
+        if (finished) {
           break;
         }
       }
     }
 
-    buffer +=
-      decoder.decode();
+    buffer += decoder.decode();
 
-    if (
-      buffer.trim() &&
-      !finished
-    ) {
-      processBlock(
-        buffer,
-      );
+    if (buffer.trim() && !finished) {
+      processBlock(buffer);
     }
   } finally {
     reader.releaseLock();
@@ -1270,26 +797,12 @@ async function readEventStream(
 /* RESPONSE METADATA                                                          */
 /* -------------------------------------------------------------------------- */
 
-function headerBoolean(
-  value:
-    string | null,
-): boolean {
-  if (
-    !value
-  ) {
+function headerBoolean(value: string | null): boolean {
+  if (!value) {
     return false;
   }
 
-  return [
-    "1",
-    "true",
-    "yes",
-    "fallback",
-  ].includes(
-    value
-      .trim()
-      .toLowerCase(),
-  );
+  return ["1", "true", "yes", "fallback"].includes(value.trim().toLowerCase());
 }
 
 /**
@@ -1309,70 +822,27 @@ function extractExecutionMetadata({
   response,
   requestedProvider,
 }: {
-  response:
-    Response;
+  response: Response;
 
-  requestedProvider:
-    CossaAiProvider;
+  requestedProvider: CossaAiProvider;
 }): AiExecutionMetadata {
-  const rawProvider =
-    response.headers
-      .get(
-        HEADER_PROVIDER,
-      )
-      ?.trim()
-      .toLowerCase();
+  const rawProvider = response.headers.get(HEADER_PROVIDER)?.trim().toLowerCase();
 
-  if (
-    !isExecutionProvider(
-      rawProvider,
-    )
-  ) {
-    throw new Error(
-      "Cossa AI gateway did not report the actual execution provider.",
-    );
+  if (!isExecutionProvider(rawProvider)) {
+    throw new Error("Cossa AI gateway did not report the actual execution provider.");
   }
 
-  const provider:
-    CossaAiExecutionProvider =
-    rawProvider;
+  const provider: CossaAiExecutionProvider = rawProvider;
 
-  const model =
-    response.headers
-      .get(
-        HEADER_MODEL,
-      )
-      ?.trim() ||
-    null;
+  const model = response.headers.get(HEADER_MODEL)?.trim() || null;
 
-  const providerRoute =
-    response.headers
-      .get(
-        HEADER_PROVIDER_ROUTE,
-      )
-      ?.trim() ||
-    null;
+  const providerRoute = response.headers.get(HEADER_PROVIDER_ROUTE)?.trim() || null;
 
-  const requestId =
-    response.headers
-      .get(
-        HEADER_REQUEST_ID,
-      )
-      ?.trim() ||
-    null;
+  const requestId = response.headers.get(HEADER_REQUEST_ID)?.trim() || null;
 
-  const explicitFallback =
-    headerBoolean(
-      response.headers.get(
-        HEADER_FALLBACK,
-      ),
-    );
+  const explicitFallback = headerBoolean(response.headers.get(HEADER_FALLBACK));
 
-  const providerChanged =
-    requestedProvider !==
-      "auto" &&
-    provider !==
-      requestedProvider;
+  const providerChanged = requestedProvider !== "auto" && provider !== requestedProvider;
 
   return {
     requestedProvider,
@@ -1381,9 +851,7 @@ function extractExecutionMetadata({
 
     model,
 
-    fallback:
-      explicitFallback ||
-      providerChanged,
+    fallback: explicitFallback || providerChanged,
 
     providerRoute,
 
@@ -1415,57 +883,35 @@ function notifyProviderStart({
   callback,
   metadata,
 }: {
-  callback:
-    StreamChatOptions["onProviderAttempt"];
+  callback: StreamChatOptions["onProviderAttempt"];
 
-  metadata:
-    AiExecutionMetadata;
+  metadata: AiExecutionMetadata;
 }): void {
-  if (
-    metadata.fallback
-  ) {
-    notifyProviderAttempt(
-      callback,
-      {
-        provider:
-          metadata.provider,
+  if (metadata.fallback) {
+    notifyProviderAttempt(callback, {
+      provider: metadata.provider,
 
-        requestedProvider:
-          metadata.requestedProvider,
+      requestedProvider: metadata.requestedProvider,
 
-        status:
-          "fallback",
+      status: "fallback",
 
-        fallback:
-          true,
+      fallback: true,
 
-        model:
-          metadata.model ??
-          undefined,
-      },
-    );
+      model: metadata.model ?? undefined,
+    });
   }
 
-  notifyProviderAttempt(
-    callback,
-    {
-      provider:
-        metadata.provider,
+  notifyProviderAttempt(callback, {
+    provider: metadata.provider,
 
-      requestedProvider:
-        metadata.requestedProvider,
+    requestedProvider: metadata.requestedProvider,
 
-      status:
-        "starting",
+    status: "starting",
 
-      fallback:
-        metadata.fallback,
+    fallback: metadata.fallback,
 
-      model:
-        metadata.model ??
-        undefined,
-    },
-  );
+    model: metadata.model ?? undefined,
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1504,107 +950,65 @@ async function streamFromGateway({
   onProviderAttempt,
   onExecutionMetadata,
 }: StreamGatewayInput): Promise<StreamGatewayResult> {
-  const accessToken =
-    await getAccessToken();
+  const accessToken = await getAccessToken();
 
   const {
-    signal:
-      combinedSignal,
+    signal: combinedSignal,
 
     cleanup,
 
     didTimeout,
-  } =
-    createCombinedAbortSignal(
-      signal,
-      timeoutMs,
-    );
+  } = createCombinedAbortSignal(signal, timeoutMs);
 
-  let visibleOutput =
-    "";
+  let visibleOutput = "";
 
-  let streamingNotified =
-    false;
+  let streamingNotified = false;
 
-  let executionMetadata:
-    AiExecutionMetadata | null =
-    null;
+  let executionMetadata: AiExecutionMetadata | null = null;
 
   try {
     const requestBody = {
       messages,
 
-      system:
-        system?.trim() ||
-        undefined,
+      system: system?.trim() || undefined,
 
       provider,
     };
 
-    const response =
-      await fetch(
-        "/api/chat",
-        {
-          method:
-            "POST",
+    const response = await fetch("/api/chat", {
+      method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
+      headers: {
+        "Content-Type": "application/json",
 
-            Accept:
-              "text/event-stream, text/plain, application/json",
+        Accept: "text/event-stream, text/plain, application/json",
 
-            Authorization:
-              `Bearer ${accessToken}`,
-          },
+        Authorization: `Bearer ${accessToken}`,
+      },
 
-          /*
-           * Only one provider-routing instruction is sent.
-           *
-           * fallback_provider is intentionally NOT sent.
-           *
-           * /api/chat owns the fallback order.
-           */
-          body:
-            JSON.stringify(
-              requestBody,
-            ),
+      /*
+       * Only one provider-routing instruction is sent.
+       *
+       * fallback_provider is intentionally NOT sent.
+       *
+       * /api/chat owns the fallback order.
+       */
+      body: JSON.stringify(requestBody),
 
-          signal:
-            combinedSignal,
-        },
-      );
+      signal: combinedSignal,
+    });
 
-    if (
-      !response.ok
-    ) {
-      const rawProvider =
-        response.headers
-          .get(
-            HEADER_PROVIDER,
-          )
-          ?.trim()
-          .toLowerCase();
+    if (!response.ok) {
+      const rawProvider = response.headers.get(HEADER_PROVIDER)?.trim().toLowerCase();
 
-      const actualProvider =
-        isExecutionProvider(
-          rawProvider,
-        )
-          ? rawProvider
-          : null;
+      const actualProvider = isExecutionProvider(rawProvider) ? rawProvider : null;
 
       throw new ChatHttpError({
-        status:
-          response.status,
+        status: response.status,
 
-        message:
-          await readErrorResponse(
-            response,
-          ),
+        message: await readErrorResponse(response),
 
-        requestedProvider:
-          provider,
+        requestedProvider: provider,
 
         actualProvider,
       });
@@ -1617,197 +1021,110 @@ async function streamFromGateway({
      *
      * This preserves provider truth.
      */
-    executionMetadata =
-      extractExecutionMetadata({
-        response,
+    executionMetadata = extractExecutionMetadata({
+      response,
 
-        requestedProvider:
-          provider,
-      });
-
-    notifyExecutionMetadata(
-      onExecutionMetadata,
-      executionMetadata,
-    );
-
-    notifyProviderStart({
-      callback:
-        onProviderAttempt,
-
-      metadata:
-        executionMetadata,
+      requestedProvider: provider,
     });
 
-    if (
-      !response.body
-    ) {
-      throw new Error(
-        "The Cossa AI gateway returned no response stream.",
-      );
+    notifyExecutionMetadata(onExecutionMetadata, executionMetadata);
+
+    notifyProviderStart({
+      callback: onProviderAttempt,
+
+      metadata: executionMetadata,
+    });
+
+    if (!response.body) {
+      throw new Error("The Cossa AI gateway returned no response stream.");
     }
 
-    const metadata =
-      executionMetadata;
+    const metadata = executionMetadata;
 
-    const tokenHandler =
-      (
-        chunk:
-          string,
-      ) => {
-        if (
-          !chunk
-        ) {
-          return;
-        }
+    const tokenHandler = (chunk: string) => {
+      if (!chunk) {
+        return;
+      }
 
-        visibleOutput +=
-          chunk;
+      visibleOutput += chunk;
 
-        if (
-          !streamingNotified
-        ) {
-          streamingNotified =
-            true;
+      if (!streamingNotified) {
+        streamingNotified = true;
 
-          notifyProviderAttempt(
-            onProviderAttempt,
-            {
-              provider:
-                metadata.provider,
+        notifyProviderAttempt(onProviderAttempt, {
+          provider: metadata.provider,
 
-              requestedProvider:
-                metadata.requestedProvider,
+          requestedProvider: metadata.requestedProvider,
 
-              status:
-                "streaming",
+          status: "streaming",
 
-              fallback:
-                metadata.fallback,
+          fallback: metadata.fallback,
 
-              model:
-                metadata.model ??
-                undefined,
-            },
-          );
-        }
+          model: metadata.model ?? undefined,
+        });
+      }
 
-        onToken(
-          chunk,
-        );
-      };
+      onToken(chunk);
+    };
 
-    const contentType =
-      response.headers
-        .get(
-          "content-type",
-        )
-        ?.toLowerCase() ??
-      "";
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
 
-    const content =
-      contentType.includes(
-        "text/event-stream",
-      )
-        ? await readEventStream(
-            response,
-            tokenHandler,
-          )
-        : await readPlainTextStream(
-            response,
-            tokenHandler,
-          );
+    const content = contentType.includes("text/event-stream")
+      ? await readEventStream(response, tokenHandler)
+      : await readPlainTextStream(response, tokenHandler);
 
-    if (
-      requireContent &&
-      !content.trim()
-    ) {
-      throw new Error(
-        `${metadata.provider} returned an empty AI response.`,
-      );
+    if (requireContent && !content.trim()) {
+      throw new Error(`${metadata.provider} returned an empty AI response.`);
     }
 
-    notifyProviderAttempt(
-      onProviderAttempt,
-      {
-        provider:
-          metadata.provider,
+    notifyProviderAttempt(onProviderAttempt, {
+      provider: metadata.provider,
 
-        requestedProvider:
-          metadata.requestedProvider,
+      requestedProvider: metadata.requestedProvider,
 
-        status:
-          "completed",
+      status: "completed",
 
-        fallback:
-          metadata.fallback,
+      fallback: metadata.fallback,
 
-        model:
-          metadata.model ??
-          undefined,
-      },
-    );
+      model: metadata.model ?? undefined,
+    });
 
     return {
       content,
 
       metadata,
     };
-  } catch (
-    error
-  ) {
+  } catch (error) {
     /*
      * Browser timeout takes precedence over generic abort reporting.
      */
-    if (
-      didTimeout()
-    ) {
-      const providerLabel =
-        executionMetadata
-          ?.provider ??
-        provider;
+    if (didTimeout()) {
+      const providerLabel = executionMetadata?.provider ?? provider;
 
-      const timeoutError =
-        new Error(
-          `${providerLabel} AI request timed out after ${Math.round(
-            timeoutMs /
-              1_000,
-          )} seconds.`,
-        );
+      const timeoutError = new Error(
+        `${providerLabel} AI request timed out after ${Math.round(timeoutMs / 1_000)} seconds.`,
+      );
 
-      if (
-        executionMetadata
-      ) {
-        notifyProviderAttempt(
-          onProviderAttempt,
-          {
-            provider:
-              executionMetadata.provider,
+      if (executionMetadata) {
+        notifyProviderAttempt(onProviderAttempt, {
+          provider: executionMetadata.provider,
 
-            requestedProvider:
-              executionMetadata.requestedProvider,
+          requestedProvider: executionMetadata.requestedProvider,
 
-            status:
-              "failed",
+          status: "failed",
 
-            fallback:
-              executionMetadata.fallback,
+          fallback: executionMetadata.fallback,
 
-            model:
-              executionMetadata.model ??
-              undefined,
+          model: executionMetadata.model ?? undefined,
 
-            error:
-              timeoutError.message,
-          },
-        );
+          error: timeoutError.message,
+        });
       }
 
       /*
        * Preserve partial-response truth.
        */
-      if (
-        visibleOutput.trim()
-      ) {
+      if (visibleOutput.trim()) {
         throw new Error(
           [
             "Cossa AI stopped after already returning part of the response.",
@@ -1815,9 +1132,7 @@ async function streamFromGateway({
             "The partial answer was not replaced or mixed with another provider.",
 
             timeoutError.message,
-          ].join(
-            " ",
-          ),
+          ].join(" "),
         );
       }
 
@@ -1827,51 +1142,28 @@ async function streamFromGateway({
     /*
      * Explicit caller cancellation.
      */
-    if (
-      signal?.aborted
-    ) {
-      throw new DOMException(
-        "The AI request was cancelled.",
-        "AbortError",
-      );
+    if (signal?.aborted) {
+      throw new DOMException("The AI request was cancelled.", "AbortError");
     }
 
-    if (
-      isAbortError(
-        error,
-      )
-    ) {
+    if (isAbortError(error)) {
       throw error;
     }
 
-    if (
-      executionMetadata
-    ) {
-      notifyProviderAttempt(
-        onProviderAttempt,
-        {
-          provider:
-            executionMetadata.provider,
+    if (executionMetadata) {
+      notifyProviderAttempt(onProviderAttempt, {
+        provider: executionMetadata.provider,
 
-          requestedProvider:
-            executionMetadata.requestedProvider,
+        requestedProvider: executionMetadata.requestedProvider,
 
-          status:
-            "failed",
+        status: "failed",
 
-          fallback:
-            executionMetadata.fallback,
+        fallback: executionMetadata.fallback,
 
-          model:
-            executionMetadata.model ??
-            undefined,
+        model: executionMetadata.model ?? undefined,
 
-          error:
-            errorMessage(
-              error,
-            ),
-        },
-      );
+        error: errorMessage(error),
+      });
     }
 
     /*
@@ -1883,21 +1175,15 @@ async function streamFromGateway({
      *
      * No partial answer is silently replaced.
      */
-    if (
-      visibleOutput.trim()
-    ) {
+    if (visibleOutput.trim()) {
       throw new Error(
         [
           "Cossa AI stopped after already returning part of the response.",
 
           "The partial answer was not replaced or mixed with another provider.",
 
-          errorMessage(
-            error,
-          ),
-        ].join(
-          " ",
-        ),
+          errorMessage(error),
+        ].join(" "),
       );
     }
 
@@ -1934,39 +1220,29 @@ async function streamFromGateway({
  * Provider fallback never occurs inside this browser module.
  */
 export async function streamChat(
-  messages:
-    ChatMessage[],
+  messages: ChatMessage[],
 
-  onToken:
-    (
-      chunk:
-        string,
-    ) => void,
+  onToken: (chunk: string) => void,
 
-  signal?:
-    AbortSignal,
+  signal?: AbortSignal,
 
-  system?:
-    string,
+  system?: string,
 
-  provider:
-    CossaAiProvider =
-      DEFAULT_PROVIDER,
+  provider: CossaAiProvider = DEFAULT_PROVIDER,
 ): Promise<string> {
-  const result =
-    await streamChatWithMetadata(
-      messages,
+  const result = await streamChatWithMetadata(
+    messages,
 
-      onToken,
+    onToken,
 
-      {
-        signal,
+    {
+      signal,
 
-        system,
+      system,
 
-        provider,
-      },
-    );
+      provider,
+    },
+  );
 
   return result.content;
 }
@@ -1989,41 +1265,23 @@ export async function streamChat(
  * - monitoring.
  */
 export async function streamChatWithMetadata(
-  messages:
-    ChatMessage[],
+  messages: ChatMessage[],
 
-  onToken:
-    (
-      chunk:
-        string,
-    ) => void,
+  onToken: (chunk: string) => void,
 
-  options:
-    StreamChatOptions =
-      {},
+  options: StreamChatOptions = {},
 ): Promise<StreamChatResult> {
-  const validMessages =
-    requireMessages(
-      messages,
-    );
+  const validMessages = requireMessages(messages);
 
-  const provider =
-    requireProvider(
-      options.provider ??
-        DEFAULT_PROVIDER,
-    );
+  const provider = requireProvider(options.provider ?? DEFAULT_PROVIDER);
 
-  const timeoutMs =
-    Math.max(
-      MIN_TIMEOUT_MS,
+  const timeoutMs = Math.max(
+    MIN_TIMEOUT_MS,
 
-      options.timeoutMs ??
-        DEFAULT_TIMEOUT_MS,
-    );
+    options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+  );
 
-  const requireContent =
-    options.requireContent ??
-    true;
+  const requireContent = options.requireContent ?? true;
 
   /*
    * fallbackProvider is intentionally ignored.
@@ -2031,46 +1289,36 @@ export async function streamChatWithMetadata(
    * Keep this reference temporarily so TypeScript/lint tooling understands the
    * compatibility property is deliberately retained rather than forgotten.
    */
-  if (
-    options.fallbackProvider
-  ) {
+  if (options.fallbackProvider) {
     console.warn(
       "Cossa AI fallbackProvider is deprecated. Provider fallback is controlled by /api/chat.",
     );
   }
 
-  const result =
-    await streamFromGateway({
-      messages:
-        validMessages,
+  const result = await streamFromGateway({
+    messages: validMessages,
 
-      onToken,
+    onToken,
 
-      signal:
-        options.signal,
+    signal: options.signal,
 
-      system:
-        options.system,
+    system: options.system,
 
-      provider,
+    provider,
 
-      timeoutMs,
+    timeoutMs,
 
-      requireContent,
+    requireContent,
 
-      onProviderAttempt:
-        options.onProviderAttempt,
+    onProviderAttempt: options.onProviderAttempt,
 
-      onExecutionMetadata:
-        options.onExecutionMetadata,
-    });
+    onExecutionMetadata: options.onExecutionMetadata,
+  });
 
   return {
-    content:
-      result.content,
+    content: result.content,
 
-    metadata:
-      result.metadata,
+    metadata: result.metadata,
   };
 }
 
@@ -2089,27 +1337,19 @@ export async function streamChatWithMetadata(
  * streamChatWithMetadata()
  */
 export async function streamChatWithOptions(
-  messages:
-    ChatMessage[],
+  messages: ChatMessage[],
 
-  onToken:
-    (
-      chunk:
-        string,
-    ) => void,
+  onToken: (chunk: string) => void,
 
-  options:
-    StreamChatOptions =
-      {},
+  options: StreamChatOptions = {},
 ): Promise<string> {
-  const result =
-    await streamChatWithMetadata(
-      messages,
+  const result = await streamChatWithMetadata(
+    messages,
 
-      onToken,
+    onToken,
 
-      options,
-    );
+    options,
+  );
 
   return result.content;
 }

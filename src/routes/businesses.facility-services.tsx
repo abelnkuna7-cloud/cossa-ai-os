@@ -58,7 +58,7 @@ const FACILITY_TOOLS = [
     title: "Find Customers",
     description:
       "Research potential commercial, residential and organisational customers that may need facility services.",
-    to: "/sales/lead-hunter",
+    to: "/sales/lead-finder",
     icon: Target,
   },
 
@@ -136,8 +136,7 @@ const FACILITY_TOOLS = [
 
   {
     title: "Sales Analytics",
-    description:
-      "Review available pipeline, customer and sales performance information.",
+    description: "Review available pipeline, customer and sales performance information.",
     to: "/sales/analytics",
     icon: BarChart3,
   },
@@ -183,17 +182,13 @@ function CossaFacilityServicesWorkspace() {
           </p>
 
           <h1 className="mt-2 font-display text-3xl font-semibold md:text-4xl">
-            Cossa{" "}
-            <span className="text-gradient-gold">
-              Facility Services
-            </span>
+            Cossa <span className="text-gradient-gold">Facility Services</span>
           </h1>
 
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            One operating workspace for Cossa Facility Services. Customer
-            acquisition, quotations, service delivery, projects, marketing,
-            documents and AI support are organised around the complete customer
-            lifecycle.
+            One operating workspace for Cossa Facility Services. Customer acquisition, quotations,
+            service delivery, projects, marketing, documents and AI support are organised around the
+            complete customer lifecycle.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-2">
@@ -201,28 +196,20 @@ function CossaFacilityServicesWorkspace() {
               asChild
               className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
             >
-              <Link to="/sales/lead-hunter">
+              <Link to="/sales/lead-finder">
                 <Target className="mr-1.5 h-4 w-4" />
                 Find Customers
               </Link>
             </Button>
 
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary/40 text-primary"
-            >
+            <Button asChild variant="outline" className="border-primary/40 text-primary">
               <Link to="/sales/quotations">
                 <FileText className="mr-1.5 h-4 w-4" />
                 Create Quotation
               </Link>
             </Button>
 
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary/40 text-primary"
-            >
+            <Button asChild variant="outline" className="border-primary/40 text-primary">
               <Link to="/operations/projects">
                 <Wrench className="mr-1.5 h-4 w-4" />
                 Service Operations
@@ -277,9 +264,9 @@ function CossaFacilityServicesWorkspace() {
           </h2>
 
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            The tools below connect customer acquisition with service delivery.
-            The goal is not only to win individual jobs, but to build long-term
-            customer relationships and recurring facility-service revenue.
+            The tools below connect customer acquisition with service delivery. The goal is not only
+            to win individual jobs, but to build long-term customer relationships and recurring
+            facility-service revenue.
           </p>
         </div>
 
@@ -297,9 +284,7 @@ function CossaFacilityServicesWorkspace() {
                   <Icon className="h-5 w-5" />
                 </div>
 
-                <h3 className="mt-4 text-base font-semibold">
-                  {tool.title}
-                </h3>
+                <h3 className="mt-4 text-base font-semibold">{tool.title}</h3>
 
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   {tool.description}
@@ -334,9 +319,8 @@ function CossaFacilityServicesWorkspace() {
             </h2>
 
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              Facility Services becomes stronger when every enquiry follows a
-              repeatable commercial and operational process instead of being
-              handled as an isolated job.
+              Facility Services becomes stronger when every enquiry follows a repeatable commercial
+              and operational process instead of being handled as an isolated job.
             </p>
           </div>
         </div>
@@ -426,13 +410,9 @@ function OperatingArea({
         <Icon className="h-4 w-4" />
       </div>
 
-      <h3 className="mt-3 text-sm font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-3 text-sm font-semibold">{title}</h3>
 
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -452,13 +432,9 @@ function ProcessStep({
         {number}
       </span>
 
-      <h3 className="mt-2 text-sm font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-2 text-sm font-semibold">{title}</h3>
 
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -478,13 +454,9 @@ function PriorityCard({
         <Icon className="h-5 w-5" />
       </div>
 
-      <h3 className="mt-4 text-base font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-4 text-base font-semibold">{title}</h3>
 
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }

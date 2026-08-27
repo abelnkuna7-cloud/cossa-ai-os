@@ -14,6 +14,20 @@ interface SupabaseUser {
   id: string;
 }
 
+interface WebsiteHealthCheck {
+  id: string;
+  name: string;
+  website: string;
+  final_url: string | null;
+  availability: "healthy" | "degraded" | "unavailable";
+  http_status: number | null;
+  response_time_ms: number | null;
+  page_title: string | null;
+  title_detected: boolean;
+  noindex_detected: boolean;
+  issues: string[];
+}
+
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
@@ -154,7 +168,9 @@ function extractTitle(html: string): string | null {
   return title || null;
 }
 
-async function checkWebsite(website: (typeof OFFICIAL_WEBSITES)[number]): Promise<WebsiteHealthCheck> {
+async function checkWebsite(
+  website: (typeof OFFICIAL_WEBSITES)[number],
+): Promise<WebsiteHealthCheck> {
   const startedAt = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), WEBSITE_CHECK_TIMEOUT_MS);
@@ -178,9 +194,12 @@ async function checkWebsite(website: (typeof OFFICIAL_WEBSITES)[number]): Promis
     const issues: string[] = [];
 
     if (!response.ok) issues.push(`The homepage returned HTTP ${response.status}.`);
-    if (response.ok && !pageTitle) issues.push("A page title could not be detected in the homepage response.");
-    if (noindexDetected) issues.push("The homepage response indicates noindex, which can prevent search indexing.");
-    if (response.ok && responseTime > 5_000) issues.push(`Homepage response was slow (${(responseTime / 1_000).toFixed(1)} seconds).`);
+    if (response.ok && !pageTitle)
+      issues.push("A page title could not be detected in the homepage response.");
+    if (noindexDetected)
+      issues.push("The homepage response indicates noindex, which can prevent search indexing.");
+    if (response.ok && responseTime > 5_000)
+      issues.push(`Homepage response was slow (${(responseTime / 1_000).toFixed(1)} seconds).`);
 
     return {
       id: website.id,

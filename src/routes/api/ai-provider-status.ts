@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
-const OPENAI_MODEL = "gpt-5.6-terra";
 const PROVIDER_CHECK_TIMEOUT_MS = 10_000;
 
 interface SupabaseUser {
@@ -36,6 +35,7 @@ function getEnvironment() {
 
   return {
     openAiApiKey: process.env.OPENAI_API_KEY,
+    openAiModel: process.env.AGENT_OPENAI_MODEL?.trim() || process.env.OPENAI_MODEL?.trim() || null,
     supabaseUrl: trimTrailingSlash(supabaseUrl),
     supabaseKey,
     organisationId,
@@ -147,7 +147,9 @@ async function requireCossaMember(request: Request) {
   const environment = getEnvironment();
 
   if (!environment) {
-    return { error: responseJson({ error: "Cossa provider status is not fully configured." }, 503) };
+    return {
+      error: responseJson({ error: "Cossa provider status is not fully configured." }, 503),
+    };
   }
 
   const token = getBearerToken(request);
@@ -189,8 +191,10 @@ export const Route = createFileRoute("/api/ai-provider-status")({
 
         return responseJson({
           openai: {
-            configured: Boolean(access.environment.openAiApiKey),
-            model: OPENAI_MODEL,
+            configured: Boolean(access.environment.openAiApiKey && access.environment.openAiModel),
+            key_configured: Boolean(access.environment.openAiApiKey),
+            model_configured: Boolean(access.environment.openAiModel),
+            model: access.environment.openAiModel,
           },
         });
       },
@@ -200,11 +204,12 @@ export const Route = createFileRoute("/api/ai-provider-status")({
           return access.error;
         }
 
-        if (!access.environment.openAiApiKey) {
+        if (!access.environment.openAiApiKey || !access.environment.openAiModel) {
           return responseJson(
             {
               connected: false,
-              error: "OpenAI is not configured on this deployment. Add OPENAI_API_KEY to the Production environment and deploy again.",
+              error:
+                "OpenAI is not fully configured on this deployment. Add OPENAI_API_KEY and an approved AGENT_OPENAI_MODEL or OPENAI_MODEL to the protected Production environment, then deploy again.",
             },
             503,
           );
@@ -218,12 +223,15 @@ export const Route = createFileRoute("/api/ai-provider-status")({
            * This checks credential and model access only. It does not send Cossa
            * knowledge, CRM data, prompts or a chat completion to OpenAI.
            */
-          const response = await fetch(`https://api.openai.com/v1/models/${OPENAI_MODEL}`, {
-            headers: {
-              Authorization: `Bearer ${access.environment.openAiApiKey}`,
+          const response = await fetch(
+            `https://api.openai.com/v1/models/${encodeURIComponent(access.environment.openAiModel)}`,
+            {
+              headers: {
+                Authorization: `Bearer ${access.environment.openAiApiKey}`,
+              },
+              signal: controller.signal,
             },
-            signal: controller.signal,
-          });
+          );
 
           if (!response.ok) {
             const body = (await response.json().catch(() => null)) as OpenAiProviderError | null;
@@ -235,14 +243,16 @@ export const Route = createFileRoute("/api/ai-provider-status")({
 
           return responseJson({
             connected: true,
-            model: OPENAI_MODEL,
+            model: access.environment.openAiModel,
             checked_at: new Date().toISOString(),
-            scope: "Credential and model-access check only. No Cossa data or chat request was sent.",
+            scope:
+              "Credential and model-access check only. No Cossa data or chat request was sent.",
           });
         } catch (error) {
-          const message = error instanceof Error && error.name === "AbortError"
-            ? "The OpenAI connection check timed out. Try again shortly."
-            : "The deployment could not reach OpenAI. Check the server deployment and try again.";
+          const message =
+            error instanceof Error && error.name === "AbortError"
+              ? "The OpenAI connection check timed out. Try again shortly."
+              : "The deployment could not reach OpenAI. Check the server deployment and try again.";
           return responseJson({ connected: false, error: message }, 502);
         } finally {
           clearTimeout(timeout);

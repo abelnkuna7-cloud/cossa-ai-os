@@ -75,6 +75,7 @@ export type ModuleStatus =
   | "Design"
   | "Development"
   | "Testing"
+  | "Preview"
   | "Live"
   | "Production";
 
@@ -727,11 +728,17 @@ export const MODULES: ModuleGroup[] = [
         "/ai/voice",
         Mic,
         "Live",
-        "Talk to Cossa, hands-free",
-        "Voice mode for capturing notes, running commands and handling calls.",
-        "The fastest interface for busy operators.",
-        ["Push-to-talk", "Voice notes", "Transcription"],
-        ["Inbound calls", "Voice agents", "Real-time translation"],
+        "Speak naturally with Cossa AI",
+        "Cossa Voice AI can listen and respond by voice inside GROWTH. It does not place or receive telephone calls unless an authorised telephony integration is separately connected.",
+        "Use one persistent voice-and-text conversation with page-aware Cossa intelligence.",
+        [
+          "Voice input",
+          "Editable transcription",
+          "Spoken responses",
+          "Shared conversation",
+          "Page context",
+        ],
+        ["Telephone calling", "Voice cloning", "Real-time translation"],
       ),
       s(
         "AI Memory",

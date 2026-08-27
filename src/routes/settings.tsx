@@ -1,6 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Settings as SettingsIcon, Save, Building2, Palette, Brain } from "lucide-react";
+import {
+  Brain,
+  Building2,
+  Palette,
+  Save,
+  Settings as SettingsIcon,
+  ShieldCheck,
+} from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +20,10 @@ export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
       { title: "Settings — Cossa AI" },
-      { name: "description", content: "Business profile, brand and AI preferences for Cossa AI." },
+      {
+        name: "description",
+        content: "Device preferences plus links to persistent Cossa account and access controls.",
+      },
       { property: "og:title", content: "Settings — Cossa AI" },
       { property: "og:description", content: "Configure your Cossa AI workspace." },
     ],
@@ -74,13 +84,15 @@ function SettingsPage() {
     setHydrated(true);
   }, []);
 
-  function set<K extends keyof SettingsShape>(k: K, v: SettingsShape[K]) {
-    setState((s) => ({ ...s, [k]: v }));
+  function set<K extends keyof SettingsShape>(key: K, value: SettingsShape[K]) {
+    setState((current) => ({ ...current, [key]: value }));
   }
 
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    toast.success("Settings saved");
+    toast.success("Device preferences saved", {
+      description: "These preferences are stored in this browser only.",
+    });
   }
 
   if (!hydrated) return null;
@@ -95,66 +107,133 @@ function SettingsPage() {
           </div>
           <StatusBadge status="Live" />
         </div>
-        <h1 className="mt-4 font-display text-3xl font-semibold">Settings</h1>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
-          Configure your business profile, brand and AI preferences. Used across every Cossa AI module.
+        <h1 className="mt-4 font-display text-3xl font-semibold">Administration & Settings</h1>
+        <p className="mt-2 max-w-3xl text-muted-foreground">
+          Browser-local workspace preferences are kept separate from persistent Supabase account
+          profiles and role permissions. This prevents device settings from being mistaken for
+          company-wide configuration.
         </p>
       </section>
 
-      <Section icon={Building2} title="Business profile">
+      <section className="glass-card p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
+            <div>
+              <h2 className="font-display text-lg font-semibold">Persistent Team & Access</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Manage your real Supabase profile and, for authorised admins, team role permissions.
+                These settings persist across devices and sessions.
+              </p>
+            </div>
+          </div>
+          <Button asChild variant="outline">
+            <Link to="/administration/team-access">Open Team & Access</Link>
+          </Button>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-muted-foreground">
+        <strong className="text-foreground">Device-local preference boundary:</strong> the fields
+        below currently use browser localStorage. They are useful personal preferences, but they are
+        not presented as authoritative company records or global Cossa AI knowledge.
+      </section>
+
+      <Section icon={Building2} title="Device business preferences">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Business name">
-            <Input value={state.businessName} onChange={(e) => set("businessName", e.target.value)} placeholder="Acme (Pty) Ltd" />
+            <Input
+              value={state.businessName}
+              onChange={(event) => set("businessName", event.target.value)}
+              placeholder="Cossa Nexus Holdings"
+            />
           </Field>
           <Field label="Industry">
-            <Input value={state.industry} onChange={(e) => set("industry", e.target.value)} placeholder="Construction" />
+            <Input
+              value={state.industry}
+              onChange={(event) => set("industry", event.target.value)}
+              placeholder="Construction"
+            />
           </Field>
           <Field label="Website">
-            <Input value={state.website} onChange={(e) => set("website", e.target.value)} placeholder="https://" />
+            <Input
+              value={state.website}
+              onChange={(event) => set("website", event.target.value)}
+              placeholder="https://"
+            />
           </Field>
           <Field label="Phone">
-            <Input value={state.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+27" />
+            <Input
+              value={state.phone}
+              onChange={(event) => set("phone", event.target.value)}
+              placeholder="+27"
+            />
           </Field>
           <Field label="Email">
-            <Input type="email" value={state.email} onChange={(e) => set("email", e.target.value)} placeholder="hello@" />
+            <Input
+              type="email"
+              value={state.email}
+              onChange={(event) => set("email", event.target.value)}
+              placeholder="hello@"
+            />
           </Field>
           <Field label="Currency">
-            <Input value={state.currency} onChange={(e) => set("currency", e.target.value)} placeholder="ZAR" />
+            <Input
+              value={state.currency}
+              onChange={(event) => set("currency", event.target.value)}
+              placeholder="ZAR"
+            />
           </Field>
           <Field label="Timezone">
-            <Input value={state.timezone} onChange={(e) => set("timezone", e.target.value)} placeholder="Africa/Johannesburg" />
+            <Input
+              value={state.timezone}
+              onChange={(event) => set("timezone", event.target.value)}
+              placeholder="Africa/Johannesburg"
+            />
           </Field>
           <Field label="Address" className="sm:col-span-2">
-            <Textarea value={state.address} onChange={(e) => set("address", e.target.value)} rows={2} />
-          </Field>
-        </div>
-      </Section>
-
-      <Section icon={Palette} title="Brand">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Primary color">
-            <Input value={state.brandPrimary} onChange={(e) => set("brandPrimary", e.target.value)} placeholder="#000000" />
-          </Field>
-          <Field label="Accent color">
-            <Input value={state.brandAccent} onChange={(e) => set("brandAccent", e.target.value)} placeholder="#D4AF37" />
-          </Field>
-          <Field label="Brand voice" className="sm:col-span-2">
             <Textarea
-              value={state.brandVoice}
-              onChange={(e) => set("brandVoice", e.target.value)}
-              rows={3}
-              placeholder="Confident, warm, expert. We speak plainly and never patronise."
+              value={state.address}
+              onChange={(event) => set("address", event.target.value)}
+              rows={2}
             />
           </Field>
         </div>
       </Section>
 
-      <Section icon={Brain} title="AI preferences">
+      <Section icon={Palette} title="Device brand preferences">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Primary color">
+            <Input
+              value={state.brandPrimary}
+              onChange={(event) => set("brandPrimary", event.target.value)}
+              placeholder="#000000"
+            />
+          </Field>
+          <Field label="Accent color">
+            <Input
+              value={state.brandAccent}
+              onChange={(event) => set("brandAccent", event.target.value)}
+              placeholder="#D4AF37"
+            />
+          </Field>
+          <Field label="Brand voice" className="sm:col-span-2">
+            <Textarea
+              value={state.brandVoice}
+              onChange={(event) => set("brandVoice", event.target.value)}
+              rows={3}
+              placeholder="Professional, direct, evidence-led."
+            />
+          </Field>
+        </div>
+      </Section>
+
+      <Section icon={Brain} title="Device AI preferences">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Default tone">
             <select
               value={state.aiTone}
-              onChange={(e) => set("aiTone", e.target.value)}
+              onChange={(event) => set("aiTone", event.target.value)}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
               <option value="professional">Professional</option>
@@ -163,27 +242,38 @@ function SettingsPage() {
               <option value="premium">Premium / luxury</option>
             </select>
           </Field>
-          <Field label="Business context for AI" className="sm:col-span-2">
+          <Field label="Personal AI context" className="sm:col-span-2">
             <Textarea
               value={state.aiContext}
-              onChange={(e) => set("aiContext", e.target.value)}
+              onChange={(event) => set("aiContext", event.target.value)}
               rows={4}
-              placeholder="Anything Cossa AI should always know: markets you serve, ideal customers, offers, differentiators."
+              placeholder="Optional personal working preference for this browser. Do not use this field as authoritative company truth."
             />
           </Field>
         </div>
       </Section>
 
       <div className="sticky bottom-4 flex justify-end">
-        <Button onClick={save} className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
-          <Save className="mr-1.5 h-4 w-4" /> Save changes
+        <Button
+          onClick={save}
+          className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+        >
+          <Save className="mr-1.5 h-4 w-4" /> Save device preferences
         </Button>
       </div>
     </div>
   );
 }
 
-function Section({ icon: Icon, title, children }: { icon: typeof SettingsIcon; title: string; children: React.ReactNode }) {
+function Section({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: typeof SettingsIcon;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="glass-card p-6">
       <div className="flex items-center gap-2">
@@ -195,7 +285,15 @@ function Section({ icon: Icon, title, children }: { icon: typeof SettingsIcon; t
   );
 }
 
-function Field({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
+function Field({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       <Label className="text-xs uppercase tracking-widest text-muted-foreground">{label}</Label>

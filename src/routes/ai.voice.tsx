@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { SpecialistChat } from "@/components/specialist-chat";
+import { CossaVoiceAssistant } from "@/components/cossa-voice-assistant";
 import { getModule } from "@/lib/modules";
 
 const TO = "/ai/voice";
 const mod = getModule(TO)!;
 
 export const Route = createFileRoute("/ai/voice")({
-  component: () => <SpecialistChat to={TO} />,
+  component: () => <CossaVoiceAssistant page />,
   head: () => ({
     meta: [
       { title: `${mod.title} — Cossa AI` },

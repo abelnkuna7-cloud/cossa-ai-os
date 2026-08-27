@@ -14,7 +14,14 @@ interface StatCardProps {
   icon?: LucideIcon;
   tone?: string;
 }
-export function StatCard({ label, value, delta, trend = "up", icon: Icon, tone = "text-primary" }: StatCardProps) {
+export function StatCard({
+  label,
+  value,
+  delta,
+  trend = "up",
+  icon: Icon,
+  tone = "text-primary",
+}: StatCardProps) {
   const TrendIcon = trend === "down" ? ArrowDownRight : ArrowUpRight;
   const trendTone = trend === "down" ? "text-destructive" : "text-success";
   return (
@@ -22,7 +29,12 @@ export function StatCard({ label, value, delta, trend = "up", icon: Icon, tone =
       <div className="flex items-start justify-between">
         <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
         {Icon && (
-          <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10", tone)}>
+          <div
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10",
+              tone,
+            )}
+          >
             <Icon className="h-4 w-4" />
           </div>
         )}
@@ -57,7 +69,15 @@ export function FeatureCard({ icon: Icon, title, description }: FeatureCardProps
 }
 
 /* --------------------------- ProgressStat --------------------------- */
-export function ProgressStat({ label, value, hint }: { label: string; value: number; hint?: string }) {
+export function ProgressStat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: number;
+  hint?: string;
+}) {
   return (
     <div>
       <div className="flex items-center justify-between text-sm">
@@ -80,19 +100,30 @@ export interface TimelineItem {
 export function Timeline({ items }: { items: TimelineItem[] }) {
   return (
     <ol className="relative flex flex-col gap-4 pl-6">
-      <div className="absolute left-2 top-2 bottom-2 w-px bg-gradient-to-b from-primary/40 via-primary/15 to-transparent" aria-hidden />
+      <div
+        className="absolute left-2 top-2 bottom-2 w-px bg-gradient-to-b from-primary/40 via-primary/15 to-transparent"
+        aria-hidden
+      />
       {items.map((it, i) => {
         const Icon = it.icon;
         return (
           <li key={i} className="relative">
             <div className="absolute -left-6 top-1 flex h-4 w-4 items-center justify-center rounded-full border border-primary/40 bg-background">
-              {Icon ? <Icon className="h-2.5 w-2.5 text-primary" /> : <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+              {Icon ? (
+                <Icon className="h-2.5 w-2.5 text-primary" />
+              ) : (
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+              )}
             </div>
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-medium">{it.title}</div>
-              <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{it.time}</div>
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                {it.time}
+              </div>
             </div>
-            {it.description && <p className="mt-0.5 text-xs text-muted-foreground">{it.description}</p>}
+            {it.description && (
+              <p className="mt-0.5 text-xs text-muted-foreground">{it.description}</p>
+            )}
           </li>
         );
       })}
@@ -107,14 +138,26 @@ export interface Column<T> {
   render?: (row: T) => ReactNode;
   className?: string;
 }
-export function DataTable<T extends Record<string, unknown>>({ columns, rows }: { columns: Column<T>[]; rows: T[] }) {
+export function DataTable<T extends Record<string, unknown>>({
+  columns,
+  rows,
+}: {
+  columns: Column<T>[];
+  rows: T[];
+}) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border/60">
       <table className="min-w-full text-sm">
         <thead className="bg-card/60">
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className={cn("px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-muted-foreground", c.className)}>
+              <th
+                key={c.key}
+                className={cn(
+                  "px-4 py-2.5 text-left text-[11px] uppercase tracking-widest text-muted-foreground",
+                  c.className,
+                )}
+              >
                 {c.header}
               </th>
             ))}
@@ -182,7 +225,11 @@ export function Widget({ title, icon: Icon, status, action, children, className 
 /* --------------------------- PreviewGrid --------------------------- */
 /** Placeholder grid used inside "Coming Soon" module pages to show what the
  * final feature will contain, without any interactive controls. */
-export function PreviewGrid({ items }: { items: { icon: LucideIcon; title: string; description: string }[] }) {
+export function PreviewGrid({
+  items,
+}: {
+  items: { icon: LucideIcon; title: string; description: string }[];
+}) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((f) => {

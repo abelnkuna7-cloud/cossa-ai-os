@@ -57,7 +57,7 @@ const CONSTRUCTION_TOOLS = [
     title: "Lead Hunter",
     description:
       "Research potential construction customers, companies and commercial opportunities for Cossa Construction.",
-    to: "/sales/lead-hunter",
+    to: "/sales/lead-finder",
     icon: Target,
   },
 
@@ -166,17 +166,13 @@ function CossaConstructionWorkspace() {
           </p>
 
           <h1 className="mt-2 font-display text-3xl font-semibold md:text-4xl">
-            Cossa{" "}
-            <span className="text-gradient-gold">
-              Construction
-            </span>
+            Cossa <span className="text-gradient-gold">Construction</span>
           </h1>
 
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            One operating workspace for Cossa Construction. Find opportunities,
-            manage customers, prepare quotations, research tenders, coordinate
-            projects, produce documents and grow the construction business from
-            one command centre.
+            One operating workspace for Cossa Construction. Find opportunities, manage customers,
+            prepare quotations, research tenders, coordinate projects, produce documents and grow
+            the construction business from one command centre.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-2">
@@ -184,28 +180,20 @@ function CossaConstructionWorkspace() {
               asChild
               className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
             >
-              <Link to="/sales/lead-hunter">
+              <Link to="/sales/lead-finder">
                 <Target className="mr-1.5 h-4 w-4" />
                 Find Construction Leads
               </Link>
             </Button>
 
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary/40 text-primary"
-            >
+            <Button asChild variant="outline" className="border-primary/40 text-primary">
               <Link to="/sales/quotations">
                 <Calculator className="mr-1.5 h-4 w-4" />
                 Create Quotation
               </Link>
             </Button>
 
-            <Button
-              asChild
-              variant="outline"
-              className="border-primary/40 text-primary"
-            >
+            <Button asChild variant="outline" className="border-primary/40 text-primary">
               <Link to="/operations/projects">
                 <HardHat className="mr-1.5 h-4 w-4" />
                 Open Projects
@@ -260,9 +248,9 @@ function CossaConstructionWorkspace() {
           </h2>
 
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            This workspace groups the GROWTH tools that matter to the
-            construction business. The objective is simple: find work, convert
-            opportunities, deliver professionally and build repeat business.
+            This workspace groups the GROWTH tools that matter to the construction business. The
+            objective is simple: find work, convert opportunities, deliver professionally and build
+            repeat business.
           </p>
         </div>
 
@@ -280,9 +268,7 @@ function CossaConstructionWorkspace() {
                   <Icon className="h-5 w-5" />
                 </div>
 
-                <h3 className="mt-4 text-base font-semibold">
-                  {tool.title}
-                </h3>
+                <h3 className="mt-4 text-base font-semibold">{tool.title}</h3>
 
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   {tool.description}
@@ -317,9 +303,8 @@ function CossaConstructionWorkspace() {
             </h2>
 
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              Construction opportunities should move through a controlled
-              process so leads, quotations and projects do not disappear
-              between disconnected tools.
+              Construction opportunities should move through a controlled process so leads,
+              quotations and projects do not disappear between disconnected tools.
             </p>
           </div>
         </div>
@@ -409,13 +394,9 @@ function ConstructionArea({
         <Icon className="h-4 w-4" />
       </div>
 
-      <h3 className="mt-3 text-sm font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-3 text-sm font-semibold">{title}</h3>
 
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -435,13 +416,9 @@ function ProcessStep({
         {number}
       </span>
 
-      <h3 className="mt-2 text-sm font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-2 text-sm font-semibold">{title}</h3>
 
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -461,13 +438,9 @@ function PriorityCard({
         <Icon className="h-5 w-5" />
       </div>
 
-      <h3 className="mt-4 text-base font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-4 text-base font-semibold">{title}</h3>
 
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }

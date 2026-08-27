@@ -1,12 +1,5 @@
-import {
-  createFileRoute,
-  Link,
-} from "@tanstack/react-router";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   ArrowLeft,
@@ -29,20 +22,15 @@ import {
   salesOpportunities,
   type SalesOpportunity,
 } from "@/lib/business-data";
-import {
-  fmtCurrency,
-  fmtDate,
-} from "@/components/crud-workspace";
+import { fmtCurrency, fmtDate } from "@/components/crud-workspace";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
-export const Route = createFileRoute(
-  "/sales/pipeline",
-)({
+export const Route = createFileRoute("/sales/pipeline")({
   component: PipelinePage,
   head: () => ({
     meta: [
       {
-        title:
-          "Sales Pipeline — Cossa AI",
+        title: "Sales Pipeline — Cossa AI",
       },
       {
         name: "description",
@@ -51,37 +39,23 @@ export const Route = createFileRoute(
       },
       {
         property: "og:title",
-        content:
-          "Sales Pipeline — Cossa AI",
+        content: "Sales Pipeline — Cossa AI",
       },
       {
         property: "og:description",
-        content:
-          "Production sales pipeline for Cossa Nexus Holdings.",
+        content: "Production sales pipeline for Cossa Nexus Holdings.",
       },
     ],
   }),
 });
 
-const ACTIVE_STAGES = [
-  "prospect",
-  "qualified",
-  "proposal",
-  "negotiation",
-] as const;
+const ACTIVE_STAGES = ["prospect", "qualified", "proposal", "negotiation"] as const;
 
-const CLOSED_STAGES = [
-  "won",
-  "lost",
-] as const;
+const CLOSED_STAGES = ["won", "lost"] as const;
 
-const STAGES = [
-  ...ACTIVE_STAGES,
-  ...CLOSED_STAGES,
-] as const;
+const STAGES = [...ACTIVE_STAGES, ...CLOSED_STAGES] as const;
 
-type PipelineStage =
-  (typeof STAGES)[number];
+type PipelineStage = (typeof STAGES)[number];
 
 interface StageDefinition {
   stage: PipelineStage;
@@ -100,78 +74,53 @@ const STAGE_DEFINITIONS: StageDefinition[] = [
   {
     stage: "prospect",
     label: "Prospect",
-    description:
-      "Potential opportunity identified but not yet qualified.",
+    description: "Potential opportunity identified but not yet qualified.",
   },
   {
     stage: "qualified",
     label: "Qualified",
-    description:
-      "Need, fit and contact route have been confirmed.",
+    description: "Need, fit and contact route have been confirmed.",
   },
   {
     stage: "proposal",
     label: "Proposal",
-    description:
-      "A quotation, proposal or solution has been prepared.",
+    description: "A quotation, proposal or solution has been prepared.",
   },
   {
     stage: "negotiation",
     label: "Negotiation",
-    description:
-      "Scope, price, timing or commercial terms are under discussion.",
+    description: "Scope, price, timing or commercial terms are under discussion.",
   },
   {
     stage: "won",
     label: "Won",
-    description:
-      "Accepted opportunities converted into operational projects.",
+    description: "Accepted opportunities converted into operational projects.",
   },
   {
     stage: "lost",
     label: "Lost",
-    description:
-      "The opportunity did not proceed.",
+    description: "The opportunity did not proceed.",
   },
 ];
 
-function normaliseStage(
-  value: unknown,
-): PipelineStage {
+function normaliseStage(value: unknown): PipelineStage {
   const stage = String(value ?? "")
     .trim()
     .toLowerCase();
 
-  if (
-    STAGES.includes(
-      stage as PipelineStage,
-    )
-  ) {
+  if (STAGES.includes(stage as PipelineStage)) {
     return stage as PipelineStage;
   }
 
   return "prospect";
 }
 
-function getStageLabel(
-  stage: PipelineStage,
-): string {
-  return (
-    STAGE_DEFINITIONS.find(
-      (definition) =>
-        definition.stage === stage,
-    )?.label ?? stage
-  );
+function getStageLabel(stage: PipelineStage): string {
+  return STAGE_DEFINITIONS.find((definition) => definition.stage === stage)?.label ?? stage;
 }
 
-function getPreviousStage(
-  stage: PipelineStage,
-): PipelineStage | null {
-  const index =
-    ACTIVE_STAGES.indexOf(
-      stage as
-        (typeof ACTIVE_STAGES)[number],
-    );
+function getPreviousStage(stage: PipelineStage): PipelineStage | null {
+  const index = ACTIVE_STAGES.indexOf(stage as (typeof ACTIVE_STAGES)[number]);
 
   if (index <= 0) {
     return null;
@@ -180,20 +129,10 @@ function getPreviousStage(
   return ACTIVE_STAGES[index - 1];
 }
 
-function getNextStage(
-  stage: PipelineStage,
-): PipelineStage | null {
-  const index =
-    ACTIVE_STAGES.indexOf(
-      stage as
-        (typeof ACTIVE_STAGES)[number],
-    );
+function getNextStage(stage: PipelineStage): PipelineStage | null {
+  const index = ACTIVE_STAGES.indexOf(stage as (typeof ACTIVE_STAGES)[number]);
 
-  if (
-    index < 0 ||
-    index >=
-      ACTIVE_STAGES.length - 1
-  ) {
+  if (index < 0 || index >= ACTIVE_STAGES.length - 1) {
     return null;
   }
 
@@ -213,24 +152,16 @@ function PipelinePage() {
   async function refreshPipelineData() {
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: [
-          "sales-opportunities",
-        ],
+        queryKey: ["sales-opportunities"],
       }),
       queryClient.invalidateQueries({
-        queryKey: [
-          "dashboard-stats",
-        ],
+        queryKey: ["dashboard-stats"],
       }),
       queryClient.invalidateQueries({
-        queryKey: [
-          "ops-projects",
-        ],
+        queryKey: ["ops-projects"],
       }),
       queryClient.invalidateQueries({
-        queryKey: [
-          "operations-projects",
-        ],
+        queryKey: ["operations-projects"],
       }),
     ]);
   }
@@ -243,12 +174,9 @@ function PipelinePage() {
       opportunityId: string;
       stage: PipelineStage;
     }) => {
-      await salesOpportunities.update(
-        opportunityId,
-        {
-          stage,
-        },
-      );
+      await salesOpportunities.update(opportunityId, {
+        stage,
+      });
 
       return {
         opportunityId,
@@ -259,237 +187,139 @@ function PipelinePage() {
     onSuccess: async ({ stage }) => {
       await refreshPipelineData();
 
-      toast.success(
-        `Opportunity moved to ${getStageLabel(
-          stage,
-        )}`,
-      );
+      toast.success(`Opportunity moved to ${getStageLabel(stage)}`);
     },
 
     onError: (error) => {
       const message =
-        error instanceof Error
-          ? error.message
-          : "The opportunity stage could not be updated.";
+        error instanceof Error ? error.message : "The opportunity stage could not be updated.";
 
-      toast.error(
-        "Pipeline update failed",
-        {
-          description: message,
-        },
-      );
+      toast.error("Pipeline update failed", {
+        description: message,
+      });
     },
   });
 
-  const wonConversionMutation =
-    useMutation({
-      mutationFn: async (
-        opportunity: SalesOpportunity,
-      ): Promise<WonConversionResult> => {
-        /*
-         * Step 1:
-         * Persist the Won stage in the opportunities table.
-         */
-        await salesOpportunities.update(
-          opportunity.id,
-          {
-            stage: "won",
-          },
-        );
+  const wonConversionMutation = useMutation({
+    mutationFn: async (opportunity: SalesOpportunity): Promise<WonConversionResult> => {
+      /*
+       * Step 1:
+       * Persist the Won stage in the opportunities table.
+       */
+      await salesOpportunities.update(opportunity.id, {
+        stage: "won",
+      });
 
-        /*
-         * Step 2:
-         * Pass a Won-version of the record to the project conversion
-         * function. The function checks for an existing source marker,
-         * so clicking again cannot create duplicate projects.
-         */
-        const project =
-          await createProjectFromOpportunity({
-            ...opportunity,
-            stage: "won",
-          });
+      /*
+       * Step 2:
+       * Pass a Won-version of the record to the project conversion
+       * function. The function checks for an existing source marker,
+       * so clicking again cannot create duplicate projects.
+       */
+      const project = await createProjectFromOpportunity({
+        ...opportunity,
+        stage: "won",
+      });
 
-        return {
-          opportunityId:
-            opportunity.id,
-          opportunityTitle:
-            opportunity.title,
-          projectId: project.id,
-          projectName: project.name,
-        };
-      },
+      return {
+        opportunityId: opportunity.id,
+        opportunityTitle: opportunity.title,
+        projectId: project.id,
+        projectName: project.name,
+      };
+    },
 
-      onSuccess: async (result) => {
-        await refreshPipelineData();
+    onSuccess: async (result) => {
+      await refreshPipelineData();
 
-        toast.success(
-          "Opportunity won and project created",
-          {
-            description:
-              `"${result.projectName}" is now available in Operations → Projects.`,
-          },
-        );
-      },
+      toast.success("Opportunity won and project created", {
+        description: `"${result.projectName}" is now available in Operations → Projects.`,
+      });
+    },
 
-      onError: async (error) => {
-        /*
-         * The stage update may have succeeded before project creation
-         * failed. Refresh all views so the user sees the true database
-         * state and can use the retry conversion button in the Won card.
-         */
-        await refreshPipelineData();
+    onError: async (error) => {
+      /*
+       * The stage update may have succeeded before project creation
+       * failed. Refresh all views so the user sees the true database
+       * state and can use the retry conversion button in the Won card.
+       */
+      await refreshPipelineData();
 
-        const message =
-          error instanceof Error
-            ? error.message
-            : "The opportunity or project conversion could not be completed.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "The opportunity or project conversion could not be completed.";
 
-        toast.error(
-          "Won conversion needs attention",
-          {
-            description: message,
-          },
-        );
-      },
-    });
+      toast.error("Won conversion needs attention", {
+        description: message,
+      });
+    },
+  });
 
-  const projectRetryMutation =
-    useMutation({
-      mutationFn: async (
-        opportunity: SalesOpportunity,
-      ) => {
-        return createProjectFromOpportunity({
-          ...opportunity,
-          stage: "won",
-        });
-      },
+  const projectRetryMutation = useMutation({
+    mutationFn: async (opportunity: SalesOpportunity) => {
+      return createProjectFromOpportunity({
+        ...opportunity,
+        stage: "won",
+      });
+    },
 
-      onSuccess: async (project) => {
-        await refreshPipelineData();
+    onSuccess: async (project) => {
+      await refreshPipelineData();
 
-        toast.success(
-          "Project ready",
-          {
-            description:
-              `"${project.name}" is available in Operations → Projects.`,
-          },
-        );
-      },
+      toast.success("Project ready", {
+        description: `"${project.name}" is available in Operations → Projects.`,
+      });
+    },
 
-      onError: (error) => {
-        toast.error(
-          "Project conversion failed",
-          {
-            description:
-              error instanceof Error
-                ? error.message
-                : "The project could not be created.",
-          },
-        );
-      },
-    });
+    onError: (error) => {
+      toast.error("Project conversion failed", {
+        description: error instanceof Error ? error.message : "The project could not be created.",
+      });
+    },
+  });
 
-  const rows = (
-    opportunitiesQuery.data ?? []
-  ).map((opportunity) => ({
+  const rows = (opportunitiesQuery.data ?? []).map((opportunity) => ({
     ...opportunity,
-    stage: normaliseStage(
-      opportunity.stage,
-    ),
+    stage: normaliseStage(opportunity.stage),
   }));
 
-  const columns =
-    STAGE_DEFINITIONS.map(
-      (definition) => {
-        const stageRows =
-          rows.filter(
-            (opportunity) =>
-              opportunity.stage ===
-              definition.stage,
-          );
+  const columns = STAGE_DEFINITIONS.map((definition) => {
+    const stageRows = rows.filter((opportunity) => opportunity.stage === definition.stage);
 
-        return {
-          ...definition,
-          rows: stageRows,
-          value: stageRows.reduce(
-            (
-              total,
-              opportunity,
-            ) =>
-              total +
-              Number(
-                opportunity.value ??
-                  0,
-              ),
-            0,
-          ),
-        };
-      },
-    );
+    return {
+      ...definition,
+      rows: stageRows,
+      value: stageRows.reduce((total, opportunity) => total + Number(opportunity.value ?? 0), 0),
+    };
+  });
 
-  const openPipelineValue =
-    rows
-      .filter(
-        (opportunity) =>
-          opportunity.stage !==
-            "won" &&
-          opportunity.stage !==
-            "lost",
-      )
-      .reduce(
-        (
-          total,
-          opportunity,
-        ) =>
-          total +
-          Number(
-            opportunity.value ?? 0,
-          ),
-        0,
-      );
+  const openPipelineValue = rows
+    .filter((opportunity) => opportunity.stage !== "won" && opportunity.stage !== "lost")
+    .reduce((total, opportunity) => total + Number(opportunity.value ?? 0), 0);
 
-  const openOpportunityCount =
-    rows.filter(
-      (opportunity) =>
-        opportunity.stage !== "won" &&
-        opportunity.stage !== "lost",
-    ).length;
+  const openOpportunityCount = rows.filter(
+    (opportunity) => opportunity.stage !== "won" && opportunity.stage !== "lost",
+  ).length;
 
-  const wonOpportunityCount =
-    rows.filter(
-      (opportunity) =>
-        opportunity.stage === "won",
-    ).length;
+  const wonOpportunityCount = rows.filter((opportunity) => opportunity.stage === "won").length;
 
   const mutationPending =
-    stageMutation.isPending ||
-    wonConversionMutation.isPending ||
-    projectRetryMutation.isPending;
+    stageMutation.isPending || wonConversionMutation.isPending || projectRetryMutation.isPending;
 
-  function updateStage(
-    opportunity: SalesOpportunity,
-    targetStage: PipelineStage,
-  ) {
+  function updateStage(opportunity: SalesOpportunity, targetStage: PipelineStage) {
     if (mutationPending) {
       return;
     }
 
-    const currentStage =
-      normaliseStage(
-        opportunity.stage,
-      );
+    const currentStage = normaliseStage(opportunity.stage);
 
-    if (
-      currentStage === targetStage
-    ) {
+    if (currentStage === targetStage) {
       return;
     }
 
     if (targetStage === "lost") {
-      const confirmed =
-        window.confirm(
-          `Mark "${opportunity.title}" as lost?`,
-        );
+      const confirmed = window.confirm(`Mark "${opportunity.title}" as lost?`);
 
       if (!confirmed) {
         return;
@@ -497,126 +327,89 @@ function PipelinePage() {
     }
 
     stageMutation.mutate({
-      opportunityId:
-        opportunity.id,
+      opportunityId: opportunity.id,
       stage: targetStage,
     });
   }
 
-  function markOpportunityWon(
-    opportunity: SalesOpportunity,
-  ) {
+  function markOpportunityWon(opportunity: SalesOpportunity) {
     if (mutationPending) {
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        [
-          `Mark "${opportunity.title}" as won?`,
-          "",
-          "This will:",
-          "1. Close the sales opportunity as Won.",
-          "2. Count its value as won revenue.",
-          "3. Create an operational project.",
-          "4. Add the project to the Command Center.",
-        ].join("\n"),
-      );
+    const confirmed = window.confirm(
+      [
+        `Mark "${opportunity.title}" as won?`,
+        "",
+        "This will:",
+        "1. Close the sales opportunity as Won.",
+        "2. Count its value as won revenue.",
+        "3. Create an operational project.",
+        "4. Add the project to the Command Center.",
+      ].join("\n"),
+    );
 
     if (!confirmed) {
       return;
     }
 
-    wonConversionMutation.mutate(
-      opportunity,
-    );
+    wonConversionMutation.mutate(opportunity);
   }
 
-  function retryProjectCreation(
-    opportunity: SalesOpportunity,
-  ) {
+  function retryProjectCreation(opportunity: SalesOpportunity) {
     if (mutationPending) {
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `Create or recover the Operations project for "${opportunity.title}"?`,
-      );
+    const confirmed = window.confirm(
+      `Create or recover the Operations project for "${opportunity.title}"?`,
+    );
 
     if (!confirmed) {
       return;
     }
 
-    projectRetryMutation.mutate(
-      opportunity,
-    );
+    projectRetryMutation.mutate(opportunity);
   }
 
-  function advanceOpportunity(
-    opportunity: SalesOpportunity,
-  ) {
-    const currentStage =
-      normaliseStage(
-        opportunity.stage,
-      );
+  function advanceOpportunity(opportunity: SalesOpportunity) {
+    const currentStage = normaliseStage(opportunity.stage);
 
-    const nextStage =
-      getNextStage(currentStage);
+    const nextStage = getNextStage(currentStage);
 
     if (!nextStage) {
       return;
     }
 
-    updateStage(
-      opportunity,
-      nextStage,
-    );
+    updateStage(opportunity, nextStage);
   }
 
-  function moveOpportunityBack(
-    opportunity: SalesOpportunity,
-  ) {
-    const currentStage =
-      normaliseStage(
-        opportunity.stage,
-      );
+  function moveOpportunityBack(opportunity: SalesOpportunity) {
+    const currentStage = normaliseStage(opportunity.stage);
 
-    const previousStage =
-      getPreviousStage(
-        currentStage,
-      );
+    const previousStage = getPreviousStage(currentStage);
 
     if (!previousStage) {
       return;
     }
 
-    updateStage(
-      opportunity,
-      previousStage,
-    );
+    updateStage(opportunity, previousStage);
   }
 
-  function reopenOpportunity(
-    opportunity: SalesOpportunity,
-  ) {
-    const confirmed =
-      window.confirm(
-        [
-          `Reopen "${opportunity.title}" and return it to Negotiation?`,
-          "",
-          "Important: any project already created from this opportunity will remain in Operations. Reopening does not delete the project.",
-        ].join("\n"),
-      );
+  function reopenOpportunity(opportunity: SalesOpportunity) {
+    const confirmed = window.confirm(
+      [
+        `Reopen "${opportunity.title}" and return it to Negotiation?`,
+        "",
+        "Important: any project already created from this opportunity will remain in Operations. Reopening does not delete the project.",
+      ].join("\n"),
+    );
 
     if (!confirmed) {
       return;
     }
 
-    updateStage(
-      opportunity,
-      "negotiation",
-    );
+    updateStage(opportunity, "negotiation");
   }
 
   return (
@@ -631,19 +424,14 @@ function PipelinePage() {
                 <GitBranch className="h-5 w-5" />
               </div>
 
-              <StatusBadge status="Production" />
+              <StatusBadge status={workspaceRuntimeStatus()} />
             </div>
 
-            <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">
-              Sales Pipeline
-            </h1>
+            <h1 className="mt-3 font-display text-3xl font-semibold md:text-4xl">Sales Pipeline</h1>
 
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Move every opportunity through
-              Prospect, Qualified, Proposal,
-              Negotiation and then convert
-              accepted work into an operational
-              project.
+              Move every opportunity through Prospect, Qualified, Proposal, Negotiation and then
+              convert accepted work into an operational project.
             </p>
           </div>
 
@@ -679,38 +467,20 @@ function PipelinePage() {
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Open opportunities"
-          value={
-            opportunitiesQuery.isLoading
-              ? "—"
-              : String(
-                  openOpportunityCount,
-                )
-          }
+          value={opportunitiesQuery.isLoading ? "—" : String(openOpportunityCount)}
           description="Opportunities not marked won or lost."
         />
 
         <MetricCard
           label="Open pipeline value"
-          value={
-            opportunitiesQuery.isLoading
-              ? "—"
-              : fmtCurrency(
-                  openPipelineValue,
-                )
-          }
+          value={opportunitiesQuery.isLoading ? "—" : fmtCurrency(openPipelineValue)}
           description="Estimated value of active opportunities."
           primary
         />
 
         <MetricCard
           label="Won opportunities"
-          value={
-            opportunitiesQuery.isLoading
-              ? "—"
-              : String(
-                  wonOpportunityCount,
-                )
-          }
+          value={opportunitiesQuery.isLoading ? "—" : String(wonOpportunityCount)}
           description="Accepted opportunities eligible for projects."
         />
 
@@ -735,16 +505,11 @@ function PipelinePage() {
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
 
           <div>
-            <h2 className="text-sm font-semibold">
-              Pipeline records could not be
-              loaded
-            </h2>
+            <h2 className="text-sm font-semibold">Pipeline records could not be loaded</h2>
 
             <p className="mt-1 text-xs text-muted-foreground">
-              No records were changed. Retry
-              the query or inspect Supabase
-              permissions and the opportunities
-              table.
+              No records were changed. Retry the query or inspect Supabase permissions and the
+              opportunities table.
             </p>
 
             <button
@@ -768,10 +533,7 @@ function PipelinePage() {
       ) : (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {columns.map((column) => (
-            <section
-              key={column.stage}
-              className="glass-card flex min-h-[460px] flex-col p-3"
-            >
+            <section key={column.stage} className="glass-card flex min-h-[460px] flex-col p-3">
               <header className="mb-3 border-b border-border/60 pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -785,9 +547,7 @@ function PipelinePage() {
                   </div>
 
                   <div className="shrink-0 text-right">
-                    <div className="font-display text-lg font-semibold">
-                      {column.rows.length}
-                    </div>
+                    <div className="font-display text-lg font-semibold">{column.rows.length}</div>
 
                     <div className="text-[9px] uppercase tracking-wider text-muted-foreground">
                       deals
@@ -796,69 +556,30 @@ function PipelinePage() {
                 </div>
 
                 <div className="mt-2 text-xs font-semibold text-primary">
-                  {fmtCurrency(
-                    column.value,
-                  )}
+                  {fmtCurrency(column.value)}
                 </div>
               </header>
 
               <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
-                {column.rows.length ===
-                0 ? (
+                {column.rows.length === 0 ? (
                   <div className="mt-6 rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
-                    No opportunities in this
-                    stage.
+                    No opportunities in this stage.
                   </div>
                 ) : (
-                  column.rows.map(
-                    (opportunity) => (
-                      <OpportunityCard
-                        key={
-                          opportunity.id
-                        }
-                        opportunity={
-                          opportunity
-                        }
-                        stage={
-                          column.stage
-                        }
-                        mutationPending={
-                          mutationPending
-                        }
-                        onAdvance={() =>
-                          advanceOpportunity(
-                            opportunity,
-                          )
-                        }
-                        onBack={() =>
-                          moveOpportunityBack(
-                            opportunity,
-                          )
-                        }
-                        onWon={() =>
-                          markOpportunityWon(
-                            opportunity,
-                          )
-                        }
-                        onLost={() =>
-                          updateStage(
-                            opportunity,
-                            "lost",
-                          )
-                        }
-                        onReopen={() =>
-                          reopenOpportunity(
-                            opportunity,
-                          )
-                        }
-                        onCreateProject={() =>
-                          retryProjectCreation(
-                            opportunity,
-                          )
-                        }
-                      />
-                    ),
-                  )
+                  column.rows.map((opportunity) => (
+                    <OpportunityCard
+                      key={opportunity.id}
+                      opportunity={opportunity}
+                      stage={column.stage}
+                      mutationPending={mutationPending}
+                      onAdvance={() => advanceOpportunity(opportunity)}
+                      onBack={() => moveOpportunityBack(opportunity)}
+                      onWon={() => markOpportunityWon(opportunity)}
+                      onLost={() => updateStage(opportunity, "lost")}
+                      onReopen={() => reopenOpportunity(opportunity)}
+                      onCreateProject={() => retryProjectCreation(opportunity)}
+                    />
+                  ))
                 )}
               </div>
             </section>
@@ -882,9 +603,7 @@ function MetricCard({
 }) {
   return (
     <div className="glass-card p-5">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-        {label}
-      </div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
 
       <div
         className={
@@ -896,9 +615,7 @@ function MetricCard({
         {value}
       </div>
 
-      <p className="mt-1 text-xs text-muted-foreground">
-        {description}
-      </p>
+      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -924,44 +641,27 @@ function OpportunityCard({
   onReopen: () => void;
   onCreateProject: () => void;
 }) {
-  const previousStage =
-    getPreviousStage(stage);
+  const previousStage = getPreviousStage(stage);
 
-  const nextStage =
-    getNextStage(stage);
+  const nextStage = getNextStage(stage);
 
-  const isClosed =
-    stage === "won" ||
-    stage === "lost";
+  const isClosed = stage === "won" || stage === "lost";
 
   return (
     <article className="rounded-xl border border-border/60 bg-card/40 p-3 text-sm">
-      <div className="font-medium leading-5">
-        {opportunity.title ||
-          "Untitled opportunity"}
-      </div>
+      <div className="font-medium leading-5">{opportunity.title || "Untitled opportunity"}</div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-        <span className="font-semibold text-primary">
-          {fmtCurrency(
-            opportunity.value ?? 0,
-          )}
-        </span>
+        <span className="font-semibold text-primary">{fmtCurrency(opportunity.value ?? 0)}</span>
 
         <span className="text-muted-foreground">
-          {Number(
-            opportunity.probability ?? 0,
-          )}
-          % probability
+          {Number(opportunity.probability ?? 0)}% probability
         </span>
       </div>
 
       {opportunity.expected_close && (
         <div className="mt-1 text-[10px] text-muted-foreground">
-          Expected close:{" "}
-          {fmtDate(
-            opportunity.expected_close,
-          )}
+          Expected close: {fmtDate(opportunity.expected_close)}
         </div>
       )}
 
@@ -978,10 +678,7 @@ function OpportunityCard({
               type="button"
               size="sm"
               variant="outline"
-              disabled={
-                mutationPending ||
-                !previousStage
-              }
+              disabled={mutationPending || !previousStage}
               onClick={onBack}
               className="h-8 border-border/70 text-xs"
             >
@@ -993,10 +690,7 @@ function OpportunityCard({
               type="button"
               size="sm"
               variant="outline"
-              disabled={
-                mutationPending ||
-                !nextStage
-              }
+              disabled={mutationPending || !nextStage}
               onClick={onAdvance}
               className="h-8 border-primary/40 text-xs text-primary hover:bg-primary/10"
             >

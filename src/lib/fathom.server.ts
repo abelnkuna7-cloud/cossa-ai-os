@@ -3,7 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 
 const FATHOM_API_BASE = "https://api.fathom.ai/external/v1";
 
-function requiredEnv(name: "FATHOM_API_KEY" | "FATHOM_WEBHOOK_SECRET" | "SUPABASE_URL" | "SUPABASE_SERVICE_ROLE_KEY") {
+function requiredEnv(
+  name: "FATHOM_API_KEY" | "FATHOM_WEBHOOK_SECRET" | "SUPABASE_URL" | "SUPABASE_SERVICE_ROLE_KEY",
+) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`Missing ${name}`);
   return value;
@@ -74,7 +76,10 @@ export function verifyFathomWebhook(headers: Headers, rawBody: string, tolerance
     .some((signature) => {
       const expectedBuffer = Buffer.from(expected);
       const actualBuffer = Buffer.from(signature);
-      return expectedBuffer.length === actualBuffer.length && crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+      return (
+        expectedBuffer.length === actualBuffer.length &&
+        crypto.timingSafeEqual(expectedBuffer, actualBuffer)
+      );
     });
 }
 
@@ -84,10 +89,13 @@ function stringValue(value: unknown) {
 
 export async function storeFathomMeeting(payload: Record<string, unknown>, webhookId: string) {
   const recordingId = String(payload.recording_id ?? webhookId);
-  const title = stringValue(payload.meeting_title) ?? stringValue(payload.title) ?? "Fathom meeting";
+  const title =
+    stringValue(payload.meeting_title) ?? stringValue(payload.title) ?? "Fathom meeting";
   const recordingUrl = stringValue(payload.share_url) ?? stringValue(payload.url);
-  const startedAt = stringValue(payload.recording_start_time) ?? stringValue(payload.scheduled_start_time);
-  const endedAt = stringValue(payload.recording_end_time) ?? stringValue(payload.scheduled_end_time);
+  const startedAt =
+    stringValue(payload.recording_start_time) ?? stringValue(payload.scheduled_start_time);
+  const endedAt =
+    stringValue(payload.recording_end_time) ?? stringValue(payload.scheduled_end_time);
 
   const supabase = createFathomStorageClient();
   const { error } = await supabase.from("meeting_intelligence").upsert(

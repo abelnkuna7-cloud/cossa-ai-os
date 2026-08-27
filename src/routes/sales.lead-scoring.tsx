@@ -29,7 +29,9 @@ function LeadScoringPage() {
         <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative">
           <div className="flex items-center gap-2">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow"><Gauge className="h-5 w-5" /></div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow">
+              <Gauge className="h-5 w-5" />
+            </div>
             <StatusBadge status="Live" />
           </div>
           <h1 className="mt-3 font-display text-3xl md:text-4xl font-semibold">Lead Scoring</h1>
@@ -38,9 +40,20 @@ function LeadScoringPage() {
       </section>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="glass-card p-4"><div className="text-[10px] uppercase tracking-widest text-success">Hot (≥70)</div><div className="mt-1 font-display text-2xl font-semibold">{hot.length}</div></div>
-        <div className="glass-card p-4"><div className="text-[10px] uppercase tracking-widest text-primary">Warm (40–69)</div><div className="mt-1 font-display text-2xl font-semibold">{warm.length}</div></div>
-        <div className="glass-card p-4"><div className="text-[10px] uppercase tracking-widest text-muted-foreground">Cold (&lt;40)</div><div className="mt-1 font-display text-2xl font-semibold">{cold.length}</div></div>
+        <div className="glass-card p-4">
+          <div className="text-[10px] uppercase tracking-widest text-success">Hot (≥70)</div>
+          <div className="mt-1 font-display text-2xl font-semibold">{hot.length}</div>
+        </div>
+        <div className="glass-card p-4">
+          <div className="text-[10px] uppercase tracking-widest text-primary">Warm (40–69)</div>
+          <div className="mt-1 font-display text-2xl font-semibold">{warm.length}</div>
+        </div>
+        <div className="glass-card p-4">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Cold (&lt;40)
+          </div>
+          <div className="mt-1 font-display text-2xl font-semibold">{cold.length}</div>
+        </div>
       </div>
 
       <section className="glass-card p-4 md:p-6">
@@ -51,12 +64,29 @@ function LeadScoringPage() {
         ) : (
           <table className="w-full text-sm">
             <thead className="text-xs uppercase tracking-widest text-muted-foreground">
-              <tr className="border-b border-border/60"><th className="px-3 py-2 text-left font-medium">Score</th><th className="px-3 py-2 text-left font-medium">Name</th><th className="px-3 py-2 text-left font-medium">Company</th><th className="px-3 py-2 text-left font-medium">Status</th></tr>
+              <tr className="border-b border-border/60">
+                <th className="px-3 py-2 text-left font-medium">Score</th>
+                <th className="px-3 py-2 text-left font-medium">Name</th>
+                <th className="px-3 py-2 text-left font-medium">Company</th>
+                <th className="px-3 py-2 text-left font-medium">Status</th>
+              </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className="border-b border-border/40">
-                  <td className="px-3 py-3"><span className={r.score >= 70 ? "text-success font-semibold" : r.score >= 40 ? "text-primary" : "text-muted-foreground"}>{r.score}</span></td>
+                  <td className="px-3 py-3">
+                    <span
+                      className={
+                        r.score >= 70
+                          ? "text-success font-semibold"
+                          : r.score >= 40
+                            ? "text-primary"
+                            : "text-muted-foreground"
+                      }
+                    >
+                      {r.score}
+                    </span>
+                  </td>
                   <td className="px-3 py-3 font-medium">{r.name}</td>
                   <td className="px-3 py-3">{r.company ?? "—"}</td>
                   <td className="px-3 py-3">{r.status}</td>

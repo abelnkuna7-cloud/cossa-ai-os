@@ -1,15 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  BookMarked, Plus, Search, Pin, Trash2, Copy, Play, Loader2, Sparkles,
-} from "lucide-react";
+import { BookMarked, Plus, Search, Pin, Trash2, Copy, Play, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
 import {
-  listPrompts, upsertPrompt, deletePrompt, incrementPromptUsage, type AiPrompt,
+  listPrompts,
+  upsertPrompt,
+  deletePrompt,
+  incrementPromptUsage,
+  type AiPrompt,
 } from "@/lib/ai-data";
 
 export const Route = createFileRoute("/ai/prompts")({
@@ -17,7 +19,11 @@ export const Route = createFileRoute("/ai/prompts")({
   head: () => ({
     meta: [
       { title: "Prompt Library — Cossa AI" },
-      { name: "description", content: "Save, organise and reuse your best AI prompts across marketing, sales and operations." },
+      {
+        name: "description",
+        content:
+          "Save, organise and reuse your best AI prompts across marketing, sales and operations.",
+      },
       { property: "og:title", content: "Prompt Library — Cossa AI" },
       { property: "og:description", content: "A living library of proven prompts for Cossa AI." },
     ],
@@ -110,7 +116,9 @@ function PromptLibrary() {
             </p>
           </div>
           <Button
-            onClick={() => setEditing({ title: "", body: "", category: null, tags: [], pinned: false })}
+            onClick={() =>
+              setEditing({ title: "", body: "", category: null, tags: [], pinned: false })
+            }
             className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
           >
             <Plus className="mr-1.5 h-4 w-4" /> New prompt
@@ -133,7 +141,9 @@ function PromptLibrary() {
           onClick={() => setCat(null)}
           className={cn(
             "rounded-full border px-3 py-1 text-xs transition-colors",
-            !cat ? "border-primary/40 bg-primary/10 text-primary" : "border-border/60 hover:border-primary/40",
+            !cat
+              ? "border-primary/40 bg-primary/10 text-primary"
+              : "border-border/60 hover:border-primary/40",
           )}
         >
           All
@@ -144,7 +154,9 @@ function PromptLibrary() {
             onClick={() => setCat(c === cat ? null : c)}
             className={cn(
               "rounded-full border px-3 py-1 text-xs transition-colors",
-              c === cat ? "border-primary/40 bg-primary/10 text-primary" : "border-border/60 hover:border-primary/40",
+              c === cat
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-border/60 hover:border-primary/40",
             )}
           >
             {c}
@@ -162,10 +174,13 @@ function PromptLibrary() {
           <Sparkles className="mx-auto h-6 w-6 text-primary" />
           <h2 className="mt-3 font-display text-lg font-semibold">No prompts yet</h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Save prompts you find yourself typing more than once. They'll be one click away in every module.
+            Save prompts you find yourself typing more than once. They'll be one click away in every
+            module.
           </p>
           <Button
-            onClick={() => setEditing({ title: "", body: "", category: null, tags: [], pinned: false })}
+            onClick={() =>
+              setEditing({ title: "", body: "", category: null, tags: [], pinned: false })
+            }
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
           >
             <Plus className="mr-1.5 h-4 w-4" /> Create your first prompt
@@ -187,11 +202,18 @@ function PromptLibrary() {
               </header>
               <p className="line-clamp-4 flex-1 text-xs text-muted-foreground">{p.body}</p>
               <div className="mt-3 flex items-center gap-1.5">
-                <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10" onClick={() => handleCopy(p)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-primary/40 text-primary hover:bg-primary/10"
+                  onClick={() => handleCopy(p)}
+                >
                   <Copy className="mr-1 h-3 w-3" /> Copy
                 </Button>
                 <Button asChild size="sm" variant="outline" className="border-border/60">
-                  <Link to="/ai/cossa"><Play className="mr-1 h-3 w-3" /> Run</Link>
+                  <Link to="/ai/cossa">
+                    <Play className="mr-1 h-3 w-3" /> Run
+                  </Link>
                 </Button>
                 <div className="ml-auto flex items-center gap-1">
                   <button
@@ -217,12 +239,14 @@ function PromptLibrary() {
 
       {/* Editor modal */}
       {editing && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => !saving && setEditing(null)}>
-          <div
-            className="glass-card w-full max-w-2xl p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="font-display text-lg font-semibold">{editing.id ? "Edit prompt" : "New prompt"}</h2>
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+          onClick={() => !saving && setEditing(null)}
+        >
+          <div className="glass-card w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-display text-lg font-semibold">
+              {editing.id ? "Edit prompt" : "New prompt"}
+            </h2>
             <div className="mt-4 space-y-3">
               <input
                 value={editing.title ?? ""}
@@ -242,10 +266,14 @@ function PromptLibrary() {
                 {CATEGORIES.map((c) => (
                   <button
                     key={c}
-                    onClick={() => setEditing({ ...editing, category: editing.category === c ? null : c })}
+                    onClick={() =>
+                      setEditing({ ...editing, category: editing.category === c ? null : c })
+                    }
                     className={cn(
                       "rounded-full border px-3 py-1 text-xs",
-                      editing.category === c ? "border-primary/40 bg-primary/10 text-primary" : "border-border/60",
+                      editing.category === c
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : "border-border/60",
                     )}
                   >
                     {c}
@@ -262,8 +290,14 @@ function PromptLibrary() {
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>Cancel</Button>
-              <Button onClick={handleSave} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow">
+              <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+              >
                 {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
                 Save prompt
               </Button>

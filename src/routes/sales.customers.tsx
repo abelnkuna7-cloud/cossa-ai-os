@@ -34,16 +34,32 @@ function CustomersPage() {
         { key: "name", label: "Name", required: true },
         { key: "email", label: "Email", type: "email" },
         { key: "phone", label: "Phone" },
-        { key: "status", label: "Status", type: "select", options: STATUSES, defaultValue: "active" },
+        {
+          key: "status",
+          label: "Status",
+          type: "select",
+          options: STATUSES,
+          defaultValue: "active",
+        },
         { key: "notes", label: "Notes", type: "textarea" },
       ]}
       columns={[
-        { key: "name", label: "Name", render: (r) => <span className="font-medium">{r.name}</span> },
+        {
+          key: "name",
+          label: "Name",
+          render: (r) => <span className="font-medium">{r.name}</span>,
+        },
         { key: "email", label: "Email" },
         { key: "phone", label: "Phone" },
-        { key: "status", label: "Status", render: (r) => (
-          <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">{r.status}</span>
-        ) },
+        {
+          key: "status",
+          label: "Status",
+          render: (r) => (
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">
+              {r.status}
+            </span>
+          ),
+        },
         { key: "created_at", label: "Added", render: (r) => fmtDate(r.created_at) },
       ]}
       searchKeys={["name", "email", "phone", "status"]}

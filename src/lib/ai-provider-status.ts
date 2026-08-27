@@ -3,7 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 export interface AiProviderStatus {
   openai: {
     configured: boolean;
-    model: string;
+    key_configured: boolean;
+    model_configured: boolean;
+    model: string | null;
   };
 }
 

@@ -1,19 +1,8 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  Link,
-} from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -26,6 +15,7 @@ import {
   ExternalLink,
   Loader2,
   MessageSquare,
+  Mic,
   Pin,
   Plus,
   Search,
@@ -38,21 +28,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import {
-  toast,
-} from "sonner";
+import { toast } from "sonner";
 
-import {
-  Button,
-} from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 
-import {
-  StatusBadge,
-} from "@/components/status-badge";
+import { StatusBadge } from "@/components/status-badge";
 
-import {
-  cn,
-} from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 import {
   createConversation,
@@ -72,18 +54,11 @@ import {
   type ProviderAttemptEvent,
 } from "@/lib/ai-stream";
 
-import {
-  capabilityForRoute,
-} from "@/lib/capability-matrix";
+import { capabilityForRoute } from "@/lib/capability-matrix";
 
-import {
-  getModule,
-} from "@/lib/modules";
+import { getModule } from "@/lib/modules";
 
-import {
-  specialistFor,
-  type Specialist,
-} from "@/lib/specialists";
+import { specialistFor, type Specialist } from "@/lib/specialists";
 
 import {
   createGrowthCoordinationMission,
@@ -93,9 +68,7 @@ import {
   type CoordinationMissionResult,
 } from "@/lib/workforce-data";
 
-import {
-  workspaceRuntimeStatus,
-} from "@/lib/workspace-runtime";
+import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
@@ -105,11 +78,7 @@ interface Props {
   to: string;
 }
 
-type WorkforceMissionKind =
-  | "growth"
-  | "store"
-  | "tech"
-  | "revenue";
+type WorkforceMissionKind = "growth" | "store" | "tech" | "revenue";
 
 interface WorkforceMissionDefinition {
   kind: WorkforceMissionKind;
@@ -144,9 +113,35 @@ interface CreatedMissionState {
  * This prevents browser fallback + server fallback from producing duplicate
  * provider requests.
  */
-const DEFAULT_CHAT_PROVIDER:
-  CossaAiProvider =
-  "auto";
+const DEFAULT_CHAT_PROVIDER: CossaAiProvider = "auto";
+
+type BrowserSpeechRecognitionEvent = {
+  results: ArrayLike<{
+    0?: { transcript?: string };
+  }>;
+};
+
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
+function browserSpeechRecognition(): BrowserSpeechRecognitionConstructor | null {
+  if (typeof window === "undefined") return null;
+  const browser = window as typeof window & {
+    SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+  };
+  return browser.SpeechRecognition ?? browser.webkitSpeechRecognition ?? null;
+}
 
 /* -------------------------------------------------------------------------- */
 /* WORKFORCE MISSION DEFINITIONS                                              */
@@ -163,166 +158,117 @@ const DEFAULT_CHAT_PROVIDER:
  * workforce-data.ts remains the execution/source-of-truth layer.
  */
 
-const GROWTH_WORKFORCE_KEYS =
-  new Set<string>([
-    "website-seo-monitor",
-    "social-strategy-planner",
-    "content-writer",
-    "creative-media-producer",
-    "social-schedule-coordinator",
-    "social-media-manager",
-    "account-growth-analyst",
-    "paid-media-specialist",
-    "ai-ceo",
-  ]);
+const GROWTH_WORKFORCE_KEYS = new Set<string>([
+  "website-seo-monitor",
+  "social-strategy-planner",
+  "content-writer",
+  "creative-media-producer",
+  "social-schedule-coordinator",
+  "social-media-manager",
+  "account-growth-analyst",
+  "paid-media-specialist",
+  "ai-ceo",
+]);
 
-const STORE_WORKFORCE_KEYS =
-  new Set<string>([
-    "product-intelligence-analyst",
-    "supplier-sourcing-analyst",
-    "store-operations-manager",
-    "content-writer",
-    "creative-media-producer",
-    "social-media-manager",
-    "account-growth-analyst",
-    "ai-ceo",
-  ]);
+const STORE_WORKFORCE_KEYS = new Set<string>([
+  "product-intelligence-analyst",
+  "supplier-sourcing-analyst",
+  "store-operations-manager",
+  "content-writer",
+  "creative-media-producer",
+  "social-media-manager",
+  "account-growth-analyst",
+  "ai-ceo",
+]);
 
-const TECH_WORKFORCE_KEYS =
-  new Set<string>([
-    "tech-solutions-specialist",
-    "website-delivery-specialist",
-    "content-writer",
-    "creative-media-producer",
-    "website-seo-monitor",
-    "ai-ceo",
-  ]);
+const TECH_WORKFORCE_KEYS = new Set<string>([
+  "tech-solutions-specialist",
+  "website-delivery-specialist",
+  "content-writer",
+  "creative-media-producer",
+  "website-seo-monitor",
+  "ai-ceo",
+]);
 
-const REVENUE_WORKFORCE_KEYS =
-  new Set<string>([
-    "lead-intake-coordinator",
-    "customer-reactivation-analyst",
-    "broker-deal-intelligence-analyst",
-    "procurement-intelligence-analyst",
-    "ai-ceo",
-  ]);
+const REVENUE_WORKFORCE_KEYS = new Set<string>([
+  "lead-intake-coordinator",
+  "customer-reactivation-analyst",
+  "broker-deal-intelligence-analyst",
+  "procurement-intelligence-analyst",
+  "ai-ceo",
+]);
 
-const WORKFORCE_MISSIONS:
-  readonly WorkforceMissionDefinition[] =
-  [
-    {
-      kind:
-        "growth",
+const WORKFORCE_MISSIONS: readonly WorkforceMissionDefinition[] = [
+  {
+    kind: "growth",
 
-      label:
-        "Growth workforce",
+    label: "Growth workforce",
 
-      description:
-        "Website intelligence → social strategy → content → creative → scheduling → social management → growth analysis → paid media → AI CEO.",
+    description:
+      "Website intelligence → social strategy → content → creative → scheduling → social management → growth analysis → paid media → AI CEO.",
 
-      employeeKeys:
-        GROWTH_WORKFORCE_KEYS,
-    },
+    employeeKeys: GROWTH_WORKFORCE_KEYS,
+  },
 
-    {
-      kind:
-        "store",
+  {
+    kind: "store",
 
-      label:
-        "Cossa Store workforce",
+    label: "Cossa Store workforce",
 
-      description:
-        "Product intelligence → supplier sourcing → store operations → content → creative → social commerce → growth analysis → AI CEO.",
+    description:
+      "Product intelligence → supplier sourcing → store operations → content → creative → social commerce → growth analysis → AI CEO.",
 
-      employeeKeys:
-        STORE_WORKFORCE_KEYS,
-    },
+    employeeKeys: STORE_WORKFORCE_KEYS,
+  },
 
-    {
-      kind:
-        "tech",
+  {
+    kind: "tech",
 
-      label:
-        "Cossa Tech workforce",
+    label: "Cossa Tech workforce",
 
-      description:
-        "Technical solution → website delivery → content → creative → SEO and quality review → AI CEO.",
+    description:
+      "Technical solution → website delivery → content → creative → SEO and quality review → AI CEO.",
 
-      employeeKeys:
-        TECH_WORKFORCE_KEYS,
-    },
+    employeeKeys: TECH_WORKFORCE_KEYS,
+  },
 
-    {
-      kind:
-        "revenue",
+  {
+    kind: "revenue",
 
-      label:
-        "Revenue workforce",
+    label: "Revenue workforce",
 
-      description:
-        "Lead intake → customer reactivation → commercial intelligence → procurement intelligence → AI CEO.",
+    description:
+      "Lead intake → customer reactivation → commercial intelligence → procurement intelligence → AI CEO.",
 
-      employeeKeys:
-        REVENUE_WORKFORCE_KEYS,
-    },
-  ];
+    employeeKeys: REVENUE_WORKFORCE_KEYS,
+  },
+];
 
 /* -------------------------------------------------------------------------- */
 /* GENERIC HELPERS                                                            */
 /* -------------------------------------------------------------------------- */
 
-function normaliseErrorMessage(
-  error:
-    unknown,
-): string {
-  if (
-    error instanceof
-    Error
-  ) {
+function normaliseErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
     return error.message;
   }
 
-  if (
-    typeof error ===
-    "string"
-  ) {
+  if (typeof error === "string") {
     return error;
   }
 
   return "Unknown Cossa AI error.";
 }
 
-function isAbortError(
-  error:
-    unknown,
-): boolean {
-  return (
-    error instanceof
-      DOMException &&
-    error.name ===
-      "AbortError"
-  );
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
-function workflowDefinitionForKind(
-  kind:
-    WorkforceMissionKind,
-): WorkforceMissionDefinition {
-  const definition =
-    WORKFORCE_MISSIONS.find(
-      (
-        candidate,
-      ) =>
-        candidate.kind ===
-        kind,
-    );
+function workflowDefinitionForKind(kind: WorkforceMissionKind): WorkforceMissionDefinition {
+  const definition = WORKFORCE_MISSIONS.find((candidate) => candidate.kind === kind);
 
-  if (
-    !definition
-  ) {
-    throw new Error(
-      `Unsupported workforce mission type: ${kind}`,
-    );
+  if (!definition) {
+    throw new Error(`Unsupported workforce mission type: ${kind}`);
   }
 
   return definition;
@@ -332,13 +278,8 @@ function workflowDefinitionForKind(
 /* PROVIDER DISPLAY HELPERS                                                   */
 /* -------------------------------------------------------------------------- */
 
-function providerDisplayName(
-  provider:
-    AiExecutionMetadata["provider"],
-): string {
-  switch (
-    provider
-  ) {
+function providerDisplayName(provider: AiExecutionMetadata["provider"]): string {
+  switch (provider) {
     case "groq":
       return "Groq";
 
@@ -353,20 +294,12 @@ function providerDisplayName(
   }
 }
 
-function providerAttemptStatusLabel(
-  attempt:
-    ProviderAttemptEvent |
-    null,
-): string | null {
-  if (
-    !attempt
-  ) {
+function providerAttemptStatusLabel(attempt: ProviderAttemptEvent | null): string | null {
+  if (!attempt) {
     return null;
   }
 
-  switch (
-    attempt.status
-  ) {
+  switch (attempt.status) {
     case "starting":
       return "starting";
 
@@ -417,91 +350,37 @@ function providerAttemptStatusLabel(
  * The UI then allows the owner to explicitly select the desired workflow.
  */
 
-function missionKindsForSpecialist(
-  specialist:
-    Specialist |
-    undefined,
-): WorkforceMissionKind[] {
-  if (
-    !specialist ||
-    !specialist.canCreateMission
-  ) {
+function missionKindsForSpecialist(specialist: Specialist | undefined): WorkforceMissionKind[] {
+  if (!specialist || !specialist.canCreateMission) {
     return [];
   }
 
-  const employeeKeys =
-    specialist.workforceEmployeeKeys ??
-    [];
+  const employeeKeys = specialist.workforceEmployeeKeys ?? [];
 
-  if (
-    employeeKeys.length ===
-    0
-  ) {
+  if (employeeKeys.length === 0) {
     return [];
   }
 
-  const scores =
-    WORKFORCE_MISSIONS.map(
-      (
-        definition,
-      ) => {
-        const score =
-          employeeKeys.reduce(
-            (
-              total,
-              employeeKey,
-            ) =>
-              total +
-              (
-                definition.employeeKeys.has(
-                  employeeKey,
-                )
-                  ? 1
-                  : 0
-              ),
-            0,
-          );
-
-        return {
-          kind:
-            definition.kind,
-
-          score,
-        };
-      },
+  const scores = WORKFORCE_MISSIONS.map((definition) => {
+    const score = employeeKeys.reduce(
+      (total, employeeKey) => total + (definition.employeeKeys.has(employeeKey) ? 1 : 0),
+      0,
     );
 
-  const highestScore =
-    Math.max(
-      ...scores.map(
-        (
-          item,
-        ) =>
-          item.score,
-      ),
-    );
+    return {
+      kind: definition.kind,
 
-  if (
-    highestScore <=
-    0
-  ) {
+      score,
+    };
+  });
+
+  const highestScore = Math.max(...scores.map((item) => item.score));
+
+  if (highestScore <= 0) {
     return [];
   }
 
-  return scores
-    .filter(
-      (
-        item,
-      ) =>
-        item.score ===
-        highestScore,
-    )
-    .map(
-      (
-        item,
-      ) =>
-        item.kind,
-    );
+  return scores.filter((item) => item.score === highestScore).map((item) => item.kind);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -514,75 +393,45 @@ async function createWorkforceMission({
   targetMarket,
   targetLocation,
 }: {
-  kind:
-    WorkforceMissionKind;
+  kind: WorkforceMissionKind;
 
-  objective:
-    string;
+  objective: string;
 
-  targetMarket:
-    string;
+  targetMarket: string;
 
-  targetLocation:
-    string;
+  targetLocation: string;
 }): Promise<CoordinationMissionResult> {
-  const cleanObjective =
-    objective.trim();
+  const cleanObjective = objective.trim();
 
-  if (
-    !cleanObjective
-  ) {
-    throw new Error(
-      "A workforce mission objective is required.",
-    );
+  if (!cleanObjective) {
+    throw new Error("A workforce mission objective is required.");
   }
 
   const commonInput = {
-    objective:
-      cleanObjective,
+    objective: cleanObjective,
 
-    target_market:
-      targetMarket.trim() ||
-      null,
+    target_market: targetMarket.trim() || null,
 
-    target_location:
-      targetLocation.trim() ||
-      null,
+    target_location: targetLocation.trim() || null,
   };
 
-  switch (
-    kind
-  ) {
+  switch (kind) {
     case "growth":
-      return createGrowthCoordinationMission(
-        commonInput,
-      );
+      return createGrowthCoordinationMission(commonInput);
 
     case "store":
-      return createStoreOperationsMission(
-        commonInput,
-      );
+      return createStoreOperationsMission(commonInput);
 
     case "tech":
-      return createTechDeliveryMission(
-        commonInput,
-      );
+      return createTechDeliveryMission(commonInput);
 
     case "revenue":
-      return createRevenueIntelligenceMission(
-        commonInput,
-      );
+      return createRevenueIntelligenceMission(commonInput);
 
     default: {
-      const exhaustiveCheck:
-        never =
-        kind;
+      const exhaustiveCheck: never = kind;
 
-      throw new Error(
-        `Unsupported workforce mission type: ${String(
-          exhaustiveCheck,
-        )}`,
-      );
+      throw new Error(`Unsupported workforce mission type: ${String(exhaustiveCheck)}`);
     }
   }
 }
@@ -591,75 +440,36 @@ async function createWorkforceMission({
 /* SPECIALIST CHAT                                                            */
 /* -------------------------------------------------------------------------- */
 
-export function SpecialistChat({
-  to,
-}: Props) {
-  const mod =
-    getModule(
-      to,
-    );
+export function SpecialistChat({ to }: Props) {
+  const mod = getModule(to);
 
-  const spec =
-    specialistFor(
-      to,
-    );
+  const spec = specialistFor(to);
 
-  const Icon:
-    LucideIcon =
-    mod?.icon ??
-    Bot;
+  const Icon: LucideIcon = mod?.icon ?? Bot;
 
-  const category =
-    `specialist:${to}`;
+  const category = `specialist:${to}`;
 
-  const qc =
-    useQueryClient();
+  const isVoiceAssistant = to === "/ai/voice";
+
+  const qc = useQueryClient();
 
   /* ------------------------------------------------------------------------ */
   /* CHAT STATE                                                               */
   /* ------------------------------------------------------------------------ */
 
-  const [
-    activeId,
-    setActiveId,
-  ] =
-    useState<
-      string |
-      null
-    >(
-      null,
-    );
+  const [activeId, setActiveId] = useState<string | null>(null);
 
-  const [
-    search,
-    setSearch,
-  ] =
-    useState(
-      "",
-    );
+  const [search, setSearch] = useState("");
 
-  const [
-    input,
-    setInput,
-  ] =
-    useState(
-      "",
-    );
+  const [input, setInput] = useState("");
+
+  const [voiceState, setVoiceState] = useState<"idle" | "listening">("idle");
 
   /**
    * Current response text that has reached the browser but has not necessarily
    * been persisted as a completed assistant message yet.
    */
-  const [
-    streaming,
-    setStreaming,
-  ] =
-    useState<
-      string |
-      null
-    >(
-      null,
-    );
+  const [streaming, setStreaming] = useState<string | null>(null);
 
   /**
    * Streaming text and "request currently active" are intentionally separated.
@@ -667,21 +477,9 @@ export function SpecialistChat({
    * This means an interrupted or unsaved response can remain visible without
    * falsely displaying the animated "still generating" cursor.
    */
-  const [
-    streamingActive,
-    setStreamingActive,
-  ] =
-    useState(
-      false,
-    );
+  const [streamingActive, setStreamingActive] = useState(false);
 
-  const [
-    sending,
-    setSending,
-  ] =
-    useState(
-      false,
-    );
+  const [sending, setSending] = useState(false);
 
   /* ------------------------------------------------------------------------ */
   /* PROVIDER EXECUTION STATE                                                 */
@@ -692,493 +490,210 @@ export function SpecialistChat({
    *
    * It is not inferred from the provider requested by this component.
    */
-  const [
-    executionMetadata,
-    setExecutionMetadata,
-  ] =
-    useState<
-      AiExecutionMetadata |
-      null
-    >(
-      null,
-    );
+  const [executionMetadata, setExecutionMetadata] = useState<AiExecutionMetadata | null>(null);
 
-  const [
-    providerAttempt,
-    setProviderAttempt,
-  ] =
-    useState<
-      ProviderAttemptEvent |
-      null
-    >(
-      null,
-    );
+  const [providerAttempt, setProviderAttempt] = useState<ProviderAttemptEvent | null>(null);
 
   /* ------------------------------------------------------------------------ */
   /* WORKFORCE BRIDGE STATE                                                   */
   /* ------------------------------------------------------------------------ */
 
-  const [
-    missionPanelOpen,
-    setMissionPanelOpen,
-  ] =
-    useState(
-      false,
-    );
+  const [missionPanelOpen, setMissionPanelOpen] = useState(false);
 
-  const [
-    missionObjective,
-    setMissionObjective,
-  ] =
-    useState(
-      "",
-    );
+  const [missionObjective, setMissionObjective] = useState("");
 
-  const [
-    missionTargetMarket,
-    setMissionTargetMarket,
-  ] =
-    useState(
-      "South Africa",
-    );
+  const [missionTargetMarket, setMissionTargetMarket] = useState("South Africa");
 
-  const [
-    missionTargetLocation,
-    setMissionTargetLocation,
-  ] =
-    useState(
-      "Gauteng",
-    );
+  const [missionTargetLocation, setMissionTargetLocation] = useState("Gauteng");
 
-  const [
-    selectedMissionKind,
-    setSelectedMissionKind,
-  ] =
-    useState<
-      WorkforceMissionKind |
-      null
-    >(
-      null,
-    );
+  const [selectedMissionKind, setSelectedMissionKind] = useState<WorkforceMissionKind | null>(null);
 
-  const [
-    lastCreatedMission,
-    setLastCreatedMission,
-  ] =
-    useState<
-      CreatedMissionState |
-      null
-    >(
-      null,
-    );
+  const [lastCreatedMission, setLastCreatedMission] = useState<CreatedMissionState | null>(null);
 
   /* ------------------------------------------------------------------------ */
   /* REFS                                                                     */
   /* ------------------------------------------------------------------------ */
 
-  const scrollRef =
-    useRef<
-      HTMLDivElement |
-      null
-    >(
-      null,
-    );
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const abortRef =
-    useRef<
-      AbortController |
-      null
-    >(
-      null,
-    );
+  const abortRef = useRef<AbortController | null>(null);
+
+  const voiceRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
   /* ------------------------------------------------------------------------ */
   /* QUERIES                                                                  */
   /* ------------------------------------------------------------------------ */
 
-  const convos =
-    useQuery({
-      queryKey: [
-        "ai-conversations",
-        category,
-      ],
+  const convos = useQuery({
+    queryKey: ["ai-conversations", category],
 
-      queryFn:
-        () =>
-          listConversations(
-            category,
-          ),
-    });
+    queryFn: () => listConversations(category),
+  });
 
-  const messages =
-    useQuery({
-      queryKey: [
-        "ai-messages",
-        activeId,
-      ],
+  const messages = useQuery({
+    queryKey: ["ai-messages", activeId],
 
-      queryFn:
-        () =>
-          activeId
-            ? listMessages(
-                activeId,
-              )
-            : Promise.resolve(
-                [] as AiMessage[],
-              ),
+    queryFn: () => (activeId ? listMessages(activeId) : Promise.resolve([] as AiMessage[])),
 
-      enabled:
-        Boolean(
-          activeId,
-        ),
-    });
+    enabled: Boolean(activeId),
+  });
 
   /* ------------------------------------------------------------------------ */
   /* SPECIALIST WORKFORCE CAPABILITY                                          */
   /* ------------------------------------------------------------------------ */
 
-  const availableMissionKinds =
-    useMemo(
-      () =>
-        missionKindsForSpecialist(
-          spec,
-        ),
-      [
-        spec,
-      ],
-    );
+  const availableMissionKinds = useMemo(() => missionKindsForSpecialist(spec), [spec]);
 
-  const missionBridgeEnabled =
-    Boolean(
-      spec?.canCreateMission &&
-      availableMissionKinds.length >
-        0,
-    );
+  const missionBridgeEnabled = Boolean(spec?.canCreateMission && availableMissionKinds.length > 0);
 
-  const selectedMissionDefinition =
-    selectedMissionKind
-      ? workflowDefinitionForKind(
-          selectedMissionKind,
-        )
-      : null;
+  const selectedMissionDefinition = selectedMissionKind
+    ? workflowDefinitionForKind(selectedMissionKind)
+    : null;
 
   /* ------------------------------------------------------------------------ */
   /* PROVIDER DISPLAY                                                         */
   /* ------------------------------------------------------------------------ */
 
-  const providerStatusText =
-    useMemo(
-      () => {
-        if (
-          executionMetadata
-        ) {
-          const providerName =
-            providerDisplayName(
-              executionMetadata.provider,
-            );
+  const providerStatusText = useMemo(() => {
+    if (executionMetadata) {
+      const providerName = providerDisplayName(executionMetadata.provider);
 
-          const model =
-            executionMetadata.model
-              ? ` • ${executionMetadata.model}`
-              : "";
+      const model = executionMetadata.model ? ` • ${executionMetadata.model}` : "";
 
-          const fallback =
-            executionMetadata.fallback
-              ? " • fallback used"
-              : "";
+      const fallback = executionMetadata.fallback ? " • fallback used" : "";
 
-          return `${providerName}${model}${fallback}`;
-        }
+      return `${providerName}${model}${fallback}`;
+    }
 
-        if (
-          providerAttempt
-        ) {
-          const providerName =
-            providerDisplayName(
-              providerAttempt.provider,
-            );
+    if (providerAttempt) {
+      const providerName = providerDisplayName(providerAttempt.provider);
 
-          const status =
-            providerAttemptStatusLabel(
-              providerAttempt,
-            );
+      const status = providerAttemptStatusLabel(providerAttempt);
 
-          return `${providerName}${status ? ` • ${status}` : ""}`;
-        }
+      return `${providerName}${status ? ` • ${status}` : ""}`;
+    }
 
-        return "Automatic provider routing";
-      },
-      [
-        executionMetadata,
-        providerAttempt,
-      ],
-    );
+    return "Automatic provider routing";
+  }, [executionMetadata, providerAttempt]);
 
   /* ------------------------------------------------------------------------ */
   /* EFFECTS                                                                  */
   /* ------------------------------------------------------------------------ */
 
-  useEffect(
-    () => {
-      if (
-        !activeId &&
-        convos.data &&
-        convos.data.length >
-          0
-      ) {
-        setActiveId(
-          convos.data[0].id,
-        );
-      }
-    },
-    [
-      convos.data,
-      activeId,
-    ],
-  );
+  useEffect(() => {
+    if (!activeId && convos.data && convos.data.length > 0) {
+      setActiveId(convos.data[0].id);
+    }
+  }, [convos.data, activeId]);
 
-  useEffect(
-    () => {
-      scrollRef.current?.scrollTo({
-        top:
-          scrollRef.current.scrollHeight,
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
 
-        behavior:
-          "smooth",
-      });
-    },
-    [
-      messages.data,
-      streaming,
-    ],
-  );
+      behavior: "smooth",
+    });
+  }, [messages.data, streaming]);
 
   /**
    * Keep mission selection valid when moving between specialist routes.
    */
-  useEffect(
-    () => {
-      if (
-        availableMissionKinds.length ===
-        0
-      ) {
-        setSelectedMissionKind(
-          null,
-        );
+  useEffect(() => {
+    if (availableMissionKinds.length === 0) {
+      setSelectedMissionKind(null);
 
-        setMissionPanelOpen(
-          false,
-        );
+      setMissionPanelOpen(false);
 
-        return;
-      }
+      return;
+    }
 
-      if (
-        !selectedMissionKind ||
-        !availableMissionKinds.includes(
-          selectedMissionKind,
-        )
-      ) {
-        setSelectedMissionKind(
-          availableMissionKinds[0],
-        );
-      }
-    },
-    [
-      availableMissionKinds,
-      selectedMissionKind,
-    ],
-  );
+    if (!selectedMissionKind || !availableMissionKinds.includes(selectedMissionKind)) {
+      setSelectedMissionKind(availableMissionKinds[0]);
+    }
+  }, [availableMissionKinds, selectedMissionKind]);
 
   /**
    * Do not carry route-specific execution state into another specialist.
    */
-  useEffect(
-    () => {
-      abortRef.current?.abort();
+  useEffect(() => {
+    abortRef.current?.abort();
 
-      setLastCreatedMission(
-        null,
-      );
+    setLastCreatedMission(null);
 
-      setExecutionMetadata(
-        null,
-      );
+    setExecutionMetadata(null);
 
-      setProviderAttempt(
-        null,
-      );
+    setProviderAttempt(null);
 
-      setStreaming(
-        null,
-      );
+    setStreaming(null);
 
-      setStreamingActive(
-        false,
-      );
-    },
-    [
-      to,
-    ],
-  );
+    setStreamingActive(false);
+  }, [to]);
 
   /* ------------------------------------------------------------------------ */
   /* FILTERED CONVERSATIONS                                                   */
   /* ------------------------------------------------------------------------ */
 
-  const filtered =
-    useMemo(
-      () => {
-        const q =
-          search
-            .trim()
-            .toLowerCase();
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
 
-        if (
-          !q
-        ) {
-          return (
-            convos.data ??
-            []
-          );
-        }
+    if (!q) {
+      return convos.data ?? [];
+    }
 
-        return (
-          convos.data ??
-          []
-        ).filter(
-          (
-            conversation,
-          ) =>
-            conversation.title
-              .toLowerCase()
-              .includes(
-                q,
-              ),
-        );
-      },
-      [
-        convos.data,
-        search,
-      ],
+    return (convos.data ?? []).filter((conversation) =>
+      conversation.title.toLowerCase().includes(q),
     );
+  }, [convos.data, search]);
 
   /* ------------------------------------------------------------------------ */
   /* DERIVED CHAT DATA                                                        */
   /* ------------------------------------------------------------------------ */
 
   const activeConvo =
-    (
-      convos.data ??
-      []
-    ).find(
-      (
-        conversation,
-      ) =>
-        conversation.id ===
-        activeId,
-    ) ??
-    null;
+    (convos.data ?? []).find((conversation) => conversation.id === activeId) ?? null;
 
-  const latestUserMessage =
-    [
-      ...(
-        messages.data ??
-        []
-      ),
-    ]
-      .reverse()
-      .find(
-        (
-          message,
-        ) =>
-          message.role ===
-          "user",
-      );
+  const latestUserMessage = [...(messages.data ?? [])]
+    .reverse()
+    .find((message) => message.role === "user");
 
-  const hasMessages =
-    (
-      messages.data?.length ??
-      0
-    ) >
-      0 ||
-    streaming !==
-      null;
+  const hasMessages = (messages.data?.length ?? 0) > 0 || streaming !== null;
 
-  const title =
-    mod?.title ??
-    spec?.title ??
-    "Specialist";
+  const title = mod?.title ?? spec?.title ?? "Specialist";
 
-  const starters =
-    spec?.starters ??
-    [];
+  const starters = spec?.starters ?? [];
 
-  const capability =
-    capabilityForRoute(
-      to,
-    );
+  const capability = capabilityForRoute(to);
 
   /* ------------------------------------------------------------------------ */
   /* NEW CONVERSATION                                                         */
   /* ------------------------------------------------------------------------ */
 
   async function handleNew() {
-    if (
-      sending
-    ) {
-      toast.error(
-        "Finish or stop the current response first.",
-      );
+    if (sending) {
+      toast.error("Finish or stop the current response first.");
 
       return;
     }
 
     try {
-      const conversation =
-        await createConversation(
-          "New conversation",
-          category,
-        );
+      const conversation = await createConversation("New conversation", category);
 
       await qc.invalidateQueries({
-        queryKey: [
-          "ai-conversations",
-          category,
-        ],
+        queryKey: ["ai-conversations", category],
       });
 
-      setExecutionMetadata(
-        null,
-      );
+      setExecutionMetadata(null);
 
-      setProviderAttempt(
-        null,
-      );
+      setProviderAttempt(null);
 
-      setStreaming(
-        null,
-      );
+      setStreaming(null);
 
-      setStreamingActive(
-        false,
-      );
+      setStreamingActive(false);
 
-      setActiveId(
-        conversation.id,
-      );
-    } catch (
-      error
-    ) {
-      toast.error(
-        "Could not start a new chat",
-        {
-          description:
-            normaliseErrorMessage(
-              error,
-            ),
-        },
-      );
+      setActiveId(conversation.id);
+    } catch (error) {
+      toast.error("Could not start a new chat", {
+        description: normaliseErrorMessage(error),
+      });
     }
   }
 
@@ -1186,78 +701,39 @@ export function SpecialistChat({
   /* DELETE CONVERSATION                                                      */
   /* ------------------------------------------------------------------------ */
 
-  async function handleDelete(
-    id:
-      string,
-  ) {
-    if (
-      sending &&
-      id ===
-        activeId
-    ) {
-      toast.error(
-        "Stop the active AI response before deleting this conversation.",
-      );
+  async function handleDelete(id: string) {
+    if (sending && id === activeId) {
+      toast.error("Stop the active AI response before deleting this conversation.");
 
       return;
     }
 
-    if (
-      !window.confirm(
-        "Delete this conversation?",
-      )
-    ) {
+    if (!window.confirm("Delete this conversation?")) {
       return;
     }
 
     try {
-      await deleteConversation(
-        id,
-      );
+      await deleteConversation(id);
 
       await qc.invalidateQueries({
-        queryKey: [
-          "ai-conversations",
-          category,
-        ],
+        queryKey: ["ai-conversations", category],
       });
 
-      if (
-        id ===
-        activeId
-      ) {
-        setActiveId(
-          null,
-        );
+      if (id === activeId) {
+        setActiveId(null);
 
-        setExecutionMetadata(
-          null,
-        );
+        setExecutionMetadata(null);
 
-        setProviderAttempt(
-          null,
-        );
+        setProviderAttempt(null);
 
-        setStreaming(
-          null,
-        );
+        setStreaming(null);
 
-        setStreamingActive(
-          false,
-        );
+        setStreamingActive(false);
       }
-    } catch (
-      error
-    ) {
-      toast.error(
-        "Delete failed",
-        {
-          description:
-            normaliseErrorMessage(
-              error,
-            ),
-        },
-      );
+    } catch (error) {
+      toast.error("Delete failed", {
+        description: normaliseErrorMessage(error),
+      });
     }
   }
 
@@ -1265,37 +741,19 @@ export function SpecialistChat({
   /* PIN                                                                      */
   /* ------------------------------------------------------------------------ */
 
-  async function handleTogglePin(
-    conversation:
-      AiConversation,
-  ) {
+  async function handleTogglePin(conversation: AiConversation) {
     try {
-      await updateConversation(
-        conversation.id,
-        {
-          pinned:
-            !conversation.pinned,
-        },
-      );
+      await updateConversation(conversation.id, {
+        pinned: !conversation.pinned,
+      });
 
       await qc.invalidateQueries({
-        queryKey: [
-          "ai-conversations",
-          category,
-        ],
+        queryKey: ["ai-conversations", category],
       });
-    } catch (
-      error
-    ) {
-      toast.error(
-        "Could not update",
-        {
-          description:
-            normaliseErrorMessage(
-              error,
-            ),
-        },
-      );
+    } catch (error) {
+      toast.error("Could not update", {
+        description: normaliseErrorMessage(error),
+      });
     }
   }
 
@@ -1304,341 +762,234 @@ export function SpecialistChat({
   /* ------------------------------------------------------------------------ */
 
   function handleStop() {
-    if (
-      !abortRef.current
-    ) {
+    if (!abortRef.current) {
       return;
     }
 
     abortRef.current.abort();
   }
 
+  function handleVoiceInput() {
+    if (!isVoiceAssistant) return;
+
+    if (voiceRecognitionRef.current) {
+      voiceRecognitionRef.current.stop();
+      return;
+    }
+
+    const Recognition = browserSpeechRecognition();
+    if (!Recognition) {
+      toast.error("Voice input is unavailable in this browser", {
+        description: "Use a current Chromium browser, or type your message instead.",
+      });
+      return;
+    }
+
+    const recognition = new Recognition();
+    const prefix = input.trim();
+    recognition.lang = "en-ZA";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript?.trim() ?? "")
+        .filter(Boolean)
+        .join(" ");
+      setInput([prefix, transcript].filter(Boolean).join(prefix && transcript ? " " : ""));
+    };
+    recognition.onerror = (event) => {
+      if (event.error !== "aborted") {
+        toast.error("Voice input stopped", {
+          description:
+            event.error === "not-allowed"
+              ? "Allow microphone access in your browser, then try again."
+              : "Your words could not be transcribed. You can type your message instead.",
+        });
+      }
+    };
+    recognition.onend = () => {
+      voiceRecognitionRef.current = null;
+      setVoiceState("idle");
+    };
+
+    try {
+      voiceRecognitionRef.current = recognition;
+      setVoiceState("listening");
+      recognition.start();
+    } catch {
+      voiceRecognitionRef.current = null;
+      setVoiceState("idle");
+      toast.error("Voice input could not start", {
+        description: "Check microphone permission, then try again.",
+      });
+    }
+  }
+
   /* ------------------------------------------------------------------------ */
   /* SEND CHAT                                                                */
   /* ------------------------------------------------------------------------ */
 
-  async function handleSend(
-    text?:
-      string,
-  ) {
-    const content =
-      (
-        text ??
-        input
-      ).trim();
+  async function handleSend(text?: string) {
+    const content = (text ?? input).trim();
 
-    if (
-      !content ||
-      sending
-    ) {
+    if (!content || sending) {
       return;
     }
 
-    setSending(
-      true,
-    );
+    setSending(true);
 
-    setStreaming(
-      "",
-    );
+    setStreaming("");
 
-    setStreamingActive(
-      true,
-    );
+    setStreamingActive(true);
 
-    setExecutionMetadata(
-      null,
-    );
+    setExecutionMetadata(null);
 
-    setProviderAttempt(
-      null,
-    );
+    setProviderAttempt(null);
 
-    setInput(
-      "",
-    );
+    setInput("");
 
     /**
      * Kept outside React state so that we always know exactly how much text
      * reached the browser even if React state updates are still batching.
      */
-    let responseBuffer =
-      "";
+    let responseBuffer = "";
 
     /**
      * Prevents a completed provider answer from being incorrectly labelled as
      * partial when the later database insert fails.
      */
-    let aiCompleted =
-      false;
+    let aiCompleted = false;
 
-    let convoId:
-      string |
-      null =
-      activeId;
+    let convoId: string | null = activeId;
 
     try {
-      if (
-        !convoId
-      ) {
-        const conversation =
-          await createConversation(
-            content.slice(
-              0,
-              60,
-            ),
-            category,
-          );
+      if (!convoId) {
+        const conversation = await createConversation(content.slice(0, 60), category);
 
-        convoId =
-          conversation.id;
+        convoId = conversation.id;
 
-        setActiveId(
-          convoId,
-        );
+        setActiveId(convoId);
 
         await qc.invalidateQueries({
-          queryKey: [
-            "ai-conversations",
-            category,
-          ],
+          queryKey: ["ai-conversations", category],
         });
       }
 
-      await insertMessage(
-        convoId,
-        "user",
-        content,
-      );
+      await insertMessage(convoId, "user", content);
 
       await qc.invalidateQueries({
-        queryKey: [
-          "ai-messages",
-          convoId,
-        ],
+        queryKey: ["ai-messages", convoId],
       });
 
-      const prior =
-        (
-          await listMessages(
-            convoId,
-          )
-        ).map(
-          (
-            message,
-          ) => ({
-            role:
-              message.role,
+      const prior = (await listMessages(convoId)).map((message) => ({
+        role: message.role,
 
-            content:
-              message.content,
-          }),
-        );
+        content: message.content,
+      }));
 
-      const currentConvo =
-        (
-          convos.data ??
-          []
-        ).find(
-          (
-            conversation,
-          ) =>
-            conversation.id ===
-            convoId,
-        );
+      const currentConvo = (convos.data ?? []).find((conversation) => conversation.id === convoId);
 
       if (
         currentConvo &&
-        (
-          currentConvo.title ===
-            "New conversation" ||
-          !currentConvo.title.trim()
-        )
+        (currentConvo.title === "New conversation" || !currentConvo.title.trim())
       ) {
-        await updateConversation(
-          convoId,
-          {
-            title:
-              content.slice(
-                0,
-                60,
-              ),
-          },
-        );
+        await updateConversation(convoId, {
+          title: content.slice(0, 60),
+        });
 
         await qc.invalidateQueries({
-          queryKey: [
-            "ai-conversations",
-            category,
-          ],
+          queryKey: ["ai-conversations", category],
         });
       }
 
-      abortRef.current =
-        new AbortController();
+      abortRef.current = new AbortController();
 
-      const result =
-        await streamChatWithMetadata(
-          prior,
+      const result = await streamChatWithMetadata(
+        prior,
 
-          (
-            chunk,
-          ) => {
-            responseBuffer +=
-              chunk;
+        (chunk) => {
+          responseBuffer += chunk;
 
-            setStreaming(
-              responseBuffer,
-            );
+          setStreaming(responseBuffer);
+        },
+
+        {
+          signal: abortRef.current.signal,
+
+          system: spec?.system,
+
+          provider: DEFAULT_CHAT_PROVIDER,
+
+          onProviderAttempt: (event) => {
+            setProviderAttempt(event);
           },
 
-          {
-            signal:
-              abortRef.current.signal,
-
-            system:
-              spec?.system,
-
-            provider:
-              DEFAULT_CHAT_PROVIDER,
-
-            onProviderAttempt:
-              (
-                event,
-              ) => {
-                setProviderAttempt(
-                  event,
-                );
-              },
-
-            onExecutionMetadata:
-              (
-                metadata,
-              ) => {
-                setExecutionMetadata(
-                  metadata,
-                );
-              },
+          onExecutionMetadata: (metadata) => {
+            setExecutionMetadata(metadata);
           },
-        );
-
-      aiCompleted =
-        true;
-
-      setStreamingActive(
-        false,
+        },
       );
 
-      setExecutionMetadata(
-        result.metadata,
-      );
+      aiCompleted = true;
 
-      await insertMessage(
-        convoId,
-        "assistant",
-        result.content,
-      );
+      setStreamingActive(false);
 
-      setStreaming(
-        null,
-      );
+      setExecutionMetadata(result.metadata);
+
+      await insertMessage(convoId, "assistant", result.content);
+
+      setStreaming(null);
 
       await qc.invalidateQueries({
-        queryKey: [
-          "ai-messages",
-          convoId,
-        ],
+        queryKey: ["ai-messages", convoId],
       });
 
       await qc.invalidateQueries({
-        queryKey: [
-          "ai-conversations",
-          category,
-        ],
+        queryKey: ["ai-conversations", category],
       });
-    } catch (
-      error
-    ) {
-      setStreamingActive(
-        false,
-      );
+    } catch (error) {
+      setStreamingActive(false);
 
-      const message =
-        normaliseErrorMessage(
-          error,
-        );
+      const message = normaliseErrorMessage(error);
 
-      const partialOutput =
-        responseBuffer.trim();
+      const partialOutput = responseBuffer.trim();
 
       /* -------------------------------------------------------------------- */
       /* USER-CANCELLED RESPONSE                                              */
       /* -------------------------------------------------------------------- */
 
-      if (
-        isAbortError(
-          error,
-        )
-      ) {
-        if (
-          partialOutput &&
-          convoId
-        ) {
-          const stoppedContent =
-            [
-              responseBuffer.trimEnd(),
+      if (isAbortError(error)) {
+        if (partialOutput && convoId) {
+          const stoppedContent = [
+            responseBuffer.trimEnd(),
 
-              "",
+            "",
 
-              "> **Response stopped:** Generation was stopped before the answer finished.",
-            ].join(
-              "\n",
-            );
+            "> **Response stopped:** Generation was stopped before the answer finished.",
+          ].join("\n");
 
           try {
-            await insertMessage(
-              convoId,
-              "assistant",
-              stoppedContent,
-            );
+            await insertMessage(convoId, "assistant", stoppedContent);
 
-            setStreaming(
-              null,
-            );
+            setStreaming(null);
 
             await qc.invalidateQueries({
-              queryKey: [
-                "ai-messages",
-                convoId,
-              ],
+              queryKey: ["ai-messages", convoId],
             });
-          } catch (
-            persistenceError
-          ) {
-            setStreaming(
-              stoppedContent,
-            );
+          } catch (persistenceError) {
+            setStreaming(stoppedContent);
 
-            console.error(
-              "Stopped AI response could not be persisted.",
-              persistenceError,
-            );
+            console.error("Stopped AI response could not be persisted.", persistenceError);
           }
         } else {
-          setStreaming(
-            null,
-          );
+          setStreaming(null);
         }
 
-        toast.message(
-          "AI response stopped",
-          {
-            description:
-              partialOutput
-                ? "The partial response was preserved."
-                : "No assistant response was generated.",
-          },
-        );
+        toast.message("AI response stopped", {
+          description: partialOutput
+            ? "The partial response was preserved."
+            : "No assistant response was generated.",
+        });
 
         return;
       }
@@ -1647,70 +998,41 @@ export function SpecialistChat({
       /* PROVIDER FAILED AFTER VISIBLE OUTPUT                                 */
       /* -------------------------------------------------------------------- */
 
-      if (
-        !aiCompleted &&
-        partialOutput &&
-        convoId
-      ) {
-        const interruptedContent =
-          [
-            responseBuffer.trimEnd(),
+      if (!aiCompleted && partialOutput && convoId) {
+        const interruptedContent = [
+          responseBuffer.trimEnd(),
 
-            "",
+          "",
 
-            "> **Interrupted response:** The reasoning stream stopped before completion. This is a partial answer and should not be treated as complete.",
-          ].join(
-            "\n",
-          );
+          "> **Interrupted response:** The reasoning stream stopped before completion. This is a partial answer and should not be treated as complete.",
+        ].join("\n");
 
         try {
-          await insertMessage(
-            convoId,
-            "assistant",
-            interruptedContent,
-          );
+          await insertMessage(convoId, "assistant", interruptedContent);
 
-          setStreaming(
-            null,
-          );
+          setStreaming(null);
 
           await qc.invalidateQueries({
-            queryKey: [
-              "ai-messages",
-              convoId,
-            ],
+            queryKey: ["ai-messages", convoId],
           });
 
           await qc.invalidateQueries({
-            queryKey: [
-              "ai-conversations",
-              category,
-            ],
+            queryKey: ["ai-conversations", category],
           });
-        } catch (
-          persistenceError
-        ) {
+        } catch (persistenceError) {
           /**
            * Even if persistence fails, do not erase output the owner already
            * saw.
            */
-          setStreaming(
-            interruptedContent,
-          );
+          setStreaming(interruptedContent);
 
-          console.error(
-            "Interrupted Cossa AI response could not be persisted.",
-            persistenceError,
-          );
+          console.error("Interrupted Cossa AI response could not be persisted.", persistenceError);
         }
 
-        toast.error(
-          "AI response interrupted",
-          {
-            description:
-              "Part of the answer was returned before the reasoning stream failed. The partial output was preserved and was not mixed with another provider.",
-          },
-        );
+        toast.error("AI response interrupted", {
+          description:
+            "Part of the answer was returned before the reasoning stream failed. The partial output was preserved and was not mixed with another provider.",
+        });
 
         return;
       }
@@ -1719,27 +1041,19 @@ export function SpecialistChat({
       /* AI COMPLETED BUT DATABASE SAVE FAILED                                */
       /* -------------------------------------------------------------------- */
 
-      if (
-        aiCompleted &&
-        partialOutput
-      ) {
+      if (aiCompleted && partialOutput) {
         /**
          * The provider successfully completed reasoning.
          *
          * If inserting the assistant message failed afterwards, preserve the
          * generated answer visibly rather than pretending the provider failed.
          */
-        setStreaming(
-          responseBuffer,
-        );
+        setStreaming(responseBuffer);
 
-        toast.error(
-          "Answer generated but not saved",
-          {
-            description:
-              "The AI completed its response, but Cossa could not persist the assistant message. The generated answer remains visible in this session.",
-          },
-        );
+        toast.error("Answer generated but not saved", {
+          description:
+            "The AI completed its response, but Cossa could not persist the assistant message. The generated answer remains visible in this session.",
+        });
 
         return;
       }
@@ -1748,59 +1062,28 @@ export function SpecialistChat({
       /* REQUEST FAILED BEFORE OUTPUT                                         */
       /* -------------------------------------------------------------------- */
 
-      setStreaming(
-        null,
-      );
+      setStreaming(null);
 
-      if (
-        message.includes(
-          "402",
-        )
-      ) {
-        toast.error(
-          "AI service unavailable",
-          {
-            description:
-              "The selected reasoning route could not complete the request. The server may use another configured provider when available.",
-          },
-        );
-      } else if (
-        message.includes(
-          "429",
-        ) ||
-        message
-          .toLowerCase()
-          .includes(
-            "rate",
-          )
-      ) {
-        toast.error(
-          "AI provider rate limited",
-          {
-            description:
-              message,
-          },
-        );
+      if (message.includes("402")) {
+        toast.error("AI service unavailable", {
+          description:
+            "The selected reasoning route could not complete the request. The server may use another configured provider when available.",
+        });
+      } else if (message.includes("429") || message.toLowerCase().includes("rate")) {
+        toast.error("AI provider rate limited", {
+          description: message,
+        });
       } else {
-        toast.error(
-          "AI request failed",
-          {
-            description:
-              message,
-          },
-        );
+        toast.error("AI request failed", {
+          description: message,
+        });
       }
     } finally {
-      setSending(
-        false,
-      );
+      setSending(false);
 
-      setStreamingActive(
-        false,
-      );
+      setStreamingActive(false);
 
-      abortRef.current =
-        null;
+      abortRef.current = null;
     }
   }
 
@@ -1809,185 +1092,113 @@ export function SpecialistChat({
   /* ------------------------------------------------------------------------ */
 
   function handleOpenMissionPanel() {
-    if (
-      !missionBridgeEnabled
-    ) {
-      toast.error(
-        "Workforce bridge unavailable",
-        {
-          description:
-            "This specialist is not currently mapped to a real Cossa workforce mission engine.",
-        },
-      );
+    if (!missionBridgeEnabled) {
+      toast.error("Workforce bridge unavailable", {
+        description:
+          "This specialist is not currently mapped to a real Cossa workforce mission engine.",
+      });
 
       return;
     }
 
-    if (
-      !missionObjective.trim()
-    ) {
+    if (!missionObjective.trim()) {
       const suggestedObjective =
         input.trim() ||
         latestUserMessage?.content.trim() ||
-        (
-          activeConvo?.title &&
-          activeConvo.title !==
-            "New conversation"
-            ? activeConvo.title
-            : ""
-        ) ||
+        (activeConvo?.title && activeConvo.title !== "New conversation" ? activeConvo.title : "") ||
         `Complete a coordinated ${title} mission using verified Cossa information.`;
 
-      setMissionObjective(
-        suggestedObjective,
-      );
+      setMissionObjective(suggestedObjective);
     }
 
-    setMissionPanelOpen(
-      true,
-    );
+    setMissionPanelOpen(true);
   }
 
   /* ------------------------------------------------------------------------ */
   /* CREATE REAL WORKFORCE MISSION                                            */
   /* ------------------------------------------------------------------------ */
 
-  const createMissionMutation =
-    useMutation({
-      mutationFn:
-        async () => {
-          if (
-            !spec
-          ) {
-            throw new Error(
-              "The specialist configuration could not be loaded.",
-            );
-          }
+  const createMissionMutation = useMutation({
+    mutationFn: async () => {
+      if (!spec) {
+        throw new Error("The specialist configuration could not be loaded.");
+      }
 
-          if (
-            !spec.canCreateMission
-          ) {
-            throw new Error(
-              `${spec.title} is advisory-only and cannot create a workforce mission.`,
-            );
-          }
+      if (!spec.canCreateMission) {
+        throw new Error(`${spec.title} is advisory-only and cannot create a workforce mission.`);
+      }
 
-          if (
-            !selectedMissionKind
-          ) {
-            throw new Error(
-              "Select a workforce mission type.",
-            );
-          }
+      if (!selectedMissionKind) {
+        throw new Error("Select a workforce mission type.");
+      }
 
-          if (
-            !availableMissionKinds.includes(
-              selectedMissionKind,
-            )
-          ) {
-            throw new Error(
-              "The selected workforce mission is not authorised for this specialist mapping.",
-            );
-          }
+      if (!availableMissionKinds.includes(selectedMissionKind)) {
+        throw new Error(
+          "The selected workforce mission is not authorised for this specialist mapping.",
+        );
+      }
 
-          const result =
-            await createWorkforceMission({
-              kind:
-                selectedMissionKind,
+      const result = await createWorkforceMission({
+        kind: selectedMissionKind,
 
-              objective:
-                missionObjective,
+        objective: missionObjective,
 
-              targetMarket:
-                missionTargetMarket,
+        targetMarket: missionTargetMarket,
 
-              targetLocation:
-                missionTargetLocation,
-            });
+        targetLocation: missionTargetLocation,
+      });
 
-          return {
-            kind:
-              selectedMissionKind,
+      return {
+        kind: selectedMissionKind,
 
-            result,
-          } satisfies CreatedMissionState;
-        },
+        result,
+      } satisfies CreatedMissionState;
+    },
 
-      onSuccess:
-        async (
-          created,
-        ) => {
-          setLastCreatedMission(
-            created,
-          );
+    onSuccess: async (created) => {
+      setLastCreatedMission(created);
 
-          /**
-           * These are the same query keys used by /ai/workforce.
-           *
-           * Invalidating them means an already-mounted workforce page or later
-           * navigation receives the new mission, handoffs and employee state.
-           */
-          await Promise.all([
-            qc.invalidateQueries({
-              queryKey: [
-                "ai-workforce-employees",
-              ],
-            }),
+      /**
+       * These are the same query keys used by /ai/workforce.
+       *
+       * Invalidating them means an already-mounted workforce page or later
+       * navigation receives the new mission, handoffs and employee state.
+       */
+      await Promise.all([
+        qc.invalidateQueries({
+          queryKey: ["ai-workforce-employees"],
+        }),
 
-            qc.invalidateQueries({
-              queryKey: [
-                "ai-workforce-missions",
-              ],
-            }),
+        qc.invalidateQueries({
+          queryKey: ["ai-workforce-missions"],
+        }),
 
-            qc.invalidateQueries({
-              queryKey: [
-                "ai-workforce-handoffs",
-              ],
-            }),
+        qc.invalidateQueries({
+          queryKey: ["ai-workforce-handoffs"],
+        }),
 
-            qc.invalidateQueries({
-              queryKey: [
-                "ai-workforce-runs",
-              ],
-            }),
+        qc.invalidateQueries({
+          queryKey: ["ai-workforce-runs"],
+        }),
 
-            qc.invalidateQueries({
-              queryKey: [
-                "ai-workforce-approvals",
-              ],
-            }),
-          ]);
+        qc.invalidateQueries({
+          queryKey: ["ai-workforce-approvals"],
+        }),
+      ]);
 
-          const definition =
-            workflowDefinitionForKind(
-              created.kind,
-            );
+      const definition = workflowDefinitionForKind(created.kind);
 
-          toast.success(
-            "Real workforce mission created",
-            {
-              description:
-                `${definition.label}: ${created.result.handoffs.length} recorded handoff stages were created. No external action was executed.`,
-            },
-          );
-        },
+      toast.success("Real workforce mission created", {
+        description: `${definition.label}: ${created.result.handoffs.length} recorded handoff stages were created. No external action was executed.`,
+      });
+    },
 
-      onError:
-        (
-          error,
-        ) => {
-          toast.error(
-            "Workforce mission could not be created",
-            {
-              description:
-                normaliseErrorMessage(
-                  error,
-                ),
-            },
-          );
-        },
-    });
+    onError: (error) => {
+      toast.error("Workforce mission could not be created", {
+        description: normaliseErrorMessage(error),
+      });
+    },
+  });
 
   /* ------------------------------------------------------------------------ */
   /* RENDER                                                                   */
@@ -2010,20 +1221,12 @@ export function SpecialistChat({
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="font-display text-xl font-semibold md:text-2xl">
-                  {title}
-                </h1>
+                <h1 className="font-display text-xl font-semibold md:text-2xl">{title}</h1>
 
-                <StatusBadge
-                  status={
-                    workspaceRuntimeStatus()
-                  }
-                />
+                <StatusBadge status={workspaceRuntimeStatus()} />
 
                 <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                  {
-                    capability.label
-                  }
+                  {capability.label}
                 </span>
 
                 {missionBridgeEnabled ? (
@@ -2046,27 +1249,17 @@ export function SpecialistChat({
                         : "border-success/30 bg-success/10 text-success",
                     )}
                   >
-                    {providerDisplayName(
-                      executionMetadata.provider,
-                    )}
+                    {providerDisplayName(executionMetadata.provider)}
 
-                    {executionMetadata.fallback
-                      ? " fallback"
-                      : " active"}
+                    {executionMetadata.fallback ? " fallback" : " active"}
                   </span>
                 ) : null}
               </div>
 
-              <p className="mt-1 text-xs text-muted-foreground">
-                {
-                  capability.summary
-                }
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{capability.summary}</p>
 
               <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-muted-foreground">
-                {
-                  capability.evidence
-                }
+                {capability.evidence}
               </p>
             </div>
           </div>
@@ -2076,29 +1269,21 @@ export function SpecialistChat({
               <Button
                 type="button"
                 variant="outline"
-                onClick={
-                  handleOpenMissionPanel
-                }
+                onClick={handleOpenMissionPanel}
                 className="w-full border-primary/40 text-primary hover:bg-primary/10 sm:w-auto"
               >
                 <Workflow className="mr-1.5 h-4 w-4" />
-
                 Create workforce mission
               </Button>
             ) : null}
 
             <Button
               type="button"
-              onClick={
-                handleNew
-              }
-              disabled={
-                sending
-              }
+              onClick={handleNew}
+              disabled={sending}
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow sm:w-auto"
             >
               <Plus className="mr-1.5 h-4 w-4" />
-
               New chat
             </Button>
           </div>
@@ -2109,8 +1294,7 @@ export function SpecialistChat({
       {/* REAL WORKFORCE MISSION CREATOR                                       */}
       {/* -------------------------------------------------------------------- */}
 
-      {missionPanelOpen &&
-      missionBridgeEnabled ? (
+      {missionPanelOpen && missionBridgeEnabled ? (
         <section className="glass-card border border-primary/20 p-4 sm:p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
@@ -2127,10 +1311,9 @@ export function SpecialistChat({
               </h2>
 
               <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-                This action creates a real mission and real employee handoffs
-                in the Cossa workforce database. It does not claim that the
-                employees have executed the mission and it does not publish,
-                message, spend money or perform another external action.
+                This action creates a real mission and real employee handoffs in the Cossa workforce
+                database. It does not claim that the employees have executed the mission and it does
+                not publish, message, spend money or perform another external action.
               </p>
             </div>
 
@@ -2138,11 +1321,7 @@ export function SpecialistChat({
               type="button"
               size="sm"
               variant="ghost"
-              onClick={() =>
-                setMissionPanelOpen(
-                  false,
-                )
-              }
+              onClick={() => setMissionPanelOpen(false)}
               aria-label="Close workforce mission creator"
             >
               <X className="h-4 w-4" />
@@ -2151,72 +1330,35 @@ export function SpecialistChat({
 
           <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="grid gap-4">
-              {availableMissionKinds.length >
-              1 ? (
+              {availableMissionKinds.length > 1 ? (
                 <label className="grid gap-1.5 text-sm font-medium">
                   Workforce type
-
                   <select
-                    value={
-                      selectedMissionKind ??
-                      ""
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setSelectedMissionKind(
-                        event.target
-                          .value as WorkforceMissionKind,
-                      )
+                    value={selectedMissionKind ?? ""}
+                    onChange={(event) =>
+                      setSelectedMissionKind(event.target.value as WorkforceMissionKind)
                     }
                     className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
                   >
-                    {availableMissionKinds.map(
-                      (
-                        kind,
-                      ) => {
-                        const definition =
-                          workflowDefinitionForKind(
-                            kind,
-                          );
+                    {availableMissionKinds.map((kind) => {
+                      const definition = workflowDefinitionForKind(kind);
 
-                        return (
-                          <option
-                            key={
-                              kind
-                            }
-                            value={
-                              kind
-                            }
-                          >
-                            {
-                              definition.label
-                            }
-                          </option>
-                        );
-                      },
-                    )}
+                      return (
+                        <option key={kind} value={kind}>
+                          {definition.label}
+                        </option>
+                      );
+                    })}
                   </select>
                 </label>
               ) : null}
 
               <label className="grid gap-1.5 text-sm font-medium">
                 Mission objective
-
                 <textarea
-                  value={
-                    missionObjective
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setMissionObjective(
-                      event.target.value,
-                    )
-                  }
-                  rows={
-                    5
-                  }
+                  value={missionObjective}
+                  onChange={(event) => setMissionObjective(event.target.value)}
+                  rows={5}
                   placeholder="Describe the actual outcome the workforce should prepare."
                   className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
                 />
@@ -2225,36 +1367,18 @@ export function SpecialistChat({
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="grid gap-1.5 text-sm font-medium">
                   Target market
-
                   <input
-                    value={
-                      missionTargetMarket
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setMissionTargetMarket(
-                        event.target.value,
-                      )
-                    }
+                    value={missionTargetMarket}
+                    onChange={(event) => setMissionTargetMarket(event.target.value)}
                     className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
                   />
                 </label>
 
                 <label className="grid gap-1.5 text-sm font-medium">
                   Target location
-
                   <input
-                    value={
-                      missionTargetLocation
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setMissionTargetLocation(
-                        event.target.value,
-                      )
-                    }
+                    value={missionTargetLocation}
+                    onChange={(event) => setMissionTargetLocation(event.target.value)}
                     className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus:border-primary/50"
                   />
                 </label>
@@ -2267,13 +1391,11 @@ export function SpecialistChat({
               </p>
 
               <h3 className="mt-1 text-sm font-semibold">
-                {selectedMissionDefinition?.label ??
-                  "No workforce selected"}
+                {selectedMissionDefinition?.label ?? "No workforce selected"}
               </h3>
 
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                {selectedMissionDefinition?.description ??
-                  "Select a supported workforce mission."}
+                {selectedMissionDefinition?.description ?? "Select a supported workforce mission."}
               </p>
 
               <div className="mt-4 rounded-lg border border-success/20 bg-success/5 p-3">
@@ -2281,9 +1403,8 @@ export function SpecialistChat({
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
 
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    The workforce backend will install or synchronise required
-                    source employees, create the mission and create its
-                    hand-to-hand employee assignments.
+                    The workforce backend will install or synchronise required source employees,
+                    create the mission and create its hand-to-hand employee assignments.
                   </p>
                 </div>
               </div>
@@ -2294,16 +1415,14 @@ export function SpecialistChat({
                 </p>
 
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  Mission creation proves assignment only. Execution is proven
-                  later by mission runs and completed handoffs.
+                  Mission creation proves assignment only. Execution is proven later by mission runs
+                  and completed handoffs.
                 </p>
               </div>
 
               <Button
                 type="button"
-                onClick={() =>
-                  createMissionMutation.mutate()
-                }
+                onClick={() => createMissionMutation.mutate()}
                 disabled={
                   createMissionMutation.isPending ||
                   !selectedMissionKind ||
@@ -2341,47 +1460,35 @@ export function SpecialistChat({
                   </div>
 
                   <p className="mt-2 break-words text-sm font-medium">
-                    {
-                      lastCreatedMission.result.mission.title
-                    }
+                    {lastCreatedMission.result.mission.title}
                   </p>
 
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
                     <span>
                       Mission ID:{" "}
-
                       <strong className="text-foreground">
-                        {
-                          lastCreatedMission.result.mission.id
-                        }
+                        {lastCreatedMission.result.mission.id}
                       </strong>
                     </span>
 
                     <span>
                       Status:{" "}
-
                       <strong className="text-foreground">
-                        {
-                          lastCreatedMission.result.mission.status
-                        }
+                        {lastCreatedMission.result.mission.status}
                       </strong>
                     </span>
 
                     <span>
                       Handoffs:{" "}
-
                       <strong className="text-foreground">
-                        {
-                          lastCreatedMission.result.handoffs.length
-                        }
+                        {lastCreatedMission.result.handoffs.length}
                       </strong>
                     </span>
                   </div>
 
                   <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                    The mission and employee assignments now exist in the
-                    workforce database. Open the Workforce command centre to
-                    inspect or run the recorded stages.
+                    The mission and employee assignments now exist in the workforce database. Open
+                    the Workforce command centre to inspect or run the recorded stages.
                   </p>
                 </div>
 
@@ -2391,9 +1498,12 @@ export function SpecialistChat({
                 >
                   <Link
                     to="/ai/workforce"
+                    search={{
+                      view: "command",
+                      department: "all",
+                    }}
                   >
                     Open workforce
-
                     <ArrowRight className="ml-1.5 h-4 w-4" />
                   </Link>
                 </Button>
@@ -2417,16 +1527,8 @@ export function SpecialistChat({
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
 
             <input
-              value={
-                search
-              }
-              onChange={(
-                event,
-              ) =>
-                setSearch(
-                  event.target.value,
-                )
-              }
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Search chats"
               className="w-full rounded-lg border border-border/60 bg-background/50 py-2 pl-8 pr-2 text-xs outline-none focus:border-primary/50"
             />
@@ -2434,139 +1536,86 @@ export function SpecialistChat({
 
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             {convos.isLoading ? (
-              <div className="p-3 text-xs text-muted-foreground">
-                Loading…
-              </div>
-            ) : filtered.length ===
-              0 ? (
+              <div className="p-3 text-xs text-muted-foreground">Loading…</div>
+            ) : filtered.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground">
                 No chats yet. Start one to see it here.
               </div>
             ) : (
               <ul className="space-y-1">
-                {filtered.map(
-                  (
-                    conversation,
-                  ) => (
-                    <li
-                      key={
-                        conversation.id
-                      }
+                {filtered.map((conversation) => (
+                  <li key={conversation.id}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveId(conversation.id)}
+                      className={cn(
+                        "group flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors",
+
+                        conversation.id === activeId
+                          ? "border-primary/40 bg-primary/10"
+                          : "border-transparent hover:border-border/60 hover:bg-card/40",
+                      )}
                     >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveId(
-                            conversation.id,
-                          )
-                        }
+                      <MessageSquare
                         className={cn(
-                          "group flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors",
+                          "h-3.5 w-3.5 shrink-0",
 
-                          conversation.id ===
-                            activeId
-                            ? "border-primary/40 bg-primary/10"
-                            : "border-transparent hover:border-border/60 hover:bg-card/40",
+                          conversation.pinned ? "text-primary" : "text-muted-foreground",
                         )}
-                      >
-                        <MessageSquare
-                          className={cn(
-                            "h-3.5 w-3.5 shrink-0",
+                      />
 
-                            conversation.pinned
-                              ? "text-primary"
-                              : "text-muted-foreground",
+                      <span className="min-w-0 flex-1 truncate">{conversation.title}</span>
+
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+
+                          void handleTogglePin(conversation);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.stopPropagation();
+
+                            void handleTogglePin(conversation);
+                          }
+                        }}
+                        className="opacity-0 group-hover:opacity-100 hover:text-primary"
+                        aria-label={conversation.pinned ? "Unpin" : "Pin"}
+                      >
+                        <Pin
+                          className={cn(
+                            "h-3 w-3",
+
+                            conversation.pinned && "fill-primary text-primary opacity-100",
                           )}
                         />
+                      </span>
 
-                        <span className="min-w-0 flex-1 truncate">
-                          {
-                            conversation.title
-                          }
-                        </span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.stopPropagation();
 
-                        <span
-                          role="button"
-                          tabIndex={
-                            0
-                          }
-                          onClick={(
-                            event,
-                          ) => {
+                          void handleDelete(conversation.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
                             event.stopPropagation();
 
-                            void handleTogglePin(
-                              conversation,
-                            );
-                          }}
-                          onKeyDown={(
-                            event,
-                          ) => {
-                            if (
-                              event.key ===
-                              "Enter"
-                            ) {
-                              event.stopPropagation();
-
-                              void handleTogglePin(
-                                conversation,
-                              );
-                            }
-                          }}
-                          className="opacity-0 group-hover:opacity-100 hover:text-primary"
-                          aria-label={
-                            conversation.pinned
-                              ? "Unpin"
-                              : "Pin"
+                            void handleDelete(conversation.id);
                           }
-                        >
-                          <Pin
-                            className={cn(
-                              "h-3 w-3",
-
-                              conversation.pinned &&
-                                "fill-primary text-primary opacity-100",
-                            )}
-                          />
-                        </span>
-
-                        <span
-                          role="button"
-                          tabIndex={
-                            0
-                          }
-                          onClick={(
-                            event,
-                          ) => {
-                            event.stopPropagation();
-
-                            void handleDelete(
-                              conversation.id,
-                            );
-                          }}
-                          onKeyDown={(
-                            event,
-                          ) => {
-                            if (
-                              event.key ===
-                              "Enter"
-                            ) {
-                              event.stopPropagation();
-
-                              void handleDelete(
-                                conversation.id,
-                              );
-                            }
-                          }}
-                          className="opacity-0 group-hover:opacity-100 hover:text-destructive"
-                          aria-label="Delete"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </span>
-                      </button>
-                    </li>
-                  ),
-                )}
+                        }}
+                        className="opacity-0 group-hover:opacity-100 hover:text-destructive"
+                        aria-label="Delete"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </span>
+                    </button>
+                  </li>
+                ))}
               </ul>
             )}
           </div>
@@ -2580,25 +1629,17 @@ export function SpecialistChat({
           <div className="flex items-center justify-between gap-3 border-b border-border/40 px-5 py-3">
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold">
-                {activeConvo?.title ??
-                  "New chat"}
+                {activeConvo?.title ?? "New chat"}
               </div>
 
               <div className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-1 text-[10px] uppercase tracking-widest text-muted-foreground">
-                <span>
-                  {
-                    capability.label
-                  }
-                </span>
+                <span>{capability.label}</span>
 
-                <span>
-                  •
-                </span>
+                <span>•</span>
 
                 <span
                   className={cn(
-                    providerAttempt?.status ===
-                      "failed"
+                    providerAttempt?.status === "failed"
                       ? "text-destructive"
                       : executionMetadata?.fallback
                         ? "text-warning"
@@ -2607,28 +1648,18 @@ export function SpecialistChat({
                           : "",
                   )}
                 >
-                  {
-                    providerStatusText
-                  }
+                  {providerStatusText}
                 </span>
 
-                <span>
-                  •
-                </span>
+                <span>•</span>
 
-                <span>
-                  external actions require verified authority
-                </span>
+                <span>external actions require verified authority</span>
 
                 {missionBridgeEnabled ? (
                   <>
-                    <span>
-                      •
-                    </span>
+                    <span>•</span>
 
-                    <span className="text-success">
-                      workforce mission bridge available
-                    </span>
+                    <span className="text-success">workforce mission bridge available</span>
                   </>
                 ) : null}
               </div>
@@ -2637,9 +1668,7 @@ export function SpecialistChat({
                 <div className="mt-1 text-[10px] text-muted-foreground">
                   Provider route:{" "}
                   <span className="font-medium text-foreground">
-                    {
-                      executionMetadata.providerRoute
-                    }
+                    {executionMetadata.providerRoute}
                   </span>
                 </div>
               ) : null}
@@ -2651,13 +1680,10 @@ export function SpecialistChat({
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={
-                    handleStop
-                  }
+                  onClick={handleStop}
                   className="border-destructive/40 text-destructive hover:bg-destructive/10"
                 >
                   <CircleStop className="mr-1.5 h-3.5 w-3.5" />
-
                   Stop
                 </Button>
               ) : null}
@@ -2669,9 +1695,14 @@ export function SpecialistChat({
                   variant="outline"
                   className="hidden border-primary/40 text-primary hover:bg-primary/10 sm:flex"
                 >
-                  <Link to="/ai/workforce">
+                  <Link
+                    to="/ai/workforce"
+                    search={{
+                      view: "command",
+                      department: "all",
+                    }}
+                  >
                     Workforce
-
                     <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
                   </Link>
                 </Button>
@@ -2683,59 +1714,37 @@ export function SpecialistChat({
           {/* PROVIDER EXECUTION NOTICE                                        */}
           {/* ---------------------------------------------------------------- */}
 
-          {sending &&
-          providerAttempt ? (
+          {sending && providerAttempt ? (
             <div className="border-b border-border/40 bg-background/20 px-5 py-2">
               <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin text-primary" />
 
                 <span>
                   Cossa AI reasoning through{" "}
-
                   <strong className="text-foreground">
-                    {providerDisplayName(
-                      providerAttempt.provider,
-                    )}
+                    {providerDisplayName(providerAttempt.provider)}
                   </strong>
                 </span>
 
                 {providerAttempt.model ? (
                   <>
-                    <span>
-                      •
-                    </span>
+                    <span>•</span>
 
-                    <span>
-                      {
-                        providerAttempt.model
-                      }
-                    </span>
+                    <span>{providerAttempt.model}</span>
                   </>
                 ) : null}
 
                 {providerAttempt.fallback ? (
                   <>
-                    <span>
-                      •
-                    </span>
+                    <span>•</span>
 
-                    <span className="text-warning">
-                      server fallback
-                    </span>
+                    <span className="text-warning">server fallback</span>
                   </>
                 ) : null}
 
-                <span>
-                  •
-                </span>
+                <span>•</span>
 
-                <span>
-                  {
-                    providerAttemptStatusLabel(
-                      providerAttempt,
-                    )
-                  }
-                </span>
+                <span>{providerAttemptStatusLabel(providerAttempt)}</span>
               </div>
             </div>
           ) : null}
@@ -2744,12 +1753,7 @@ export function SpecialistChat({
           {/* MESSAGES                                                         */}
           {/* ---------------------------------------------------------------- */}
 
-          <div
-            ref={
-              scrollRef
-            }
-            className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8"
-          >
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8">
             {!hasMessages ? (
               <div className="mx-auto flex max-w-2xl flex-col items-center gap-6 py-8 text-center">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary gold-glow">
@@ -2758,127 +1762,71 @@ export function SpecialistChat({
 
                 <div>
                   <h2 className="font-display text-2xl font-semibold">
-                    Talk to{" "}
-
-                    <span className="text-gradient-gold">
-                      {
-                        title
-                      }
-                    </span>
+                    Talk to <span className="text-gradient-gold">{title}</span>
                   </h2>
 
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {
-                      capability.summary
-                    }
-                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">{capability.summary}</p>
 
                   <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                    Cossa AI uses server-controlled provider routing. The
-                    provider shown after a request is the provider reported by
-                    the gateway as actually executing that response.
+                    Cossa AI uses server-controlled provider routing. The provider shown after a
+                    request is the provider reported by the gateway as actually executing that
+                    response.
                   </p>
 
                   {missionBridgeEnabled ? (
                     <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                      This specialist can also create a real recorded Cossa
-                      workforce mission when you choose{" "}
-
-                      <strong className="text-foreground">
-                        Create workforce mission
-                      </strong>
-                      .
+                      This specialist can also create a real recorded Cossa workforce mission when
+                      you choose{" "}
+                      <strong className="text-foreground">Create workforce mission</strong>.
                     </p>
                   ) : null}
                 </div>
 
                 <div className="grid w-full max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
-                  {starters.map(
-                    (
-                      label,
-                    ) => (
-                      <button
-                        type="button"
-                        key={
-                          label
-                        }
-                        disabled={
-                          sending
-                        }
-                        onClick={() =>
-                          void handleSend(
-                            label,
-                          )
-                        }
-                        className="flex items-start gap-2 rounded-xl border border-border/60 bg-card/40 p-3 text-left text-xs transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  {starters.map((label) => (
+                    <button
+                      type="button"
+                      key={label}
+                      disabled={sending}
+                      onClick={() => void handleSend(label)}
+                      className="flex items-start gap-2 rounded-xl border border-border/60 bg-card/40 p-3 text-left text-xs transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 
-                        <span>
-                          {
-                            label
-                          }
-                        </span>
-                      </button>
-                    ),
-                  )}
+                      <span>{label}</span>
+                    </button>
+                  ))}
                 </div>
 
                 {missionBridgeEnabled ? (
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={
-                      handleOpenMissionPanel
-                    }
+                    onClick={handleOpenMissionPanel}
                     className="border-primary/40 text-primary hover:bg-primary/10"
                   >
                     <Workflow className="mr-1.5 h-4 w-4" />
-
                     Create a real workforce mission
                   </Button>
                 ) : null}
               </div>
             ) : (
               <div className="mx-auto flex max-w-3xl flex-col gap-6">
-                {(
-                  messages.data ??
-                  []
-                ).map(
-                  (
-                    message,
-                  ) => (
-                    <ChatBubble
-                      key={
-                        message.id
-                      }
-                      role={
-                        message.role
-                      }
-                      content={
-                        message.content
-                      }
-                      Icon={
-                        Icon
-                      }
-                    />
-                  ),
-                )}
+                {(messages.data ?? []).map((message) => (
+                  <ChatBubble
+                    key={message.id}
+                    role={message.role}
+                    content={message.content}
+                    Icon={Icon}
+                  />
+                ))}
 
-                {streaming !==
-                null ? (
+                {streaming !== null ? (
                   <ChatBubble
                     role="assistant"
-                    content={
-                      streaming ||
-                      "…"
-                    }
-                    streaming={
-                      streamingActive
-                    }
-                    Icon={
-                      Icon
-                    }
+                    content={streaming || "…"}
+                    streaming={streamingActive}
+                    Icon={Icon}
                   />
                 ) : null}
               </div>
@@ -2891,9 +1839,7 @@ export function SpecialistChat({
 
           <div className="border-t border-border/40 p-3 md:p-4">
             <form
-              onSubmit={(
-                event,
-              ) => {
+              onSubmit={(event) => {
                 event.preventDefault();
 
                 void handleSend();
@@ -2901,47 +1847,42 @@ export function SpecialistChat({
               className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-border/60 bg-background/50 p-2 focus-within:border-primary/50"
             >
               <textarea
-                value={
-                  input
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setInput(
-                    event.target.value,
-                  )
-                }
-                onKeyDown={(
-                  event,
-                ) => {
-                  if (
-                    event.key ===
-                      "Enter" &&
-                    !event.shiftKey
-                  ) {
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
 
                     void handleSend();
                   }
                 }}
-                rows={
-                  1
-                }
+                rows={1}
                 placeholder={`Message ${title}… (Enter to send, Shift+Enter for newline)`}
                 className="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
-                disabled={
-                  sending
-                }
+                disabled={sending}
               />
+
+              {isVoiceAssistant ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={voiceState === "listening" ? "default" : "outline"}
+                  onClick={handleVoiceInput}
+                  disabled={sending}
+                  className={voiceState === "listening" ? "animate-pulse" : ""}
+                  aria-label={voiceState === "listening" ? "Stop voice input" : "Start voice input"}
+                  title={voiceState === "listening" ? "Stop listening" : "Speak your message"}
+                >
+                  <Mic className="h-4 w-4" />
+                </Button>
+              ) : null}
 
               {sending ? (
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={
-                    handleStop
-                  }
+                  onClick={handleStop}
                   className="border-destructive/40 text-destructive hover:bg-destructive/10"
                   aria-label="Stop response"
                 >
@@ -2951,9 +1892,7 @@ export function SpecialistChat({
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={
-                    !input.trim()
-                  }
+                  disabled={!input.trim()}
                   className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
                   aria-label="Send"
                 >
@@ -2964,20 +1903,19 @@ export function SpecialistChat({
 
             <div className="mx-auto mt-2 flex max-w-3xl flex-col items-center justify-between gap-2 sm:flex-row">
               <p className="text-center text-[10px] text-muted-foreground sm:text-left">
-                Cossa AI can make mistakes. Verify important information.
+                {isVoiceAssistant
+                  ? "Voice input turns speech into an editable message. It does not place or answer calls."
+                  : "Cossa AI can make mistakes. Verify important information."}{" "}
                 Provider identity is reported by the server gateway.
               </p>
 
               {missionBridgeEnabled ? (
                 <button
                   type="button"
-                  onClick={
-                    handleOpenMissionPanel
-                  }
+                  onClick={handleOpenMissionPanel}
                   className="inline-flex items-center gap-1 text-[10px] font-medium text-primary transition-opacity hover:opacity-80"
                 >
                   <Workflow className="h-3 w-3" />
-
                   Turn this work into a workforce mission
                 </button>
               ) : null}
@@ -2999,30 +1937,22 @@ function ChatBubble({
   streaming,
   Icon,
 }: {
-  role:
-    string;
+  role: string;
 
-  content:
-    string;
+  content: string;
 
-  streaming?:
-    boolean;
+  streaming?: boolean;
 
-  Icon:
-    LucideIcon;
+  Icon: LucideIcon;
 }) {
-  const isUser =
-    role ===
-    "user";
+  const isUser = role === "user";
 
   return (
     <div
       className={cn(
         "flex gap-3",
 
-        isUser
-          ? "justify-end"
-          : "justify-start",
+        isUser ? "justify-end" : "justify-start",
       )}
     >
       {!isUser ? (
@@ -3041,22 +1971,10 @@ function ChatBubble({
         )}
       >
         {isUser ? (
-          <div className="whitespace-pre-wrap break-words">
-            {
-              content
-            }
-          </div>
+          <div className="whitespace-pre-wrap break-words">{content}</div>
         ) : (
           <div className="prose prose-invert prose-sm max-w-none break-words prose-headings:font-display prose-p:my-2 prose-pre:my-2">
-            <ReactMarkdown
-              remarkPlugins={[
-                remarkGfm,
-              ]}
-            >
-              {
-                content
-              }
-            </ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
 
             {streaming ? (
               <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-primary align-middle" />

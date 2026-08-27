@@ -1,7 +1,8 @@
 const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 const GOOGLE_ANALYTICS_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 const GOOGLE_STS_URL = "https://sts.googleapis.com/v1/token";
-const GOOGLE_IMPERSONATION_BASE_URL = "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts";
+const GOOGLE_IMPERSONATION_BASE_URL =
+  "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts";
 const GOOGLE_ANALYTICS_BASE_URL = "https://analyticsdata.googleapis.com/v1beta/properties";
 const GOOGLE_REQUEST_TIMEOUT_MS = 12_000;
 
@@ -99,8 +100,7 @@ function getGoogleWorkloadEnvironment(): GoogleWorkloadEnvironment | null {
   const projectNumber = process.env.GCP_PROJECT_NUMBER?.trim();
   const serviceAccountEmail = process.env.GCP_SERVICE_ACCOUNT_EMAIL?.trim();
   const workloadIdentityPoolId = process.env.GCP_WORKLOAD_IDENTITY_POOL_ID?.trim();
-  const workloadIdentityPoolProviderId =
-    process.env.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID?.trim();
+  const workloadIdentityPoolProviderId = process.env.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID?.trim();
   const nexDocsPropertyId = process.env.NEXDOCS_GA4_PROPERTY_ID?.trim();
 
   if (
@@ -167,17 +167,14 @@ async function isCossaOwnerOrAdmin(
     role: "in.(owner,admin)",
     limit: "1",
   });
-  const response = await fetch(
-    `${environment.supabaseUrl}/rest/v1/organisation_members?${query}`,
-    {
-      headers: {
-        apikey: environment.supabaseKey,
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
+  const response = await fetch(`${environment.supabaseUrl}/rest/v1/organisation_members?${query}`, {
+    headers: {
+      apikey: environment.supabaseKey,
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
     },
-  );
+    signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
+  });
 
   if (!response.ok) {
     return false;
@@ -191,8 +188,7 @@ async function exchangeVercelIdentityForGoogleToken(
   environment: GoogleWorkloadEnvironment,
   oidcToken: string,
 ): Promise<string> {
-  const audience =
-    `//iam.googleapis.com/projects/${environment.projectNumber}/locations/global/workloadIdentityPools/${environment.workloadIdentityPoolId}/providers/${environment.workloadIdentityPoolProviderId}`;
+  const audience = `//iam.googleapis.com/projects/${environment.projectNumber}/locations/global/workloadIdentityPools/${environment.workloadIdentityPoolId}/providers/${environment.workloadIdentityPoolProviderId}`;
   const response = await fetch(GOOGLE_STS_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -208,17 +204,12 @@ async function exchangeVercelIdentityForGoogleToken(
   });
 
   if (!response.ok) {
-    throw new PlatformAnalyticsConnectionError(
-      "workload_identity_exchange",
-      response.status,
-    );
+    throw new PlatformAnalyticsConnectionError("workload_identity_exchange", response.status);
   }
 
   const payload = (await response.json()) as GoogleTokenResponse;
   if (!payload.access_token) {
-    throw new PlatformAnalyticsConnectionError(
-      "workload_identity_exchange_token",
-    );
+    throw new PlatformAnalyticsConnectionError("workload_identity_exchange_token");
   }
 
   return payload.access_token;
@@ -246,18 +237,12 @@ async function impersonateAnalyticsReader(
   );
 
   if (!response.ok) {
-    throw new PlatformAnalyticsConnectionError(
-      "service_account_impersonation",
-      response.status,
-    );
+    throw new PlatformAnalyticsConnectionError("service_account_impersonation", response.status);
   }
 
-  const payload =
-    (await response.json()) as GoogleImpersonatedTokenResponse;
+  const payload = (await response.json()) as GoogleImpersonatedTokenResponse;
   if (!payload.accessToken) {
-    throw new PlatformAnalyticsConnectionError(
-      "service_account_impersonation_token",
-    );
+    throw new PlatformAnalyticsConnectionError("service_account_impersonation_token");
   }
 
   return payload.accessToken;
@@ -268,24 +253,18 @@ async function runReport(
   accessToken: string,
   body: Record<string, unknown>,
 ): Promise<GoogleAnalyticsRunReportResponse> {
-  const response = await fetch(
-    `${GOOGLE_ANALYTICS_BASE_URL}/${propertyId}:runReport`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
+  const response = await fetch(`${GOOGLE_ANALYTICS_BASE_URL}/${propertyId}:runReport`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
+  });
 
   if (!response.ok) {
-    throw new PlatformAnalyticsConnectionError(
-      "ga4_report",
-      response.status,
-    );
+    throw new PlatformAnalyticsConnectionError("ga4_report", response.status);
   }
 
   return (await response.json()) as GoogleAnalyticsRunReportResponse;
@@ -309,11 +288,7 @@ export async function getPlatformAnalyticsResponse(request: Request): Promise<Re
     return responseJson({ error: "Unauthorized" }, 401);
   }
 
-  const isOwnerOrAdmin = await isCossaOwnerOrAdmin(
-    publicEnvironment,
-    bearerToken,
-    user.id,
-  );
+  const isOwnerOrAdmin = await isCossaOwnerOrAdmin(publicEnvironment, bearerToken, user.id);
   if (!isOwnerOrAdmin) {
     return responseJson(
       { error: "Only Cossa owners and administrators can view platform traffic." },
@@ -332,8 +307,7 @@ export async function getPlatformAnalyticsResponse(request: Request): Promise<Re
     );
   }
 
-  const oidcToken =
-    request.headers.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN;
+  const oidcToken = request.headers.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN;
   if (!oidcToken) {
     console.warn("[platform-analytics] connection unavailable", {
       stage: "vercel_oidc_token",

@@ -108,10 +108,29 @@ function AiChatWorkspace() {
   });
 
   useEffect(() => {
+    setActiveId(window.localStorage.getItem("cossa-ai-active-conversation"));
+  }, []);
+
+  useEffect(() => {
     if (!activeId && conversations.data && conversations.data.length > 0) {
       setActiveId(conversations.data[0].id);
     }
   }, [conversations.data, activeId]);
+
+  useEffect(() => {
+    if (!activeId || typeof window === "undefined") return;
+    window.localStorage.setItem("cossa-ai-active-conversation", activeId);
+  }, [activeId]);
+
+  useEffect(() => {
+    function handleConversationChange(event: Event) {
+      const conversationId = (event as CustomEvent<string>).detail;
+      if (conversationId) setActiveId(conversationId);
+    }
+    window.addEventListener("cossa-ai-conversation-change", handleConversationChange);
+    return () =>
+      window.removeEventListener("cossa-ai-conversation-change", handleConversationChange);
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({

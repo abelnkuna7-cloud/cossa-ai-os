@@ -1,11 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  ArrowRight,
-  CheckCircle2,
-  MessageCircle,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2, MessageCircle, ShieldCheck, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PublicSiteShell } from "@/components/public-site-shell";
@@ -18,7 +12,8 @@ const plans = [
     name: "Starter",
     price: "R499",
     cadence: "/month",
-    description: "For owner-led businesses that need control of leads, customers and follow-up without paying for AI they do not need.",
+    description:
+      "For owner-led businesses that need control of leads, customers and follow-up without paying for AI they do not need.",
     features: [
       "CRM, contacts and lead management",
       "Enquiry and follow-up pipeline",
@@ -32,7 +27,8 @@ const plans = [
     name: "Professional",
     price: "R999",
     cadence: "/month",
-    description: "For growing teams ready to automate more of their marketing, workflow and day-to-day execution.",
+    description:
+      "For growing teams ready to automate more of their marketing, workflow and day-to-day execution.",
     featured: true,
     badge: "Most popular",
     features: [
@@ -48,7 +44,8 @@ const plans = [
     name: "Business",
     price: "R1,999",
     cadence: "/month",
-    description: "For businesses that want advanced automation, AI Workforce capability and higher operating limits.",
+    description:
+      "For businesses that want advanced automation, AI Workforce capability and higher operating limits.",
     features: [
       "Everything in Professional",
       "Advanced automation and intelligence",
@@ -62,7 +59,8 @@ const plans = [
     name: "Enterprise",
     price: "Custom",
     cadence: "",
-    description: "For larger organisations, agencies and teams requiring tailored deployment, integrations or governance.",
+    description:
+      "For larger organisations, agencies and teams requiring tailored deployment, integrations or governance.",
     features: [
       "Everything in Business",
       "Custom integrations and limits",
@@ -93,9 +91,7 @@ export const Route = createFileRoute("/pricing")({
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://growth.cossanexusholdings.co.za/pricing" },
     ],
-    links: [
-      { rel: "canonical", href: "https://growth.cossanexusholdings.co.za/pricing" },
-    ],
+    links: [{ rel: "canonical", href: "https://growth.cossanexusholdings.co.za/pricing" }],
   }),
   component: PricingPage,
 });
@@ -113,13 +109,16 @@ function PricingPage() {
               Start lean. Add intelligence as your business grows.
             </h1>
             <p className="mt-5 text-base leading-7 text-muted-foreground">
-              GROWTH separates core business operations from paid AI usage so smaller businesses can start affordably while growing teams can unlock more automation and intelligence.
+              GROWTH separates core business operations from paid AI usage so smaller businesses can
+              start affordably while growing teams can unlock more automation and intelligence.
             </p>
 
             <div className="mt-7 inline-flex max-w-2xl items-start gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-left text-sm text-foreground/90">
               <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
               <span>
-                <strong>14-day Intelligent Trial:</strong> explore GROWTH before choosing a plan. Trial AI and premium capabilities will use controlled allowances while the full tenant system is rolled out.
+                <strong>14-day Intelligent Trial:</strong> explore GROWTH before choosing a plan.
+                Trial AI and premium capabilities will use controlled allowances while the full
+                tenant system is rolled out.
               </span>
             </div>
           </div>
@@ -138,7 +137,9 @@ function PricingPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h2 className="font-display text-2xl font-semibold">{plan.name}</h2>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{plan.description}</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {plan.description}
+                    </p>
                   </div>
                   {"badge" in plan ? (
                     <span className="shrink-0 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
@@ -186,17 +187,24 @@ function PricingPage() {
             <div className="rounded-2xl border border-border/70 bg-card/40 p-6">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-primary" />
-                <h2 className="font-display text-xl font-semibold">AI cost protection is built into the model</h2>
+                <h2 className="font-display text-xl font-semibold">
+                  AI cost protection is built into the model
+                </h2>
               </div>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Starter is designed around core tools that do not require paid AI. Professional introduces controlled AI usage. Business provides substantially higher AI capacity with fair-use safeguards. This keeps GROWTH commercially sustainable while giving customers room to scale.
+                Starter is designed around core tools that do not require paid AI. Professional
+                introduces controlled AI usage. Business provides substantially higher AI capacity
+                with fair-use safeguards. This keeps GROWTH commercially sustainable while giving
+                customers room to scale.
               </p>
             </div>
 
             <div className="rounded-2xl border border-border/70 bg-card/40 p-6">
               <h2 className="font-display text-xl font-semibold">Founding customer launch</h2>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                These are launch-stage prices while GROWTH expands its external SaaS capabilities. Future pricing may change for new customers as the platform, automation and AI capacity grow.
+                These are launch-stage prices while GROWTH expands its external SaaS capabilities.
+                Future pricing may change for new customers as the platform, automation and AI
+                capacity grow.
               </p>
             </div>
           </div>
@@ -204,7 +212,9 @@ function PricingPage() {
           <div className="mt-10 rounded-2xl border border-border/70 bg-card/40 p-6 text-center sm:p-8">
             <h2 className="font-display text-2xl font-semibold">Not sure which plan fits?</h2>
             <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-              See GROWTH in action first, or speak to Cossa about your team, workflow and automation needs. We will recommend the appropriate level rather than pushing unnecessary features.
+              See GROWTH in action first, or speak to Cossa about your team, workflow and automation
+              needs. We will recommend the appropriate level rather than pushing unnecessary
+              features.
             </p>
             <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
               <Link to="/">
@@ -214,7 +224,10 @@ function PricingPage() {
                 </Button>
               </Link>
               <a href={whatsappHref} target="_blank" rel="noreferrer">
-                <Button variant="outline" className="w-full border-primary/40 text-primary hover:bg-primary/10 sm:w-auto">
+                <Button
+                  variant="outline"
+                  className="w-full border-primary/40 text-primary hover:bg-primary/10 sm:w-auto"
+                >
                   <MessageCircle className="mr-2 h-4 w-4" />
                   WhatsApp Cossa
                 </Button>
