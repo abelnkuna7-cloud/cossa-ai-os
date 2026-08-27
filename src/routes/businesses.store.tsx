@@ -122,6 +122,10 @@ function metricLabel(value: number | null, suffix = "") {
   return `${value.toLocaleString("en-ZA")}${suffix}`;
 }
 
+function zar(value: number) {
+  return new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR", maximumFractionDigits: 0 }).format(value);
+}
+
 function CossaStoreWorkspace() {
   const intelligence = useQuery({
     queryKey: ["cossa-store-intelligence"],
@@ -238,6 +242,12 @@ function CossaStoreWorkspace() {
               <Metric label="Supplier-managed" value={snapshot?.supplierManaged ?? null} />
               <Metric label="Inventory verified" value={snapshot?.verifiedInventory ?? null} />
               <Metric label="Inventory unknown" value={snapshot?.unknownInventory ?? null} attention={(snapshot?.unknownInventory ?? 0) > 0} />
+              <Metric label="Variants available" value={snapshot?.variantIntelligenceAvailable ? snapshot.variants.available : null} />
+              <Metric label="Variants unavailable" value={snapshot?.variantIntelligenceAvailable ? snapshot.variants.unavailable : null} attention={(snapshot?.variants.unavailable ?? 0) > 0} />
+              <Metric label="No available variants" value={snapshot?.variantIntelligenceAvailable ? snapshot.productsWithNoAvailableVariants : null} attention={(snapshot?.productsWithNoAvailableVariants ?? 0) > 0} />
+              <Metric label="Paid orders" value={snapshot?.orderIntelligenceAvailable ? snapshot.paidOrderCount : null} />
+              <Metric label="No-sale products" value={snapshot?.orderIntelligenceAvailable ? snapshot.noSaleProducts : null} attention={(snapshot?.noSaleProducts ?? 0) > 0} />
+              <Metric label="Oldest product age" value={snapshot?.oldestProductAgeDays ?? null} suffix="d" />
               <Metric
                 label="Known avg margin"
                 value={snapshot?.averageKnownGrossMarginPercent == null ? null : Math.round(snapshot.averageKnownGrossMarginPercent)}
@@ -274,6 +284,41 @@ function CossaStoreWorkspace() {
                   <TruthRow label="Pricing / margin review" value={snapshot?.pricingReview ?? null} attention={(snapshot?.pricingReview ?? 0) > 0} />
                   <TruthRow label="Total catalogue attention signals" value={snapshot ? attentionCount : null} attention={attentionCount > 0} />
                 </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-3">
+              <div className="rounded-2xl border border-border/60 bg-card/40 p-5">
+                <h3 className="font-semibold">Paid-order performance</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Only orders recorded as paid, processing or completed are counted.</p>
+                <p className="mt-4 font-display text-2xl font-semibold text-primary">{snapshot?.orderIntelligenceAvailable ? zar(snapshot.paidRevenue) : "Unavailable"}</p>
+                <div className="mt-4 space-y-2 text-sm">
+                  {(snapshot?.productRevenue ?? []).slice(0, 5).map((product) => (
+                    <div key={`${product.productId ?? product.name}`} className="flex justify-between gap-3"><span className="truncate text-muted-foreground">{product.name} · {product.quantity} sold</span><span>{zar(product.revenue)}</span></div>
+                  ))}
+                  {snapshot?.orderIntelligenceAvailable && snapshot.productRevenue.length === 0 ? <p className="text-muted-foreground">No payment-confirmed product sales recorded.</p> : null}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border/60 bg-card/40 p-5">
+                <h3 className="font-semibold">Movement and freshness</h3>
+                <div className="mt-4 grid gap-2 text-sm">
+                  <TruthRow label="Variant freshness unknown" value={snapshot?.variantIntelligenceAvailable ? snapshot.variants.unknownFreshness : null} attention={(snapshot?.variants.unknownFreshness ?? 0) > 0} />
+                  <TruthRow label="Variant sync stale / failed" value={snapshot?.variantIntelligenceAvailable ? snapshot.variants.staleOrFailed : null} attention={(snapshot?.variants.staleOrFailed ?? 0) > 0} />
+                </div>
+                <p className="mt-4 text-xs text-muted-foreground"><strong className="text-foreground">Fast movers:</strong> {snapshot?.fastMovers.length ? snapshot.fastMovers.join(", ") : "No paid-order evidence."}</p>
+                <p className="mt-2 text-xs text-muted-foreground"><strong className="text-foreground">Slow movers:</strong> {snapshot?.slowMovers.length ? snapshot.slowMovers.join(", ") : "No paid-order evidence."}</p>
+              </div>
+
+              <div className="rounded-2xl border border-border/60 bg-card/40 p-5">
+                <h3 className="font-semibold">Recommendations</h3>
+                <ul className="mt-4 list-disc space-y-2 pl-4 text-sm text-muted-foreground">
+                  {(snapshot?.unknownInventory ?? 0) > 0 ? <li>Connect or manually verify inventory sources before promising availability.</li> : null}
+                  {(snapshot?.pricingReview ?? 0) > 0 ? <li>Review products with missing cost data, invalid pricing or margin below 10%.</li> : null}
+                  {(snapshot?.noSaleProducts ?? 0) > 0 ? <li>Review published products with no payment-confirmed sales before expanding the catalogue.</li> : null}
+                  {(snapshot?.productsWithNoAvailableVariants ?? 0) > 0 ? <li>Hide or correct products whose recorded variants are all unavailable.</li> : null}
+                  <li>Supplier cost movement is unavailable: no historical supplier-cost ledger is connected.</li>
+                </ul>
               </div>
             </div>
           </>

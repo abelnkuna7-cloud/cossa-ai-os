@@ -61,6 +61,18 @@ export interface StoreIntelligenceSnapshot {
   grossMarginKnown: number;
   grossMarginUnknown: number;
   averageKnownGrossMarginPercent: number | null;
+  variants: { total: number; available: number; unavailable: number; unknownFreshness: number; staleOrFailed: number };
+  productsWithNoAvailableVariants: number;
+  paidOrderCount: number;
+  paidRevenue: number;
+  productRevenue: Array<{ productId: string | null; name: string; quantity: number; revenue: number }>;
+  fastMovers: string[];
+  slowMovers: string[];
+  noSaleProducts: number;
+  oldestProductAgeDays: number | null;
+  orderIntelligenceAvailable: boolean;
+  variantIntelligenceAvailable: boolean;
+  supplierCostMovementAvailable: false;
 }
 
 const db = supabase as unknown as {
@@ -94,16 +106,24 @@ function missingCoreProductData(product: StoreIntelligenceProduct): boolean {
 }
 
 export async function loadStoreIntelligence(): Promise<StoreIntelligenceSnapshot> {
-  const { data, error } = await db
+  const [{ data, error }, variantsResult, ordersResult, orderItemsResult] = await Promise.all([
+    db
     .from("store_products")
     .select(
       "id,name,sku,product_type,fulfilment_model,status,supplier_name,cost_price,price,track_inventory,stock_quantity,unlimited_stock,inventory_ownership,inventory_source_status,image_urls,description,category,updated_at,created_at",
     )
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false }),
+    db.from("store_product_variants").select("id,product_id,is_available,availability_source_status,availability_last_verified_at"),
+    db.from("store_orders").select("id,status,total,paid_at,created_at"),
+    db.from("store_order_items").select("order_id,product_id,product_name,quantity,line_total"),
+  ]);
 
   if (error) throw new Error(`Unable to load Cossa Store intelligence: ${error.message}`);
 
   const products = (data ?? []) as StoreIntelligenceProduct[];
+  const variants = variantsResult.error ? [] : (variantsResult.data ?? []) as Array<{ product_id: string; is_available: boolean; availability_source_status: InventorySourceStatus | null }>;
+  const orders = ordersResult.error ? [] : (ordersResult.data ?? []) as Array<{ id: string; status: string; total: number | string | null }>;
+  const orderItems = orderItemsResult.error ? [] : (orderItemsResult.data ?? []) as Array<{ order_id: string; product_id: string | null; product_name: string; quantity: number; line_total: number | string }>;
   const byType = Object.fromEntries(PRODUCT_TYPES.map((type) => [type, 0])) as Record<ProductType, number>;
   const byOwnership = Object.fromEntries(OWNERSHIP_TYPES.map((type) => [type, 0])) as Record<InventoryOwnership, number>;
 
@@ -160,6 +180,25 @@ export async function loadStoreIntelligence(): Promise<StoreIntelligenceSnapshot
     }
   }
 
+  const paidOrderIds = new Set(orders.filter((order) => ["paid", "processing", "completed"].includes(order.status)).map((order) => order.id));
+  const productPerformance = new Map<string, { productId: string | null; name: string; quantity: number; revenue: number }>();
+  for (const item of orderItems) {
+    if (!paidOrderIds.has(item.order_id)) continue;
+    const key = item.product_id ?? item.product_name;
+    const current = productPerformance.get(key) ?? { productId: item.product_id, name: item.product_name, quantity: 0, revenue: 0 };
+    current.quantity += Number(item.quantity ?? 0);
+    current.revenue += Number(item.line_total ?? 0);
+    productPerformance.set(key, current);
+  }
+  const productRevenue = [...productPerformance.values()].sort((a, b) => b.revenue - a.revenue);
+  const soldProductIds = new Set(productRevenue.map((item) => item.productId).filter(Boolean));
+  const variantProducts = new Set(variants.map((variant) => variant.product_id));
+  const productsWithNoAvailableVariants = [...variantProducts].filter((productId) => !variants.some((variant) => variant.product_id === productId && variant.is_available)).length;
+  const oldestCreatedAt = products.reduce<number | null>((oldest, product) => {
+    const created = Date.parse(product.created_at);
+    return Number.isFinite(created) && (oldest == null || created < oldest) ? created : oldest;
+  }, null);
+
   return {
     generatedAt: new Date().toISOString(),
     products,
@@ -180,5 +219,23 @@ export async function loadStoreIntelligence(): Promise<StoreIntelligenceSnapshot
     grossMarginUnknown,
     averageKnownGrossMarginPercent:
       grossMarginKnown > 0 ? grossMarginPercentTotal / grossMarginKnown : null,
+    variants: {
+      total: variants.length,
+      available: variants.filter((variant) => variant.is_available).length,
+      unavailable: variants.filter((variant) => !variant.is_available).length,
+      unknownFreshness: variants.filter((variant) => !variant.availability_source_status || ["unknown", "not_connected"].includes(variant.availability_source_status)).length,
+      staleOrFailed: variants.filter((variant) => ["stale", "failed"].includes(variant.availability_source_status ?? "unknown")).length,
+    },
+    productsWithNoAvailableVariants,
+    paidOrderCount: paidOrderIds.size,
+    paidRevenue: orders.filter((order) => paidOrderIds.has(order.id)).reduce((sum, order) => sum + Number(order.total ?? 0), 0),
+    productRevenue,
+    fastMovers: productRevenue.slice(0, 5).map((item) => `${item.name} (${item.quantity})`),
+    slowMovers: [...productRevenue].sort((a, b) => a.quantity - b.quantity).slice(0, 5).map((item) => `${item.name} (${item.quantity})`),
+    noSaleProducts: products.filter((product) => product.status === "active" && !soldProductIds.has(product.id)).length,
+    oldestProductAgeDays: oldestCreatedAt == null ? null : Math.max(0, Math.floor((Date.now() - oldestCreatedAt) / 86_400_000)),
+    orderIntelligenceAvailable: !ordersResult.error && !orderItemsResult.error,
+    variantIntelligenceAvailable: !variantsResult.error,
+    supplierCostMovementAvailable: false,
   };
 }
