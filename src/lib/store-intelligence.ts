@@ -122,7 +122,7 @@ export async function loadStoreIntelligence(): Promise<StoreIntelligenceSnapshot
 
   const products = (data ?? []) as StoreIntelligenceProduct[];
   const variants = variantsResult.error ? [] : (variantsResult.data ?? []) as Array<{ product_id: string; is_available: boolean; availability_source_status: InventorySourceStatus | null }>;
-  const orders = ordersResult.error ? [] : (ordersResult.data ?? []) as Array<{ id: string; status: string; total: number | string | null }>;
+  const orders = ordersResult.error ? [] : (ordersResult.data ?? []) as Array<{ id: string; status: string; total: number | string | null; paid_at: string | null }>;
   const orderItems = orderItemsResult.error ? [] : (orderItemsResult.data ?? []) as Array<{ order_id: string; product_id: string | null; product_name: string; quantity: number; line_total: number | string }>;
   const byType = Object.fromEntries(PRODUCT_TYPES.map((type) => [type, 0])) as Record<ProductType, number>;
   const byOwnership = Object.fromEntries(OWNERSHIP_TYPES.map((type) => [type, 0])) as Record<InventoryOwnership, number>;
@@ -180,7 +180,11 @@ export async function loadStoreIntelligence(): Promise<StoreIntelligenceSnapshot
     }
   }
 
-  const paidOrderIds = new Set(orders.filter((order) => ["paid", "processing", "completed"].includes(order.status)).map((order) => order.id));
+  const paidOrderIds = new Set(
+    orders
+      .filter((order) => order.paid_at !== null && ["paid", "processing", "completed"].includes(order.status))
+      .map((order) => order.id),
+  );
   const productPerformance = new Map<string, { productId: string | null; name: string; quantity: number; revenue: number }>();
   for (const item of orderItems) {
     if (!paidOrderIds.has(item.order_id)) continue;
