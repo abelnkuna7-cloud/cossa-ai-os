@@ -27,6 +27,16 @@ export type AgentRuntimeDashboard = {
   missions: Array<Record<string, unknown>>;
 };
 
+export class AgentRuntimeUnavailableError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "AgentRuntimeUnavailableError";
+    this.status = status;
+  }
+}
+
 async function sessionHeaders(): Promise<HeadersInit> {
   const {
     data: { session },
@@ -44,11 +54,16 @@ async function runtimeRequest<T>(init?: RequestInit): Promise<T> {
   });
   const payload = (await response.json().catch(() => null)) as T | { error?: string } | null;
   if (!response.ok) {
-    throw new Error(
+    const message =
       payload && typeof payload === "object" && "error" in payload && payload.error
         ? payload.error
-        : `Cossa Orchestrator request failed (${response.status}).`,
-    );
+        : `Cossa Orchestrator request failed (${response.status}).`;
+
+    if (response.status === 503) {
+      throw new AgentRuntimeUnavailableError(message, response.status);
+    }
+
+    throw new Error(message);
   }
   return payload as T;
 }
