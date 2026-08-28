@@ -39,6 +39,13 @@ export const Route = createFileRoute("/businesses/store")({
 
 const STORE_TOOLS = [
   {
+    title: "Inventory & Product Intake",
+    description:
+      "Paste a supplier product link, review real data, record source and fulfilment rules, then approve before publication.",
+    to: "/businesses/store-inventory",
+    icon: PackagePlus,
+  },
+  {
     title: "Product Manager",
     description:
       "Add real products, change prices, upload images and digital files, publish, archive and manage the live Store catalogue.",
@@ -168,9 +175,9 @@ function CossaStoreWorkspace() {
               asChild
               className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
             >
-              <Link to="/businesses/store-products">
+              <Link to="/businesses/store-inventory">
                 <PackagePlus className="mr-1.5 h-4 w-4" />
-                Manage Products
+                Add supplier product
               </Link>
             </Button>
 

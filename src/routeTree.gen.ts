@@ -79,11 +79,13 @@ import { Route as MarketingBrandRouteImport } from './routes/marketing.brand'
 import { Route as MarketingAiDirectorRouteImport } from './routes/marketing.ai-director'
 import { Route as BusinessesTechRouteImport } from './routes/businesses.tech'
 import { Route as BusinessesStoreProductsRouteImport } from './routes/businesses.store-products'
+import { Route as BusinessesStoreInventoryRouteImport } from './routes/businesses.store-inventory'
 import { Route as BusinessesStoreRouteImport } from './routes/businesses.store'
 import { Route as BusinessesNexdocsRouteImport } from './routes/businesses.nexdocs'
 import { Route as BusinessesFacilityServicesRouteImport } from './routes/businesses.facility-services'
 import { Route as BusinessesConstructionRouteImport } from './routes/businesses.construction'
 import { Route as ApiWebsiteHealthRouteImport } from './routes/api/website-health'
+import { Route as ApiStoreProductImportRouteImport } from './routes/api.store-product-import'
 import { Route as ApiPlatformAnalyticsRouteImport } from './routes/api/platform-analytics'
 import { Route as ApiGrowthAnalyticsRouteImport } from './routes/api/growth-analytics'
 import { Route as ApiFathomWebhookRouteImport } from './routes/api/fathom-webhook'
@@ -473,6 +475,12 @@ const BusinessesStoreProductsRoute = BusinessesStoreProductsRouteImport.update({
   path: '/businesses/store-products',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BusinessesStoreInventoryRoute =
+  BusinessesStoreInventoryRouteImport.update({
+    id: '/businesses/store-inventory',
+    path: '/businesses/store-inventory',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const BusinessesStoreRoute = BusinessesStoreRouteImport.update({
   id: '/businesses/store',
   path: '/businesses/store',
@@ -497,6 +505,11 @@ const BusinessesConstructionRoute = BusinessesConstructionRouteImport.update({
 const ApiWebsiteHealthRoute = ApiWebsiteHealthRouteImport.update({
   id: '/api/website-health',
   path: '/api/website-health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiStoreProductImportRoute = ApiStoreProductImportRouteImport.update({
+  id: '/api/store-product-import',
+  path: '/api/store-product-import',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPlatformAnalyticsRoute = ApiPlatformAnalyticsRouteImport.update({
@@ -726,11 +739,13 @@ export interface FileRoutesByFullPath {
   '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
+  '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/businesses/construction': typeof BusinessesConstructionRoute
   '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
+  '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
@@ -837,11 +852,13 @@ export interface FileRoutesByTo {
   '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
+  '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/businesses/construction': typeof BusinessesConstructionRoute
   '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
+  '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
@@ -949,11 +966,13 @@ export interface FileRoutesById {
   '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
+  '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/businesses/construction': typeof BusinessesConstructionRoute
   '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
+  '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
   '/marketing/ai-director': typeof MarketingAiDirectorRoute
@@ -1062,11 +1081,13 @@ export interface FileRouteTypes {
     | '/api/fathom-webhook'
     | '/api/growth-analytics'
     | '/api/platform-analytics'
+    | '/api/store-product-import'
     | '/api/website-health'
     | '/businesses/construction'
     | '/businesses/facility-services'
     | '/businesses/nexdocs'
     | '/businesses/store'
+    | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
     | '/marketing/ai-director'
@@ -1173,11 +1194,13 @@ export interface FileRouteTypes {
     | '/api/fathom-webhook'
     | '/api/growth-analytics'
     | '/api/platform-analytics'
+    | '/api/store-product-import'
     | '/api/website-health'
     | '/businesses/construction'
     | '/businesses/facility-services'
     | '/businesses/nexdocs'
     | '/businesses/store'
+    | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
     | '/marketing/ai-director'
@@ -1284,11 +1307,13 @@ export interface FileRouteTypes {
     | '/api/fathom-webhook'
     | '/api/growth-analytics'
     | '/api/platform-analytics'
+    | '/api/store-product-import'
     | '/api/website-health'
     | '/businesses/construction'
     | '/businesses/facility-services'
     | '/businesses/nexdocs'
     | '/businesses/store'
+    | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
     | '/marketing/ai-director'
@@ -1396,11 +1421,13 @@ export interface RootRouteChildren {
   ApiFathomWebhookRoute: typeof ApiFathomWebhookRoute
   ApiGrowthAnalyticsRoute: typeof ApiGrowthAnalyticsRouteWithChildren
   ApiPlatformAnalyticsRoute: typeof ApiPlatformAnalyticsRoute
+  ApiStoreProductImportRoute: typeof ApiStoreProductImportRoute
   ApiWebsiteHealthRoute: typeof ApiWebsiteHealthRoute
   BusinessesConstructionRoute: typeof BusinessesConstructionRoute
   BusinessesFacilityServicesRoute: typeof BusinessesFacilityServicesRoute
   BusinessesNexdocsRoute: typeof BusinessesNexdocsRoute
   BusinessesStoreRoute: typeof BusinessesStoreRoute
+  BusinessesStoreInventoryRoute: typeof BusinessesStoreInventoryRoute
   BusinessesStoreProductsRoute: typeof BusinessesStoreProductsRoute
   BusinessesTechRoute: typeof BusinessesTechRoute
   MarketingAiDirectorRoute: typeof MarketingAiDirectorRoute
@@ -1945,6 +1972,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BusinessesStoreProductsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/businesses/store-inventory': {
+      id: '/businesses/store-inventory'
+      path: '/businesses/store-inventory'
+      fullPath: '/businesses/store-inventory'
+      preLoaderRoute: typeof BusinessesStoreInventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/businesses/store': {
       id: '/businesses/store'
       path: '/businesses/store'
@@ -1978,6 +2012,13 @@ declare module '@tanstack/react-router' {
       path: '/api/website-health'
       fullPath: '/api/website-health'
       preLoaderRoute: typeof ApiWebsiteHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/store-product-import': {
+      id: '/api/store-product-import'
+      path: '/api/store-product-import'
+      fullPath: '/api/store-product-import'
+      preLoaderRoute: typeof ApiStoreProductImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/platform-analytics': {
@@ -2298,11 +2339,13 @@ const rootRouteChildren: RootRouteChildren = {
   ApiFathomWebhookRoute: ApiFathomWebhookRoute,
   ApiGrowthAnalyticsRoute: ApiGrowthAnalyticsRouteWithChildren,
   ApiPlatformAnalyticsRoute: ApiPlatformAnalyticsRoute,
+  ApiStoreProductImportRoute: ApiStoreProductImportRoute,
   ApiWebsiteHealthRoute: ApiWebsiteHealthRoute,
   BusinessesConstructionRoute: BusinessesConstructionRoute,
   BusinessesFacilityServicesRoute: BusinessesFacilityServicesRoute,
   BusinessesNexdocsRoute: BusinessesNexdocsRoute,
   BusinessesStoreRoute: BusinessesStoreRoute,
+  BusinessesStoreInventoryRoute: BusinessesStoreInventoryRoute,
   BusinessesStoreProductsRoute: BusinessesStoreProductsRoute,
   BusinessesTechRoute: BusinessesTechRoute,
   MarketingAiDirectorRoute: MarketingAiDirectorRoute,
