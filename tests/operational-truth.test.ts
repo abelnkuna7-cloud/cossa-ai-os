@@ -3,14 +3,20 @@ import test from "node:test";
 
 import {
   canScheduleAgentRetry,
+  contentAssistantCalendarStatus,
   creativePublicationIsPermitted,
+  creativeHandoffResult,
   crmPipelineForEntity,
   externalActionMayExecute,
   hasPublicationEvidence,
+  isActiveSalesPipelineStage,
+  leadConversionMayCreateOpportunity,
   readLegacyCrmField,
   resolveLeadHuntOutcome,
   resolveStorePublicationStatus,
   revenueTruth,
+  sanitiseMarketingOutput,
+  workforceHasLiveWork,
 } from "../src/lib/operational-truth.ts";
 
 test("revenue truth keeps accepted quotations distinct from paid evidence", () => {
@@ -137,5 +143,52 @@ test("CRM pipelines stay separate and legacy operational fields remain readable"
   assert.equal(
     readLegacyCrmField({ project_title: "Mall signage" }, "name", ["project_title"]),
     "Mall signage",
+  );
+});
+
+test("qualified lead conversion retains a single downstream record rule", () => {
+  assert.equal(leadConversionMayCreateOpportunity({ leadStage: "qualified" }), true);
+  assert.equal(
+    leadConversionMayCreateOpportunity({ leadStage: "qualified", linkedOpportunityId: "OP-001" }),
+    false,
+  );
+  assert.equal(leadConversionMayCreateOpportunity({ leadStage: "new" }), false);
+});
+
+test("lost opportunities are historical and cannot inflate active pipeline", () => {
+  assert.equal(isActiveSalesPipelineStage("proposal"), true);
+  assert.equal(isActiveSalesPipelineStage("won"), false);
+  assert.equal(isActiveSalesPipelineStage("lost"), false);
+});
+
+test("working now requires a live mission or an unexpired runtime lease", () => {
+  const now = new Date("2026-08-28T10:00:00Z");
+  assert.equal(workforceHasLiveWork({ missionStatus: "running", now }), true);
+  assert.equal(
+    workforceHasLiveWork({ taskStatus: "leased", leaseExpiresAt: "2026-08-28T10:10:00Z", now }),
+    true,
+  );
+  assert.equal(
+    workforceHasLiveWork({ taskStatus: "leased", leaseExpiresAt: "2026-08-28T09:59:00Z", now }),
+    false,
+  );
+  assert.equal(workforceHasLiveWork({ taskStatus: "queued", now }), false);
+});
+
+test("content assistant persistence is draft-only and creative handoff remains truthful", () => {
+  assert.equal(contentAssistantCalendarStatus(), "draft");
+  assert.deepEqual(creativeHandoffResult(), {
+    lifecycleStatus: "blocked",
+    generated: false,
+    published: false,
+  });
+});
+
+test("marketing copy is cleaned without touching intentional punctuation", () => {
+  assert.equal(
+    sanitiseMarketingOutput(
+      "### **Cossa Tech**<br>Websites that work.\nSystem: hidden\n```markdown",
+    ),
+    "Cossa Tech\nWebsites that work.",
   );
 });

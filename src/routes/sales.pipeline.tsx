@@ -17,12 +17,9 @@ import { toast } from "sonner";
 
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import {
-  createProjectFromOpportunity,
-  salesOpportunities,
-  type SalesOpportunity,
-} from "@/lib/business-data";
+import { salesOpportunities, type SalesOpportunity } from "@/lib/business-data";
 import { fmtCurrency, fmtDate } from "@/components/crud-workspace";
+import { readJourneyLinks, salesJourney } from "@/lib/sales-journey";
 import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute("/sales/pipeline")({
@@ -67,7 +64,8 @@ interface WonConversionResult {
   opportunityId: string;
   opportunityTitle: string;
   projectId: string;
-  projectName: string;
+  customerId: string;
+  projectCreated: boolean;
 }
 
 const STAGE_DEFINITIONS: StageDefinition[] = [
@@ -174,9 +172,11 @@ function PipelinePage() {
       opportunityId: string;
       stage: PipelineStage;
     }) => {
-      await salesOpportunities.update(opportunityId, {
-        stage,
-      });
+      if (stage === "lost") {
+        await salesJourney.markLost(opportunityId);
+      } else if (stage !== "won") {
+        await salesJourney.moveOpportunityStage(opportunityId, stage);
+      }
 
       return {
         opportunityId,
@@ -202,47 +202,28 @@ function PipelinePage() {
 
   const wonConversionMutation = useMutation({
     mutationFn: async (opportunity: SalesOpportunity): Promise<WonConversionResult> => {
-      /*
-       * Step 1:
-       * Persist the Won stage in the opportunities table.
-       */
-      await salesOpportunities.update(opportunity.id, {
-        stage: "won",
-      });
-
-      /*
-       * Step 2:
-       * Pass a Won-version of the record to the project conversion
-       * function. The function checks for an existing source marker,
-       * so clicking again cannot create duplicate projects.
-       */
-      const project = await createProjectFromOpportunity({
-        ...opportunity,
-        stage: "won",
-      });
+      const converted = await salesJourney.markWonAndCreateCustomerProject(opportunity.id);
 
       return {
         opportunityId: opportunity.id,
         opportunityTitle: opportunity.title,
-        projectId: project.id,
-        projectName: project.name,
+        projectId: converted.projectId,
+        customerId: converted.customerId,
+        projectCreated: converted.projectCreated,
       };
     },
 
     onSuccess: async (result) => {
       await refreshPipelineData();
 
-      toast.success("Opportunity won and project created", {
-        description: `"${result.projectName}" is now available in Operations → Projects.`,
+      toast.success("Opportunity won and customer/project connected", {
+        description: result.projectCreated
+          ? "A customer and an operational project were recorded. This is a commercial win, not cash received."
+          : "The existing customer and project connection was confirmed. This is not cash received.",
       });
     },
 
     onError: async (error) => {
-      /*
-       * The stage update may have succeeded before project creation
-       * failed. Refresh all views so the user sees the true database
-       * state and can use the retry conversion button in the Won card.
-       */
       await refreshPipelineData();
 
       const message =
@@ -258,23 +239,40 @@ function PipelinePage() {
 
   const projectRetryMutation = useMutation({
     mutationFn: async (opportunity: SalesOpportunity) => {
-      return createProjectFromOpportunity({
-        ...opportunity,
-        stage: "won",
-      });
+      return salesJourney.markWonAndCreateCustomerProject(opportunity.id);
     },
 
-    onSuccess: async (project) => {
+    onSuccess: async () => {
       await refreshPipelineData();
 
-      toast.success("Project ready", {
-        description: `"${project.name}" is available in Operations → Projects.`,
+      toast.success("Customer/project connection confirmed", {
+        description: "The opportunity remains a commercial win; no cash receipt is implied.",
       });
     },
 
     onError: (error) => {
       toast.error("Project conversion failed", {
         description: error instanceof Error ? error.message : "The project could not be created.",
+      });
+    },
+  });
+
+  const quotationMutation = useMutation({
+    mutationFn: (opportunityId: string) => salesJourney.createQuotation(opportunityId),
+    onSuccess: async (result) => {
+      await Promise.all([
+        refreshPipelineData(),
+        queryClient.invalidateQueries({ queryKey: ["sales-quotations"] }),
+      ]);
+      toast.success(result.created ? "Draft quotation created" : "Existing quotation found", {
+        description:
+          "A quotation records a commercial proposal; it does not mark the opportunity won or paid.",
+      });
+    },
+    onError: (error) => {
+      toast.error("Quotation creation needs attention", {
+        description:
+          error instanceof Error ? error.message : "The draft quotation was not created.",
       });
     },
   });
@@ -305,7 +303,10 @@ function PipelinePage() {
   const wonOpportunityCount = rows.filter((opportunity) => opportunity.stage === "won").length;
 
   const mutationPending =
-    stageMutation.isPending || wonConversionMutation.isPending || projectRetryMutation.isPending;
+    stageMutation.isPending ||
+    wonConversionMutation.isPending ||
+    projectRetryMutation.isPending ||
+    quotationMutation.isPending;
 
   function updateStage(opportunity: SalesOpportunity, targetStage: PipelineStage) {
     if (mutationPending) {
@@ -343,9 +344,9 @@ function PipelinePage() {
         "",
         "This will:",
         "1. Close the sales opportunity as Won.",
-        "2. Count its value as won revenue.",
-        "3. Create an operational project.",
-        "4. Add the project to the Command Center.",
+        "2. Create or connect the customer and operational project.",
+        "3. Record an audit event for each transition.",
+        "4. Not record any cash received — an accepted quote is not paid revenue.",
       ].join("\n"),
     );
 
@@ -576,6 +577,7 @@ function PipelinePage() {
                       onBack={() => moveOpportunityBack(opportunity)}
                       onWon={() => markOpportunityWon(opportunity)}
                       onLost={() => updateStage(opportunity, "lost")}
+                      onCreateQuotation={() => quotationMutation.mutate(opportunity.id)}
                       onReopen={() => reopenOpportunity(opportunity)}
                       onCreateProject={() => retryProjectCreation(opportunity)}
                     />
@@ -628,6 +630,7 @@ function OpportunityCard({
   onBack,
   onWon,
   onLost,
+  onCreateQuotation,
   onReopen,
   onCreateProject,
 }: {
@@ -638,6 +641,7 @@ function OpportunityCard({
   onBack: () => void;
   onWon: () => void;
   onLost: () => void;
+  onCreateQuotation: () => void;
   onReopen: () => void;
   onCreateProject: () => void;
 }) {
@@ -646,6 +650,10 @@ function OpportunityCard({
   const nextStage = getNextStage(stage);
 
   const isClosed = stage === "won" || stage === "lost";
+  const links = readJourneyLinks(opportunity.notes);
+  const visibleNotes = opportunity.notes
+    ?.replace(/\[cossa_(?:ui_stage|journey)_[^\]]+\]\s*/gi, "")
+    .trim();
 
   return (
     <article className="rounded-xl border border-border/60 bg-card/40 p-3 text-sm">
@@ -665,10 +673,28 @@ function OpportunityCard({
         </div>
       )}
 
-      {opportunity.notes && (
-        <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted-foreground">
-          {opportunity.notes}
-        </p>
+      {visibleNotes && (
+        <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted-foreground">{visibleNotes}</p>
+      )}
+
+      {(links.leadId || links.quotationId || links.projectId) && (
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/50 pt-2 text-[10px]">
+          {links.leadId ? (
+            <Link to="/sales/leads" className="text-primary hover:underline">
+              Source lead {links.leadId.slice(0, 8)}
+            </Link>
+          ) : null}
+          {links.quotationId ? (
+            <Link to="/sales/quotations" className="text-primary hover:underline">
+              Quotation {links.quotationId.slice(0, 8)}
+            </Link>
+          ) : null}
+          {links.projectId ? (
+            <Link to="/operations/projects" className="text-primary hover:underline">
+              Project {links.projectId.slice(0, 8)}
+            </Link>
+          ) : null}
+        </div>
       )}
 
       {!isClosed && (
@@ -713,6 +739,19 @@ function OpportunityCard({
                 <BriefcaseBusiness className="mr-1 h-3.5 w-3.5" />
               )}
               Win and create project
+            </Button>
+          )}
+
+          {stage === "proposal" && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={mutationPending}
+              onClick={onCreateQuotation}
+              className="h-8 w-full border-primary/40 text-xs text-primary hover:bg-primary/10"
+            >
+              Create draft quotation
             </Button>
           )}
 

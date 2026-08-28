@@ -59,6 +59,8 @@ export interface CrudWorkspaceProps<T extends { id: string }> {
   emptyHint?: string;
   Stats?: ComponentType<{ rows: T[] }>;
   extra?: ReactNode;
+  /** Controlled operational actions displayed before edit/delete. */
+  rowActions?: (row: T) => ReactNode;
   singular?: string;
   initialRecordId?: string | null;
 }
@@ -93,6 +95,7 @@ export function CrudWorkspace<T extends { id: string; created_at?: string; updat
     emptyHint,
     Stats,
     extra,
+    rowActions,
     singular = "item",
     initialRecordId = null,
   } = props;
@@ -270,7 +273,8 @@ export function CrudWorkspace<T extends { id: string; created_at?: string; updat
                       </td>
                     ))}
                     <td className="px-3 py-3 text-right">
-                      <div className="inline-flex gap-1">
+                      <div className="inline-flex flex-wrap justify-end gap-1">
+                        {rowActions?.(row)}
                         <Button
                           size="sm"
                           variant="ghost"

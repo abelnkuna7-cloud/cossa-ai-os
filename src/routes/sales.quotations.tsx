@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { FileText } from "lucide-react";
 import { CrudWorkspace, fmtCurrency, fmtDate } from "@/components/crud-workspace";
+import { Button } from "@/components/ui/button";
 import { salesQuotations, type SalesQuotation } from "@/lib/business-data";
 
 interface QuotationSearch {
@@ -123,6 +124,23 @@ function QuotationsPage() {
         "status",
         "notes",
       ]}
+      rowActions={(quotation) => {
+        const opportunityId = quotation.notes?.match(
+          /\[cossa_journey_opportunityId:([^\]\s]+)\]/i,
+        )?.[1];
+        return opportunityId ? (
+          <Link to="/sales/pipeline">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2 text-xs text-primary"
+            >
+              Opportunity {opportunityId.slice(0, 8)}
+            </Button>
+          </Link>
+        ) : null;
+      }}
     />
   );
 }

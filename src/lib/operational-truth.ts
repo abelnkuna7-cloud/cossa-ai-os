@@ -139,3 +139,78 @@ export function readLegacyCrmField(
   }
   return null;
 }
+
+/** A qualified source lead may create one downstream opportunity only. */
+export function leadConversionMayCreateOpportunity(input: {
+  leadStage: string;
+  linkedOpportunityId?: string | null;
+}): boolean {
+  return input.leadStage.trim().toLowerCase() === "qualified" && !input.linkedOpportunityId;
+}
+
+/** Lost and won records are historical, not part of the active sales pipeline. */
+export function isActiveSalesPipelineStage(stage: unknown): boolean {
+  const normalised = String(stage ?? "")
+    .trim()
+    .toLowerCase();
+  return normalised !== "won" && normalised !== "lost";
+}
+
+/**
+ * A workforce status is only "working now" when backed by a running mission
+ * or an unexpired runtime lease. An enabled profile alone is never evidence.
+ */
+export function workforceHasLiveWork(input: {
+  missionStatus?: string | null;
+  taskStatus?: string | null;
+  leaseExpiresAt?: string | null;
+  now?: Date;
+}): boolean {
+  if (input.missionStatus?.trim().toLowerCase() === "running") return true;
+  const leased = input.taskStatus?.trim().toLowerCase() === "leased";
+  const running = input.taskStatus?.trim().toLowerCase() === "running";
+  if (running) return true;
+  if (!leased || !input.leaseExpiresAt) return false;
+  const expiry = new Date(input.leaseExpiresAt);
+  return !Number.isNaN(expiry.getTime()) && expiry.getTime() > (input.now ?? new Date()).getTime();
+}
+
+/** A Content Assistant save always starts as a draft, never as published. */
+export function contentAssistantCalendarStatus(): "draft" {
+  return "draft";
+}
+
+/** Creative handoff is honest about the absence of a generated external asset. */
+export function creativeHandoffResult(): {
+  lifecycleStatus: "blocked";
+  generated: false;
+  published: false;
+} {
+  return { lifecycleStatus: "blocked", generated: false, published: false };
+}
+
+/** Presentation-only sanitiser for AI marketing copy; never apply it to evidence or audit logs. */
+export function sanitiseMarketingOutput(value: unknown): string {
+  const text = String(value ?? "")
+    .replace(/```(?:markdown|text)?/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/^\s{0,3}#{1,6}\s*/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/_(.*?)_/g, "$1");
+
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        !line ||
+        !/^(?:final answer|assistant|system|model|tool|handoff|metadata|analysis|reasoning)\s*:/i.test(
+          line,
+        ),
+    )
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
