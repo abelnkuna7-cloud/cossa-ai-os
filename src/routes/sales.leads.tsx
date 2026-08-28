@@ -1,7 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { UserPlus } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, BadgeCheck, UserPlus } from "lucide-react";
+import { toast } from "sonner";
 import { CrudWorkspace, fmtDate } from "@/components/crud-workspace";
+import { Button } from "@/components/ui/button";
 import { salesLeads, type SalesLead } from "@/lib/business-data";
+import { salesJourney } from "@/lib/sales-journey";
 
 export const Route = createFileRoute("/sales/leads")({
   component: LeadsPage,
@@ -57,6 +61,39 @@ function Stats({ rows }: { rows: SalesLead[] }) {
 }
 
 function LeadsPage() {
+  const queryClient = useQueryClient();
+  const journeyMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: string; action: "qualify" | "convert" }) => {
+      if (action === "qualify") {
+        await salesJourney.qualifyLead(id);
+        return { action };
+      }
+      return { action, ...(await salesJourney.convertLeadToOpportunity(id)) };
+    },
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["sales-leads"] }),
+        queryClient.invalidateQueries({ queryKey: ["sales-opportunities"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] }),
+      ]);
+      if (result.action === "qualify") {
+        toast.success("Lead qualified", {
+          description: "The lead remains in the Lead Funnel until you convert it.",
+        });
+      } else {
+        toast.success(result.created ? "Opportunity created" : "Existing opportunity opened", {
+          description:
+            "The source lead and organisation context are retained in the journey evidence.",
+        });
+      }
+    },
+    onError: (error) => {
+      toast.error("Sales transition needs attention", {
+        description: error instanceof Error ? error.message : "The transition was not completed.",
+      });
+    },
+  });
+
   return (
     <CrudWorkspace<SalesLead>
       title="Leads"
@@ -128,6 +165,72 @@ function LeadsPage() {
       ]}
       searchKeys={["name", "email", "company", "source", "status"]}
       emptyHint="Add your first lead to start building pipeline."
+      rowActions={(lead) => {
+        const status = lead.status.toLowerCase();
+        const convertedOpportunityId = lead.notes?.match(
+          /\[cossa_journey_opportunityId:([^\]\s]+)\]/i,
+        )?.[1];
+        return (
+          <>
+            {status !== "qualified" && status !== "converted" && status !== "lost" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 border-primary/40 px-2 text-xs text-primary hover:bg-primary/10"
+                disabled={journeyMutation.isPending}
+                onClick={() => journeyMutation.mutate({ id: lead.id, action: "qualify" })}
+              >
+                <BadgeCheck className="mr-1 h-3.5 w-3.5" />
+                Qualify
+              </Button>
+            ) : null}
+            {status === "qualified" ? (
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 bg-primary px-2 text-xs text-primary-foreground hover:bg-primary/90"
+                disabled={journeyMutation.isPending}
+                onClick={() => journeyMutation.mutate({ id: lead.id, action: "convert" })}
+              >
+                <ArrowRight className="mr-1 h-3.5 w-3.5" />
+                Convert
+              </Button>
+            ) : null}
+            {convertedOpportunityId ? (
+              <Link to="/sales/opportunities">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2 text-xs text-primary"
+                >
+                  Opportunity {convertedOpportunityId.slice(0, 8)}
+                </Button>
+              </Link>
+            ) : null}
+          </>
+        );
+      }}
+      extra={
+        <section className="glass-card flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Connected sales journey</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Qualify before conversion. Conversion preserves the source lead, company, contact,
+              service, value and organisation context; it never creates a duplicate lead.
+            </p>
+          </div>
+          <Link to="/sales/pipeline">
+            <Button
+              variant="outline"
+              className="border-primary/40 text-primary hover:bg-primary/10"
+            >
+              Open Opportunity Pipeline
+            </Button>
+          </Link>
+        </section>
+      }
     />
   );
 }

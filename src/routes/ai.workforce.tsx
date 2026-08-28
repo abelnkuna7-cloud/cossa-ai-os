@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -94,6 +94,8 @@ import { checkOfficialWebsite, type OfficialWebsiteHealthReport } from "@/lib/we
 
 import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 import { getAgentRuntimeDashboard } from "@/lib/agent-runtime";
+import { salesLeads, salesOpportunities } from "@/lib/business-data";
+import { buildOwnerBriefing, buildWorkforceIntelligence } from "@/lib/workforce-intelligence";
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                      */
@@ -2116,6 +2118,16 @@ function AiWorkforce() {
     queryFn: getAgentRuntimeDashboard,
   });
 
+  const intelligenceLeadsQuery = useQuery({
+    queryKey: ["sales-leads"],
+    queryFn: salesLeads.list,
+  });
+
+  const intelligenceOpportunitiesQuery = useQuery({
+    queryKey: ["sales-opportunities"],
+    queryFn: salesOpportunities.list,
+  });
+
   /* ------------------------------------------------------------------------ */
   /* REFRESH                                                                  */
   /* ------------------------------------------------------------------------ */
@@ -2134,6 +2146,12 @@ function AiWorkforce() {
       { label: "runs and failures", critical: true, request: runsQuery.refetch() },
       { label: "approvals", critical: true, request: approvalsQuery.refetch() },
       { label: "hosted agent runtime", critical: false, request: runtimeQuery.refetch() },
+      { label: "CRM leads", critical: true, request: intelligenceLeadsQuery.refetch() },
+      {
+        label: "CRM opportunities",
+        critical: true,
+        request: intelligenceOpportunitiesQuery.refetch(),
+      },
       {
         label: "current tasks",
         critical: false,
@@ -2273,6 +2291,58 @@ function AiWorkforce() {
   const runs = runsQuery.data ?? EMPTY_RUNS;
 
   const approvals = approvalsQuery.data ?? EMPTY_APPROVALS;
+
+  const workforceIntelligence = useMemo(
+    () =>
+      buildWorkforceIntelligence({
+        employees,
+        missions,
+        runs,
+        handoffs,
+        approvals,
+        leads: intelligenceLeadsQuery.data ?? [],
+        opportunities: intelligenceOpportunitiesQuery.data ?? [],
+        runtime: runtimeQuery.data,
+      }),
+    [
+      approvals,
+      employees,
+      handoffs,
+      intelligenceLeadsQuery.data,
+      intelligenceOpportunitiesQuery.data,
+      missions,
+      runs,
+      runtimeQuery.data,
+    ],
+  );
+
+  const ownerBriefing = useMemo(
+    () => buildOwnerBriefing(workforceIntelligence),
+    [workforceIntelligence],
+  );
+
+  useEffect(() => {
+    if (
+      employeesQuery.isSuccess &&
+      missionsQuery.isSuccess &&
+      handoffsQuery.isSuccess &&
+      runsQuery.isSuccess &&
+      approvalsQuery.isSuccess &&
+      intelligenceLeadsQuery.isSuccess &&
+      intelligenceOpportunitiesQuery.isSuccess
+    ) {
+      setLastRefreshedAt((previous) => previous ?? workforceIntelligence.verifiedAt);
+    }
+  }, [
+    approvalsQuery.isSuccess,
+    employeesQuery.isSuccess,
+    handoffsQuery.isSuccess,
+    intelligenceLeadsQuery.isSuccess,
+    intelligenceOpportunitiesQuery.isSuccess,
+    missionsQuery.isSuccess,
+    runsQuery.isSuccess,
+    workforceIntelligence.verifiedAt,
+  ]);
 
   const employeesByKey = useMemo(() => {
     const map = new Map<string, AiEmployee>();
@@ -2505,7 +2575,9 @@ function AiWorkforce() {
     missionsQuery.isLoading ||
     handoffsQuery.isLoading ||
     runsQuery.isLoading ||
-    approvalsQuery.isLoading;
+    approvalsQuery.isLoading ||
+    intelligenceLeadsQuery.isLoading ||
+    intelligenceOpportunitiesQuery.isLoading;
 
   const canCreateGrowth =
     activeExecutableGrowthEmployees.length === EXECUTABLE_GROWTH_WORKFLOW.length &&
@@ -3202,24 +3274,103 @@ function AiWorkforce() {
       {/* COMPANY METRICS */}
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Metric label="Employees" value={String(employees.length)} />
+        <Metric label="Employees" value={String(workforceIntelligence.totalEmployees)} />
 
-        <Metric
-          label="Active"
-          value={String(employees.filter((employee) => employee.status === "active").length)}
-        />
+        <Metric label="Active" value={String(workforceIntelligence.active)} />
 
-        <Metric label="Working now" value={String(workforceCounts.working)} />
+        <Metric label="Working now" value={String(workforceIntelligence.workingNow)} />
 
-        <Metric label="Assigned" value={String(workforceCounts.waiting)} />
+        <Metric label="Assigned" value={String(workforceIntelligence.assigned)} />
 
-        <Metric label="Available" value={String(workforceCounts.idle)} />
+        <Metric label="Available" value={String(workforceIntelligence.available)} />
 
         <Metric
           label="Needs attention"
-          value={String(workforceCounts.attention + workforceCounts.approval)}
-          warning={workforceCounts.attention + workforceCounts.approval > 0}
+          value={String(
+            workforceIntelligence.failedNeedsAttention + workforceIntelligence.waitingForApproval,
+          )}
+          warning={
+            workforceIntelligence.failedNeedsAttention + workforceIntelligence.waitingForApproval >
+            0
+          }
         />
+      </section>
+
+      <section className="glass-card p-5 sm:p-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <BrainCircuit className="h-4 w-4 text-primary" />
+              <h2 className="font-display text-lg font-semibold">Owner briefing</h2>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Evidence-only operating report from the successful workforce and CRM refresh at{" "}
+              {new Date(ownerBriefing.generatedAt).toLocaleString("en-ZA")}.
+            </p>
+          </div>
+          <span className="text-[10px] uppercase tracking-widest text-primary">
+            Verified evidence
+          </span>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {ownerBriefing.sections.map((section) => (
+            <article
+              key={section.title}
+              className="rounded-xl border border-border/60 bg-card/40 p-3"
+            >
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-primary">
+                {section.title}
+              </h3>
+              <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
+                {section.points.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {[
+            ["Missions today", workforceIntelligence.missionsToday],
+            ["Completed today", workforceIntelligence.completedToday],
+            ["Overdue", workforceIntelligence.overdue],
+            ["Handoffs today", workforceIntelligence.handoffsToday],
+            ["Leads generated", workforceIntelligence.leadsGenerated],
+            ["Leads qualified", workforceIntelligence.leadsQualified],
+            ["Opportunities created", workforceIntelligence.opportunitiesCreated],
+            ["Approvals required", workforceIntelligence.approvalsRequired],
+            ["Provider warnings", workforceIntelligence.providerWarnings],
+            [
+              "Last verified refresh",
+              new Date(workforceIntelligence.verifiedAt).toLocaleTimeString("en-ZA", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            ],
+          ].map(([label, value]) => (
+            <div
+              key={String(label)}
+              className="rounded-lg border border-border/60 bg-background/30 p-3"
+            >
+              <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
+                {label}
+              </div>
+              <div className="mt-1 font-display text-lg font-semibold">{String(value)}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-3">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-primary">
+            Top 3 CEO actions
+          </h3>
+          <ol className="mt-2 space-y-1 text-sm text-muted-foreground">
+            {ownerBriefing.topActions.map((action, index) => (
+              <li key={action}>
+                {index + 1}. {action}
+              </li>
+            ))}
+          </ol>
+        </div>
       </section>
 
       {/* COMMAND CENTRE */}

@@ -240,7 +240,9 @@ function contentRow(
     row.status = status;
   }
 
-  if (creating) row.ai_generated = false;
+  // A Content Assistant draft is persisted as a draft only.  This source flag
+  // records copy provenance; it does not imply a real social post was sent.
+  if (creating) row.ai_generated = Boolean(payload.ai_generated);
   return row;
 }
 
