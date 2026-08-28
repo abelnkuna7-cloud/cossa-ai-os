@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { UsersRound } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowRight, UsersRound } from "lucide-react";
 
 import { CrudWorkspace, fmtCurrency, fmtDate } from "@/components/crud-workspace";
+import { Button } from "@/components/ui/button";
 import { growthReferrals, type GrowthReferral } from "@/lib/legacy-growth-data";
 
 export const Route = createFileRoute("/marketing/referrals")({
@@ -47,7 +48,7 @@ function ReferralsPage() {
     <CrudWorkspace<GrowthReferral>
       title="Referrals"
       tagline="Turn trusted introductions into tracked revenue opportunities"
-      description="Restored referral operations from the original Growth platform. Commission figures are recorded obligations/estimates only and are not treated as cash paid unless the underlying record says so."
+      description="Referral ledger for approved referral partners, referred clients and recorded commission obligations. Website referral submissions first enter the intake pipeline for verification before any commission is treated as eligible or payable."
       icon={UsersRound}
       queryKey="growth-referrals"
       fetch={growthReferrals.list}
@@ -63,53 +64,35 @@ function ReferralsPage() {
         { key: "referee_phone", label: "Client phone" },
         { key: "referee_email", label: "Client email", type: "email" },
         { key: "service", label: "Service", type: "select", options: SERVICES },
-        {
-          key: "status",
-          label: "Status",
-          type: "select",
-          options: STATUSES,
-          defaultValue: "pending",
-        },
+        { key: "status", label: "Status", type: "select", options: STATUSES, defaultValue: "pending" },
         { key: "commission_percent", label: "Commission %", type: "number", defaultValue: 10 },
-        {
-          key: "commission_amount",
-          label: "Commission amount (R)",
-          type: "number",
-          defaultValue: 0,
-        },
+        { key: "commission_amount", label: "Commission amount (R)", type: "number", defaultValue: 0 },
         { key: "notes", label: "Notes", type: "textarea" },
       ]}
       columns={[
-        {
-          key: "referrer_name",
-          label: "Referrer",
-          render: (row) => <span className="font-medium">{row.referrer_name}</span>,
-        },
+        { key: "referrer_name", label: "Referrer", render: (row) => <span className="font-medium">{row.referrer_name}</span> },
         { key: "referee_name", label: "Referred client" },
         { key: "service", label: "Service" },
-        {
-          key: "status",
-          label: "Status",
-          render: (row) => (
-            <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">
-              {row.status}
-            </span>
-          ),
-        },
-        {
-          key: "commission_percent",
-          label: "%",
-          render: (row) => `${Number(row.commission_percent || 0)}%`,
-        },
-        {
-          key: "commission_amount",
-          label: "Commission",
-          render: (row) => fmtCurrency(row.commission_amount),
-        },
+        { key: "status", label: "Status", render: (row) => <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-primary">{row.status}</span> },
+        { key: "commission_percent", label: "%", render: (row) => `${Number(row.commission_percent || 0)}%` },
+        { key: "commission_amount", label: "Commission", render: (row) => fmtCurrency(row.commission_amount) },
         { key: "created_at", label: "Added", render: (row) => fmtDate(row.created_at) },
       ]}
       searchKeys={["referrer_name", "referee_name", "service", "status"]}
       Stats={ReferralStats}
+      extra={
+        <section className="glass-card flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Website referral intake & merchant applications</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Review new public referral opportunities before commission approval, and manage Cossa Store merchant applications from the same controlled partnership workspace.</p>
+          </div>
+          <Link to="/sales/partner-pipelines">
+            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+              Open Partner Pipelines <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        </section>
+      }
     />
   );
 }
