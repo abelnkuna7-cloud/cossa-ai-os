@@ -363,7 +363,11 @@ export const salesJourney = {
       .insert({
         organisation_id: COSSA_ORGANISATION_ID,
         quote_number: quoteNumber,
-        title: `Quotation — ${clean(opportunity.organization_name) ?? "Opportunity"}`,
+        // Keep this payload within the established quotations adapter contract.
+        // The production table uses description/service rather than a title column.
+        description: `Quotation — ${clean(opportunity.organization_name) ?? "Opportunity"}`,
+        customer: clean(opportunity.organization_name) ?? clean(opportunity.contact_name),
+        opportunity_id: String(opportunity.id),
         amount: safeNumber(opportunity.estimated_value),
         status: "draft",
         notes: appendJourneyLinks(opportunity.notes, {
@@ -549,7 +553,6 @@ export const salesJourney = {
         .insert({
           organisation_id: COSSA_ORGANISATION_ID,
           name: customerName,
-          company: clean(opportunity.organization_name),
           email: clean(opportunity.contact_email),
           phone: clean(opportunity.contact_phone),
           status: "active",
