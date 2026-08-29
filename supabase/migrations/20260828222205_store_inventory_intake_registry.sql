@@ -74,7 +74,7 @@ CREATE TABLE public.store_product_sources (
   sync_status text NOT NULL DEFAULT 'not_connected'
     CHECK (sync_status IN ('verified', 'manual', 'stale', 'not_connected', 'failed', 'unknown')),
   supplier_cost numeric(12, 2),
-  markup_percent numeric(7, 2) NOT NULL DEFAULT 35 CHECK (markup_percent >= 0),
+  markup_percent numeric(7, 2) NOT NULL DEFAULT 25 CHECK (markup_percent >= 0),
   calculated_selling_price numeric(12, 2),
   selling_price_override numeric(12, 2),
   affiliate_commission_percent numeric(5, 2),

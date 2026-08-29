@@ -24,6 +24,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
+import {
+  calculatePricing,
+  compareWithMarket,
+  inheritSupplierDefaults,
+  validNonNegativeNumber,
+} from "@/lib/store-inventory-pricing";
+import { canPublishInventoryLifecycle } from "@/lib/store-inventory-safety";
 
 export const Route = createFileRoute("/businesses/store-inventory")({
   component: StoreInventoryIntake,
@@ -40,7 +47,8 @@ export const Route = createFileRoute("/businesses/store-inventory")({
 });
 
 const db = asDynamicSupabaseClient(supabase);
-const DEFAULT_MARKUP_PERCENT = 35;
+const DEFAULT_MARKUP_PERCENT = 25;
+const MARKUP_PRESETS = [20, 25, 30, 35, 40] as const;
 
 type BusinessModel =
   | "dropship"
@@ -294,6 +302,23 @@ function slugify(value: string): string {
     .slice(0, 120);
 }
 
+function supplierForSourceUrl(suppliers: StoreSupplier[], sourceUrl: string): StoreSupplier | null {
+  try {
+    const hostname = new URL(sourceUrl).hostname.replace(/^www\./, "").toLowerCase();
+    return (
+      suppliers.find((supplier) => {
+        if (!supplier.source_url) return false;
+        const supplierHost = new URL(supplier.source_url).hostname
+          .replace(/^www\./, "")
+          .toLowerCase();
+        return hostname === supplierHost || hostname.endsWith(`.${supplierHost}`);
+      }) ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
 function num(value: string | number | null | undefined): number | null {
   if (value == null || value === "") return null;
   const parsed = Number(value);
@@ -413,15 +438,28 @@ function StoreInventoryIntake() {
     () => new Map(sources.map((source) => [source.product_id, source])),
     [sources],
   );
-  const calculatedPrice = useMemo(() => {
-    const cost = num(form.supplierCost) ?? 0;
-    const markup = num(form.markupPercent) ?? 0;
-    return cost > 0 ? Math.round(cost * (1 + markup / 100) * 100) / 100 : null;
-  }, [form.markupPercent, form.supplierCost]);
-  const sellingPrice = num(form.priceOverride) ?? calculatedPrice;
-  const grossProfit = sellingPrice != null ? sellingPrice - (num(form.supplierCost) ?? 0) : null;
-  const grossMargin =
-    sellingPrice && grossProfit != null ? (grossProfit / sellingPrice) * 100 : null;
+  const pricing = useMemo(
+    () =>
+      calculatePricing({
+        supplierCost: num(form.supplierCost),
+        markupPercent: num(form.markupPercent),
+        sellingPriceOverride: num(form.priceOverride),
+      }),
+    [form.markupPercent, form.priceOverride, form.supplierCost],
+  );
+  const calculatedPrice = pricing.calculatedSellingPrice;
+  const sellingPrice = pricing.sellingPrice;
+  const grossProfit = pricing.grossProfit;
+  const grossMargin = pricing.grossMarginPercent;
+  const competitorComparison = useMemo(
+    () =>
+      compareWithMarket({
+        cossaPrice: sellingPrice,
+        marketPrice: num(form.marketPrice),
+        grossMarginPercent: grossMargin,
+      }),
+    [form.marketPrice, grossMargin, sellingPrice],
+  );
   const unconfirmedFields = form.fieldsRequiringConfirmation.filter(
     (field) => !form.confirmedFields.includes(field),
   );
@@ -440,6 +478,25 @@ function StoreInventoryIntake() {
 
   function update<K extends keyof IntakeForm>(key: K, value: IntakeForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function applySupplier(supplier: StoreSupplier | null) {
+    const defaultProfile = profiles.find(
+      (profile) => profile.supplier_id === supplier?.id && profile.is_active,
+    );
+    setForm((current) =>
+      inheritSupplierDefaults({
+        current,
+        supplier: supplier
+          ? {
+              id: supplier.id,
+              businessModel: supplier.business_model,
+              stockOrigin: supplier.stock_origin,
+            }
+          : null,
+        profileId: defaultProfile?.id ?? null,
+      }),
+    );
   }
 
   async function loadOperationsBook() {
@@ -577,7 +634,23 @@ function StoreInventoryIntake() {
       }
 
       setForm((current) => ({
-        ...current,
+        ...(() => {
+          const identifiedSupplier = supplierForSourceUrl(suppliers, payload.sourceUrl);
+          const defaultProfile = profiles.find(
+            (profile) => profile.supplier_id === identifiedSupplier?.id && profile.is_active,
+          );
+          return inheritSupplierDefaults({
+            current,
+            supplier: identifiedSupplier
+              ? {
+                  id: identifiedSupplier.id,
+                  businessModel: identifiedSupplier.business_model,
+                  stockOrigin: identifiedSupplier.stock_origin,
+                }
+              : null,
+            profileId: defaultProfile?.id ?? null,
+          });
+        })(),
         lifecycle: "review",
         importStatus: payload.importStatus,
         sourceUrl: payload.sourceUrl,
@@ -839,11 +912,16 @@ function StoreInventoryIntake() {
     if (num(form.supplierCost) == null && form.businessModel !== "affiliate") {
       return "Enter the confirmed supplier cost.";
     }
+    if (!validNonNegativeNumber(num(form.markupPercent))) {
+      return "Enter a valid markup percentage of zero or more.";
+    }
     if (status === "approved" && unconfirmedFields.length > 0) {
       return "Confirm every flagged field before approval.";
     }
     if (status === "published") {
-      if (form.lifecycle !== "approved") return "Approve this product before publishing it.";
+      if (!canPublishInventoryLifecycle(form.lifecycle)) {
+        return "Approve this product before publishing it.";
+      }
       if (!form.category.trim() || !form.description.trim()) {
         return "Add a customer-facing category and description before publishing.";
       }
@@ -1142,19 +1220,22 @@ function StoreInventoryIntake() {
                 onChange={(event) => update("brand", event.target.value)}
               />
             </Field>
-            <Field label="Business model">
+            <Field label="Supplier / partner">
               <select
                 className={inputClass}
-                value={form.businessModel}
-                onChange={(event) => update("businessModel", event.target.value as BusinessModel)}
+                value={form.supplierId}
+                onChange={(event) =>
+                  applySupplier(
+                    suppliers.find((supplier) => supplier.id === event.target.value) ?? null,
+                  )
+                }
               >
-                <option value="dropship">Dropshipping</option>
-                <option value="affiliate">Affiliate</option>
-                <option value="wholesale">Wholesale / local supplier</option>
-                <option value="pod">Print on demand</option>
-                <option value="marketplace">Marketplace / referral</option>
-                <option value="cossa_stock">Cossa-owned stock</option>
-                <option value="other">Other</option>
+                <option value="">Select supplier / partner</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name} — {supplier.status}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Short customer description" className="sm:col-span-2">
@@ -1182,6 +1263,19 @@ function StoreInventoryIntake() {
               />
             </Field>
           </div>
+
+          {selectedSupplier ? (
+            <div className="mt-4 rounded-xl border border-primary/25 bg-primary/5 p-3 text-xs">
+              <p className="font-semibold text-primary">Inherited from {selectedSupplier.name}</p>
+              <p className="mt-1 text-muted-foreground">
+                {selectedSupplier.business_model.replace(/_/g, " ")} ·{" "}
+                {selectedSupplier.stock_origin || "Stock origin needs confirmation"}
+                {selectedProfile
+                  ? ` · ${selectedProfile.name} · ${selectedProfile.delivery_payer === "customer" ? "customer pays delivery" : `${selectedProfile.delivery_payer} delivery`}`
+                  : " · fulfilment profile still needs selection"}
+              </p>
+            </div>
+          ) : null}
 
           <div className="mt-7 border-t border-border/60 pt-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1245,7 +1339,20 @@ function StoreInventoryIntake() {
                       <span className="absolute bottom-2 left-2 rounded bg-background/90 px-2 py-1 text-[10px] font-medium">
                         Main image
                       </span>
-                    ) : null}
+                    ) : (
+                      <button
+                        type="button"
+                        className="absolute bottom-2 left-2 rounded bg-background/90 px-2 py-1 text-[10px] font-medium hover:text-primary"
+                        onClick={() =>
+                          update("imageUrls", [
+                            url,
+                            ...form.imageUrls.filter((item) => item !== url),
+                          ])
+                        }
+                      >
+                        Set as main
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1259,7 +1366,8 @@ function StoreInventoryIntake() {
           <div className="mt-7 border-t border-border/60 pt-6">
             <h3 className="font-semibold">Pricing &amp; competitive check</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              The default 35% markup is deliberately modest. You stay in control of it per product.
+              Choose a competitive starting point or type any valid markup. Markup and gross margin
+              are shown separately.
             </p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Field
@@ -1285,6 +1393,18 @@ function StoreInventoryIntake() {
                   onChange={(event) => update("markupPercent", event.target.value)}
                   placeholder={String(DEFAULT_MARKUP_PERCENT)}
                 />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {MARKUP_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => update("markupPercent", String(preset))}
+                      className={`rounded-md border px-2 py-1 text-[11px] ${num(form.markupPercent) === preset ? "border-primary/50 bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:border-primary/40"}`}
+                    >
+                      {preset}%
+                    </button>
+                  ))}
+                </div>
               </Field>
               <Field label="Override selling price (R)">
                 <input
@@ -1313,16 +1433,20 @@ function StoreInventoryIntake() {
                 <p className="mt-1 font-semibold">{money(calculatedPrice)}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Gross profit before fees</p>
+                <p className="text-xs text-muted-foreground">Gross product profit</p>
                 <p className="mt-1 font-semibold">{money(grossProfit)}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Gross margin before fees</p>
+                <p className="text-xs text-muted-foreground">Gross margin</p>
                 <p className="mt-1 font-semibold">
                   {grossMargin == null ? "—" : `${grossMargin.toFixed(1)}%`}
                 </p>
               </div>
             </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Payment fee not configured. Gross product profit excludes payment fees. Customer-paid
+              delivery remains separate.
+            </p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="Market / competitor price (R)">
                 <input
@@ -1351,208 +1475,235 @@ function StoreInventoryIntake() {
                 />
               </Field>
             </div>
+            <div className="mt-3 rounded-xl border border-border/60 bg-card/50 p-3 text-xs">
+              {competitorComparison.differenceRand == null ? (
+                <p className="text-muted-foreground">Competitor benchmark not checked.</p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-semibold">
+                    {money(Math.abs(competitorComparison.differenceRand))}{" "}
+                    {competitorComparison.label.replace(/^.*?\s/, "")}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {Math.abs(competitorComparison.differencePercent ?? 0).toFixed(1)}%{" "}
+                    {competitorComparison.differencePercent &&
+                    competitorComparison.differencePercent > 0
+                      ? "below benchmark"
+                      : competitorComparison.differencePercent === 0
+                        ? "at benchmark"
+                        : "above benchmark"}
+                  </span>
+                  {competitorComparison.status ? (
+                    <span className="rounded-full border border-primary/25 bg-primary/5 px-2 py-0.5 font-medium text-primary">
+                      {competitorComparison.status}
+                    </span>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="mt-7 border-t border-border/60 pt-6">
-            <h3 className="font-semibold">Supplier source &amp; fulfilment</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              These are internal records. The customer sees Cossa-facing fulfilment notices, not
-              your supplier identity.
-            </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="Supplier / partner registry">
-                <select
-                  className={inputClass}
-                  value={form.supplierId}
-                  onChange={(event) => {
-                    const supplier = suppliers.find((item) => item.id === event.target.value);
-                    const profile = profiles.find(
-                      (item) => item.supplier_id === supplier?.id && item.is_active,
-                    );
-                    setForm((current) => ({
-                      ...current,
-                      supplierId: supplier?.id ?? "",
-                      businessModel: supplier?.business_model ?? current.businessModel,
-                      stockOrigin: supplier?.stock_origin ?? current.stockOrigin,
-                      fulfilmentProfileId: profile?.id ?? "",
-                    }));
-                  }}
-                >
-                  <option value="">Select supplier / partner</option>
-                  {suppliers.map((supplier) => (
-                    <option key={supplier.id} value={supplier.id}>
-                      {supplier.name} — {supplier.status}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Fulfilment profile">
-                <select
-                  className={inputClass}
-                  value={form.fulfilmentProfileId}
-                  onChange={(event) => update("fulfilmentProfileId", event.target.value)}
-                >
-                  <option value="">Select fulfilment profile</option>
-                  {supplierProfiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Stock origin">
-                <input
-                  className={inputClass}
-                  value={form.stockOrigin}
-                  onChange={(event) => update("stockOrigin", event.target.value)}
-                  placeholder="e.g. South Africa"
-                />
-              </Field>
-              <Field label="Supplier stock / availability">
-                <select
-                  className={inputClass}
-                  value={form.stockStatus}
-                  onChange={(event) => update("stockStatus", event.target.value as StockStatus)}
-                >
-                  <option value="not_checked">Not checked</option>
-                  <option value="available">Available</option>
-                  <option value="unavailable">Unavailable</option>
-                  <option value="preorder">Preorder</option>
-                  <option value="unknown">Unknown</option>
-                </select>
-              </Field>
-              <Field label="Price check date &amp; time">
-                <input
-                  className={inputClass}
-                  type="datetime-local"
-                  value={form.lastPriceCheckedAt}
-                  onChange={(event) => update("lastPriceCheckedAt", event.target.value)}
-                />
-              </Field>
-              <Field label="Stock check date &amp; time">
-                <input
-                  className={inputClass}
-                  type="datetime-local"
-                  value={form.lastStockCheckedAt}
-                  onChange={(event) => update("lastStockCheckedAt", event.target.value)}
-                />
-              </Field>
-              <Field label="Stock / sync status" className="sm:col-span-2">
-                <select
-                  className={inputClass}
-                  value={form.syncStatus}
-                  onChange={(event) => update("syncStatus", event.target.value as SyncStatus)}
-                >
-                  <option value="not_connected">Not connected — manual check required</option>
-                  <option value="manual">Manually recorded</option>
-                  <option value="verified">Verified from a current source</option>
-                  <option value="stale">Needs re-checking</option>
-                  <option value="failed">Last check failed</option>
-                  <option value="unknown">Unknown</option>
-                </select>
-              </Field>
-            </div>
-
-            {selectedProfile ? (
-              <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 p-4 text-sm">
-                <p className="font-medium">Inherited from {selectedProfile.name}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {selectedProfile.customer_delivery_notice ||
-                    "No customer delivery notice recorded yet."}
-                </p>
+          <details className="mt-7 border-t border-border/60 pt-6">
+            <summary className="cursor-pointer list-none rounded-xl border border-border/60 bg-card/40 p-4 transition hover:border-primary/35">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold">Advanced / Operational Details</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Supplier defaults, fulfilment rules and product-specific overrides. These remain
+                    internal.
+                  </p>
+                </div>
+                <span className="text-xs text-primary">Expand only when this product differs</span>
               </div>
-            ) : null}
+            </summary>
+            <div className="pt-4">
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <Field label="Business model">
+                  <select
+                    className={inputClass}
+                    value={form.businessModel}
+                    onChange={(event) =>
+                      update("businessModel", event.target.value as BusinessModel)
+                    }
+                  >
+                    <option value="dropship">Dropshipping</option>
+                    <option value="affiliate">Affiliate</option>
+                    <option value="wholesale">Wholesale / local supplier</option>
+                    <option value="pod">Print on demand</option>
+                    <option value="marketplace">Marketplace / referral</option>
+                    <option value="cossa_stock">Cossa-owned stock</option>
+                    <option value="other">Other</option>
+                  </select>
+                </Field>
+                <Field label="Fulfilment profile">
+                  <select
+                    className={inputClass}
+                    value={form.fulfilmentProfileId}
+                    onChange={(event) => update("fulfilmentProfileId", event.target.value)}
+                  >
+                    <option value="">Select fulfilment profile</option>
+                    {supplierProfiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Stock origin">
+                  <input
+                    className={inputClass}
+                    value={form.stockOrigin}
+                    onChange={(event) => update("stockOrigin", event.target.value)}
+                    placeholder="e.g. South Africa"
+                  />
+                </Field>
+                <Field label="Supplier stock / availability">
+                  <select
+                    className={inputClass}
+                    value={form.stockStatus}
+                    onChange={(event) => update("stockStatus", event.target.value as StockStatus)}
+                  >
+                    <option value="not_checked">Not checked</option>
+                    <option value="available">Available</option>
+                    <option value="unavailable">Unavailable</option>
+                    <option value="preorder">Preorder</option>
+                    <option value="unknown">Unknown</option>
+                  </select>
+                </Field>
+                <Field label="Price check date &amp; time">
+                  <input
+                    className={inputClass}
+                    type="datetime-local"
+                    value={form.lastPriceCheckedAt}
+                    onChange={(event) => update("lastPriceCheckedAt", event.target.value)}
+                  />
+                </Field>
+                <Field label="Stock check date &amp; time">
+                  <input
+                    className={inputClass}
+                    type="datetime-local"
+                    value={form.lastStockCheckedAt}
+                    onChange={(event) => update("lastStockCheckedAt", event.target.value)}
+                  />
+                </Field>
+                <Field label="Stock / sync status" className="sm:col-span-2">
+                  <select
+                    className={inputClass}
+                    value={form.syncStatus}
+                    onChange={(event) => update("syncStatus", event.target.value as SyncStatus)}
+                  >
+                    <option value="not_connected">Not connected — manual check required</option>
+                    <option value="manual">Manually recorded</option>
+                    <option value="verified">Verified from a current source</option>
+                    <option value="stale">Needs re-checking</option>
+                    <option value="failed">Last check failed</option>
+                    <option value="unknown">Unknown</option>
+                  </select>
+                </Field>
+              </div>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="Delivery payer">
-                <select
-                  className={inputClass}
-                  value={form.deliveryPayerOverride}
-                  onChange={(event) =>
-                    update(
-                      "deliveryPayerOverride",
-                      event.target.value as IntakeForm["deliveryPayerOverride"],
-                    )
-                  }
-                >
-                  <option value="inherit">
-                    Inherit profile ({selectedProfile?.delivery_payer ?? "customer"})
-                  </option>
-                  <option value="customer">Customer pays delivery</option>
-                  <option value="cossa">Cossa pays delivery</option>
-                  <option value="conditional">Conditional delivery rule</option>
-                  <option value="not_applicable">Not applicable</option>
-                </select>
-              </Field>
-              <Field label="Free-shipping eligibility">
-                <select
-                  className={inputClass}
-                  value={form.freeShippingOverride}
-                  onChange={(event) =>
-                    update(
-                      "freeShippingOverride",
-                      event.target.value as IntakeForm["freeShippingOverride"],
-                    )
-                  }
-                >
-                  <option value="inherit">
-                    Inherit profile (
-                    {selectedProfile?.free_shipping_eligible ? "eligible" : "not eligible"})
-                  </option>
-                  <option value="yes">Eligible</option>
-                  <option value="no">Not eligible</option>
-                </select>
-              </Field>
-              <Field label="Delivery method override">
-                <input
-                  className={inputClass}
-                  value={form.deliveryMethodOverride}
-                  onChange={(event) => update("deliveryMethodOverride", event.target.value)}
-                  placeholder={
-                    selectedProfile?.delivery_method ?? "Only when product differs from profile"
-                  }
-                />
-              </Field>
-              <Field label="Delivery rule override">
-                <input
-                  className={inputClass}
-                  value={form.deliveryRuleOverride}
-                  onChange={(event) => update("deliveryRuleOverride", event.target.value)}
-                  placeholder={
-                    selectedProfile?.delivery_rule ?? "Only when product differs from profile"
-                  }
-                />
-              </Field>
-              <Field label="Returns profile override">
-                <input
-                  className={inputClass}
-                  value={form.returnsProfileOverride}
-                  onChange={(event) => update("returnsProfileOverride", event.target.value)}
-                  placeholder={
-                    selectedProfile?.returns_profile_code ?? "Inherit Cossa-facing profile"
-                  }
-                />
-              </Field>
-              <Field label="Warranty profile override">
-                <input
-                  className={inputClass}
-                  value={form.warrantyProfileOverride}
-                  onChange={(event) => update("warrantyProfileOverride", event.target.value)}
-                  placeholder={
-                    selectedProfile?.warranty_profile_code ?? "Inherit Cossa-facing profile"
-                  }
-                />
-              </Field>
+              {selectedProfile ? (
+                <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 p-4 text-sm">
+                  <p className="font-medium">Inherited from {selectedProfile.name}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {selectedProfile.customer_delivery_notice ||
+                      "No customer delivery notice recorded yet."}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <Field label="Delivery payer">
+                  <select
+                    className={inputClass}
+                    value={form.deliveryPayerOverride}
+                    onChange={(event) =>
+                      update(
+                        "deliveryPayerOverride",
+                        event.target.value as IntakeForm["deliveryPayerOverride"],
+                      )
+                    }
+                  >
+                    <option value="inherit">
+                      Inherit profile ({selectedProfile?.delivery_payer ?? "customer"})
+                    </option>
+                    <option value="customer">Customer pays delivery</option>
+                    <option value="cossa">Cossa pays delivery</option>
+                    <option value="conditional">Conditional delivery rule</option>
+                    <option value="not_applicable">Not applicable</option>
+                  </select>
+                </Field>
+                <Field label="Free-shipping eligibility">
+                  <select
+                    className={inputClass}
+                    value={form.freeShippingOverride}
+                    onChange={(event) =>
+                      update(
+                        "freeShippingOverride",
+                        event.target.value as IntakeForm["freeShippingOverride"],
+                      )
+                    }
+                  >
+                    <option value="inherit">
+                      Inherit profile (
+                      {selectedProfile?.free_shipping_eligible ? "eligible" : "not eligible"})
+                    </option>
+                    <option value="yes">Eligible</option>
+                    <option value="no">Not eligible</option>
+                  </select>
+                </Field>
+                <Field label="Delivery method override">
+                  <input
+                    className={inputClass}
+                    value={form.deliveryMethodOverride}
+                    onChange={(event) => update("deliveryMethodOverride", event.target.value)}
+                    placeholder={
+                      selectedProfile?.delivery_method ?? "Only when product differs from profile"
+                    }
+                  />
+                </Field>
+                <Field label="Delivery rule override">
+                  <input
+                    className={inputClass}
+                    value={form.deliveryRuleOverride}
+                    onChange={(event) => update("deliveryRuleOverride", event.target.value)}
+                    placeholder={
+                      selectedProfile?.delivery_rule ?? "Only when product differs from profile"
+                    }
+                  />
+                </Field>
+                <Field label="Returns profile override">
+                  <input
+                    className={inputClass}
+                    value={form.returnsProfileOverride}
+                    onChange={(event) => update("returnsProfileOverride", event.target.value)}
+                    placeholder={
+                      selectedProfile?.returns_profile_code ?? "Inherit Cossa-facing profile"
+                    }
+                  />
+                </Field>
+                <Field label="Warranty profile override">
+                  <input
+                    className={inputClass}
+                    value={form.warrantyProfileOverride}
+                    onChange={(event) => update("warrantyProfileOverride", event.target.value)}
+                    placeholder={
+                      selectedProfile?.warranty_profile_code ?? "Inherit Cossa-facing profile"
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+                Effective delivery payer:{" "}
+                <strong className="text-foreground">{effectiveDeliveryPayer}</strong>. Free
+                shipping:{" "}
+                <strong className="text-foreground">
+                  {effectiveFreeShipping ? "eligible" : "not eligible"}
+                </strong>
+                . Supplier rules support Cossa operations; Cossa customer terms remain separate.
+              </div>
             </div>
-            <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
-              Effective delivery payer:{" "}
-              <strong className="text-foreground">{effectiveDeliveryPayer}</strong>. Free shipping:{" "}
-              <strong className="text-foreground">
-                {effectiveFreeShipping ? "eligible" : "not eligible"}
-              </strong>
-              . Supplier rules support Cossa operations; Cossa customer terms remain separate.
-            </div>
-          </div>
+          </details>
 
           {form.businessModel === "affiliate" || form.businessModel === "marketplace" ? (
             <div className="mt-7 border-t border-border/60 pt-6">

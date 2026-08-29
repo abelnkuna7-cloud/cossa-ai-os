@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseGenericProductPage } from "../src/lib/store-product-import.server.ts";
+import {
+  ProductImportError,
+  importSupplierProduct,
+  parseGenericProductPage,
+} from "../src/lib/store-product-import.server.ts";
 
 test("product-page parsing preserves real structured data and flags a visible page price for confirmation", () => {
   const result = parseGenericProductPage({
@@ -52,4 +56,11 @@ test("incomplete pages remain partial and never fabricate product details", () =
   assert.ok(result.fieldsRequiringConfirmation.includes("product images"));
   assert.ok(result.fieldsRequiringConfirmation.includes("supplier SKU/product ID"));
   assert.ok(result.fieldsRequiringConfirmation.includes("supplier cost"));
+});
+
+test("invalid URLs are rejected before any supplier request", async () => {
+  await assert.rejects(
+    importSupplierProduct({ sourceUrl: "not a valid URL" }),
+    (error: unknown) => error instanceof ProductImportError && error.code === "invalid_source_url",
+  );
 });
