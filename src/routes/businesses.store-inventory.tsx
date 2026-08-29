@@ -34,6 +34,7 @@ import {
   canAdvanceInventoryIntake,
   saveStatusForInventoryIntake,
 } from "@/lib/store-inventory-safety";
+import { buildProductReadiness } from "@/lib/store-inventory-readiness";
 import {
   compareCatalogueSnapshots,
   type CatalogueSnapshotItem,
@@ -199,6 +200,10 @@ type ProductSource = {
   market_price_source_url: string | null;
   market_price_notes: string | null;
   approval_status: IntakeStatus;
+  supplier_cost_confirmed: boolean;
+  supplier_cost_confirmed_at: string | null;
+  stock_confirmed: boolean;
+  stock_confirmed_at: string | null;
   last_price_checked_at: string | null;
   last_stock_checked_at: string | null;
   operational_notes: string | null;
@@ -305,8 +310,10 @@ type IntakeForm = {
   freeShippingOverride: "inherit" | "yes" | "no";
   returnsProfileOverride: string;
   warrantyProfileOverride: string;
-  lastPriceCheckedAt: string;
-  lastStockCheckedAt: string;
+  supplierCostConfirmed: boolean;
+  supplierCostConfirmedAt: string | null;
+  stockConfirmed: boolean;
+  stockConfirmedAt: string | null;
   operationalNotes: string;
   fieldsRequiringConfirmation: string[];
   confirmedFields: string[];
@@ -404,7 +411,7 @@ function emptyForm(supplier?: StoreSupplier, profile?: FulfilmentProfile): Intak
     variants: [],
     supplierCategory: "",
     category: "",
-    brand: "Cossa Store",
+    brand: "",
     imageUrls: [],
     manualImageUrl: "",
     supplierId: supplier?.id ?? "",
@@ -435,8 +442,10 @@ function emptyForm(supplier?: StoreSupplier, profile?: FulfilmentProfile): Intak
     freeShippingOverride: "inherit",
     returnsProfileOverride: "",
     warrantyProfileOverride: "",
-    lastPriceCheckedAt: "",
-    lastStockCheckedAt: "",
+    supplierCostConfirmed: false,
+    supplierCostConfirmedAt: null,
+    stockConfirmed: false,
+    stockConfirmedAt: null,
     operationalNotes: "",
     fieldsRequiringConfirmation: [
       "supplier cost confirmation",
@@ -460,19 +469,6 @@ function num(value: string | number | null | undefined): number | null {
   if (value == null || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function dateTimeInput(value: string | null): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 16);
-}
-
-function toIso(value: string): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function strings(value: unknown): string[] {
@@ -550,10 +546,12 @@ function lifecycleCopy(status: IntakeStatus): string {
   }
 }
 
-function InformationStatusBadge({ needsInformation }: { needsInformation: boolean }) {
+function InformationStatusBadge({ missingItems = [] }: { missingItems?: string[] }) {
+  const needsInformation = missingItems.length > 0;
   return needsInformation ? (
     <span className="inline-flex items-center rounded-full border border-destructive/45 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">
-      <AlertTriangle className="mr-1 h-3.5 w-3.5" /> Needs information
+      <AlertTriangle className="mr-1 h-3.5 w-3.5" /> Needs {missingItems.length} item
+      {missingItems.length === 1 ? "" : "s"}
     </span>
   ) : (
     <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
@@ -583,6 +581,8 @@ function StoreInventoryIntake() {
     (CatalogueSnapshotItem & { snapshot_id: string })[]
   >([]);
   const [snapshotting, setSnapshotting] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [supplierRecognitionMessage, setSupplierRecognitionMessage] = useState<string | null>(null);
   const [catalogueCounts, setCatalogueCounts] = useState({
     source: 0,
@@ -627,63 +627,6 @@ function StoreInventoryIntake() {
       }),
     [form.marketPrice, grossMargin, sellingPrice],
   );
-  const unconfirmedFields = form.fieldsRequiringConfirmation.filter(
-    (field) => !form.confirmedFields.includes(field),
-  );
-  const sectionWarnings = useMemo(
-    () => ({
-      intake:
-        !form.sourceUrl.trim() ||
-        !form.name.trim() ||
-        !form.sku.trim() ||
-        !form.shortDescription.trim() ||
-        !form.description.trim() ||
-        !form.category.trim() ||
-        !form.supplierId,
-      images: form.imageUrls.length === 0,
-      pricing:
-        form.businessModel === "affiliate" || form.businessModel === "marketplace"
-          ? !form.affiliateUrl.trim() ||
-            !validNonNegativeNumber(num(form.affiliateCommissionPercent))
-          : num(form.supplierCost) == null ||
-            !validNonNegativeNumber(num(form.markupPercent)) ||
-            sellingPrice == null,
-      operations:
-        !form.fulfilmentProfileId ||
-        !form.stockOrigin.trim() ||
-        form.stockStatus === "not_checked" ||
-        !form.lastStockCheckedAt,
-      review: unconfirmedFields.length > 0,
-    }),
-    [
-      form.affiliateCommissionPercent,
-      form.affiliateUrl,
-      form.businessModel,
-      form.category,
-      form.description,
-      form.fulfilmentProfileId,
-      form.imageUrls.length,
-      form.lastStockCheckedAt,
-      form.markupPercent,
-      form.name,
-      form.shortDescription,
-      form.sourceUrl,
-      form.stockOrigin,
-      form.stockStatus,
-      form.supplierCost,
-      form.supplierId,
-      form.sku,
-      sellingPrice,
-      unconfirmedFields.length,
-    ],
-  );
-  const incompleteSectionLabels = [
-    sectionWarnings.intake ? "intake details" : null,
-    sectionWarnings.images ? "images" : null,
-    sectionWarnings.pricing ? "pricing" : null,
-    sectionWarnings.operations ? "operational details" : null,
-    sectionWarnings.review ? "confirmations" : null,
-  ].filter((label): label is string => Boolean(label));
   const currentLifecycleHistory = useMemo(
     () => lifecycleHistory.filter((entry) => entry.intake_id === form.sourceId),
     [form.sourceId, lifecycleHistory],
@@ -707,6 +650,49 @@ function StoreInventoryIntake() {
         selectedSupplier?.default_free_shipping_eligible ??
         false)
       : form.freeShippingOverride === "yes";
+  const readiness = useMemo(
+    () =>
+      buildProductReadiness({
+        supplierRecognised: Boolean(selectedSupplier && selectedSupplier.status === "active"),
+        sourceUrl: form.sourceUrl,
+        name: form.name,
+        supplierProductRef: form.sku,
+        category: form.category,
+        shortDescription: form.shortDescription,
+        description: form.description,
+        imageCount: form.imageUrls.length,
+        businessModel: form.businessModel,
+        supplierCost: num(form.supplierCost),
+        finalSellingPrice: sellingPrice,
+        stockStatus: form.stockStatus,
+        fulfilmentProfileSelected: Boolean(form.fulfilmentProfileId),
+        stockOrigin: form.stockOrigin,
+        deliveryResolved: Boolean(effectiveDeliveryPayer),
+        freeShippingResolved: typeof effectiveFreeShipping === "boolean",
+        supplierCostConfirmed: form.supplierCostConfirmed,
+        stockConfirmed: form.stockConfirmed,
+      }),
+    [
+      effectiveDeliveryPayer,
+      effectiveFreeShipping,
+      form.businessModel,
+      form.category,
+      form.description,
+      form.fulfilmentProfileId,
+      form.imageUrls.length,
+      form.name,
+      form.shortDescription,
+      form.sku,
+      form.sourceUrl,
+      form.stockOrigin,
+      form.stockStatus,
+      form.supplierCost,
+      form.supplierCostConfirmed,
+      form.stockConfirmed,
+      selectedSupplier,
+      sellingPrice,
+    ],
+  );
   const snapshotComparison = useMemo(() => {
     if (snapshots.length < 2) return null;
     const [latest, previous] = snapshots;
@@ -720,8 +706,40 @@ function StoreInventoryIntake() {
     void loadOperationsBook();
   }, []);
 
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (readiness.operationalMissing.length) setAdvancedOpen(true);
+  }, [readiness.operationalMissing.length]);
+
   function update<K extends keyof IntakeForm>(key: K, value: IntakeForm[K]) {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "supplierCost" && value !== current.supplierCost) {
+        next.supplierCostConfirmed = false;
+        next.supplierCostConfirmedAt = null;
+        next.confirmedFields = next.confirmedFields.filter(
+          (field) => field !== "supplier cost confirmation",
+        );
+      }
+      if (key === "stockStatus" && value !== current.stockStatus) {
+        next.stockConfirmed = false;
+        next.stockConfirmedAt = null;
+        next.confirmedFields = next.confirmedFields.filter(
+          (field) => field !== "current supplier stock before approval",
+        );
+      }
+      return next;
+    });
+    setHasUnsavedChanges(true);
   }
 
   function applySupplier(supplier: StoreSupplier | null) {
@@ -745,6 +763,7 @@ function StoreInventoryIntake() {
         profileId: defaultProfile?.id ?? null,
       }),
     );
+    setHasUnsavedChanges(true);
   }
 
   async function loadOperationsBook() {
@@ -880,6 +899,8 @@ function StoreInventoryIntake() {
         profiles.find((profile) => profile.supplier_id === dmc?.id && profile.is_active),
       ),
     );
+    setHasUnsavedChanges(false);
+    setAdvancedOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -893,6 +914,8 @@ function StoreInventoryIntake() {
     setSupplierRecognitionMessage(
       "DMC Wholesale selected. Import the public supplier page to populate verified fields.",
     );
+    setHasUnsavedChanges(true);
+    setAdvancedOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -1029,6 +1052,9 @@ function StoreInventoryIntake() {
         imageUrls: payload.imageUrls.length > 0 ? payload.imageUrls : current.imageUrls,
         supplierCost:
           payload.supplierCost == null ? current.supplierCost : String(payload.supplierCost),
+        supplierCostConfirmed: payload.supplierCost == null ? current.supplierCostConfirmed : false,
+        supplierCostConfirmedAt:
+          payload.supplierCost == null ? current.supplierCostConfirmedAt : null,
         supplierCostConfidence: payload.supplierCostConfidence,
         supplierCostSourceLabel: payload.supplierCostSourceLabel ?? "",
         supplierRrp:
@@ -1040,6 +1066,8 @@ function StoreInventoryIntake() {
             : String(payload.supplierSalePrice),
         supplierSalePriceSourceLabel: payload.supplierSalePriceSourceLabel ?? "",
         stockStatus: payload.stockStatus === "unknown" ? current.stockStatus : payload.stockStatus,
+        stockConfirmed: payload.stockStatus === "unknown" ? current.stockConfirmed : false,
+        stockConfirmedAt: payload.stockStatus === "unknown" ? current.stockConfirmedAt : null,
         syncStatus: payload.stockStatus === "unknown" ? current.syncStatus : "manual",
         importTrace: payload.importTrace,
         fieldsRequiringConfirmation: Array.from(
@@ -1058,6 +1086,7 @@ function StoreInventoryIntake() {
           .filter(Boolean)
           .join("\n"),
       }));
+      setHasUnsavedChanges(true);
       toast.success(
         "Available page details were added for review. Confirm every flagged field before approval.",
       );
@@ -1292,7 +1321,7 @@ function StoreInventoryIntake() {
       variants: form.variants,
       supplier_category: form.supplierCategory.trim() || null,
       category: form.category.trim() || null,
-      brand: form.brand.trim() || "Cossa Store",
+      brand: form.brand.trim() || null,
       image_urls: form.imageUrls,
       affiliate_url:
         form.businessModel === "affiliate" || form.businessModel === "marketplace"
@@ -1332,15 +1361,14 @@ function StoreInventoryIntake() {
       market_price_source_url: form.marketPriceSourceUrl.trim() || null,
       market_price_notes: form.marketPriceNotes.trim() || null,
       approval_status: status,
-      last_price_checked_at: toIso(form.lastPriceCheckedAt),
-      last_stock_checked_at: toIso(form.lastStockCheckedAt),
+      supplier_cost_confirmed: form.supplierCostConfirmed,
+      stock_confirmed: form.stockConfirmed,
       operational_notes: form.operationalNotes.trim() || null,
     };
   }
 
   function validateFor(status: IntakeStatus): string | null {
     if (!organisationId) return "Your Cossa organisation could not be identified.";
-    if (!form.name.trim()) return "Product title is required.";
     if (!form.sourceUrl.trim()) return "A real supplier product URL is required.";
     try {
       const url = new URL(form.sourceUrl);
@@ -1348,20 +1376,18 @@ function StoreInventoryIntake() {
     } catch {
       return "Use a complete http or https supplier product URL.";
     }
-    if (!form.supplierId) return "Select the product's supplier or partner.";
-    if (!form.fulfilmentProfileId) return "Select or create a supplier fulfilment profile.";
-    if (num(form.supplierCost) == null && form.businessModel !== "affiliate") {
-      return "Enter the confirmed supplier cost.";
+    if (status === "review" && !form.supplierId) {
+      return "Select the product's supplier or partner before saving for review.";
     }
-    if (!validNonNegativeNumber(num(form.markupPercent))) {
+    const missing =
+      status === "approved"
+        ? readiness.approvalMissing
+        : status === "draft"
+          ? readiness.draftMissing
+          : [];
+    if (missing.length) return `Needs attention: ${missing.map((item) => item.label).join("; ")}.`;
+    if (!validNonNegativeNumber(num(form.markupPercent)))
       return "Enter a valid markup percentage of zero or more.";
-    }
-    if (status === "approved" && unconfirmedFields.length > 0) {
-      return "Confirm every flagged field before approval.";
-    }
-    if (status === "approved" && !form.confirmedFields.includes("supplier cost confirmation")) {
-      return "Supplier cost requires manual confirmation before approval.";
-    }
     if (status === "published") {
       return "Publishing integration pending production catalogue review.";
     }
@@ -1425,6 +1451,7 @@ function StoreInventoryIntake() {
         lifecycle: status,
         fieldsRequiringConfirmation: remainingFields,
       }));
+      setHasUnsavedChanges(false);
       await loadOperationsBook();
       toast.success(
         status === "review"
@@ -1446,6 +1473,58 @@ function StoreInventoryIntake() {
     }
   }
 
+  async function confirmCurrentSupplierValue(kind: "cost" | "stock") {
+    if (!form.sourceId) {
+      toast.error(
+        "Save this imported product for review before recording an auditable confirmation.",
+      );
+      return;
+    }
+    if (kind === "cost" && num(form.supplierCost) == null) {
+      toast.error("Enter the supplier cost before confirming it.");
+      return;
+    }
+    if (kind === "stock" && form.stockStatus !== "available") {
+      toast.error("Set supplier stock to Available before confirming current supplier stock.");
+      return;
+    }
+
+    const confirmationField =
+      kind === "cost" ? "supplier cost confirmation" : "current supplier stock before approval";
+    const remainingFields = form.fieldsRequiringConfirmation.filter(
+      (field) => field !== confirmationField,
+    );
+    const payload =
+      kind === "cost"
+        ? {
+            supplier_cost_confirmed: true,
+            fields_requiring_confirmation: remainingFields,
+          }
+        : {
+            stock_confirmed: true,
+            stock_status: "available" as StockStatus,
+            sync_status: "verified" as SyncStatus,
+            fields_requiring_confirmation: remainingFields,
+          };
+    const { data, error } = await db
+      .from<ProductSource>("store_inventory_intakes")
+      .update(payload)
+      .eq("id", form.sourceId)
+      .select("*")
+      .single();
+    if (error || !data) {
+      toast.error(`Could not record confirmation: ${error?.message ?? "Unknown error"}`);
+      return;
+    }
+    openSource(data);
+    await loadOperationsBook();
+    toast.success(
+      kind === "cost"
+        ? `Supplier cost ${money(num(form.supplierCost))} confirmed with a server timestamp.`
+        : "Current supplier stock confirmed with a server timestamp.",
+    );
+  }
+
   function openSource(source: ProductSource) {
     const product = productFromIntake(source);
     setForm({
@@ -1463,7 +1542,7 @@ function StoreInventoryIntake() {
       variants: importedVariantRows(source.variants),
       supplierCategory: source.supplier_category ?? "",
       category: product.category ?? "",
-      brand: product.brand ?? "Cossa Store",
+      brand: product.brand ?? "",
       imageUrls: product.image_urls ?? [],
       manualImageUrl: "",
       supplierId: source.supplier_id,
@@ -1507,13 +1586,19 @@ function StoreInventoryIntake() {
             : "no",
       returnsProfileOverride: source.returns_profile_override ?? "",
       warrantyProfileOverride: source.warranty_profile_override ?? "",
-      lastPriceCheckedAt: dateTimeInput(source.last_price_checked_at),
-      lastStockCheckedAt: dateTimeInput(source.last_stock_checked_at),
+      supplierCostConfirmed: source.supplier_cost_confirmed ?? false,
+      supplierCostConfirmedAt: source.supplier_cost_confirmed_at,
+      stockConfirmed: source.stock_confirmed ?? false,
+      stockConfirmedAt: source.stock_confirmed_at,
       operationalNotes: source.operational_notes ?? "",
       fieldsRequiringConfirmation: strings(source.fields_requiring_confirmation),
-      confirmedFields: [],
+      confirmedFields: [
+        ...(source.supplier_cost_confirmed ? ["supplier cost confirmation"] : []),
+        ...(source.stock_confirmed ? ["current supplier stock before approval"] : []),
+      ],
       importTrace: importTraceRows(source.import_trace),
     });
+    setHasUnsavedChanges(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -1658,7 +1743,9 @@ function StoreInventoryIntake() {
                 <h2 className="font-display text-xl font-semibold">
                   {form.productId ? "Continue intake" : "Start a product intake"}
                 </h2>
-                <InformationStatusBadge needsInformation={sectionWarnings.intake} />
+                <InformationStatusBadge
+                  missingItems={readiness.draftMissing.map((item) => item.label)}
+                />
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 URL imports never publish. This internal workflow ends at approval while the
@@ -1670,14 +1757,17 @@ function StoreInventoryIntake() {
             </span>
           </div>
 
-          {incompleteSectionLabels.length ? (
+          {readiness.draftMissing.length ? (
             <div className="mt-5 flex items-start gap-2 rounded-xl border border-destructive/45 bg-destructive/10 p-4 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>
-                <strong>Information still needed:</strong> {incompleteSectionLabels.join(", ")}.
-                These red section labels remain until the missing information is supplied or
-                manually confirmed.
-              </p>
+              <div>
+                <p className="font-semibold">Needs attention</p>
+                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs">
+                  {readiness.draftMissing.map((item) => (
+                    <li key={item.id}>{item.label}</li>
+                  ))}
+                </ul>
+              </div>
             </div>
           ) : null}
 
@@ -1717,6 +1807,49 @@ function StoreInventoryIntake() {
               </p>
             ) : null}
           </div>
+
+          <div className="mt-5 rounded-xl border border-primary/25 bg-primary/5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold">Product readiness</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {readiness.approvalReady
+                    ? "Ready for approval"
+                    : readiness.draftReady
+                      ? "Ready for draft — confirm cost and current stock before approval"
+                      : `${readiness.items.filter((item) => item.requiredBefore).filter((item) => item.satisfied).length}/${readiness.items.filter((item) => item.requiredBefore).length} required items ready`}
+                </p>
+              </div>
+              {readiness.draftReady ? (
+                <CheckCircle2 className="h-5 w-5 text-primary" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              )}
+            </div>
+            <div className="mt-3 grid gap-1 text-xs sm:grid-cols-2">
+              {readiness.items
+                .filter((item) => item.requiredBefore)
+                .map((item) => (
+                  <p
+                    key={item.id}
+                    className={
+                      item.satisfied ? "text-muted-foreground" : "font-medium text-destructive"
+                    }
+                  >
+                    {item.satisfied ? "✓" : "•"}{" "}
+                    {item.satisfied
+                      ? item.label.replace(/^Select a recognised supplier$/, "Supplier recognised")
+                      : item.label}
+                  </p>
+                ))}
+            </div>
+          </div>
+
+          {hasUnsavedChanges ? (
+            <p className="mt-3 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
+              Unsaved changes — save for review before leaving this page.
+            </p>
+          ) : null}
 
           <div className="mt-7 grid gap-4 sm:grid-cols-2">
             <Field label="Product title" className="sm:col-span-2">
@@ -1763,11 +1896,12 @@ function StoreInventoryIntake() {
                 </Button>
               </div>
             ) : null}
-            <Field label="Brand">
+            <Field label="Brand (optional)">
               <input
                 className={inputClass}
                 value={form.brand}
                 onChange={(event) => update("brand", event.target.value)}
+                placeholder="Unbranded / Generic when the supplier gives no verified brand"
               />
             </Field>
             <Field label="Supplier / partner">
@@ -1891,7 +2025,11 @@ function StoreInventoryIntake() {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-semibold">Product images</h3>
-                  <InformationStatusBadge needsInformation={sectionWarnings.images} />
+                  <InformationStatusBadge
+                    missingItems={readiness.draftMissing
+                      .filter((item) => item.id === "images")
+                      .map((item) => item.label)}
+                  />
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Use a supplier-provided image URL or upload a permitted image file. The first
@@ -1978,7 +2116,11 @@ function StoreInventoryIntake() {
           <div className="mt-7 border-t border-border/60 pt-6">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold">Pricing &amp; competitive check</h3>
-              <InformationStatusBadge needsInformation={sectionWarnings.pricing} />
+              <InformationStatusBadge
+                missingItems={readiness.draftMissing
+                  .filter((item) => item.id === "supplier-cost" || item.id === "final-price")
+                  .map((item) => item.label)}
+              />
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               Choose a competitive starting point or type any valid markup. Markup and gross margin
@@ -2077,8 +2219,13 @@ function StoreInventoryIntake() {
             </div>
             <div className="mt-3 grid gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm sm:grid-cols-3">
               <div>
-                <p className="text-xs text-muted-foreground">Calculated selling price</p>
-                <p className="mt-1 font-semibold">{money(calculatedPrice)}</p>
+                <p className="text-xs text-muted-foreground">Final selling price</p>
+                <p className="mt-1 text-lg font-semibold">{money(sellingPrice)}</p>
+                {num(form.priceOverride) != null ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Preset calculation: {money(calculatedPrice)}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Gross product profit</p>
@@ -2151,20 +2298,27 @@ function StoreInventoryIntake() {
             </div>
           </div>
 
-          <details className="mt-7 border-t border-border/60 pt-6">
+          <details
+            className="mt-7 border-t border-border/60 pt-6"
+            open={advancedOpen}
+            onToggle={(event) => setAdvancedOpen((event.target as HTMLDetailsElement).open)}
+          >
             <summary className="cursor-pointer list-none rounded-xl border border-border/60 bg-card/40 p-4 transition hover:border-primary/35">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-semibold">Advanced / Operational Details</h3>
-                    <InformationStatusBadge needsInformation={sectionWarnings.operations} />
+                    <InformationStatusBadge
+                      missingItems={readiness.operationalMissing.map((item) => item.label)}
+                    />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Supplier defaults, fulfilment rules and product-specific overrides. These remain
-                    internal.
+                    {readiness.operationalMissing.length
+                      ? `Needs attention: ${readiness.operationalMissing.map((item) => item.label).join("; ")}.`
+                      : "Operational details ✓ Ready — supplier defaults are inherited and remain internal."}
                   </p>
                 </div>
-                <span className="text-xs text-primary">Expand only when this product differs</span>
+                <span className="text-xs text-primary">Change only when this product differs</span>
               </div>
             </summary>
             <div className="pt-4">
@@ -2236,36 +2390,20 @@ function StoreInventoryIntake() {
                     <option value="unknown">Unknown</option>
                   </select>
                 </Field>
-                <Field label="Price check date &amp; time">
-                  <input
-                    className={inputClass}
-                    type="datetime-local"
-                    value={form.lastPriceCheckedAt}
-                    onChange={(event) => update("lastPriceCheckedAt", event.target.value)}
-                  />
-                </Field>
-                <Field label="Stock check date &amp; time">
-                  <input
-                    className={inputClass}
-                    type="datetime-local"
-                    value={form.lastStockCheckedAt}
-                    onChange={(event) => update("lastStockCheckedAt", event.target.value)}
-                  />
-                </Field>
-                <Field label="Stock / sync status" className="sm:col-span-2">
-                  <select
-                    className={inputClass}
-                    value={form.syncStatus}
-                    onChange={(event) => update("syncStatus", event.target.value as SyncStatus)}
-                  >
-                    <option value="not_connected">Not connected — manual check required</option>
-                    <option value="manual">Manually recorded</option>
-                    <option value="verified">Verified from a current source</option>
-                    <option value="stale">Needs re-checking</option>
-                    <option value="failed">Last check failed</option>
-                    <option value="unknown">Unknown</option>
-                  </select>
-                </Field>
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-3 text-xs sm:col-span-2">
+                  <p className="font-medium">Verification timestamps are recorded by the server</p>
+                  <p className="mt-1 text-muted-foreground">
+                    Cost:{" "}
+                    {form.supplierCostConfirmedAt
+                      ? new Date(form.supplierCostConfirmedAt).toLocaleString("en-ZA")
+                      : "Not yet confirmed"}
+                    {" · "}
+                    Stock:{" "}
+                    {form.stockConfirmedAt
+                      ? new Date(form.stockConfirmedAt).toLocaleString("en-ZA")
+                      : "Not yet confirmed"}
+                  </p>
+                </div>
               </div>
 
               {selectedProfile ? (
@@ -2408,7 +2546,14 @@ function StoreInventoryIntake() {
           <div className="mt-7 border-t border-border/60 pt-6">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold">Review notes &amp; confirmations</h3>
-              <InformationStatusBadge needsInformation={sectionWarnings.review} />
+              <InformationStatusBadge
+                missingItems={readiness.approvalMissing
+                  .filter(
+                    (item) =>
+                      item.id === "supplier-cost-confirmation" || item.id === "stock-confirmation",
+                  )
+                  .map((item) => item.label)}
+              />
             </div>
             <Field label="Operational notes" className="mt-4">
               <textarea
@@ -2418,45 +2563,50 @@ function StoreInventoryIntake() {
                 placeholder="Record supplier constraints, delivery checks, licence notes, colour/variant limitations or a review decision."
               />
             </Field>
-            {form.fieldsRequiringConfirmation.length ? (
-              <div className="mt-4 rounded-xl border border-warning/40 bg-warning/5 p-4">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 text-warning" />
-                  <div>
-                    <p className="text-sm font-semibold">Manual confirmation required</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Check each item only after you have verified it. Approval stays blocked while
-                      any item remains unchecked.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 space-y-2">
-                  {form.fieldsRequiringConfirmation.map((field) => (
-                    <label key={field} className="flex cursor-pointer items-start gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
-                        checked={form.confirmedFields.includes(field)}
-                        onChange={(event) =>
-                          update(
-                            "confirmedFields",
-                            event.target.checked
-                              ? [...form.confirmedFields, field]
-                              : form.confirmedFields.filter((item) => item !== field),
-                          )
-                        }
-                      />
-                      <span>{field}</span>
-                    </label>
-                  ))}
+            <div className="mt-4 rounded-xl border border-warning/40 bg-warning/5 p-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 text-warning" />
+                <div>
+                  <p className="text-sm font-semibold">Two deliberate confirmations</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    These actions record a trusted server timestamp. They never publish the product.
+                  </p>
                 </div>
               </div>
-            ) : (
-              <div className="mt-4 flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
-                <CheckCircle2 className="h-4 w-4 text-primary" /> No outstanding import
-                confirmations.
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={form.supplierCostConfirmed ? "outline" : "default"}
+                  disabled={form.supplierCostConfirmed || !form.sourceId}
+                  onClick={() => void confirmCurrentSupplierValue("cost")}
+                >
+                  <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                  {form.supplierCostConfirmed
+                    ? "Supplier cost confirmed"
+                    : `Confirm supplier cost ${money(num(form.supplierCost))}`}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={form.stockConfirmed ? "outline" : "default"}
+                  disabled={
+                    form.stockConfirmed || !form.sourceId || form.stockStatus !== "available"
+                  }
+                  onClick={() => void confirmCurrentSupplierValue("stock")}
+                >
+                  <CheckCircle2 className="mr-1.5 h-4 w-4" />
+                  {form.stockConfirmed
+                    ? "Current supplier stock confirmed"
+                    : "Confirm current supplier stock"}
+                </Button>
               </div>
-            )}
+              {!form.sourceId ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Save for review first; then confirmations can be audited.
+                </p>
+              ) : null}
+            </div>
           </div>
 
           {form.sourceId ? (
@@ -2519,7 +2669,7 @@ function StoreInventoryIntake() {
             {form.sourceId && form.lifecycle === "draft" ? (
               <Button
                 variant="outline"
-                disabled={saving || unconfirmedFields.length > 0}
+                disabled={saving || !readiness.approvalReady}
                 onClick={() => void saveIntake("approved")}
               >
                 <CheckCircle2 className="mr-1.5 h-4 w-4" /> Approve
