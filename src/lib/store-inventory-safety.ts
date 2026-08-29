@@ -22,8 +22,9 @@ export function saveStatusForInventoryIntake(
 }
 
 export function canPublishInventoryLifecycle(currentStatus: string): boolean {
-  // Publication is intentionally held back while catalogue sync is reviewed.
-  return currentStatus === "approved" && false;
+  // The publication bridge remains the only execution path. This guard merely
+  // exposes the approved state as eligible to start its server-side preflight.
+  return currentStatus === "approved";
 }
 
 export function customerSafeStoreProjection(input: {

@@ -48,6 +48,7 @@ export interface DynamicQuery<T = DynamicRow> extends PromiseLike<DynamicListRes
   not(column: string, operator: string, value: unknown): DynamicQuery<T>;
   order(column: string, options?: DynamicOrderOptions): DynamicQuery<T>;
   limit(count: number): DynamicQuery<T>;
+  range(from: number, to: number): DynamicQuery<T>;
   single(): DynamicSingleQuery<T>;
   maybeSingle(): DynamicSingleQuery<T>;
 }

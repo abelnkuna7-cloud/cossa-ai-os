@@ -74,10 +74,10 @@ test("supplier selection inherits registry defaults and profile", () => {
   });
 });
 
-test("lifecycle blocks publication while catalogue integration is disabled", () => {
+test("only an approved intake is eligible to start the controlled publication preflight", () => {
   assert.equal(canPublishInventoryLifecycle("imported"), false);
   assert.equal(canPublishInventoryLifecycle("review"), false);
-  assert.equal(canPublishInventoryLifecycle("approved"), false);
+  assert.equal(canPublishInventoryLifecycle("approved"), true);
 });
 
 test("approved intake edits retain approved status and cannot move backwards", () => {

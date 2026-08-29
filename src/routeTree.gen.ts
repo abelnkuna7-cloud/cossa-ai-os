@@ -87,6 +87,7 @@ import { Route as BusinessesFacilityServicesRouteImport } from './routes/busines
 import { Route as BusinessesConstructionRouteImport } from './routes/businesses.construction'
 import { Route as ApiWebsiteHealthRouteImport } from './routes/api/website-health'
 import { Route as ApiStoreProductImportRouteImport } from './routes/api.store-product-import'
+import { Route as ApiStoreInventoryPublicationRouteImport } from './routes/api.store-inventory-publication'
 import { Route as ApiPlatformAnalyticsRouteImport } from './routes/api/platform-analytics'
 import { Route as ApiGrowthAnalyticsRouteImport } from './routes/api/growth-analytics'
 import { Route as ApiFathomWebhookRouteImport } from './routes/api/fathom-webhook'
@@ -518,6 +519,12 @@ const ApiStoreProductImportRoute = ApiStoreProductImportRouteImport.update({
   path: '/api/store-product-import',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiStoreInventoryPublicationRoute =
+  ApiStoreInventoryPublicationRouteImport.update({
+    id: '/api/store-inventory-publication',
+    path: '/api/store-inventory-publication',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPlatformAnalyticsRoute = ApiPlatformAnalyticsRouteImport.update({
   id: '/api/platform-analytics',
   path: '/api/platform-analytics',
@@ -745,6 +752,7 @@ export interface FileRoutesByFullPath {
   '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
+  '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/businesses/construction': typeof BusinessesConstructionRoute
@@ -859,6 +867,7 @@ export interface FileRoutesByTo {
   '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
+  '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/businesses/construction': typeof BusinessesConstructionRoute
@@ -974,6 +983,7 @@ export interface FileRoutesById {
   '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
+  '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/businesses/construction': typeof BusinessesConstructionRoute
@@ -1090,6 +1100,7 @@ export interface FileRouteTypes {
     | '/api/fathom-webhook'
     | '/api/growth-analytics'
     | '/api/platform-analytics'
+    | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
     | '/businesses/construction'
@@ -1204,6 +1215,7 @@ export interface FileRouteTypes {
     | '/api/fathom-webhook'
     | '/api/growth-analytics'
     | '/api/platform-analytics'
+    | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
     | '/businesses/construction'
@@ -1318,6 +1330,7 @@ export interface FileRouteTypes {
     | '/api/fathom-webhook'
     | '/api/growth-analytics'
     | '/api/platform-analytics'
+    | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
     | '/businesses/construction'
@@ -1433,6 +1446,7 @@ export interface RootRouteChildren {
   ApiFathomWebhookRoute: typeof ApiFathomWebhookRoute
   ApiGrowthAnalyticsRoute: typeof ApiGrowthAnalyticsRouteWithChildren
   ApiPlatformAnalyticsRoute: typeof ApiPlatformAnalyticsRoute
+  ApiStoreInventoryPublicationRoute: typeof ApiStoreInventoryPublicationRoute
   ApiStoreProductImportRoute: typeof ApiStoreProductImportRoute
   ApiWebsiteHealthRoute: typeof ApiWebsiteHealthRoute
   BusinessesConstructionRoute: typeof BusinessesConstructionRoute
@@ -2041,6 +2055,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiStoreProductImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/store-inventory-publication': {
+      id: '/api/store-inventory-publication'
+      path: '/api/store-inventory-publication'
+      fullPath: '/api/store-inventory-publication'
+      preLoaderRoute: typeof ApiStoreInventoryPublicationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/platform-analytics': {
       id: '/api/platform-analytics'
       path: '/api/platform-analytics'
@@ -2359,6 +2380,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiFathomWebhookRoute: ApiFathomWebhookRoute,
   ApiGrowthAnalyticsRoute: ApiGrowthAnalyticsRouteWithChildren,
   ApiPlatformAnalyticsRoute: ApiPlatformAnalyticsRoute,
+  ApiStoreInventoryPublicationRoute: ApiStoreInventoryPublicationRoute,
   ApiStoreProductImportRoute: ApiStoreProductImportRoute,
   ApiWebsiteHealthRoute: ApiWebsiteHealthRoute,
   BusinessesConstructionRoute: BusinessesConstructionRoute,

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronRight,
+  Eye,
   ExternalLink,
   ImagePlus,
   Link2,
@@ -39,6 +40,11 @@ import {
   compareCatalogueSnapshots,
   type CatalogueSnapshotItem,
 } from "@/lib/store-catalogue-snapshot";
+import {
+  normalisePublicationPreflight,
+  previewHasNoInternalFields,
+  type PublicationPreflight,
+} from "@/lib/store-inventory-publication";
 import {
   findPotentialSupplierDuplicate,
   supplierForSourceUrl,
@@ -204,6 +210,9 @@ type ProductSource = {
   supplier_cost_confirmed_at: string | null;
   stock_confirmed: boolean;
   stock_confirmed_at: string | null;
+  publication_store_product_id: string | null;
+  published_at: string | null;
+  last_unpublished_at: string | null;
   last_price_checked_at: string | null;
   last_stock_checked_at: string | null;
   operational_notes: string | null;
@@ -581,6 +590,10 @@ function StoreInventoryIntake() {
     (CatalogueSnapshotItem & { snapshot_id: string })[]
   >([]);
   const [snapshotting, setSnapshotting] = useState(false);
+  const [publicationPreview, setPublicationPreview] = useState<PublicationPreflight | null>(null);
+  const [publicationLoading, setPublicationLoading] = useState<
+    "preview" | "publish" | "unpublish" | null
+  >(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [supplierRecognitionMessage, setSupplierRecognitionMessage] = useState<string | null>(null);
@@ -702,6 +715,17 @@ function StoreInventoryIntake() {
     );
   }, [snapshotItems, snapshots]);
 
+  const snapshotComparisonLabel = useMemo(() => {
+    if (snapshots.length < 2) return null;
+    const [latest, previous] = snapshots;
+    return {
+      latest,
+      previous,
+      latestItems: snapshotItems.filter((item) => item.snapshot_id === latest.id).length,
+      previousItems: snapshotItems.filter((item) => item.snapshot_id === previous.id).length,
+    };
+  }, [snapshotItems, snapshots]);
+
   useEffect(() => {
     void loadOperationsBook();
   }, []);
@@ -740,6 +764,7 @@ function StoreInventoryIntake() {
       return next;
     });
     setHasUnsavedChanges(true);
+    setPublicationPreview(null);
   }
 
   function applySupplier(supplier: StoreSupplier | null) {
@@ -775,8 +800,11 @@ function StoreInventoryIntake() {
         profileResult,
         categoryMappingResult,
         sourceResult,
-        sourceCatalogueResult,
-        publicCatalogueResult,
+        sourceCatalogueCountResult,
+        activeCatalogueCountResult,
+        draftCatalogueCountResult,
+        archivedCatalogueCountResult,
+        publicCatalogueCountResult,
         snapshotResult,
         lifecycleHistoryResult,
       ] = await Promise.all([
@@ -791,8 +819,22 @@ function StoreInventoryIntake() {
           .from<ProductSource>("store_inventory_intakes")
           .select("*")
           .order("created_at", { ascending: false }),
-        db.from<CatalogueCountRow>("store_products").select("id,status"),
-        db.from<{ id: string }>("store_public_products").select("id"),
+        db.from<CatalogueCountRow>("store_products").select("id", { count: "exact", head: true }),
+        db
+          .from<CatalogueCountRow>("store_products")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "active"),
+        db
+          .from<CatalogueCountRow>("store_products")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "draft"),
+        db
+          .from<CatalogueCountRow>("store_products")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "archived"),
+        db
+          .from<{ id: string }>("store_public_products")
+          .select("id", { count: "exact", head: true }),
         db
           .from<CatalogueSnapshot>("store_catalogue_snapshots")
           .select("*")
@@ -810,8 +852,11 @@ function StoreInventoryIntake() {
         profileResult.error ??
         categoryMappingResult.error ??
         sourceResult.error ??
-        sourceCatalogueResult.error ??
-        publicCatalogueResult.error ??
+        sourceCatalogueCountResult.error ??
+        activeCatalogueCountResult.error ??
+        draftCatalogueCountResult.error ??
+        archivedCatalogueCountResult.error ??
+        publicCatalogueCountResult.error ??
         snapshotResult.error ??
         lifecycleHistoryResult.error;
       if (error) {
@@ -830,26 +875,20 @@ function StoreInventoryIntake() {
       const nextSources = sourceResult.data ?? [];
       setSources(nextSources);
       setLifecycleHistory(lifecycleHistoryResult.data ?? []);
-      const sourceCatalogue = sourceCatalogueResult.data ?? [];
       setCatalogueCounts({
-        source: sourceCatalogue.length,
-        active: sourceCatalogue.filter((product) => product.status === "active").length,
-        draft: sourceCatalogue.filter((product) => product.status === "draft").length,
-        archived: sourceCatalogue.filter((product) => product.status === "archived").length,
-        publicCount: (publicCatalogueResult.data ?? []).length,
+        source: sourceCatalogueCountResult.count ?? 0,
+        active: activeCatalogueCountResult.count ?? 0,
+        draft: draftCatalogueCountResult.count ?? 0,
+        archived: archivedCatalogueCountResult.count ?? 0,
+        publicCount: publicCatalogueCountResult.count ?? 0,
       });
       const nextSnapshots = snapshotResult.data ?? [];
       setSnapshots(nextSnapshots);
       if (nextSnapshots.length) {
-        const { data: items, error: itemError } = await db
-          .from<CatalogueSnapshotItem & { snapshot_id: string }>("store_catalogue_snapshot_items")
-          .select("snapshot_id,product_id,sku,slug,source_status,public_present")
-          .in(
-            "snapshot_id",
-            nextSnapshots.map((snapshot) => snapshot.id),
-          );
-        if (itemError) throw new Error(itemError.message);
-        setSnapshotItems(items ?? []);
+        const itemPages = await Promise.all(
+          nextSnapshots.map((snapshot) => loadCompleteSnapshotItems(snapshot.id)),
+        );
+        setSnapshotItems(itemPages.flat());
       } else {
         setSnapshotItems([]);
       }
@@ -870,6 +909,23 @@ function StoreInventoryIntake() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadCompleteSnapshotItems(snapshotId: string) {
+    const pageSize = 1000;
+    const complete: (CatalogueSnapshotItem & { snapshot_id: string })[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await db
+        .from<CatalogueSnapshotItem & { snapshot_id: string }>("store_catalogue_snapshot_items")
+        .select("snapshot_id,product_id,sku,slug,source_status,public_present")
+        .eq("snapshot_id", snapshotId)
+        .order("product_id")
+        .range(from, from + pageSize - 1);
+      if (error) throw new Error(error.message);
+      const page = data ?? [];
+      complete.push(...page);
+      if (page.length < pageSize) return complete;
     }
   }
 
@@ -1525,6 +1581,90 @@ function StoreInventoryIntake() {
     );
   }
 
+  async function runPublicationAction(action: "preview" | "publish" | "unpublish") {
+    if (!form.sourceId) {
+      toast.error("Save and approve this intake before preparing a Store preview.");
+      return;
+    }
+    if (hasUnsavedChanges) {
+      toast.error("Save the current changes before generating the Store preview.");
+      return;
+    }
+    if (action === "publish" && !publicationPreview?.ready) {
+      toast.error("Run the customer-facing Store preflight before publishing.");
+      return;
+    }
+    if (
+      action === "publish" &&
+      !window.confirm(
+        "Publish this approved product to the live Cossa Store now? This creates or activates one public product only.",
+      )
+    ) {
+      return;
+    }
+    if (
+      action === "unpublish" &&
+      !window.confirm(
+        "Remove this product from the live Store? Its internal intake and canonical Store product will be preserved for audit and safe re-publication.",
+      )
+    ) {
+      return;
+    }
+
+    setPublicationLoading(action);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Sign in again before using Store publication controls.");
+      const response = await fetch("/api/store-inventory-publication", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action, intakeId: form.sourceId }),
+      });
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          body && typeof body === "object" && "error" in body && typeof body.error === "string"
+            ? body.error
+            : "The controlled Store action could not be completed.";
+        throw new Error(message);
+      }
+
+      if (action === "preview") {
+        const nextPreview = normalisePublicationPreflight(body);
+        if (!previewHasNoInternalFields(body)) {
+          throw new Error("The Store preview was blocked because it contained internal data.");
+        }
+        setPublicationPreview(nextPreview);
+        toast.success(
+          nextPreview.ready
+            ? "Customer-facing preflight passed. Review the Store preview, then explicitly publish."
+            : "Store preflight found customer-facing items that still need attention.",
+        );
+        return;
+      }
+
+      setPublicationPreview(null);
+      await loadOperationsBook();
+      toast.success(
+        action === "publish"
+          ? "Store product published through the controlled bridge."
+          : "Product removed from Store; its internal record and audit trail remain.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "The controlled Store action could not be completed.",
+      );
+    } finally {
+      setPublicationLoading(null);
+    }
+  }
+
   function openSource(source: ProductSource) {
     const product = productFromIntake(source);
     setForm({
@@ -1599,6 +1739,7 @@ function StoreInventoryIntake() {
       importTrace: importTraceRows(source.import_trace),
     });
     setHasUnsavedChanges(false);
+    setPublicationPreview(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -1622,8 +1763,9 @@ function StoreInventoryIntake() {
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
               Paste a real supplier product link, review only the information the page actually
-              exposes, then move the product through review, draft, approval and publication.
-              Supplier identity and internal costs stay out of customer-facing product data.
+              exposes, then move the product through review, draft, approval and a separate CEO
+              publication action. Supplier identity and internal costs stay out of customer-facing
+              product data.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1710,11 +1852,32 @@ function StoreInventoryIntake() {
             </div>
           ))}
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">
-          {snapshots[0]
-            ? `Latest snapshot: ${new Date(snapshots[0].created_at).toLocaleString("en-ZA")} · integrity ${snapshots[0].integrity_status.toUpperCase()}.`
-            : "No previous snapshot available for comparison."}
-        </p>
+        <div className="mt-4 rounded-lg border border-border/60 bg-card/40 p-3 text-xs text-muted-foreground">
+          {snapshotComparisonLabel ? (
+            <>
+              <p>
+                <strong className="text-foreground">Current snapshot</strong>{" "}
+                {snapshotComparisonLabel.latest.id} ·{" "}
+                {new Date(snapshotComparisonLabel.latest.created_at).toLocaleString("en-ZA")} ·{" "}
+                {snapshotComparisonLabel.latestItems.toLocaleString("en-ZA")} captured products.
+              </p>
+              <p className="mt-1">
+                <strong className="text-foreground">Compared with</strong>{" "}
+                {snapshotComparisonLabel.previous.id} ·{" "}
+                {new Date(snapshotComparisonLabel.previous.created_at).toLocaleString("en-ZA")} ·{" "}
+                {snapshotComparisonLabel.previousItems.toLocaleString("en-ZA")} captured products.
+              </p>
+            </>
+          ) : snapshots[0] ? (
+            <p>
+              Latest snapshot: {new Date(snapshots[0].created_at).toLocaleString("en-ZA")} ·
+              integrity {snapshots[0].integrity_status.toUpperCase()}. Create one more snapshot for
+              an exact set comparison.
+            </p>
+          ) : (
+            <p>No previous snapshot available for comparison.</p>
+          )}
+        </div>
         {snapshotComparison && (
           <div className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4 lg:grid-cols-7">
             {[
@@ -1748,8 +1911,8 @@ function StoreInventoryIntake() {
                 />
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                URL imports never publish. This internal workflow ends at approval while the
-                customer catalogue integration is under separate production review.
+                URL imports never publish. An approved product must pass a separate customer-facing
+                preflight and receive an explicit CEO publication confirmation.
               </p>
             </div>
             <span className="inline-flex w-fit items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
@@ -2640,6 +2803,136 @@ function StoreInventoryIntake() {
             </details>
           ) : null}
 
+          {(form.lifecycle === "approved" || form.lifecycle === "published") && form.sourceId ? (
+            <section className="mt-5 rounded-xl border border-primary/30 bg-primary/5 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Customer Store preview</p>
+                  <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+                    This preview contains only customer-facing product information. It never
+                    includes supplier costs, margins, supplier administration or evidence notes.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={publicationLoading !== null || hasUnsavedChanges}
+                  onClick={() => void runPublicationAction("preview")}
+                >
+                  {publicationLoading === "preview" ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Eye className="mr-1.5 h-4 w-4" />
+                  )}
+                  Preview for Store
+                </Button>
+              </div>
+
+              {publicationPreview ? (
+                <div className="mt-4 rounded-xl border border-border/60 bg-background/80 p-4">
+                  {publicationPreview.blockers.length ? (
+                    <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                      <p className="font-semibold">Not ready to publish</p>
+                      <ul className="mt-2 list-disc space-y-1 pl-4">
+                        {publicationPreview.blockers.map((blocker) => (
+                          <li key={blocker.code}>{blocker.message}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs text-primary">
+                      <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" /> Ready to publish
+                    </div>
+                  )}
+                  {publicationPreview.customer ? (
+                    <div className="mt-4 grid gap-4 lg:grid-cols-[170px_minmax(0,1fr)]">
+                      <div>
+                        {publicationPreview.customer.imageUrls[0] ? (
+                          <img
+                            src={publicationPreview.customer.imageUrls[0]}
+                            alt={publicationPreview.customer.name}
+                            className="aspect-square w-full rounded-lg border border-border/60 object-cover"
+                          />
+                        ) : (
+                          <div className="flex aspect-square items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
+                            Main image required
+                          </div>
+                        )}
+                        {publicationPreview.customer.imageUrls.length > 1 ? (
+                          <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                            +{publicationPreview.customer.imageUrls.length - 1} additional image
+                            {publicationPreview.customer.imageUrls.length === 2 ? "" : "s"}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-primary">
+                          {publicationPreview.customer.category || "Cossa Store category"}
+                        </p>
+                        <h3 className="mt-1 font-display text-xl font-semibold">
+                          {publicationPreview.customer.name || "Product title required"}
+                        </h3>
+                        <p className="mt-1 text-lg font-semibold">
+                          {money(publicationPreview.customer.price)}
+                          {publicationPreview.customer.compareAtPrice ? (
+                            <span className="ml-2 text-sm font-normal text-muted-foreground line-through">
+                              {money(publicationPreview.customer.compareAtPrice)}
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {publicationPreview.customer.shortDescription}
+                        </p>
+                        <p className="mt-3 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
+                          {publicationPreview.customer.description}
+                        </p>
+                        {publicationPreview.customer.features.length ? (
+                          <ul className="mt-3 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                            {publicationPreview.customer.features.map((feature) => (
+                              <li key={feature}>✓ {feature}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {publicationPreview.customer.specifications ? (
+                          <p className="mt-3 whitespace-pre-line rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">
+                            {publicationPreview.customer.specifications}
+                          </p>
+                        ) : null}
+                        <div className="mt-3 space-y-2 rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">
+                          <p>
+                            <strong className="text-foreground">Availability:</strong>{" "}
+                            {publicationPreview.customer.availability ?? "Needs confirmation"}
+                          </p>
+                          <p>
+                            <strong className="text-foreground">Fulfilment:</strong>{" "}
+                            {publicationPreview.customer.fulfilmentLabel}
+                          </p>
+                          <p>{publicationPreview.customer.deliveryNotice}</p>
+                          {publicationPreview.customer.returnsNotice ? (
+                            <p>{publicationPreview.customer.returnsNotice}</p>
+                          ) : null}
+                          {publicationPreview.customer.warrantyNotice ? (
+                            <p>{publicationPreview.customer.warrantyNotice}</p>
+                          ) : null}
+                        </div>
+                        <p className="mt-3 text-[11px] text-muted-foreground">
+                          Store SKU: {publicationPreview.customer.sku || "Generated when ready"} ·
+                          URL: /product/
+                          {publicationPreview.customer.slug || "generated-when-ready"}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Generate the customer view before the final Store action. This does not change the
+                  catalogue.
+                </p>
+              )}
+            </section>
+          ) : null}
+
           <div className="mt-7 flex flex-wrap gap-2 border-t border-border/60 pt-6">
             <Button
               variant="outline"
@@ -2675,14 +2968,46 @@ function StoreInventoryIntake() {
                 <CheckCircle2 className="mr-1.5 h-4 w-4" /> Approve
               </Button>
             ) : null}
-            <div className="flex flex-col gap-1">
-              <Button disabled className="bg-muted text-muted-foreground">
-                <ExternalLink className="mr-1.5 h-4 w-4" /> Publish to Store
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                Publishing integration pending production catalogue review.
-              </p>
-            </div>
+            {form.sourceId && form.lifecycle === "approved" ? (
+              <div className="flex flex-col gap-1">
+                <Button
+                  disabled={
+                    !publicationPreview?.ready || publicationLoading !== null || hasUnsavedChanges
+                  }
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => void runPublicationAction("publish")}
+                >
+                  {publicationLoading === "publish" ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ExternalLink className="mr-1.5 h-4 w-4" />
+                  )}
+                  Publish to Store
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Available only after the customer-facing preflight passes and the CEO confirms.
+                </p>
+              </div>
+            ) : null}
+            {form.sourceId && form.lifecycle === "published" ? (
+              <div className="flex flex-col gap-1">
+                <Button
+                  variant="outline"
+                  disabled={publicationLoading !== null}
+                  onClick={() => void runPublicationAction("unpublish")}
+                >
+                  {publicationLoading === "unpublish" ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <AlertTriangle className="mr-1.5 h-4 w-4" />
+                  )}
+                  Remove from Store
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  This archives the public product and preserves its internal audit trail.
+                </p>
+              </div>
+            ) : null}
           </div>
         </div>
 
