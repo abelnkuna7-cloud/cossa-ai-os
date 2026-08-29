@@ -31,11 +31,16 @@ interface DynamicSelectOptions {
   head?: boolean;
 }
 
+interface DynamicUpsertOptions {
+  onConflict?: string;
+}
+
 export type DynamicSingleQuery<T> = PromiseLike<DynamicSingleResult<T>>;
 
 export interface DynamicQuery<T = DynamicRow> extends PromiseLike<DynamicListResult<T>> {
   select(columns?: string, options?: DynamicSelectOptions): DynamicQuery<T>;
   insert(values: object | object[]): DynamicQuery<T>;
+  upsert(values: object | object[], options?: DynamicUpsertOptions): DynamicQuery<T>;
   update(values: object): DynamicQuery<T>;
   delete(): DynamicQuery<T>;
   eq(column: string, value: unknown): DynamicQuery<T>;

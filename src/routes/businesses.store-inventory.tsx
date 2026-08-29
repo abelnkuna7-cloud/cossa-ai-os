@@ -34,6 +34,16 @@ import {
   compareCatalogueSnapshots,
   type CatalogueSnapshotItem,
 } from "@/lib/store-catalogue-snapshot";
+import {
+  supplierForSourceUrl,
+  supplierRegistryPayload,
+  type SupplierRegistryStatus,
+} from "@/lib/store-supplier-registry";
+import type {
+  ImportConfidence,
+  ImportedVariant,
+  ImportTrace,
+} from "@/lib/store-product-import.server";
 
 export const Route = createFileRoute("/businesses/store-inventory")({
   component: StoreInventoryIntake,
@@ -75,8 +85,21 @@ type StoreSupplier = {
   partner_type: string;
   business_model: BusinessModel;
   status: "active" | "pending" | "paused" | "rejected";
+  registry_status: SupplierRegistryStatus | null;
   stock_origin: string | null;
   source_url: string | null;
+  recognised_domains: unknown;
+  contact_information: string | null;
+  account_reference: string | null;
+  sku_terminology: string | null;
+  default_fulfilment_profile_code: string | null;
+  default_delivery_payer: DeliveryPayer | null;
+  default_free_shipping_eligible: boolean;
+  sync_method: string | null;
+  returns_notes: string | null;
+  warranty_notes: string | null;
+  pricing_import_notes: string | null;
+  agreement_policy_reference: string | null;
   operational_notes: string | null;
   last_verified_at: string | null;
 };
@@ -145,6 +168,16 @@ type ProductSource = {
   stock_status: StockStatus;
   sync_status: SyncStatus;
   supplier_cost: number | string | null;
+  supplier_cost_confidence: ImportConfidence;
+  supplier_cost_source_label: string | null;
+  supplier_rrp: number | string | null;
+  supplier_rrp_source_label: string | null;
+  supplier_sale_price: number | string | null;
+  supplier_sale_price_source_label: string | null;
+  supplier_category: string | null;
+  features: unknown;
+  variants: unknown;
+  import_trace: unknown;
   markup_percent: number | string | null;
   calculated_selling_price: number | string | null;
   selling_price_override: number | string | null;
@@ -164,6 +197,14 @@ type ProductSource = {
   last_price_checked_at: string | null;
   last_stock_checked_at: string | null;
   operational_notes: string | null;
+};
+
+type SupplierCategoryMapping = {
+  id: string;
+  organisation_id: string;
+  supplier_id: string;
+  supplier_category: string;
+  cossa_category: string;
 };
 
 type CatalogueSnapshot = {
@@ -214,6 +255,9 @@ type IntakeForm = {
   shortDescription: string;
   description: string;
   specifications: string;
+  features: string;
+  variants: ImportedVariant[];
+  supplierCategory: string;
   category: string;
   brand: string;
   imageUrls: string[];
@@ -225,6 +269,12 @@ type IntakeForm = {
   stockStatus: StockStatus;
   syncStatus: SyncStatus;
   supplierCost: string;
+  supplierCostConfidence: ImportConfidence;
+  supplierCostSourceLabel: string;
+  supplierRrp: string;
+  supplierRrpSourceLabel: string;
+  supplierSalePrice: string;
+  supplierSalePriceSourceLabel: string;
   markupPercent: string;
   priceOverride: string;
   compareAtPrice: string;
@@ -245,15 +295,29 @@ type IntakeForm = {
   operationalNotes: string;
   fieldsRequiringConfirmation: string[];
   confirmedFields: string[];
+  importTrace: ImportTrace[];
 };
 
 type SupplierDraft = {
   name: string;
   code: string;
-  businessModel: BusinessModel;
+  businessModel: BusinessModel | "fulfilment";
+  registryStatus: SupplierRegistryStatus;
   stockOrigin: string;
-  sourceUrl: string;
+  websiteUrl: string;
+  recognisedDomains: string;
+  contactInformation: string;
+  accountReference: string;
+  skuTerminology: string;
+  defaultFulfilmentProfileCode: string;
+  defaultDeliveryPayer: DeliveryPayer;
+  defaultFreeShippingEligible: boolean;
+  syncMethod: string;
+  returnsNotes: string;
+  warrantyNotes: string;
   operationalNotes: string;
+  pricingImportNotes: string;
+  agreementPolicyReference: string;
 };
 
 type ProfileDraft = {
@@ -278,9 +342,22 @@ const EMPTY_SUPPLIER: SupplierDraft = {
   name: "",
   code: "",
   businessModel: "dropship",
+  registryStatus: "candidate",
   stockOrigin: "",
-  sourceUrl: "",
+  websiteUrl: "",
+  recognisedDomains: "",
+  contactInformation: "",
+  accountReference: "",
+  skuTerminology: "",
+  defaultFulfilmentProfileCode: "",
+  defaultDeliveryPayer: "customer",
+  defaultFreeShippingEligible: false,
+  syncMethod: "manual supplier-page check",
+  returnsNotes: "",
+  warrantyNotes: "",
   operationalNotes: "",
+  pricingImportNotes: "",
+  agreementPolicyReference: "",
 };
 
 const EMPTY_PROFILE: ProfileDraft = {
@@ -308,6 +385,9 @@ function emptyForm(supplier?: StoreSupplier, profile?: FulfilmentProfile): Intak
     shortDescription: "",
     description: "",
     specifications: "",
+    features: "",
+    variants: [],
+    supplierCategory: "",
     category: "",
     brand: "Cossa Store",
     imageUrls: [],
@@ -319,6 +399,12 @@ function emptyForm(supplier?: StoreSupplier, profile?: FulfilmentProfile): Intak
     stockStatus: "not_checked",
     syncStatus: "not_connected",
     supplierCost: "",
+    supplierCostConfidence: "unconfirmed",
+    supplierCostSourceLabel: "",
+    supplierRrp: "",
+    supplierRrpSourceLabel: "",
+    supplierSalePrice: "",
+    supplierSalePriceSourceLabel: "",
     markupPercent: String(DEFAULT_MARKUP_PERCENT),
     priceOverride: "",
     compareAtPrice: "",
@@ -337,8 +423,12 @@ function emptyForm(supplier?: StoreSupplier, profile?: FulfilmentProfile): Intak
     lastPriceCheckedAt: "",
     lastStockCheckedAt: "",
     operationalNotes: "",
-    fieldsRequiringConfirmation: [],
+    fieldsRequiringConfirmation: [
+      "supplier cost confirmation",
+      "current supplier stock before approval",
+    ],
     confirmedFields: [],
+    importTrace: [],
   };
 }
 
@@ -349,23 +439,6 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 120);
-}
-
-function supplierForSourceUrl(suppliers: StoreSupplier[], sourceUrl: string): StoreSupplier | null {
-  try {
-    const hostname = new URL(sourceUrl).hostname.replace(/^www\./, "").toLowerCase();
-    return (
-      suppliers.find((supplier) => {
-        if (!supplier.source_url) return false;
-        const supplierHost = new URL(supplier.source_url).hostname
-          .replace(/^www\./, "")
-          .toLowerCase();
-        return hostname === supplierHost || hostname.endsWith(`.${supplierHost}`);
-      }) ?? null
-    );
-  } catch {
-    return null;
-  }
 }
 
 function num(value: string | number | null | undefined): number | null {
@@ -390,6 +463,29 @@ function toIso(value: string): string | null {
 function strings(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+    : [];
+}
+
+function importedVariantRows(value: unknown): ImportedVariant[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is ImportedVariant =>
+          Boolean(item) &&
+          typeof item === "object" &&
+          typeof (item as ImportedVariant).name === "string",
+      )
+    : [];
+}
+
+function importTraceRows(value: unknown): ImportTrace[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is ImportTrace =>
+          Boolean(item) &&
+          typeof item === "object" &&
+          typeof (item as ImportTrace).field === "string" &&
+          typeof (item as ImportTrace).sourceLabel === "string",
+      )
     : [];
 }
 
@@ -443,6 +539,7 @@ function StoreInventoryIntake() {
   const [organisationId, setOrganisationId] = useState("");
   const [suppliers, setSuppliers] = useState<StoreSupplier[]>([]);
   const [profiles, setProfiles] = useState<FulfilmentProfile[]>([]);
+  const [categoryMappings, setCategoryMappings] = useState<SupplierCategoryMapping[]>([]);
   const [sources, setSources] = useState<ProductSource[]>([]);
   const [form, setForm] = useState<IntakeForm>(() => emptyForm());
   const [supplierDraft, setSupplierDraft] = useState<SupplierDraft>(EMPTY_SUPPLIER);
@@ -458,6 +555,7 @@ function StoreInventoryIntake() {
     (CatalogueSnapshotItem & { snapshot_id: string })[]
   >([]);
   const [snapshotting, setSnapshotting] = useState(false);
+  const [supplierRecognitionMessage, setSupplierRecognitionMessage] = useState<string | null>(null);
   const [catalogueCounts, setCatalogueCounts] = useState({
     source: 0,
     active: 0,
@@ -506,11 +604,13 @@ function StoreInventoryIntake() {
   );
   const effectiveDeliveryPayer =
     form.deliveryPayerOverride === "inherit"
-      ? (selectedProfile?.delivery_payer ?? "customer")
+      ? (selectedProfile?.delivery_payer ?? selectedSupplier?.default_delivery_payer ?? "customer")
       : form.deliveryPayerOverride;
   const effectiveFreeShipping =
     form.freeShippingOverride === "inherit"
-      ? (selectedProfile?.free_shipping_eligible ?? false)
+      ? (selectedProfile?.free_shipping_eligible ??
+        selectedSupplier?.default_free_shipping_eligible ??
+        false)
       : form.freeShippingOverride === "yes";
   const snapshotComparison = useMemo(() => {
     if (snapshots.length < 2) return null;
@@ -530,9 +630,13 @@ function StoreInventoryIntake() {
   }
 
   function applySupplier(supplier: StoreSupplier | null) {
-    const defaultProfile = profiles.find(
-      (profile) => profile.supplier_id === supplier?.id && profile.is_active,
-    );
+    const defaultProfile =
+      profiles.find(
+        (profile) =>
+          profile.supplier_id === supplier?.id &&
+          profile.is_active &&
+          profile.profile_code === supplier?.default_fulfilment_profile_code,
+      ) ?? profiles.find((profile) => profile.supplier_id === supplier?.id && profile.is_active);
     setForm((current) =>
       inheritSupplierDefaults({
         current,
@@ -555,6 +659,7 @@ function StoreInventoryIntake() {
         organisationResult,
         supplierResult,
         profileResult,
+        categoryMappingResult,
         sourceResult,
         sourceCatalogueResult,
         publicCatalogueResult,
@@ -563,6 +668,10 @@ function StoreInventoryIntake() {
         db.from<{ id: string }>("organisations").select("id").limit(1),
         db.from<StoreSupplier>("store_suppliers").select("*").order("name"),
         db.from<FulfilmentProfile>("store_fulfilment_profiles").select("*").order("name"),
+        db
+          .from<SupplierCategoryMapping>("store_supplier_category_mappings")
+          .select("*")
+          .order("supplier_category"),
         db
           .from<ProductSource>("store_inventory_intakes")
           .select("*")
@@ -580,6 +689,7 @@ function StoreInventoryIntake() {
         organisationResult.error ??
         supplierResult.error ??
         profileResult.error ??
+        categoryMappingResult.error ??
         sourceResult.error ??
         sourceCatalogueResult.error ??
         publicCatalogueResult.error ??
@@ -596,6 +706,7 @@ function StoreInventoryIntake() {
       setOrganisationId(organisationResult.data?.[0]?.id ?? "");
       setSuppliers(nextSuppliers);
       setProfiles(nextProfiles);
+      setCategoryMappings(categoryMappingResult.data ?? []);
       const nextSources = sourceResult.data ?? [];
       setSources(nextSources);
       const sourceCatalogue = sourceCatalogueResult.data ?? [];
@@ -670,25 +781,16 @@ function StoreInventoryIntake() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function useKnownDmcCandidate() {
+  function startDmcImport() {
     const dmc = suppliers.find((supplier) => supplier.code === "dmc-wholesale");
     const profile = profiles.find((item) => item.supplier_id === dmc?.id && item.is_active);
     setForm({
       ...emptyForm(dmc, profile),
-      lifecycle: "review",
-      name: "Portable Small Gadget Bag",
-      sku: "DM8363",
-      supplierCost: "87.20",
-      stockOrigin: "South Africa",
-      fieldsRequiringConfirmation: [
-        "supplier product URL",
-        "description or specifications",
-        "product images",
-        "current supplier stock before approval",
-      ],
-      operationalNotes:
-        "Known DMC candidate DM8363. Cost R87.20 was recorded during sourcing; confirm the live supplier page, images, details and availability before approval.",
+      sourceUrl: "https://dmcwholesale.co.za/products/portable-small-gadget-bag",
     });
+    setSupplierRecognitionMessage(
+      "DMC Wholesale selected. Import the public supplier page to populate verified fields.",
+    );
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -713,20 +815,32 @@ function StoreInventoryIntake() {
         },
         body: JSON.stringify({
           sourceUrl: form.sourceUrl.trim(),
-          supplierCode: selectedSupplier?.code ?? null,
+          supplierCode: supplierForSourceUrl(suppliers, form.sourceUrl)?.code ?? null,
         }),
       });
       const payload = (await response.json().catch(() => null)) as {
         error?: string;
         sourceUrl: string;
         title: string | null;
+        shortDescription: string | null;
         description: string | null;
+        supplierCategory: string | null;
+        brand: string | null;
+        features: string[];
         specifications: string[];
+        variants: ImportedVariant[];
         imageUrls: string[];
         supplierProductRef: string | null;
-        pagePrice: number | null;
+        supplierCost: number | null;
+        supplierCostConfidence: ImportConfidence;
+        supplierCostSourceLabel: string | null;
+        supplierRrp: number | null;
+        supplierRrpSourceLabel: string | null;
+        supplierSalePrice: number | null;
+        supplierSalePriceSourceLabel: string | null;
         stockStatus: StockStatus;
         stockAvailabilityText: string | null;
+        importTrace: ImportTrace[];
         importStatus: ImportStatus;
         fieldsRequiringConfirmation: string[];
         warnings: string[];
@@ -735,12 +849,31 @@ function StoreInventoryIntake() {
         throw new Error(payload?.error || "The product page could not be imported.");
       }
 
+      const identifiedSupplier = supplierForSourceUrl(suppliers, payload.sourceUrl);
+      const matchedCategory = categoryMappings.find(
+        (mapping) =>
+          mapping.supplier_id === identifiedSupplier?.id &&
+          mapping.supplier_category.trim().toLowerCase() ===
+            (payload.supplierCategory ?? "").trim().toLowerCase(),
+      );
+      setSupplierRecognitionMessage(
+        identifiedSupplier
+          ? `${identifiedSupplier.name} recognised from its configured domain. Defaults were inherited.`
+          : "Supplier not recognised. Select an existing supplier or add a supplier / partner before approval.",
+      );
+
       setForm((current) => ({
         ...(() => {
-          const identifiedSupplier = supplierForSourceUrl(suppliers, payload.sourceUrl);
-          const defaultProfile = profiles.find(
-            (profile) => profile.supplier_id === identifiedSupplier?.id && profile.is_active,
-          );
+          const defaultProfile =
+            profiles.find(
+              (profile) =>
+                profile.supplier_id === identifiedSupplier?.id &&
+                profile.is_active &&
+                profile.profile_code === identifiedSupplier?.default_fulfilment_profile_code,
+            ) ??
+            profiles.find(
+              (profile) => profile.supplier_id === identifiedSupplier?.id && profile.is_active,
+            );
           return inheritSupplierDefaults({
             current,
             supplier: identifiedSupplier
@@ -753,20 +886,45 @@ function StoreInventoryIntake() {
             profileId: defaultProfile?.id ?? null,
           });
         })(),
+        ...(identifiedSupplier
+          ? {}
+          : {
+              supplierId: "",
+              fulfilmentProfileId: "",
+              businessModel: "dropship" as BusinessModel,
+            }),
         lifecycle: "review",
         importStatus: payload.importStatus,
         sourceUrl: payload.sourceUrl,
         name: payload.title ?? current.name,
         sku: payload.supplierProductRef ?? current.sku,
+        shortDescription: payload.shortDescription ?? current.shortDescription,
         description: payload.description ?? current.description,
+        supplierCategory: payload.supplierCategory ?? current.supplierCategory,
+        category: matchedCategory?.cossa_category ?? current.category,
+        brand: payload.brand ?? current.brand,
+        features: payload.features.length > 0 ? payload.features.join("\n") : current.features,
         specifications:
           payload.specifications.length > 0
             ? payload.specifications.join("\n")
             : current.specifications,
+        variants: payload.variants.length > 0 ? payload.variants : current.variants,
         imageUrls: payload.imageUrls.length > 0 ? payload.imageUrls : current.imageUrls,
-        supplierCost: payload.pagePrice == null ? current.supplierCost : String(payload.pagePrice),
+        supplierCost:
+          payload.supplierCost == null ? current.supplierCost : String(payload.supplierCost),
+        supplierCostConfidence: payload.supplierCostConfidence,
+        supplierCostSourceLabel: payload.supplierCostSourceLabel ?? "",
+        supplierRrp:
+          payload.supplierRrp == null ? current.supplierRrp : String(payload.supplierRrp),
+        supplierRrpSourceLabel: payload.supplierRrpSourceLabel ?? "",
+        supplierSalePrice:
+          payload.supplierSalePrice == null
+            ? current.supplierSalePrice
+            : String(payload.supplierSalePrice),
+        supplierSalePriceSourceLabel: payload.supplierSalePriceSourceLabel ?? "",
         stockStatus: payload.stockStatus === "unknown" ? current.stockStatus : payload.stockStatus,
         syncStatus: payload.stockStatus === "unknown" ? current.syncStatus : "manual",
+        importTrace: payload.importTrace,
         fieldsRequiringConfirmation: Array.from(
           new Set([...current.fieldsRequiringConfirmation, ...payload.fieldsRequiringConfirmation]),
         ),
@@ -842,20 +1000,41 @@ function StoreInventoryIntake() {
     const name = supplierDraft.name.trim();
     const code = slugify(supplierDraft.code || name);
     if (!name || !code) return toast.error("Enter a supplier/partner name and code.");
+    if (supplierDraft.websiteUrl.trim()) {
+      try {
+        const website = new URL(supplierDraft.websiteUrl);
+        if (website.protocol !== "http:" && website.protocol !== "https:") throw new Error();
+      } catch {
+        return toast.error("Use a complete http or https supplier website URL.");
+      }
+    }
     setSavingSupplier(true);
     const { data, error } = await db
       .from<StoreSupplier>("store_suppliers")
-      .insert({
-        organisation_id: organisationId,
-        name,
-        code,
-        partner_type: supplierDraft.businessModel === "pod" ? "pod" : supplierDraft.businessModel,
-        business_model: supplierDraft.businessModel,
-        status: "pending",
-        stock_origin: supplierDraft.stockOrigin.trim() || null,
-        source_url: supplierDraft.sourceUrl.trim() || null,
-        operational_notes: supplierDraft.operationalNotes.trim() || null,
-      })
+      .insert(
+        supplierRegistryPayload({
+          organisationId,
+          name,
+          code,
+          businessModel: supplierDraft.businessModel,
+          registryStatus: supplierDraft.registryStatus,
+          stockOrigin: supplierDraft.stockOrigin,
+          websiteUrl: supplierDraft.websiteUrl,
+          recognisedDomains: supplierDraft.recognisedDomains,
+          contactInformation: supplierDraft.contactInformation,
+          accountReference: supplierDraft.accountReference,
+          skuTerminology: supplierDraft.skuTerminology,
+          defaultFulfilmentProfileCode: supplierDraft.defaultFulfilmentProfileCode,
+          defaultDeliveryPayer: supplierDraft.defaultDeliveryPayer,
+          defaultFreeShippingEligible: supplierDraft.defaultFreeShippingEligible,
+          syncMethod: supplierDraft.syncMethod,
+          returnsNotes: supplierDraft.returnsNotes,
+          warrantyNotes: supplierDraft.warrantyNotes,
+          operationalNotes: supplierDraft.operationalNotes,
+          pricingImportNotes: supplierDraft.pricingImportNotes,
+          agreementPolicyReference: supplierDraft.agreementPolicyReference,
+        }),
+      )
       .select("*")
       .single();
     setSavingSupplier(false);
@@ -873,6 +1052,56 @@ function StoreInventoryIntake() {
     toast.success(
       "Supplier added to the Store Operations Book. Add its fulfilment profile before approving a product.",
     );
+  }
+
+  async function saveCategoryMapping() {
+    if (
+      !organisationId ||
+      !form.supplierId ||
+      !form.supplierCategory.trim() ||
+      !form.category.trim()
+    ) {
+      toast.error("Choose a supplier category and Cossa category before saving a mapping.");
+      return;
+    }
+    const { data, error } = await db
+      .from<SupplierCategoryMapping>("store_supplier_category_mappings")
+      .upsert(
+        {
+          organisation_id: organisationId,
+          supplier_id: form.supplierId,
+          supplier_category: form.supplierCategory.trim(),
+          cossa_category: form.category.trim(),
+        },
+        { onConflict: "organisation_id,supplier_id,supplier_category" },
+      )
+      .select("*")
+      .single();
+    if (error || !data) {
+      toast.error(`Could not save category mapping: ${error?.message ?? "Unknown error"}`);
+      return;
+    }
+    setCategoryMappings((current) => [
+      ...current.filter((mapping) => mapping.id !== data.id),
+      data,
+    ]);
+    toast.success("Supplier category mapping saved for future imports.");
+  }
+
+  async function updateSupplierStatus(supplier: StoreSupplier, status: SupplierRegistryStatus) {
+    const legacyStatus = status === "candidate" ? "pending" : status;
+    const { data, error } = await db
+      .from<StoreSupplier>("store_suppliers")
+      .update({ status: legacyStatus, registry_status: status })
+      .eq("id", supplier.id)
+      .select("*")
+      .single();
+    if (error || !data) {
+      toast.error(`Could not update supplier status: ${error?.message ?? "Unknown error"}`);
+      return;
+    }
+    setSuppliers((current) => current.map((item) => (item.id === data.id ? data : item)));
+    toast.success(`${data.name} is now ${status}.`);
   }
 
   async function saveProfile() {
@@ -929,6 +1158,12 @@ function StoreInventoryIntake() {
       short_description: form.shortDescription.trim() || null,
       description: form.description.trim() || null,
       specifications: form.specifications.trim() || null,
+      features: form.features
+        .split("\n")
+        .map((value) => value.trim())
+        .filter(Boolean),
+      variants: form.variants,
+      supplier_category: form.supplierCategory.trim() || null,
       category: form.category.trim() || null,
       brand: form.brand.trim() || "Cossa Store",
       image_urls: form.imageUrls,
@@ -945,6 +1180,13 @@ function StoreInventoryIntake() {
       stock_status: form.stockStatus,
       sync_status: form.syncStatus,
       supplier_cost: num(form.supplierCost),
+      supplier_cost_confidence: form.supplierCostConfidence,
+      supplier_cost_source_label: form.supplierCostSourceLabel.trim() || null,
+      supplier_rrp: num(form.supplierRrp),
+      supplier_rrp_source_label: form.supplierRrpSourceLabel.trim() || null,
+      supplier_sale_price: num(form.supplierSalePrice),
+      supplier_sale_price_source_label: form.supplierSalePriceSourceLabel.trim() || null,
+      import_trace: form.importTrace,
       markup_percent: markup,
       calculated_selling_price: calculatedPrice,
       selling_price_override: num(form.priceOverride),
@@ -990,6 +1232,9 @@ function StoreInventoryIntake() {
     }
     if (status === "approved" && unconfirmedFields.length > 0) {
       return "Confirm every flagged field before approval.";
+    }
+    if (status === "approved" && !form.confirmedFields.includes("supplier cost confirmation")) {
+      return "Supplier cost requires manual confirmation before approval.";
     }
     if (status === "published") {
       return "Publishing integration pending production catalogue review.";
@@ -1062,6 +1307,9 @@ function StoreInventoryIntake() {
       shortDescription: product.short_description ?? "",
       description: product.description ?? "",
       specifications: source.specifications ?? "",
+      features: strings(source.features).join("\n"),
+      variants: importedVariantRows(source.variants),
+      supplierCategory: source.supplier_category ?? "",
       category: product.category ?? "",
       brand: product.brand ?? "Cossa Store",
       imageUrls: product.image_urls ?? [],
@@ -1073,6 +1321,13 @@ function StoreInventoryIntake() {
       stockStatus: source.stock_status,
       syncStatus: source.sync_status,
       supplierCost: source.supplier_cost == null ? "" : String(source.supplier_cost),
+      supplierCostConfidence: source.supplier_cost_confidence ?? "unconfirmed",
+      supplierCostSourceLabel: source.supplier_cost_source_label ?? "",
+      supplierRrp: source.supplier_rrp == null ? "" : String(source.supplier_rrp),
+      supplierRrpSourceLabel: source.supplier_rrp_source_label ?? "",
+      supplierSalePrice:
+        source.supplier_sale_price == null ? "" : String(source.supplier_sale_price),
+      supplierSalePriceSourceLabel: source.supplier_sale_price_source_label ?? "",
       markupPercent:
         source.markup_percent == null
           ? String(DEFAULT_MARKUP_PERCENT)
@@ -1105,6 +1360,7 @@ function StoreInventoryIntake() {
       operationalNotes: source.operational_notes ?? "",
       fieldsRequiringConfirmation: strings(source.fields_requiring_confirmation),
       confirmedFields: [],
+      importTrace: importTraceRows(source.import_trace),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1137,8 +1393,8 @@ function StoreInventoryIntake() {
             <Button variant="outline" onClick={() => void loadOperationsBook()} disabled={loading}>
               <RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
             </Button>
-            <Button variant="outline" onClick={useKnownDmcCandidate} disabled={loading}>
-              <PackageSearch className="mr-1.5 h-4 w-4" /> Use DMC candidate DM8363
+            <Button variant="outline" onClick={startDmcImport} disabled={loading}>
+              <PackageSearch className="mr-1.5 h-4 w-4" /> Start DMC import DM8363
             </Button>
             <Button
               onClick={startNewIntake}
@@ -1289,6 +1545,11 @@ function StoreInventoryIntake() {
               only. It does not guess missing details, bypass supplier logins or create a live
               product.
             </p>
+            {supplierRecognitionMessage ? (
+              <p className="mt-3 rounded-lg border border-primary/20 bg-background/70 p-3 text-xs text-muted-foreground">
+                {supplierRecognitionMessage}
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-7 grid gap-4 sm:grid-cols-2">
@@ -1308,7 +1569,7 @@ function StoreInventoryIntake() {
                 placeholder="e.g. DM8363"
               />
             </Field>
-            <Field label="Category">
+            <Field label="Cossa Store category">
               <input
                 className={inputClass}
                 value={form.category}
@@ -1316,6 +1577,26 @@ function StoreInventoryIntake() {
                 placeholder="e.g. Travel & Tech"
               />
             </Field>
+            <Field label="Supplier category / product type">
+              <input
+                className={inputClass}
+                value={form.supplierCategory}
+                onChange={(event) => update("supplierCategory", event.target.value)}
+                placeholder="Imported supplier taxonomy"
+              />
+            </Field>
+            {form.supplierCategory.trim() && form.category.trim() && form.supplierId ? (
+              <div className="-mt-2 sm:col-span-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void saveCategoryMapping()}
+                >
+                  Save this supplier-to-Cossa category mapping
+                </Button>
+              </div>
+            ) : null}
             <Field label="Brand">
               <input
                 className={inputClass}
@@ -1365,7 +1646,64 @@ function StoreInventoryIntake() {
                 placeholder="Size: ...&#10;Material: ...&#10;What is included: ..."
               />
             </Field>
+            <Field label="Features (one per line)" className="sm:col-span-2">
+              <textarea
+                className={`${inputClass} min-h-24`}
+                value={form.features}
+                onChange={(event) => update("features", event.target.value)}
+                placeholder="Only source-backed product features"
+              />
+            </Field>
           </div>
+
+          {form.variants.length ? (
+            <div className="mt-4 rounded-xl border border-border/60 p-4">
+              <p className="text-sm font-semibold">Supplier variants</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Imported only where the supplier page exposes actual variants. You may remove a
+                variant that is not appropriate for review.
+              </p>
+              <div className="mt-3 space-y-2">
+                {form.variants.map((variant, index) => (
+                  <div
+                    key={`${variant.supplierVariantId ?? variant.name}-${index}`}
+                    className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 p-3 text-xs"
+                  >
+                    <div className="grid flex-1 gap-2 sm:grid-cols-4">
+                      {(["name", "supplierSku", "colour", "size"] as const).map((key) => (
+                        <input
+                          key={key}
+                          className="rounded border border-border/60 bg-background px-2 py-1"
+                          value={variant[key] ?? ""}
+                          placeholder={key === "supplierSku" ? "Supplier SKU" : key}
+                          onChange={(event) =>
+                            update(
+                              "variants",
+                              form.variants.map((item, itemIndex) =>
+                                itemIndex === index ? { ...item, [key]: event.target.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() =>
+                        update(
+                          "variants",
+                          form.variants.filter((_, itemIndex) => itemIndex !== index),
+                        )
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {selectedSupplier ? (
             <div className="mt-4 rounded-xl border border-primary/25 bg-primary/5 p-3 text-xs">
@@ -1487,6 +1825,39 @@ function StoreInventoryIntake() {
                   onChange={(event) => update("supplierCost", event.target.value)}
                   placeholder="0.00"
                 />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {form.supplierCostSourceLabel
+                    ? `${form.supplierCostSourceLabel} · ${form.supplierCostConfidence} confidence`
+                    : "Supplier cost requires manual confirmation."}
+                </p>
+              </Field>
+              <Field label="Supplier RRP / suggested retail (R)">
+                <input
+                  className={inputClass}
+                  inputMode="decimal"
+                  value={form.supplierRrp}
+                  onChange={(event) => update("supplierRrp", event.target.value)}
+                  placeholder="Optional"
+                />
+                {form.supplierRrpSourceLabel ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {form.supplierRrpSourceLabel}
+                  </p>
+                ) : null}
+              </Field>
+              <Field label="Supplier sale price (R)">
+                <input
+                  className={inputClass}
+                  inputMode="decimal"
+                  value={form.supplierSalePrice}
+                  onChange={(event) => update("supplierSalePrice", event.target.value)}
+                  placeholder="Only when source labels it as sale"
+                />
+                {form.supplierSalePriceSourceLabel ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {form.supplierSalePriceSourceLabel}
+                  </p>
+                ) : null}
               </Field>
               <Field label="Markup percentage">
                 <input
@@ -1620,6 +1991,21 @@ function StoreInventoryIntake() {
               </div>
             </summary>
             <div className="pt-4">
+              {form.importTrace.length ? (
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-4 text-xs">
+                  <p className="font-semibold">Import source details</p>
+                  <p className="mt-1 text-muted-foreground">
+                    Internal traceability only. Review this evidence; it is never customer-facing.
+                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {form.importTrace.map((trace) => (
+                      <p key={`${trace.field}-${trace.sourceLabel}`}>
+                        <strong>{trace.field}:</strong> {trace.sourceLabel} · {trace.confidence}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <Field label="Business model">
                   <select
@@ -1940,29 +2326,36 @@ function StoreInventoryIntake() {
                 <p className="text-sm text-muted-foreground">Loading registry…</p>
               ) : suppliers.length ? (
                 suppliers.map((supplier) => (
-                  <button
-                    type="button"
+                  <div
                     key={supplier.id}
-                    onClick={() =>
-                      setForm((current) => ({
-                        ...current,
-                        supplierId: supplier.id,
-                        businessModel: supplier.business_model,
-                        stockOrigin: supplier.stock_origin ?? current.stockOrigin,
-                        fulfilmentProfileId:
-                          profiles.find(
-                            (profile) => profile.supplier_id === supplier.id && profile.is_active,
-                          )?.id ?? "",
-                      }))
-                    }
                     className={`w-full rounded-xl border p-3 text-left transition ${form.supplierId === supplier.id ? "border-primary/40 bg-primary/5" : "border-border/60 hover:border-primary/30"}`}
                   >
                     <p className="text-sm font-semibold">{supplier.name}</p>
                     <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {supplier.business_model} · {supplier.status} ·{" "}
+                      {supplier.business_model} · {supplier.registry_status ?? supplier.status} ·{" "}
                       {supplier.stock_origin || "origin not recorded"}
                     </p>
-                  </button>
+                    <div className="mt-2 flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => applySupplier(supplier)}
+                      >
+                        Use supplier
+                      </Button>
+                      {supplier.registry_status !== "paused" && supplier.status !== "paused" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void updateSupplierStatus(supplier, "paused")}
+                        >
+                          Pause
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
                 ))
               ) : (
                 <p className="rounded-xl border border-dashed border-border p-4 text-xs text-muted-foreground">
@@ -1998,7 +2391,7 @@ function StoreInventoryIntake() {
                   onChange={(event) =>
                     setSupplierDraft((current) => ({
                       ...current,
-                      businessModel: event.target.value as BusinessModel,
+                      businessModel: event.target.value as SupplierDraft["businessModel"],
                     }))
                   }
                 >
@@ -2006,8 +2399,25 @@ function StoreInventoryIntake() {
                   <option value="affiliate">Affiliate</option>
                   <option value="wholesale">Wholesale</option>
                   <option value="pod">Print on demand</option>
+                  <option value="fulfilment">Fulfilment partner</option>
                   <option value="marketplace">Marketplace</option>
                   <option value="other">Other</option>
+                </select>
+                <select
+                  className={inputClass}
+                  value={supplierDraft.registryStatus}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({
+                      ...current,
+                      registryStatus: event.target.value as SupplierRegistryStatus,
+                    }))
+                  }
+                >
+                  <option value="candidate">Candidate</option>
+                  <option value="pending">Pending</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="rejected">Rejected</option>
                 </select>
                 <input
                   className={inputClass}
@@ -2020,11 +2430,124 @@ function StoreInventoryIntake() {
                 <input
                   className={inputClass}
                   type="url"
-                  value={supplierDraft.sourceUrl}
+                  value={supplierDraft.websiteUrl}
                   onChange={(event) =>
-                    setSupplierDraft((current) => ({ ...current, sourceUrl: event.target.value }))
+                    setSupplierDraft((current) => ({ ...current, websiteUrl: event.target.value }))
                   }
                   placeholder="Supplier website / portal URL"
+                />
+                <input
+                  className={inputClass}
+                  value={supplierDraft.recognisedDomains}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({
+                      ...current,
+                      recognisedDomains: event.target.value,
+                    }))
+                  }
+                  placeholder="Recognised source domains, comma-separated"
+                />
+                <input
+                  className={inputClass}
+                  value={supplierDraft.contactInformation}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({
+                      ...current,
+                      contactInformation: event.target.value,
+                    }))
+                  }
+                  placeholder="Contact information (non-secret)"
+                />
+                <input
+                  className={inputClass}
+                  value={supplierDraft.accountReference}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({
+                      ...current,
+                      accountReference: event.target.value,
+                    }))
+                  }
+                  placeholder="Account/reference information (non-secret)"
+                />
+                <input
+                  className={inputClass}
+                  value={supplierDraft.skuTerminology}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({
+                      ...current,
+                      skuTerminology: event.target.value,
+                    }))
+                  }
+                  placeholder="Supplier SKU terminology (optional)"
+                />
+                <input
+                  className={inputClass}
+                  value={supplierDraft.defaultFulfilmentProfileCode}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({
+                      ...current,
+                      defaultFulfilmentProfileCode: event.target.value,
+                    }))
+                  }
+                  placeholder="Default fulfilment profile code (optional)"
+                />
+                <select
+                  className={inputClass}
+                  value={supplierDraft.defaultDeliveryPayer}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({
+                      ...current,
+                      defaultDeliveryPayer: event.target.value as DeliveryPayer,
+                    }))
+                  }
+                >
+                  <option value="customer">Customer pays delivery</option>
+                  <option value="cossa">Cossa pays delivery</option>
+                  <option value="conditional">Conditional delivery</option>
+                  <option value="not_applicable">Not applicable</option>
+                </select>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={supplierDraft.defaultFreeShippingEligible}
+                    onChange={(event) =>
+                      setSupplierDraft((current) => ({
+                        ...current,
+                        defaultFreeShippingEligible: event.target.checked,
+                      }))
+                    }
+                  />
+                  Eligible for free shipping by default
+                </label>
+                <input
+                  className={inputClass}
+                  value={supplierDraft.syncMethod}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({ ...current, syncMethod: event.target.value }))
+                  }
+                  placeholder="Stock / sync method"
+                />
+                <textarea
+                  className={`${inputClass} min-h-16`}
+                  value={supplierDraft.returnsNotes}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({
+                      ...current,
+                      returnsNotes: event.target.value,
+                    }))
+                  }
+                  placeholder="Supplier returns notes"
+                />
+                <textarea
+                  className={`${inputClass} min-h-16`}
+                  value={supplierDraft.warrantyNotes}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({
+                      ...current,
+                      warrantyNotes: event.target.value,
+                    }))
+                  }
+                  placeholder="Supplier warranty notes"
                 />
                 <textarea
                   className={`${inputClass} min-h-20`}
@@ -2037,6 +2560,31 @@ function StoreInventoryIntake() {
                   }
                   placeholder="Internal operational notes"
                 />
+                <textarea
+                  className={`${inputClass} min-h-16`}
+                  value={supplierDraft.pricingImportNotes}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({
+                      ...current,
+                      pricingImportNotes: event.target.value,
+                    }))
+                  }
+                  placeholder="Pricing / import notes"
+                />
+                <input
+                  className={inputClass}
+                  value={supplierDraft.agreementPolicyReference}
+                  onChange={(event) =>
+                    setSupplierDraft((current) => ({
+                      ...current,
+                      agreementPolicyReference: event.target.value,
+                    }))
+                  }
+                  placeholder="Agreement or policy reference (non-secret)"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Never enter passwords, API keys, private keys or payment credentials here.
+                </p>
                 <Button
                   type="button"
                   size="sm"
