@@ -35,6 +35,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SalesWinProbabilityRouteImport } from './routes/sales.win-probability'
 import { Route as SalesQuotationsRouteImport } from './routes/sales.quotations'
 import { Route as SalesPipelineRouteImport } from './routes/sales.pipeline'
+import { Route as SalesPartnerPipelinesRouteImport } from './routes/sales.partner-pipelines'
 import { Route as SalesOpportunitiesRouteImport } from './routes/sales.opportunities'
 import { Route as SalesLeadsRouteImport } from './routes/sales.leads'
 import { Route as SalesLeadScoringRouteImport } from './routes/sales.lead-scoring'
@@ -247,6 +248,11 @@ const SalesQuotationsRoute = SalesQuotationsRouteImport.update({
 const SalesPipelineRoute = SalesPipelineRouteImport.update({
   id: '/sales/pipeline',
   path: '/sales/pipeline',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesPartnerPipelinesRoute = SalesPartnerPipelinesRouteImport.update({
+  id: '/sales/partner-pipelines',
+  path: '/sales/partner-pipelines',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SalesOpportunitiesRoute = SalesOpportunitiesRouteImport.update({
@@ -775,6 +781,7 @@ export interface FileRoutesByFullPath {
   '/sales/lead-scoring': typeof SalesLeadScoringRoute
   '/sales/leads': typeof SalesLeadsRoute
   '/sales/opportunities': typeof SalesOpportunitiesRoute
+  '/sales/partner-pipelines': typeof SalesPartnerPipelinesRoute
   '/sales/pipeline': typeof SalesPipelineRoute
   '/sales/quotations': typeof SalesQuotationsRoute
   '/sales/win-probability': typeof SalesWinProbabilityRoute
@@ -886,6 +893,7 @@ export interface FileRoutesByTo {
   '/sales/lead-scoring': typeof SalesLeadScoringRoute
   '/sales/leads': typeof SalesLeadsRoute
   '/sales/opportunities': typeof SalesOpportunitiesRoute
+  '/sales/partner-pipelines': typeof SalesPartnerPipelinesRoute
   '/sales/pipeline': typeof SalesPipelineRoute
   '/sales/quotations': typeof SalesQuotationsRoute
   '/sales/win-probability': typeof SalesWinProbabilityRoute
@@ -998,6 +1006,7 @@ export interface FileRoutesById {
   '/sales/lead-scoring': typeof SalesLeadScoringRoute
   '/sales/leads': typeof SalesLeadsRoute
   '/sales/opportunities': typeof SalesOpportunitiesRoute
+  '/sales/partner-pipelines': typeof SalesPartnerPipelinesRoute
   '/sales/pipeline': typeof SalesPipelineRoute
   '/sales/quotations': typeof SalesQuotationsRoute
   '/sales/win-probability': typeof SalesWinProbabilityRoute
@@ -1111,6 +1120,7 @@ export interface FileRouteTypes {
     | '/sales/lead-scoring'
     | '/sales/leads'
     | '/sales/opportunities'
+    | '/sales/partner-pipelines'
     | '/sales/pipeline'
     | '/sales/quotations'
     | '/sales/win-probability'
@@ -1222,6 +1232,7 @@ export interface FileRouteTypes {
     | '/sales/lead-scoring'
     | '/sales/leads'
     | '/sales/opportunities'
+    | '/sales/partner-pipelines'
     | '/sales/pipeline'
     | '/sales/quotations'
     | '/sales/win-probability'
@@ -1333,6 +1344,7 @@ export interface FileRouteTypes {
     | '/sales/lead-scoring'
     | '/sales/leads'
     | '/sales/opportunities'
+    | '/sales/partner-pipelines'
     | '/sales/pipeline'
     | '/sales/quotations'
     | '/sales/win-probability'
@@ -1445,6 +1457,7 @@ export interface RootRouteChildren {
   SalesLeadScoringRoute: typeof SalesLeadScoringRoute
   SalesLeadsRoute: typeof SalesLeadsRoute
   SalesOpportunitiesRoute: typeof SalesOpportunitiesRoute
+  SalesPartnerPipelinesRoute: typeof SalesPartnerPipelinesRoute
   SalesPipelineRoute: typeof SalesPipelineRoute
   SalesQuotationsRoute: typeof SalesQuotationsRoute
   SalesWinProbabilityRoute: typeof SalesWinProbabilityRoute
@@ -1635,6 +1648,13 @@ declare module '@tanstack/react-router' {
       path: '/sales/pipeline'
       fullPath: '/sales/pipeline'
       preLoaderRoute: typeof SalesPipelineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales/partner-pipelines': {
+      id: '/sales/partner-pipelines'
+      path: '/sales/partner-pipelines'
+      fullPath: '/sales/partner-pipelines'
+      preLoaderRoute: typeof SalesPartnerPipelinesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sales/opportunities': {
@@ -2347,6 +2367,7 @@ const rootRouteChildren: RootRouteChildren = {
   SalesLeadScoringRoute: SalesLeadScoringRoute,
   SalesLeadsRoute: SalesLeadsRoute,
   SalesOpportunitiesRoute: SalesOpportunitiesRoute,
+  SalesPartnerPipelinesRoute: SalesPartnerPipelinesRoute,
   SalesPipelineRoute: SalesPipelineRoute,
   SalesQuotationsRoute: SalesQuotationsRoute,
   SalesWinProbabilityRoute: SalesWinProbabilityRoute,
