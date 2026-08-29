@@ -1,5 +1,6 @@
 export function canPublishInventoryLifecycle(currentStatus: string): boolean {
-  return currentStatus === "approved";
+  // Publication is intentionally held back while catalogue sync is reviewed.
+  return currentStatus === "approved" && false;
 }
 
 export function customerSafeStoreProjection(input: {

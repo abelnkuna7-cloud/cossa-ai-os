@@ -30,7 +30,6 @@ import {
   inheritSupplierDefaults,
   validNonNegativeNumber,
 } from "@/lib/store-inventory-pricing";
-import { canPublishInventoryLifecycle } from "@/lib/store-inventory-safety";
 
 export const Route = createFileRoute("/businesses/store-inventory")({
   component: StoreInventoryIntake,
@@ -122,9 +121,17 @@ type StoreProduct = {
 type ProductSource = {
   id: string;
   organisation_id: string;
-  product_id: string;
   supplier_id: string;
   fulfilment_profile_id: string | null;
+  name: string;
+  cossa_sku: string | null;
+  short_description: string | null;
+  description: string | null;
+  specifications: string | null;
+  category: string | null;
+  brand: string | null;
+  image_urls: string[];
+  affiliate_url: string | null;
   business_model: BusinessModel;
   supplier_product_ref: string | null;
   stock_origin: string | null;
@@ -137,6 +144,7 @@ type ProductSource = {
   markup_percent: number | string | null;
   calculated_selling_price: number | string | null;
   selling_price_override: number | string | null;
+  compare_at_price: number | string | null;
   affiliate_commission_percent: number | string | null;
   affiliate_commission_note: string | null;
   delivery_payer_override: DeliveryPayer | null;
@@ -153,6 +161,30 @@ type ProductSource = {
   last_stock_checked_at: string | null;
   operational_notes: string | null;
 };
+
+function productFromIntake(source: ProductSource): StoreProduct {
+  return {
+    id: source.id,
+    name: source.name,
+    slug: slugify(source.name),
+    sku: source.cossa_sku,
+    product_type: productType(source.business_model),
+    fulfilment_model: fulfilmentModel(source.business_model, source.stock_origin ?? ""),
+    status: "draft",
+    short_description: source.short_description,
+    description: source.description,
+    category: source.category,
+    brand: source.brand,
+    supplier_name: null,
+    supplier_product_ref: source.supplier_product_ref,
+    supplier_url: source.source_url,
+    affiliate_url: source.affiliate_url,
+    cost_price: source.supplier_cost ?? 0,
+    price: source.selling_price_override ?? source.calculated_selling_price ?? 0,
+    compare_at_price: source.compare_at_price,
+    image_urls: source.image_urls ?? [],
+  };
+}
 
 type IntakeForm = {
   productId?: string;
@@ -363,21 +395,6 @@ function fulfilmentModel(model: BusinessModel, origin: string): string {
   return "local_supplier";
 }
 
-function ownership(model: BusinessModel): string {
-  if (model === "affiliate" || model === "marketplace") return "affiliate_merchant";
-  if (model === "pod") return "pod_managed";
-  if (model === "cossa_stock") return "cossa_owned";
-  return "supplier_managed";
-}
-
-function syncToInventoryStatus(value: SyncStatus): string {
-  return value === "verified" || value === "manual" || value === "stale" || value === "failed"
-    ? value
-    : value === "not_connected"
-      ? "not_connected"
-      : "unknown";
-}
-
 function money(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return new Intl.NumberFormat("en-ZA", {
@@ -409,7 +426,6 @@ function StoreInventoryIntake() {
   const [organisationId, setOrganisationId] = useState("");
   const [suppliers, setSuppliers] = useState<StoreSupplier[]>([]);
   const [profiles, setProfiles] = useState<FulfilmentProfile[]>([]);
-  const [products, setProducts] = useState<StoreProduct[]>([]);
   const [sources, setSources] = useState<ProductSource[]>([]);
   const [form, setForm] = useState<IntakeForm>(() => emptyForm());
   const [supplierDraft, setSupplierDraft] = useState<SupplierDraft>(EMPTY_SUPPLIER);
@@ -433,10 +449,6 @@ function StoreInventoryIntake() {
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === form.fulfilmentProfileId) ?? null,
     [form.fulfilmentProfileId, profiles],
-  );
-  const sourceByProductId = useMemo(
-    () => new Map(sources.map((source) => [source.product_id, source])),
-    [sources],
   );
   const pricing = useMemo(
     () =>
@@ -502,26 +514,20 @@ function StoreInventoryIntake() {
   async function loadOperationsBook() {
     setLoading(true);
     try {
-      const [organisationResult, supplierResult, profileResult, productResult, sourceResult] =
-        await Promise.all([
-          db.from<{ id: string }>("organisations").select("id").limit(1),
-          db.from<StoreSupplier>("store_suppliers").select("*").order("name"),
-          db.from<FulfilmentProfile>("store_fulfilment_profiles").select("*").order("name"),
-          db
-            .from<StoreProduct>("store_products")
-            .select("*")
-            .order("updated_at", { ascending: false }),
-          db
-            .from<ProductSource>("store_product_sources")
-            .select("*")
-            .order("updated_at", { ascending: false }),
-        ]);
+      const [organisationResult, supplierResult, profileResult, sourceResult] = await Promise.all([
+        db.from<{ id: string }>("organisations").select("id").limit(1),
+        db.from<StoreSupplier>("store_suppliers").select("*").order("name"),
+        db.from<FulfilmentProfile>("store_fulfilment_profiles").select("*").order("name"),
+        db
+          .from<ProductSource>("store_inventory_intakes")
+          .select("*")
+          .order("created_at", { ascending: false }),
+      ]);
 
       const error =
         organisationResult.error ??
         supplierResult.error ??
         profileResult.error ??
-        productResult.error ??
         sourceResult.error;
       if (error) {
         toast.error(
@@ -535,8 +541,8 @@ function StoreInventoryIntake() {
       setOrganisationId(organisationResult.data?.[0]?.id ?? "");
       setSuppliers(nextSuppliers);
       setProfiles(nextProfiles);
-      setProducts(productResult.data ?? []);
-      setSources(sourceResult.data ?? []);
+      const nextSources = sourceResult.data ?? [];
+      setSources(nextSources);
       setForm((current) => {
         if (current.supplierId || !nextSuppliers.length) return current;
         const dmc =
@@ -812,49 +818,8 @@ function StoreInventoryIntake() {
     setProfileDraft(EMPTY_PROFILE);
     update("fulfilmentProfileId", data.id);
     toast.success(
-      "Fulfilment profile saved. Its Cossa-facing notices will inherit to linked products.",
+      "Fulfilment profile saved. Its Cossa-facing notices will be available when catalogue integration is reviewed.",
     );
-  }
-
-  function productPayload(status: StoreProduct["status"]) {
-    const supplierName = selectedSupplier?.name ?? null;
-    const sourceDescription = [form.description.trim(), form.specifications.trim()]
-      .filter(Boolean)
-      .join(form.description.trim() && form.specifications.trim() ? "\n\nSpecifications\n" : "");
-    const salePrice = sellingPrice ?? 0;
-    return {
-      name: form.name.trim(),
-      slug: slugify(form.name),
-      sku: form.sku.trim() || null,
-      product_type: productType(form.businessModel),
-      fulfilment_model: fulfilmentModel(form.businessModel, form.stockOrigin),
-      status,
-      short_description: form.shortDescription.trim() || null,
-      description: sourceDescription || null,
-      category: form.category.trim() || null,
-      brand: form.brand.trim() || "Cossa Store",
-      supplier_name: supplierName,
-      supplier_product_ref: form.sku.trim() || null,
-      supplier_url: form.sourceUrl.trim() || null,
-      affiliate_url:
-        form.businessModel === "affiliate" || form.businessModel === "marketplace"
-          ? form.affiliateUrl.trim() || null
-          : null,
-      currency: "ZAR",
-      cost_price: num(form.supplierCost) ?? 0,
-      price: salePrice,
-      compare_at_price: num(form.compareAtPrice),
-      track_inventory: false,
-      stock_quantity: 0,
-      unlimited_stock: false,
-      inventory_ownership: ownership(form.businessModel),
-      inventory_source_status: syncToInventoryStatus(form.syncStatus),
-      inventory_source_reference: form.sourceUrl.trim() || null,
-      image_urls: form.imageUrls,
-      featured: false,
-      seo_title: null,
-      seo_description: null,
-    };
   }
 
   function sourcePayload(status: IntakeStatus, fieldsRequiringConfirmation: string[]) {
@@ -863,6 +828,18 @@ function StoreInventoryIntake() {
       organisation_id: organisationId,
       supplier_id: form.supplierId,
       fulfilment_profile_id: form.fulfilmentProfileId || null,
+      name: form.name.trim(),
+      cossa_sku: null,
+      short_description: form.shortDescription.trim() || null,
+      description: form.description.trim() || null,
+      specifications: form.specifications.trim() || null,
+      category: form.category.trim() || null,
+      brand: form.brand.trim() || "Cossa Store",
+      image_urls: form.imageUrls,
+      affiliate_url:
+        form.businessModel === "affiliate" || form.businessModel === "marketplace"
+          ? form.affiliateUrl.trim() || null
+          : null,
       business_model: form.businessModel,
       supplier_product_ref: form.sku.trim() || null,
       stock_origin: form.stockOrigin.trim() || null,
@@ -875,6 +852,7 @@ function StoreInventoryIntake() {
       markup_percent: markup,
       calculated_selling_price: calculatedPrice,
       selling_price_override: num(form.priceOverride),
+      compare_at_price: num(form.compareAtPrice),
       affiliate_commission_percent: num(form.affiliateCommissionPercent),
       affiliate_commission_note: form.affiliateCommissionNote.trim() || null,
       delivery_payer_override:
@@ -893,7 +871,6 @@ function StoreInventoryIntake() {
       last_stock_checked_at: toIso(form.lastStockCheckedAt),
       operational_notes: form.operationalNotes.trim() || null,
       ...(status === "approved" ? { approved_at: new Date().toISOString() } : {}),
-      ...(status === "published" ? { published_at: new Date().toISOString() } : {}),
     };
   }
 
@@ -919,22 +896,7 @@ function StoreInventoryIntake() {
       return "Confirm every flagged field before approval.";
     }
     if (status === "published") {
-      if (!canPublishInventoryLifecycle(form.lifecycle)) {
-        return "Approve this product before publishing it.";
-      }
-      if (!form.category.trim() || !form.description.trim()) {
-        return "Add a customer-facing category and description before publishing.";
-      }
-      if (!form.imageUrls.length || !form.sku.trim()) {
-        return "Add at least one product image and supplier SKU/product ID before publishing.";
-      }
-      if (!sellingPrice || sellingPrice <= 0) return "Set a valid selling price before publishing.";
-      if (
-        (form.businessModel === "affiliate" || form.businessModel === "marketplace") &&
-        !/^https?:\/\//i.test(form.affiliateUrl.trim())
-      ) {
-        return "Affiliate products need a legitimate tracking URL before publication.";
-      }
+      return "Publishing integration pending production catalogue review.";
     }
     return null;
   }
@@ -944,47 +906,28 @@ function StoreInventoryIntake() {
     if (invalid) return toast.error(invalid);
     setSaving(true);
     try {
-      const productStatus: StoreProduct["status"] = status === "published" ? "active" : "draft";
-      const sourceStatus = status;
-      let productId = form.productId;
-
-      if (productId) {
-        const { error } = await db
-          .from("store_products")
-          .update(productPayload(productStatus))
-          .eq("id", productId);
-        if (error) throw new Error(error.message);
-      } else {
-        const { data, error } = await db
-          .from<StoreProduct>("store_products")
-          .insert(productPayload("draft"))
-          .select("*")
-          .single();
-        if (error || !data)
-          throw new Error(error?.message || "Could not create the draft product.");
-        productId = data.id;
-      }
-
-      const remainingFields =
-        status === "approved" || status === "published" ? [] : form.fieldsRequiringConfirmation;
-      const payload = { ...sourcePayload(sourceStatus, remainingFields), product_id: productId };
+      const remainingFields = status === "approved" ? [] : form.fieldsRequiringConfirmation;
+      const payload = sourcePayload(status, remainingFields);
       let sourceId = form.sourceId;
       if (sourceId) {
-        const { error } = await db.from("store_product_sources").update(payload).eq("id", sourceId);
+        const { error } = await db
+          .from("store_inventory_intakes")
+          .update(payload)
+          .eq("id", sourceId);
         if (error) throw new Error(error.message);
       } else {
         const { data, error } = await db
-          .from<ProductSource>("store_product_sources")
+          .from<ProductSource>("store_inventory_intakes")
           .insert(payload)
           .select("*")
           .single();
-        if (error || !data) throw new Error(error?.message || "Could not save the source record.");
+        if (error || !data) throw new Error(error?.message || "Could not save the intake record.");
         sourceId = data.id;
       }
 
       setForm((current) => ({
         ...current,
-        productId,
+        productId: sourceId,
         sourceId,
         lifecycle: status,
         fieldsRequiringConfirmation: remainingFields,
@@ -996,8 +939,8 @@ function StoreInventoryIntake() {
           : status === "draft"
             ? "Product moved to draft. It is not public."
             : status === "approved"
-              ? "Product approved. It is still not public until you publish it."
-              : "Product published to Cossa Store.",
+              ? "Product approved. Publishing integration pending production catalogue review."
+              : "Product saved.",
       );
     } catch (error) {
       toast.error(
@@ -1011,10 +954,9 @@ function StoreInventoryIntake() {
   }
 
   function openSource(source: ProductSource) {
-    const product = products.find((item) => item.id === source.product_id);
-    if (!product) return toast.error("The linked product could not be loaded.");
+    const product = productFromIntake(source);
     setForm({
-      productId: product.id,
+      productId: source.id,
       sourceId: source.id,
       lifecycle: source.approval_status,
       importStatus: source.import_status,
@@ -1023,7 +965,7 @@ function StoreInventoryIntake() {
       sku: source.supplier_product_ref ?? product.supplier_product_ref ?? product.sku ?? "",
       shortDescription: product.short_description ?? "",
       description: product.description ?? "",
-      specifications: "",
+      specifications: source.specifications ?? "",
       category: product.category ?? "",
       brand: product.brand ?? "Cossa Store",
       imageUrls: product.image_urls ?? [],
@@ -1147,8 +1089,8 @@ function StoreInventoryIntake() {
                 {form.productId ? "Continue intake" : "Start a product intake"}
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                URL imports never publish. If a page blocks extraction, use the same form to enter
-                verified data manually.
+                URL imports never publish. This internal workflow ends at approval while the
+                customer catalogue integration is under separate production review.
               </p>
             </div>
             <span className="inline-flex w-fit items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
@@ -1808,20 +1750,14 @@ function StoreInventoryIntake() {
             >
               <CheckCircle2 className="mr-1.5 h-4 w-4" /> Approve
             </Button>
-            <Button
-              disabled={saving || form.lifecycle !== "approved"}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "Publish this approved product to the customer-facing Cossa Store now?",
-                  )
-                )
-                  void saveIntake("published");
-              }}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
-            >
-              <ExternalLink className="mr-1.5 h-4 w-4" /> Publish to Store
-            </Button>
+            <div className="flex flex-col gap-1">
+              <Button disabled className="bg-muted text-muted-foreground">
+                <ExternalLink className="mr-1.5 h-4 w-4" /> Publish to Store
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Publishing integration pending production catalogue review.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -1957,7 +1893,8 @@ function StoreInventoryIntake() {
           <section className="glass-card p-5">
             <h2 className="font-display text-lg font-semibold">Fulfilment &amp; Policy Profile</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              One profile can guide many products. It projects only customer-safe Cossa notices.
+              One profile can guide many internal intake records. Catalogue projection is pending
+              review.
             </p>
             {selectedProfile ? (
               <div className="mt-4 rounded-xl border border-primary/25 bg-primary/5 p-3">
@@ -2121,7 +2058,6 @@ function StoreInventoryIntake() {
             </div>
             <div className="mt-4 space-y-2">
               {sources.slice(0, 8).map((source) => {
-                const product = products.find((item) => item.id === source.product_id);
                 return (
                   <button
                     type="button"
@@ -2129,9 +2065,7 @@ function StoreInventoryIntake() {
                     onClick={() => openSource(source)}
                     className="w-full rounded-xl border border-border/60 p-3 text-left hover:border-primary/30"
                   >
-                    <p className="line-clamp-2 text-sm font-semibold">
-                      {product?.name ?? "Product record"}
-                    </p>
+                    <p className="line-clamp-2 text-sm font-semibold">{source.name}</p>
                     <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
                       {lifecycleCopy(source.approval_status)} · {source.business_model} ·{" "}
                       {source.stock_status}

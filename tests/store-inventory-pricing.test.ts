@@ -72,10 +72,10 @@ test("supplier selection inherits registry defaults and profile", () => {
   });
 });
 
-test("lifecycle never permits an import to publish directly", () => {
+test("lifecycle blocks publication while catalogue integration is disabled", () => {
   assert.equal(canPublishInventoryLifecycle("imported"), false);
   assert.equal(canPublishInventoryLifecycle("review"), false);
-  assert.equal(canPublishInventoryLifecycle("approved"), true);
+  assert.equal(canPublishInventoryLifecycle("approved"), false);
 });
 
 test("customer-safe projection excludes supplier cost and supplier identity", () => {
