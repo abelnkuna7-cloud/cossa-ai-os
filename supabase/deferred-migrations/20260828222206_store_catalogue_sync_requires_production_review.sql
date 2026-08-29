@@ -1,0 +1,14 @@
+-- DEFERRED — DO NOT APPLY
+--
+-- This catalogue-sync enhancement is intentionally outside supabase/migrations,
+-- so deployment tooling cannot apply it. It requires a dedicated production review.
+--
+-- The following previously proposed behaviour is held back:
+--   * ALTER TABLE public.store_products ... customer notice columns
+--   * ALTER TABLE public.store_public_products ... customer notice columns
+--   * CREATE OR REPLACE FUNCTION private.sync_store_public_product()
+--   * CREATE FUNCTION private.sync_store_product_fulfilment_notices()
+--   * CREATE TRIGGER statements that write customer fulfilment notices
+--
+-- No executable catalogue-sync SQL is included until it is separately designed,
+-- reviewed, tested, and explicitly approved for production.
