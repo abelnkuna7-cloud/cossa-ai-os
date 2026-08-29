@@ -31,10 +31,15 @@ import {
   validNonNegativeNumber,
 } from "@/lib/store-inventory-pricing";
 import {
+  canAdvanceInventoryIntake,
+  saveStatusForInventoryIntake,
+} from "@/lib/store-inventory-safety";
+import {
   compareCatalogueSnapshots,
   type CatalogueSnapshotItem,
 } from "@/lib/store-catalogue-snapshot";
 import {
+  findPotentialSupplierDuplicate,
   supplierForSourceUrl,
   supplierRegistryPayload,
   type SupplierRegistryStatus,
@@ -197,6 +202,16 @@ type ProductSource = {
   last_price_checked_at: string | null;
   last_stock_checked_at: string | null;
   operational_notes: string | null;
+};
+
+type IntakeLifecycleHistory = {
+  id: string;
+  intake_id: string;
+  previous_status: IntakeStatus | null;
+  new_status: IntakeStatus;
+  action: string;
+  actor_user_id: string | null;
+  created_at: string;
 };
 
 type SupplierCategoryMapping = {
@@ -535,12 +550,25 @@ function lifecycleCopy(status: IntakeStatus): string {
   }
 }
 
+function InformationStatusBadge({ needsInformation }: { needsInformation: boolean }) {
+  return needsInformation ? (
+    <span className="inline-flex items-center rounded-full border border-destructive/45 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">
+      <AlertTriangle className="mr-1 h-3.5 w-3.5" /> Needs information
+    </span>
+  ) : (
+    <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
+      <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Complete
+    </span>
+  );
+}
+
 function StoreInventoryIntake() {
   const [organisationId, setOrganisationId] = useState("");
   const [suppliers, setSuppliers] = useState<StoreSupplier[]>([]);
   const [profiles, setProfiles] = useState<FulfilmentProfile[]>([]);
   const [categoryMappings, setCategoryMappings] = useState<SupplierCategoryMapping[]>([]);
   const [sources, setSources] = useState<ProductSource[]>([]);
+  const [lifecycleHistory, setLifecycleHistory] = useState<IntakeLifecycleHistory[]>([]);
   const [form, setForm] = useState<IntakeForm>(() => emptyForm());
   const [supplierDraft, setSupplierDraft] = useState<SupplierDraft>(EMPTY_SUPPLIER);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(EMPTY_PROFILE);
@@ -601,6 +629,73 @@ function StoreInventoryIntake() {
   );
   const unconfirmedFields = form.fieldsRequiringConfirmation.filter(
     (field) => !form.confirmedFields.includes(field),
+  );
+  const sectionWarnings = useMemo(
+    () => ({
+      intake:
+        !form.sourceUrl.trim() ||
+        !form.name.trim() ||
+        !form.sku.trim() ||
+        !form.shortDescription.trim() ||
+        !form.description.trim() ||
+        !form.category.trim() ||
+        !form.supplierId,
+      images: form.imageUrls.length === 0,
+      pricing:
+        form.businessModel === "affiliate" || form.businessModel === "marketplace"
+          ? !form.affiliateUrl.trim() ||
+            !validNonNegativeNumber(num(form.affiliateCommissionPercent))
+          : num(form.supplierCost) == null ||
+            !validNonNegativeNumber(num(form.markupPercent)) ||
+            sellingPrice == null,
+      operations:
+        !form.fulfilmentProfileId ||
+        !form.stockOrigin.trim() ||
+        form.stockStatus === "not_checked" ||
+        !form.lastStockCheckedAt,
+      review: unconfirmedFields.length > 0,
+    }),
+    [
+      form.affiliateCommissionPercent,
+      form.affiliateUrl,
+      form.businessModel,
+      form.category,
+      form.description,
+      form.fulfilmentProfileId,
+      form.imageUrls.length,
+      form.lastStockCheckedAt,
+      form.markupPercent,
+      form.name,
+      form.shortDescription,
+      form.sourceUrl,
+      form.stockOrigin,
+      form.stockStatus,
+      form.supplierCost,
+      form.supplierId,
+      form.sku,
+      sellingPrice,
+      unconfirmedFields.length,
+    ],
+  );
+  const incompleteSectionLabels = [
+    sectionWarnings.intake ? "intake details" : null,
+    sectionWarnings.images ? "images" : null,
+    sectionWarnings.pricing ? "pricing" : null,
+    sectionWarnings.operations ? "operational details" : null,
+    sectionWarnings.review ? "confirmations" : null,
+  ].filter((label): label is string => Boolean(label));
+  const currentLifecycleHistory = useMemo(
+    () => lifecycleHistory.filter((entry) => entry.intake_id === form.sourceId),
+    [form.sourceId, lifecycleHistory],
+  );
+  const supplierDraftDuplicate = useMemo(
+    () =>
+      findPotentialSupplierDuplicate(suppliers, {
+        name: supplierDraft.name,
+        recognisedDomains: supplierDraft.recognisedDomains,
+        websiteUrl: supplierDraft.websiteUrl,
+      }),
+    [supplierDraft.name, supplierDraft.recognisedDomains, supplierDraft.websiteUrl, suppliers],
   );
   const effectiveDeliveryPayer =
     form.deliveryPayerOverride === "inherit"
@@ -664,6 +759,7 @@ function StoreInventoryIntake() {
         sourceCatalogueResult,
         publicCatalogueResult,
         snapshotResult,
+        lifecycleHistoryResult,
       ] = await Promise.all([
         db.from<{ id: string }>("organisations").select("id").limit(1),
         db.from<StoreSupplier>("store_suppliers").select("*").order("name"),
@@ -683,6 +779,10 @@ function StoreInventoryIntake() {
           .select("*")
           .order("created_at", { ascending: false })
           .limit(2),
+        db
+          .from<IntakeLifecycleHistory>("store_inventory_intake_lifecycle_history")
+          .select("*")
+          .order("created_at", { ascending: false }),
       ]);
 
       const error =
@@ -693,7 +793,8 @@ function StoreInventoryIntake() {
         sourceResult.error ??
         sourceCatalogueResult.error ??
         publicCatalogueResult.error ??
-        snapshotResult.error;
+        snapshotResult.error ??
+        lifecycleHistoryResult.error;
       if (error) {
         toast.error(
           `Could not load Store Operations Book: ${error.message}. Apply the intake migration before using this section.`,
@@ -709,6 +810,7 @@ function StoreInventoryIntake() {
       setCategoryMappings(categoryMappingResult.data ?? []);
       const nextSources = sourceResult.data ?? [];
       setSources(nextSources);
+      setLifecycleHistory(lifecycleHistoryResult.data ?? []);
       const sourceCatalogue = sourceCatalogueResult.data ?? [];
       setCatalogueCounts({
         source: sourceCatalogue.length,
@@ -850,6 +952,21 @@ function StoreInventoryIntake() {
       }
 
       const identifiedSupplier = supplierForSourceUrl(suppliers, payload.sourceUrl);
+      const existingIntake = sources.find(
+        (source) =>
+          source.id !== form.sourceId &&
+          source.supplier_id === identifiedSupplier?.id &&
+          Boolean(payload.supplierProductRef?.trim()) &&
+          source.supplier_product_ref?.trim().toLowerCase() ===
+            payload.supplierProductRef?.trim().toLowerCase(),
+      );
+      if (existingIntake) {
+        openSource(existingIntake);
+        toast.error(
+          `This supplier SKU is already in intake as ${existingIntake.name}. The existing record was opened instead.`,
+        );
+        return;
+      }
       const matchedCategory = categoryMappings.find(
         (mapping) =>
           mapping.supplier_id === identifiedSupplier?.id &&
@@ -1007,6 +1124,16 @@ function StoreInventoryIntake() {
       } catch {
         return toast.error("Use a complete http or https supplier website URL.");
       }
+    }
+    const duplicate = findPotentialSupplierDuplicate(suppliers, {
+      name,
+      recognisedDomains: supplierDraft.recognisedDomains,
+      websiteUrl: supplierDraft.websiteUrl,
+    });
+    if (duplicate) {
+      return toast.error(
+        `${duplicate.name} already has this name or recognised supplier domain. Use the existing registry record instead.`,
+      );
     }
     setSavingSupplier(true);
     const { data, error } = await db
@@ -1208,7 +1335,6 @@ function StoreInventoryIntake() {
       last_price_checked_at: toIso(form.lastPriceCheckedAt),
       last_stock_checked_at: toIso(form.lastStockCheckedAt),
       operational_notes: form.operationalNotes.trim() || null,
-      ...(status === "approved" ? { approved_at: new Date().toISOString() } : {}),
     };
   }
 
@@ -1245,6 +1371,32 @@ function StoreInventoryIntake() {
   async function saveIntake(status: IntakeStatus) {
     const invalid = validateFor(status);
     if (invalid) return toast.error(invalid);
+    if (
+      form.sourceId &&
+      ["imported", "review", "draft", "approved"].includes(form.lifecycle) &&
+      ["imported", "review", "draft", "approved"].includes(status) &&
+      !canAdvanceInventoryIntake(
+        form.lifecycle as "imported" | "review" | "draft" | "approved",
+        status as "imported" | "review" | "draft" | "approved",
+      )
+    ) {
+      return toast.error(
+        "That lifecycle change is not permitted. Approved products stay approved when saved.",
+      );
+    }
+    const duplicate = sources.find(
+      (source) =>
+        source.id !== form.sourceId &&
+        source.supplier_id === form.supplierId &&
+        Boolean(form.sku.trim()) &&
+        source.supplier_product_ref?.trim().toLowerCase() === form.sku.trim().toLowerCase(),
+    );
+    if (duplicate) {
+      openSource(duplicate);
+      return toast.error(
+        `This supplier SKU is already in intake as ${duplicate.name}. The existing record was opened instead.`,
+      );
+    }
     setSaving(true);
     try {
       const remainingFields = status === "approved" ? [] : form.fieldsRequiringConfirmation;
@@ -1502,9 +1654,12 @@ function StoreInventoryIntake() {
         <div className="glass-card p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="font-display text-xl font-semibold">
-                {form.productId ? "Continue intake" : "Start a product intake"}
-              </h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-display text-xl font-semibold">
+                  {form.productId ? "Continue intake" : "Start a product intake"}
+                </h2>
+                <InformationStatusBadge needsInformation={sectionWarnings.intake} />
+              </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 URL imports never publish. This internal workflow ends at approval while the
                 customer catalogue integration is under separate production review.
@@ -1514,6 +1669,17 @@ function StoreInventoryIntake() {
               <ShieldCheck className="mr-1 h-3.5 w-3.5" /> Internal operational data
             </span>
           </div>
+
+          {incompleteSectionLabels.length ? (
+            <div className="mt-5 flex items-start gap-2 rounded-xl border border-destructive/45 bg-destructive/10 p-4 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                <strong>Information still needed:</strong> {incompleteSectionLabels.join(", ")}.
+                These red section labels remain until the missing information is supplied or
+                manually confirmed.
+              </p>
+            </div>
+          ) : null}
 
           <div className="mt-5 rounded-xl border border-primary/25 bg-primary/5 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -1615,11 +1781,13 @@ function StoreInventoryIntake() {
                 }
               >
                 <option value="">Select supplier / partner</option>
-                {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.name} — {supplier.status}
-                  </option>
-                ))}
+                {suppliers
+                  .filter((supplier) => supplier.status !== "rejected")
+                  .map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name} — {supplier.status}
+                    </option>
+                  ))}
               </select>
             </Field>
             <Field label="Short customer description" className="sm:col-span-2">
@@ -1721,7 +1889,10 @@ function StoreInventoryIntake() {
           <div className="mt-7 border-t border-border/60 pt-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="font-semibold">Product images</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold">Product images</h3>
+                  <InformationStatusBadge needsInformation={sectionWarnings.images} />
+                </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Use a supplier-provided image URL or upload a permitted image file. The first
                   image becomes the Store image.
@@ -1805,7 +1976,10 @@ function StoreInventoryIntake() {
           </div>
 
           <div className="mt-7 border-t border-border/60 pt-6">
-            <h3 className="font-semibold">Pricing &amp; competitive check</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">Pricing &amp; competitive check</h3>
+              <InformationStatusBadge needsInformation={sectionWarnings.pricing} />
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
               Choose a competitive starting point or type any valid markup. Markup and gross margin
               are shown separately.
@@ -1981,7 +2155,10 @@ function StoreInventoryIntake() {
             <summary className="cursor-pointer list-none rounded-xl border border-border/60 bg-card/40 p-4 transition hover:border-primary/35">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className="font-semibold">Advanced / Operational Details</h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-semibold">Advanced / Operational Details</h3>
+                    <InformationStatusBadge needsInformation={sectionWarnings.operations} />
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Supplier defaults, fulfilment rules and product-specific overrides. These remain
                     internal.
@@ -2229,7 +2406,10 @@ function StoreInventoryIntake() {
           ) : null}
 
           <div className="mt-7 border-t border-border/60 pt-6">
-            <h3 className="font-semibold">Review notes &amp; confirmations</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">Review notes &amp; confirmations</h3>
+              <InformationStatusBadge needsInformation={sectionWarnings.review} />
+            </div>
             <Field label="Operational notes" className="mt-4">
               <textarea
                 className={`${inputClass} min-h-28`}
@@ -2279,24 +2459,72 @@ function StoreInventoryIntake() {
             )}
           </div>
 
+          {form.sourceId ? (
+            <details className="mt-5 rounded-xl border border-border/60 bg-card/40 p-4">
+              <summary className="cursor-pointer text-sm font-semibold">Lifecycle history</summary>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Append-only status history. “Baseline observed” marks the state when this audit was
+                introduced; it does not claim to reconstruct earlier actions.
+              </p>
+              {currentLifecycleHistory.length ? (
+                <ol className="mt-3 space-y-2 text-xs">
+                  {currentLifecycleHistory.map((entry) => (
+                    <li key={entry.id} className="rounded-lg border border-border/60 p-3">
+                      <p className="font-medium">
+                        {entry.previous_status ? `${lifecycleCopy(entry.previous_status)} → ` : ""}
+                        {lifecycleCopy(entry.new_status)}
+                      </p>
+                      <p className="mt-1 text-muted-foreground">
+                        {entry.action.replace(/_/g, " ")} ·{" "}
+                        {entry.actor_user_id ? "Store leader" : "System"} ·{" "}
+                        {new Date(entry.created_at).toLocaleString("en-ZA")}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  No lifecycle events recorded yet.
+                </p>
+              )}
+            </details>
+          ) : null}
+
           <div className="mt-7 flex flex-wrap gap-2 border-t border-border/60 pt-6">
-            <Button variant="outline" disabled={saving} onClick={() => void saveIntake("review")}>
-              <Save className="mr-1.5 h-4 w-4" /> Save for review
-            </Button>
             <Button
               variant="outline"
-              disabled={saving || !form.sourceId}
-              onClick={() => void saveIntake("draft")}
+              disabled={saving}
+              onClick={() =>
+                void saveIntake(
+                  saveStatusForInventoryIntake(
+                    form.sourceId,
+                    form.lifecycle as "imported" | "review" | "draft" | "approved",
+                  ),
+                )
+              }
             >
-              <ChevronRight className="mr-1.5 h-4 w-4" /> Move to draft
+              <Save className="mr-1.5 h-4 w-4" />{" "}
+              {form.sourceId ? "Save changes" : "Save for review"}
             </Button>
-            <Button
-              variant="outline"
-              disabled={saving || !form.sourceId || unconfirmedFields.length > 0}
-              onClick={() => void saveIntake("approved")}
-            >
-              <CheckCircle2 className="mr-1.5 h-4 w-4" /> Approve
-            </Button>
+            {form.sourceId && form.lifecycle === "imported" ? (
+              <Button variant="outline" disabled={saving} onClick={() => void saveIntake("review")}>
+                <ChevronRight className="mr-1.5 h-4 w-4" /> Move to review
+              </Button>
+            ) : null}
+            {form.sourceId && form.lifecycle === "review" ? (
+              <Button variant="outline" disabled={saving} onClick={() => void saveIntake("draft")}>
+                <ChevronRight className="mr-1.5 h-4 w-4" /> Move to draft
+              </Button>
+            ) : null}
+            {form.sourceId && form.lifecycle === "draft" ? (
+              <Button
+                variant="outline"
+                disabled={saving || unconfirmedFields.length > 0}
+                onClick={() => void saveIntake("approved")}
+              >
+                <CheckCircle2 className="mr-1.5 h-4 w-4" /> Approve
+              </Button>
+            ) : null}
             <div className="flex flex-col gap-1">
               <Button disabled className="bg-muted text-muted-foreground">
                 <ExternalLink className="mr-1.5 h-4 w-4" /> Publish to Store
@@ -2336,14 +2564,20 @@ function StoreInventoryIntake() {
                       {supplier.stock_origin || "origin not recorded"}
                     </p>
                     <div className="mt-2 flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => applySupplier(supplier)}
-                      >
-                        Use supplier
-                      </Button>
+                      {supplier.status !== "rejected" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => applySupplier(supplier)}
+                        >
+                          Use supplier
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          Deactivated duplicate record
+                        </span>
+                      )}
                       {supplier.registry_status !== "paused" && supplier.status !== "paused" ? (
                         <Button
                           type="button"
@@ -2447,6 +2681,13 @@ function StoreInventoryIntake() {
                   }
                   placeholder="Recognised source domains, comma-separated"
                 />
+                {supplierDraftDuplicate ? (
+                  <div className="rounded-lg border border-destructive/45 bg-destructive/10 p-3 text-xs text-destructive">
+                    <strong>Possible duplicate:</strong> {supplierDraftDuplicate.name} already uses
+                    the same name or recognised supplier domain. Use that existing registry record;
+                    a duplicate cannot be added.
+                  </div>
+                ) : null}
                 <input
                   className={inputClass}
                   value={supplierDraft.contactInformation}

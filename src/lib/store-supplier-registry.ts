@@ -25,6 +25,7 @@ export type SupplierRegistryInput = {
 
 export type DomainRegisteredSupplier = {
   id: string;
+  name?: string;
   source_url: string | null;
   recognised_domains?: unknown;
 };
@@ -50,11 +51,41 @@ export function normaliseSupplierDomains(value: string, websiteUrl = ""): string
   return [...domains];
 }
 
+export function normaliseSupplierName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
 function storedDomains(supplier: DomainRegisteredSupplier): string[] {
   const configured = Array.isArray(supplier.recognised_domains)
     ? supplier.recognised_domains.filter((item): item is string => typeof item === "string")
     : [];
   return normaliseSupplierDomains(configured.join(","), supplier.source_url ?? "");
+}
+
+export function findPotentialSupplierDuplicate<T extends DomainRegisteredSupplier>(
+  suppliers: T[],
+  candidate: { name: string; recognisedDomains: string; websiteUrl?: string },
+): T | null {
+  const candidateName = normaliseSupplierName(candidate.name);
+  const candidateDomains = normaliseSupplierDomains(
+    candidate.recognisedDomains,
+    candidate.websiteUrl ?? "",
+  );
+  return (
+    suppliers.find((supplier) => {
+      const hasMatchingName =
+        Boolean(candidateName) &&
+        Boolean(supplier.name) &&
+        normaliseSupplierName(supplier.name ?? "") === candidateName;
+      const hasMatchingDomain = candidateDomains.some((domain) =>
+        storedDomains(supplier).includes(domain),
+      );
+      return hasMatchingName || hasMatchingDomain;
+    }) ?? null
+  );
 }
 
 export function supplierForSourceUrl<T extends DomainRegisteredSupplier>(

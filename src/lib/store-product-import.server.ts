@@ -500,7 +500,7 @@ function importedVariants(product: Record<string, unknown> | null): ImportedVari
               ? "available"
               : variant?.available === false
                 ? "unavailable"
-                : "unknown",
+                : ("unknown" as ImportedStockStatus),
         },
       ];
     })

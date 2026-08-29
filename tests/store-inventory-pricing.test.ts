@@ -7,8 +7,10 @@ import {
   inheritSupplierDefaults,
 } from "../src/lib/store-inventory-pricing.ts";
 import {
+  canAdvanceInventoryIntake,
   canPublishInventoryLifecycle,
   customerSafeStoreProjection,
+  saveStatusForInventoryIntake,
 } from "../src/lib/store-inventory-safety.ts";
 
 test("pricing calculates markup, gross profit and margin correctly", () => {
@@ -76,6 +78,15 @@ test("lifecycle blocks publication while catalogue integration is disabled", () 
   assert.equal(canPublishInventoryLifecycle("imported"), false);
   assert.equal(canPublishInventoryLifecycle("review"), false);
   assert.equal(canPublishInventoryLifecycle("approved"), false);
+});
+
+test("approved intake edits retain approved status and cannot move backwards", () => {
+  assert.equal(canAdvanceInventoryIntake("imported", "review"), true);
+  assert.equal(canAdvanceInventoryIntake("review", "draft"), true);
+  assert.equal(canAdvanceInventoryIntake("draft", "approved"), true);
+  assert.equal(canAdvanceInventoryIntake("approved", "draft"), false);
+  assert.equal(saveStatusForInventoryIntake("intake-1", "approved"), "approved");
+  assert.equal(saveStatusForInventoryIntake(undefined, "imported"), "review");
 });
 
 test("customer-safe projection excludes supplier cost and supplier identity", () => {

@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  findPotentialSupplierDuplicate,
   normaliseSupplierDomains,
+  normaliseSupplierName,
   supplierForSourceUrl,
   supplierRegistryPayload,
 } from "../src/lib/store-supplier-registry.ts";
@@ -86,4 +88,31 @@ test("a supplier can be moved to paused without a secret field", () => {
   });
   assert.equal(payload.status, "paused");
   assert.equal(payload.registry_status, "paused");
+});
+
+test("duplicate suppliers are recognised from a normalised name or configured domain", () => {
+  const suppliers = [
+    {
+      id: "dmc-wholesale",
+      name: "DMC Wholesale",
+      source_url: "https://dmcwholesale.co.za",
+      recognised_domains: ["dmcwholesale.co.za"],
+    },
+  ];
+
+  assert.equal(normaliseSupplierName(" DMC-Wholesale! "), "dmcwholesale");
+  assert.equal(
+    findPotentialSupplierDuplicate(suppliers, {
+      name: "Different name",
+      recognisedDomains: "www.dmcwholesale.co.za",
+    })?.id,
+    "dmc-wholesale",
+  );
+  assert.equal(
+    findPotentialSupplierDuplicate(suppliers, {
+      name: "DMC Wholesale",
+      recognisedDomains: "",
+    })?.id,
+    "dmc-wholesale",
+  );
 });
