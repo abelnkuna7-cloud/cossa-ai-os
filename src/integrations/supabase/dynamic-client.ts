@@ -52,6 +52,11 @@ interface DynamicStorageResult {
   error: DynamicQueryError | null;
 }
 
+interface DynamicRpcResult<T> {
+  data: T | null;
+  error: DynamicQueryError | null;
+}
+
 interface DynamicStorageBucket {
   upload(
     path: string,
@@ -64,6 +69,10 @@ interface DynamicStorageBucket {
 
 export interface DynamicSupabaseClient {
   from<T = DynamicRow>(table: string): DynamicQuery<T>;
+  rpc<T = unknown>(
+    functionName: string,
+    args?: Record<string, unknown>,
+  ): Promise<DynamicRpcResult<T>>;
   storage: {
     from(bucket: string): DynamicStorageBucket;
   };

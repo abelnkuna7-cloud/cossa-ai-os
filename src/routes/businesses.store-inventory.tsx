@@ -30,6 +30,10 @@ import {
   inheritSupplierDefaults,
   validNonNegativeNumber,
 } from "@/lib/store-inventory-pricing";
+import {
+  compareCatalogueSnapshots,
+  type CatalogueSnapshotItem,
+} from "@/lib/store-catalogue-snapshot";
 
 export const Route = createFileRoute("/businesses/store-inventory")({
   component: StoreInventoryIntake,
@@ -161,6 +165,19 @@ type ProductSource = {
   last_stock_checked_at: string | null;
   operational_notes: string | null;
 };
+
+type CatalogueSnapshot = {
+  id: string;
+  created_at: string;
+  source_total_count: number;
+  active_count: number;
+  draft_count: number;
+  archived_count: number;
+  public_catalogue_count: number;
+  integrity_status: "match" | "mismatch";
+};
+
+type CatalogueCountRow = { id: string; status: "active" | "draft" | "archived" };
 
 function productFromIntake(source: ProductSource): StoreProduct {
   return {
@@ -436,6 +453,18 @@ function StoreInventoryIntake() {
   const [savingSupplier, setSavingSupplier] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [snapshots, setSnapshots] = useState<CatalogueSnapshot[]>([]);
+  const [snapshotItems, setSnapshotItems] = useState<
+    (CatalogueSnapshotItem & { snapshot_id: string })[]
+  >([]);
+  const [snapshotting, setSnapshotting] = useState(false);
+  const [catalogueCounts, setCatalogueCounts] = useState({
+    source: 0,
+    active: 0,
+    draft: 0,
+    archived: 0,
+    publicCount: 0,
+  });
 
   const selectedSupplier = useMemo(
     () => suppliers.find((supplier) => supplier.id === form.supplierId) ?? null,
@@ -483,6 +512,14 @@ function StoreInventoryIntake() {
     form.freeShippingOverride === "inherit"
       ? (selectedProfile?.free_shipping_eligible ?? false)
       : form.freeShippingOverride === "yes";
+  const snapshotComparison = useMemo(() => {
+    if (snapshots.length < 2) return null;
+    const [latest, previous] = snapshots;
+    return compareCatalogueSnapshots(
+      snapshotItems.filter((item) => item.snapshot_id === previous.id),
+      snapshotItems.filter((item) => item.snapshot_id === latest.id),
+    );
+  }, [snapshotItems, snapshots]);
 
   useEffect(() => {
     void loadOperationsBook();
@@ -514,7 +551,15 @@ function StoreInventoryIntake() {
   async function loadOperationsBook() {
     setLoading(true);
     try {
-      const [organisationResult, supplierResult, profileResult, sourceResult] = await Promise.all([
+      const [
+        organisationResult,
+        supplierResult,
+        profileResult,
+        sourceResult,
+        sourceCatalogueResult,
+        publicCatalogueResult,
+        snapshotResult,
+      ] = await Promise.all([
         db.from<{ id: string }>("organisations").select("id").limit(1),
         db.from<StoreSupplier>("store_suppliers").select("*").order("name"),
         db.from<FulfilmentProfile>("store_fulfilment_profiles").select("*").order("name"),
@@ -522,13 +567,23 @@ function StoreInventoryIntake() {
           .from<ProductSource>("store_inventory_intakes")
           .select("*")
           .order("created_at", { ascending: false }),
+        db.from<CatalogueCountRow>("store_products").select("id,status"),
+        db.from<{ id: string }>("store_public_products").select("id"),
+        db
+          .from<CatalogueSnapshot>("store_catalogue_snapshots")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(2),
       ]);
 
       const error =
         organisationResult.error ??
         supplierResult.error ??
         profileResult.error ??
-        sourceResult.error;
+        sourceResult.error ??
+        sourceCatalogueResult.error ??
+        publicCatalogueResult.error ??
+        snapshotResult.error;
       if (error) {
         toast.error(
           `Could not load Store Operations Book: ${error.message}. Apply the intake migration before using this section.`,
@@ -543,6 +598,29 @@ function StoreInventoryIntake() {
       setProfiles(nextProfiles);
       const nextSources = sourceResult.data ?? [];
       setSources(nextSources);
+      const sourceCatalogue = sourceCatalogueResult.data ?? [];
+      setCatalogueCounts({
+        source: sourceCatalogue.length,
+        active: sourceCatalogue.filter((product) => product.status === "active").length,
+        draft: sourceCatalogue.filter((product) => product.status === "draft").length,
+        archived: sourceCatalogue.filter((product) => product.status === "archived").length,
+        publicCount: (publicCatalogueResult.data ?? []).length,
+      });
+      const nextSnapshots = snapshotResult.data ?? [];
+      setSnapshots(nextSnapshots);
+      if (nextSnapshots.length) {
+        const { data: items, error: itemError } = await db
+          .from<CatalogueSnapshotItem & { snapshot_id: string }>("store_catalogue_snapshot_items")
+          .select("snapshot_id,product_id,sku,slug,source_status,public_present")
+          .in(
+            "snapshot_id",
+            nextSnapshots.map((snapshot) => snapshot.id),
+          );
+        if (itemError) throw new Error(itemError.message);
+        setSnapshotItems(items ?? []);
+      } else {
+        setSnapshotItems([]);
+      }
       setForm((current) => {
         if (current.supplierId || !nextSuppliers.length) return current;
         const dmc =
@@ -560,6 +638,24 @@ function StoreInventoryIntake() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function createCatalogueSnapshot() {
+    setSnapshotting(true);
+    try {
+      const { error } = await db.rpc("create_store_catalogue_snapshot", { p_reason: "manual" });
+      if (error) throw new Error(error.message);
+      await loadOperationsBook();
+      toast.success("Catalogue snapshot saved. No product records were changed.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? `Snapshot could not be created: ${error.message}`
+          : "Snapshot could not be created.",
+      );
+    } finally {
+      setSnapshotting(false);
     }
   }
 
@@ -1078,6 +1174,71 @@ function StoreInventoryIntake() {
               </p>
             </div>
           ),
+        )}
+      </section>
+
+      <section className="glass-card p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
+              Read-only catalogue audit
+            </p>
+            <h2 className="mt-1 font-display text-xl font-semibold">Catalogue snapshots</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+              Captures product IDs, SKUs, slugs, status and public presence for later comparison. It
+              cannot publish, edit or remove products.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void createCatalogueSnapshot()}
+            disabled={snapshotting || loading}
+          >
+            {snapshotting ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-1.5 h-4 w-4" />
+            )}
+            Create Catalogue Snapshot
+          </Button>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {[
+            ["Source", catalogueCounts.source],
+            ["Active", catalogueCounts.active],
+            ["Draft", catalogueCounts.draft],
+            ["Archived", catalogueCounts.archived],
+            ["Public", catalogueCounts.publicCount],
+          ].map(([label, count]) => (
+            <div key={String(label)} className="rounded-lg border border-border/60 bg-card/40 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+              <p className="mt-1 text-lg font-semibold">{count}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-xs text-muted-foreground">
+          {snapshots[0]
+            ? `Latest snapshot: ${new Date(snapshots[0].created_at).toLocaleString("en-ZA")} · integrity ${snapshots[0].integrity_status.toUpperCase()}.`
+            : "No previous snapshot available for comparison."}
+        </p>
+        {snapshotComparison && (
+          <div className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4 lg:grid-cols-7">
+            {[
+              ["Added", snapshotComparison.added.length],
+              ["Removed", snapshotComparison.removed.length],
+              ["Activated", snapshotComparison.activated.length],
+              ["Archived", snapshotComparison.archived.length],
+              ["Drafted", snapshotComparison.drafted.length],
+              ["Public +", snapshotComparison.publicAdditions.length],
+              ["Public −", snapshotComparison.publicRemovals.length],
+            ].map(([label, count]) => (
+              <div key={String(label)} className="rounded-lg border border-border/60 p-3">
+                <p className="text-muted-foreground">{label}</p>
+                <p className="mt-1 text-base font-semibold">{count}</p>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 
