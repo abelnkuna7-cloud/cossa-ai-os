@@ -184,9 +184,20 @@ function AffiliateSmartImport() {
     setDraft(null);
     setImportError(null);
     try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        throw new Error("Your GROWTH session has expired. Sign in again, then retry Smart Import.");
+      }
+
       const response = await fetch("/api/store-affiliate-smart-import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         credentials: "same-origin",
         body: JSON.stringify({ sourceUrl: targetUrl }),
       });
