@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Search,
   ShoppingCart,
+  Sparkles,
   Store,
   TrendingUp,
   UsersRound,
@@ -38,6 +39,13 @@ export const Route = createFileRoute("/businesses/store")({
 });
 
 const STORE_TOOLS = [
+  {
+    title: "Smart Affiliate Import",
+    description:
+      "Paste an approved affiliate product link. GROWTH reads the merchant page, prepares product data and media, generates a Cossa SKU and saves a reviewable affiliate draft.",
+    to: "/businesses/store-affiliate-import",
+    icon: Sparkles,
+  },
   {
     title: "Inventory & Product Intake",
     description:
@@ -175,6 +183,13 @@ function CossaStoreWorkspace() {
               asChild
               className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
             >
+              <Link to="/businesses/store-affiliate-import">
+                <Sparkles className="mr-1.5 h-4 w-4" />
+                Smart Affiliate Import
+              </Link>
+            </Button>
+
+            <Button asChild variant="outline" className="border-primary/40 text-primary">
               <Link to="/businesses/store-inventory">
                 <PackagePlus className="mr-1.5 h-4 w-4" />
                 Add supplier product
