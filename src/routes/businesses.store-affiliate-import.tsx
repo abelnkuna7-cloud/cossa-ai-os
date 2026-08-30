@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   ExternalLink,
@@ -61,6 +62,7 @@ type ImportCandidate = {
   imageUrls: string[];
   videoUrls: string[];
   mediaWarnings: string[];
+  retrievalMethod?: "direct" | "rendered";
   supplierProductRef: string | null;
   supplierCost: number | null;
   supplierCostConfidence: ImportConfidence;
@@ -150,6 +152,9 @@ function AffiliateSmartImport() {
   const [saving, setSaving] = useState(false);
   const [candidate, setCandidate] = useState<ImportCandidate | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [lastImportedUrl, setLastImportedUrl] = useState("");
+  const autoTimer = useRef<number | null>(null);
 
   const validUrl = useMemo(() => {
     try {
@@ -160,31 +165,41 @@ function AffiliateSmartImport() {
     }
   }, [sourceUrl]);
 
-  async function analyse() {
-    if (!validUrl) {
-      toast.error("Paste a complete http or https affiliate product URL first.");
+  async function analyse(targetUrl = sourceUrl.trim()) {
+    if (!targetUrl) return;
+    let parsed: URL;
+    try {
+      parsed = new URL(targetUrl);
+    } catch {
+      setImportError("Paste a complete http or https affiliate product URL first.");
+      return;
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      setImportError("Paste a complete http or https affiliate product URL first.");
       return;
     }
 
     setImporting(true);
     setCandidate(null);
     setDraft(null);
+    setImportError(null);
     try {
       const response = await fetch("/api/store-affiliate-smart-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ sourceUrl: sourceUrl.trim() }),
+        body: JSON.stringify({ sourceUrl: targetUrl }),
       });
       const payload = (await response.json().catch(() => null)) as
-        | (ImportCandidate & { error?: string })
+        | (ImportCandidate & { error?: string; code?: string })
         | null;
       if (!response.ok || !payload || payload.error) {
-        throw new Error(payload?.error || `Import failed with status ${response.status}.`);
+        const message = payload?.error || `Import failed with status ${response.status}.`;
+        throw new Error(message);
       }
 
       const imported = payload as ImportCandidate;
-      const merchant = merchantName(imported.sourceUrl || sourceUrl);
+      const merchant = merchantName(imported.sourceUrl || targetUrl);
       const price = imported.supplierSalePrice ?? imported.supplierRrp ?? imported.supplierCost;
       const compareAt =
         imported.supplierRrp != null && price != null && imported.supplierRrp >= price
@@ -199,11 +214,11 @@ function AffiliateSmartImport() {
 
       setCandidate(imported);
       setDraft({
-        sourceUrl: imported.sourceUrl || sourceUrl.trim(),
-        affiliateUrl: sourceUrl.trim(),
+        sourceUrl: imported.sourceUrl || targetUrl,
+        affiliateUrl: targetUrl,
         merchant,
         name,
-        sku: internalSku(imported.sourceUrl || sourceUrl, imported.supplierProductRef),
+        sku: internalSku(imported.sourceUrl || targetUrl, imported.supplierProductRef),
         supplierProductRef: imported.supplierProductRef || "",
         brand: imported.brand || "",
         category: imported.supplierCategory || "",
@@ -219,15 +234,31 @@ function AffiliateSmartImport() {
         fieldsRequiringConfirmation: imported.fieldsRequiringConfirmation || [],
         importTrace: imported.importTrace || [],
       });
+      setLastImportedUrl(targetUrl);
       toast.success(
         `Product analysed: ${imported.imageUrls?.length ?? 0} image(s), ${imported.videoUrls?.length ?? 0} video(s).`,
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not analyse this product link.");
+      const message =
+        error instanceof Error ? error.message : "Could not analyse this product link.";
+      setImportError(message);
+      toast.error(message);
     } finally {
       setImporting(false);
     }
   }
+
+  useEffect(() => {
+    if (autoTimer.current != null) window.clearTimeout(autoTimer.current);
+    const targetUrl = sourceUrl.trim();
+    if (!validUrl || importing || targetUrl === lastImportedUrl) return;
+    autoTimer.current = window.setTimeout(() => {
+      void analyse(targetUrl);
+    }, 700);
+    return () => {
+      if (autoTimer.current != null) window.clearTimeout(autoTimer.current);
+    };
+  }, [sourceUrl, validUrl, importing, lastImportedUrl]);
 
   function updateDraft<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((current) => (current ? { ...current, [key]: value } : current));
@@ -321,8 +352,10 @@ function AffiliateSmartImport() {
         );
       }
       setSourceUrl("");
+      setLastImportedUrl("");
       setCandidate(null);
       setDraft(null);
+      setImportError(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the affiliate draft.");
     } finally {
@@ -344,10 +377,9 @@ function AffiliateSmartImport() {
         </p>
         <h1 className="mt-1 font-display text-3xl font-semibold">Smart Affiliate Import</h1>
         <p className="mt-2 max-w-4xl text-sm text-muted-foreground">
-          Paste one authorised affiliate product link. GROWTH reads the merchant page and brings in
-          the product name, advertised price, brand, merchant product ID/SKU when exposed, category,
-          descriptions, variants, product images and directly accessible product videos. A separate
-          Cossa affiliate SKU is generated automatically.
+          Paste one authorised affiliate product link. GROWTH starts automatically and reads the
+          merchant page for the product name, advertised price, brand, merchant product ID/SKU when
+          exposed, category, descriptions, variants, product images and accessible product videos.
         </p>
       </section>
 
@@ -356,18 +388,24 @@ function AffiliateSmartImport() {
           <Link2 className="h-5 w-5 text-primary" />
           <h2 className="font-display text-xl font-semibold">Paste affiliate product link</h2>
         </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          No extra form is required. Paste a complete product URL and Smart Import starts after a short delay.
+        </p>
         <div className="mt-4 flex flex-col gap-3 md:flex-row">
           <input
             className={inputClass}
             value={sourceUrl}
-            onChange={(event) => setSourceUrl(event.target.value)}
+            onChange={(event) => {
+              setSourceUrl(event.target.value);
+              setImportError(null);
+            }}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !importing) void analyse();
+              if (event.key === "Enter" && !importing) void analyse(sourceUrl.trim());
             }}
             placeholder="https://www.temu.com/... or another approved affiliate product URL"
           />
           <Button
-            onClick={() => void analyse()}
+            onClick={() => void analyse(sourceUrl.trim())}
             disabled={!validUrl || importing}
             className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
           >
@@ -380,6 +418,23 @@ function AffiliateSmartImport() {
           </Button>
         </div>
 
+        {importing ? (
+          <div className="mt-4 flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span>GROWTH is reading the merchant page and collecting product data and media…</span>
+          </div>
+        ) : null}
+
+        {importError ? (
+          <div className="mt-4 flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-semibold">Smart Import could not complete this product.</p>
+              <p className="mt-1">{importError}</p>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-4 grid gap-3 text-xs text-muted-foreground sm:grid-cols-3">
           <div className="rounded-xl border border-border/60 p-3">
             <ShieldCheck className="mb-2 h-4 w-4 text-primary" />
@@ -387,11 +442,11 @@ function AffiliateSmartImport() {
           </div>
           <div className="rounded-xl border border-border/60 p-3">
             <ImageIcon className="mb-2 h-4 w-4 text-primary" />
-            The importer keeps every product image it can directly discover, up to the safety limit.
+            The importer collects directly exposed product images, up to the safety limit.
           </div>
           <div className="rounded-xl border border-border/60 p-3">
             <PlayCircle className="mb-2 h-4 w-4 text-primary" />
-            Product video URLs are captured when the merchant exposes them to the product page.
+            Product video URLs are captured when the merchant exposes them to the page reader.
           </div>
         </div>
       </section>
@@ -402,11 +457,12 @@ function AffiliateSmartImport() {
             <div>
               <h2 className="font-display text-xl font-semibold">Imported affiliate draft</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                GROWTH has filled what the merchant exposed. Review flagged fields before publication.
+                GROWTH filled what the merchant exposed. Review flagged fields before publication.
               </p>
             </div>
             <span className="rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
               {candidate?.importStatus || "partial"}
+              {candidate?.retrievalMethod ? ` · ${candidate.retrievalMethod}` : ""}
             </span>
           </div>
 
@@ -431,100 +487,39 @@ function AffiliateSmartImport() {
           )}
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <label className="sm:col-span-2 text-sm">
-              Product name
-              <input
-                className={`${inputClass} mt-1.5`}
-                value={draft.name}
-                onChange={(event) => updateDraft("name", event.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Merchant / affiliate partner
-              <input
-                className={`${inputClass} mt-1.5`}
-                value={draft.merchant}
-                onChange={(event) => updateDraft("merchant", event.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Cossa SKU
-              <input
-                className={`${inputClass} mt-1.5`}
-                value={draft.sku}
-                onChange={(event) => updateDraft("sku", event.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Merchant product ID / SKU
-              <input
-                className={`${inputClass} mt-1.5`}
-                value={draft.supplierProductRef}
-                onChange={(event) => updateDraft("supplierProductRef", event.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Brand
-              <input
-                className={`${inputClass} mt-1.5`}
-                value={draft.brand}
-                onChange={(event) => updateDraft("brand", event.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Category
-              <input
-                className={`${inputClass} mt-1.5`}
-                value={draft.category}
-                onChange={(event) => updateDraft("category", event.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Current advertised price (ZAR)
-              <input
-                className={`${inputClass} mt-1.5`}
-                type="number"
-                min="0"
-                step="0.01"
-                value={draft.price}
-                onChange={(event) => updateDraft("price", event.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Compare-at price
-              <input
-                className={`${inputClass} mt-1.5`}
-                type="number"
-                min="0"
-                step="0.01"
-                value={draft.compareAtPrice}
-                onChange={(event) => updateDraft("compareAtPrice", event.target.value)}
-              />
-            </label>
-            <label className="sm:col-span-2 text-sm">
-              Affiliate tracking URL
-              <input
-                className={`${inputClass} mt-1.5`}
-                value={draft.affiliateUrl}
-                onChange={(event) => updateDraft("affiliateUrl", event.target.value)}
-              />
-            </label>
-            <label className="sm:col-span-2 text-sm">
-              Short description
-              <textarea
-                className={`${inputClass} mt-1.5 min-h-20`}
-                value={draft.shortDescription}
-                onChange={(event) => updateDraft("shortDescription", event.target.value)}
-              />
-            </label>
-            <label className="sm:col-span-2 text-sm">
-              Description
-              <textarea
-                className={`${inputClass} mt-1.5 min-h-36`}
-                value={draft.description}
-                onChange={(event) => updateDraft("description", event.target.value)}
-              />
-            </label>
+            <Field label="Product name" span>
+              <input className={inputClass} value={draft.name} onChange={(e) => updateDraft("name", e.target.value)} />
+            </Field>
+            <Field label="Merchant / affiliate partner">
+              <input className={inputClass} value={draft.merchant} onChange={(e) => updateDraft("merchant", e.target.value)} />
+            </Field>
+            <Field label="Cossa SKU">
+              <input className={inputClass} value={draft.sku} onChange={(e) => updateDraft("sku", e.target.value)} />
+            </Field>
+            <Field label="Merchant product ID / SKU">
+              <input className={inputClass} value={draft.supplierProductRef} onChange={(e) => updateDraft("supplierProductRef", e.target.value)} />
+            </Field>
+            <Field label="Brand">
+              <input className={inputClass} value={draft.brand} onChange={(e) => updateDraft("brand", e.target.value)} />
+            </Field>
+            <Field label="Category">
+              <input className={inputClass} value={draft.category} onChange={(e) => updateDraft("category", e.target.value)} />
+            </Field>
+            <Field label="Current advertised price (ZAR)">
+              <input className={inputClass} type="number" min="0" step="0.01" value={draft.price} onChange={(e) => updateDraft("price", e.target.value)} />
+            </Field>
+            <Field label="Compare-at price">
+              <input className={inputClass} type="number" min="0" step="0.01" value={draft.compareAtPrice} onChange={(e) => updateDraft("compareAtPrice", e.target.value)} />
+            </Field>
+            <Field label="Affiliate tracking URL" span>
+              <input className={inputClass} value={draft.affiliateUrl} onChange={(e) => updateDraft("affiliateUrl", e.target.value)} />
+            </Field>
+            <Field label="Short description" span>
+              <textarea className={`${inputClass} min-h-20`} value={draft.shortDescription} onChange={(e) => updateDraft("shortDescription", e.target.value)} />
+            </Field>
+            <Field label="Description" span>
+              <textarea className={`${inputClass} min-h-36`} value={draft.description} onChange={(e) => updateDraft("description", e.target.value)} />
+            </Field>
           </div>
 
           {candidate?.variants?.length ? (
@@ -532,14 +527,9 @@ function AffiliateSmartImport() {
               <p className="text-sm font-medium">Imported variants ({candidate.variants.length})</p>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 {candidate.variants.map((variant, index) => (
-                  <div
-                    key={`${variant.supplierVariantId || variant.supplierSku || variant.name}-${index}`}
-                    className="rounded-xl border border-border/60 p-3 text-xs"
-                  >
+                  <div key={`${variant.supplierVariantId || variant.supplierSku || variant.name}-${index}`} className="rounded-xl border border-border/60 p-3 text-xs">
                     <p className="font-medium">{variant.name}</p>
-                    <p className="mt-1 text-muted-foreground">
-                      SKU: {variant.supplierSku || "not exposed"} · {variant.availability}
-                    </p>
+                    <p className="mt-1 text-muted-foreground">SKU: {variant.supplierSku || "not exposed"} · {variant.availability}</p>
                   </div>
                 ))}
               </div>
@@ -552,14 +542,8 @@ function AffiliateSmartImport() {
               <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {draft.imageUrls.map((url, index) => (
                   <div key={`${url}-${index}`} className="relative">
-                    <img
-                      src={url}
-                      alt={`Imported product ${index + 1}`}
-                      className="aspect-square w-full rounded-xl border border-border/60 bg-background object-contain"
-                    />
-                    <span className="absolute bottom-2 right-2 rounded bg-background/85 px-1.5 py-0.5 text-[10px]">
-                      {index + 1}
-                    </span>
+                    <img src={url} alt={`Imported product ${index + 1}`} className="aspect-square w-full rounded-xl border border-border/60 bg-background object-contain" />
+                    <span className="absolute bottom-2 right-2 rounded bg-background/85 px-1.5 py-0.5 text-[10px]">{index + 1}</span>
                   </div>
                 ))}
               </div>
@@ -572,20 +556,10 @@ function AffiliateSmartImport() {
               <div className="mt-2 grid gap-3 sm:grid-cols-2">
                 {draft.videoUrls.map((url, index) => (
                   <div key={`${url}-${index}`} className="rounded-xl border border-border/60 p-3">
-                    <video
-                      controls
-                      preload="metadata"
-                      className="w-full rounded-lg bg-black"
-                      src={url}
-                    >
+                    <video controls preload="metadata" className="w-full rounded-lg bg-black" src={url}>
                       Your browser does not support this product video.
                     </video>
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-flex text-xs text-primary hover:underline"
-                    >
+                    <a href={url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs text-primary hover:underline">
                       <ExternalLink className="mr-1 h-3.5 w-3.5" /> Open source video
                     </a>
                   </div>
@@ -595,16 +569,8 @@ function AffiliateSmartImport() {
           ) : null}
 
           <div className="mt-6 flex flex-wrap gap-2">
-            <Button
-              onClick={() => void saveDraft()}
-              disabled={saving}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              {saving ? (
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-1.5 h-4 w-4" />
-              )}
+            <Button onClick={() => void saveDraft()} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
               Save Cossa Store draft
             </Button>
             <Button variant="outline" asChild>
@@ -614,6 +580,15 @@ function AffiliateSmartImport() {
         </section>
       ) : null}
     </div>
+  );
+}
+
+function Field({ label, span = false, children }: { label: string; span?: boolean; children: React.ReactNode }) {
+  return (
+    <label className={`${span ? "sm:col-span-2 " : ""}text-sm`}>
+      <span className="mb-1.5 block">{label}</span>
+      {children}
+    </label>
   );
 }
 
