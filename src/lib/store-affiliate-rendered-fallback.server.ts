@@ -16,15 +16,28 @@ export type RenderedAffiliateCandidate = ImportedProductCandidate & {
   retrievalMethod: "rendered";
 };
 
+type TemuExtract = {
+  title: string | null;
+  description: string | null;
+  brand: string | null;
+  category: string | null;
+  productRef: string | null;
+  price: number | null;
+  images: string[];
+};
+
 function decode(value: string): string {
   return value
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
     .replace(/\\u0026/gi, "&")
     .replace(/\\u002F/gi, "/")
     .replace(/\\x2F/gi, "/")
     .replace(/\\\//g, "/")
-    .replace(/\\u003A/gi, ":");
+    .replace(/\\u003A/gi, ":")
+    .replace(/\\u002D/gi, "-")
+    .replace(/\\"/g, '"');
 }
 
 function absolute(value: string, base: string): string | null {
@@ -38,14 +51,12 @@ function absolute(value: string, base: string): string | null {
 
 function cleanText(value: string | null | undefined): string | null {
   if (!value) return null;
-  const text = value
+  const text = decode(value)
     .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
+    .replace(/\\n|\\r|\\t/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   return text || null;
@@ -71,6 +82,20 @@ function canonicalFromHtml(html: string, base: string): string | null {
   return canonical ? absolute(canonical, base) : null;
 }
 
+function isTemuUrl(input: string): boolean {
+  try {
+    const host = new URL(input).hostname.toLowerCase();
+    return host === "temu.com" || host.endsWith(".temu.com");
+  } catch {
+    return false;
+  }
+}
+
+function looksLikeTemuProductUrl(input: string): boolean {
+  if (!isTemuUrl(input)) return false;
+  return /(?:-g-\d+|goods_id=|goodsId=|product_id=|productId=|\/goods(?:\/|\?|$)|\.html(?:\?|$))/i.test(input);
+}
+
 function temuProductUrlFromHtml(html: string, base: string): string | null {
   const values: string[] = [];
   for (const match of html.matchAll(/["']((?:https?:)?(?:\\?\/\\?\/)(?:www\.)?temu\.com\/[^"'<>\\s]+)["']/gi)) {
@@ -80,7 +105,7 @@ function temuProductUrlFromHtml(html: string, base: string): string | null {
     .map((value) => absolute(value, base))
     .filter((value): value is string => Boolean(value))
     .filter((value) => !/share\.temu\.com/i.test(value));
-  return resolved.find((value) => /(?:-g-\d+|goods_id=|product_id=|\.html(?:\?|$))/i.test(value)) ?? resolved[0] ?? null;
+  return resolved.find(looksLikeTemuProductUrl) ?? null;
 }
 
 export async function resolveAffiliateProductUrl(input: string): Promise<string> {
@@ -105,9 +130,15 @@ export async function resolveAffiliateProductUrl(input: string): Promise<string>
       },
     });
     const finalUrl = response.url || url.toString();
-    if (!/^share\.temu\.com$/i.test(new URL(finalUrl).hostname)) return finalUrl;
+    if (looksLikeTemuProductUrl(finalUrl)) return finalUrl;
+
     const html = await response.text().catch(() => "");
-    return temuProductUrlFromHtml(html, finalUrl) ?? canonicalFromHtml(html, finalUrl) ?? finalUrl;
+    const embeddedProduct = temuProductUrlFromHtml(html, finalUrl);
+    if (embeddedProduct) return embeddedProduct;
+
+    const canonical = canonicalFromHtml(html, finalUrl);
+    if (canonical && looksLikeTemuProductUrl(canonical)) return canonical;
+    return finalUrl;
   } catch {
     return url.toString();
   } finally {
@@ -188,6 +219,74 @@ function fallbackPrice(html: string): number | null {
   return null;
 }
 
+function quotedField(html: string, keys: string[]): string | null {
+  for (const key of keys) {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = html.match(new RegExp(`["']${escaped}["']\\s*:\\s*["']((?:\\\\.|[^"']){2,2000})["']`, "i"));
+    const value = cleanText(match?.[1]);
+    if (value) return value;
+  }
+  return null;
+}
+
+function numericField(html: string, keys: string[]): number | null {
+  for (const key of keys) {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = html.match(new RegExp(`["']${escaped}["']\\s*:\\s*(?:["'])?([0-9]+(?:\\.[0-9]{1,2})?)(?:["'])?`, "i"));
+    if (!match?.[1]) continue;
+    const parsed = Number(match[1]);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+}
+
+function temuProductRegion(html: string): string {
+  const markers = [
+    /["']goodsName["']\s*:/i,
+    /["']goodsId["']\s*:/i,
+    /["']productName["']\s*:/i,
+    /["']productId["']\s*:/i,
+  ];
+  for (const marker of markers) {
+    const match = marker.exec(html);
+    if (!match || match.index == null) continue;
+    return html.slice(Math.max(0, match.index - 120_000), Math.min(html.length, match.index + 220_000));
+  }
+  return html.slice(0, Math.min(html.length, 300_000));
+}
+
+function temuImages(region: string, sourceUrl: string): string[] {
+  const values: string[] = [];
+  const structured = /["'](?:imageUrl|imageURL|image_url|thumbUrl|thumbnailUrl|originImageUrl|originalImageUrl|goodsImageUrl|skuImageUrl|mainImageUrl|detailImageUrl|largeImageUrl)["']\s*:\s*["']([^"']+)["']/gi;
+  for (const match of region.matchAll(structured)) {
+    if (match[1]) values.push(match[1]);
+  }
+  for (const match of region.matchAll(/["']((?:https?:)?(?:\\?\/\\?\/)[^"'\s<>]+?\.(?:avif|webp|png|jpe?g)(?:\?[^"'\s<>]*)?)["']/gi)) {
+    if (match[1]) values.push(match[1]);
+  }
+  return unique(values, sourceUrl, MAX_IMAGES);
+}
+
+function extractTemuProduct(html: string, sourceUrl: string): TemuExtract {
+  const region = temuProductRegion(html);
+  const title = quotedField(region, ["goodsName", "goodsTitle", "productName", "productTitle"])
+    ?? metaContent(html, "og:title")
+    ?? metaContent(html, "twitter:title");
+  const description = quotedField(region, ["goodsDesc", "goodsDescription", "productDesc", "productDescription"])
+    ?? metaContent(html, "og:description")
+    ?? metaContent(html, "description")
+    ?? metaContent(html, "twitter:description");
+  const brand = quotedField(region, ["brandName", "brand_name"]);
+  const category = quotedField(region, ["leafCategoryName", "categoryName", "catName", "category_name"]);
+  const productRef = quotedField(region, ["goodsId", "goods_id", "productId", "product_id"])
+    ?? region.match(/["'](?:goodsId|goods_id|productId|product_id)["']\s*:\s*(\d{6,})/i)?.[1]
+    ?? productRefFromUrl(sourceUrl);
+  const price = numericField(region, ["salePrice", "sale_price", "localPrice", "priceAmount", "currentPrice"])
+    ?? fallbackPrice(region);
+  const images = temuImages(region, sourceUrl);
+  return { title, description, brand, category, productRef, price, images };
+}
+
 export async function renderAffiliateProductWithFirecrawl(sourceUrl: string): Promise<RenderedAffiliateCandidate> {
   const apiKey = process.env.FIRECRAWL_API_KEY?.trim();
   if (!apiKey) {
@@ -239,30 +338,36 @@ export async function renderAffiliateProductWithFirecrawl(sourceUrl: string): Pr
     }
 
     const basic = parseGenericProductPage({ html, sourceUrl: finalUrl, adapterKey: "rendered-web-page" });
+    const temu = isTemuUrl(finalUrl) || isTemuUrl(resolvedUrl) ? extractTemuProduct(html, finalUrl) : null;
     const titleMeta = metaContent(html, "og:title") ?? metaContent(html, "twitter:title");
     const descriptionMeta = metaContent(html, "og:description") ?? metaContent(html, "description") ?? metaContent(html, "twitter:description");
-    const betterTitle = basic.title && !/^(?:temu|shop|home)$/i.test(basic.title.trim()) ? basic.title : titleMeta;
-    const description = basic.description ?? descriptionMeta;
+    const basicTitle = basic.title && !/^(?:temu|shop|home)$/i.test(basic.title.trim()) ? basic.title : null;
+    const betterTitle = temu?.title ?? basicTitle ?? titleMeta;
+    const description = temu?.description ?? basic.description ?? descriptionMeta;
     const shortDescription = basic.shortDescription ?? (description ? description.slice(0, 240) : null);
-    const images = strictImages(html, finalUrl, basic.imageUrls || []);
+    const genericImages = strictImages(html, finalUrl, basic.imageUrls || []);
+    const images = temu?.images.length ? temu.images : genericImages;
     const videos = strictVideos(html, finalUrl);
-    const price = basic.supplierSalePrice ?? basic.supplierRrp ?? basic.supplierCost ?? fallbackPrice(html);
-    const supplierRef = basic.supplierProductRef ?? productRefFromUrl(finalUrl);
+    const price = temu?.price ?? basic.supplierSalePrice ?? basic.supplierRrp ?? basic.supplierCost ?? fallbackPrice(html);
+    const supplierRef = temu?.productRef ?? basic.supplierProductRef ?? productRefFromUrl(finalUrl) ?? productRefFromUrl(resolvedUrl);
 
     return {
       ...basic,
-      sourceUrl: finalUrl,
+      sourceUrl: looksLikeTemuProductUrl(finalUrl) ? finalUrl : resolvedUrl,
       title: betterTitle ?? basic.title,
       shortDescription,
       description,
+      brand: temu?.brand ?? basic.brand,
+      supplierCategory: temu?.category ?? basic.supplierCategory,
       supplierProductRef: supplierRef,
       supplierSalePrice: basic.supplierSalePrice ?? (price != null ? price : null),
       supplierSalePriceSourceLabel: basic.supplierSalePriceSourceLabel ?? (price != null ? "Rendered merchant product price" : null),
       imageUrls: images,
       videoUrls: videos,
       mediaWarnings: [
-        `Firecrawl fallback used once because normal merchant reading was incomplete or blocked.`,
-        `Rendered media was restricted to product/gallery signals; ${images.length} candidate product image(s) retained.`,
+        "Firecrawl fallback used once because normal merchant reading was incomplete or blocked.",
+        ...(temu ? ["Temu-specific extraction was isolated to the rendered product-data region to avoid page icons and promotional assets."] : []),
+        `Rendered media retained ${images.length} candidate product image(s).`,
       ],
       retrievalMethod: "rendered",
     };
