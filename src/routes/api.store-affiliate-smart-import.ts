@@ -5,7 +5,10 @@ import {
   agentRuntimeJson,
   requireRuntimeMember,
 } from "@/lib/agent-runtime.server";
-import { smartImportAffiliateProduct } from "@/lib/store-affiliate-smart-import.server";
+import {
+  renderAffiliateProductWithFirecrawl,
+  resolveAffiliateProductUrl,
+} from "@/lib/store-affiliate-rendered-fallback.server";
 import {
   importSupplierProduct,
   ProductImportError,
@@ -20,7 +23,7 @@ function record(value: unknown): Record<string, unknown> {
 
 function directCandidateQuality(candidate: ImportedProductCandidate): number {
   return [
-    candidate.title,
+    candidate.title && !/^(?:temu|shop|home)$/i.test(candidate.title.trim()),
     candidate.brand,
     candidate.supplierProductRef,
     candidate.supplierSalePrice ?? candidate.supplierRrp ?? candidate.supplierCost,
@@ -34,36 +37,51 @@ async function importWithCostAwareFallback(sourceUrl: unknown) {
     throw new ProductImportError("missing_source_url", "Paste an affiliate product URL first.");
   }
 
-  // Cheap path first. If the normal merchant reader can identify the product and gives us at
-  // least one usable image, return it immediately. Firecrawl must not be spent just to chase a
-  // larger gallery; the user can review/remove media before saving the draft.
+  const originalUrl = sourceUrl.trim();
+  const resolvedUrl = await resolveAffiliateProductUrl(originalUrl);
+
+  // Cheap path first. Resolve known affiliate short links before reading so the normal importer
+  // sees the actual product page instead of a share/redirect landing page.
   try {
-    const direct = await importSupplierProduct({ sourceUrl: sourceUrl.trim() });
+    const direct = await importSupplierProduct({ sourceUrl: resolvedUrl });
     if (directCandidateQuality(direct) >= 4 && direct.imageUrls.length > 0) {
       return {
         ...direct,
+        sourceUrl: direct.sourceUrl || resolvedUrl,
         imageUrls: direct.imageUrls.slice(0, 16),
         videoUrls: [],
         mediaWarnings: [
+          ...(resolvedUrl !== originalUrl
+            ? ["Affiliate short link was resolved to the merchant product page before import."]
+            : []),
           "Normal merchant reading succeeded. Firecrawl was not used for this import.",
         ],
         retrievalMethod: "direct" as const,
       };
     }
   } catch {
-    // The protected/rendered fallback below owns the final error reporting.
+    // Firecrawl fallback below owns the final error when direct reading is blocked/incomplete.
   }
 
-  // Expensive path only when the direct reader cannot safely identify the product or exposes no
-  // usable product image. smartImportAffiliateProduct invokes Firecrawl only at this stage.
-  const rendered = await smartImportAffiliateProduct(sourceUrl);
+  // Expensive path: exactly one Firecrawl scrape, only when direct reading is not good enough.
+  // The rendered importer deliberately ignores arbitrary page <img> assets and retains only
+  // product/gallery signals, so logos/payment/shipping/social icons do not become product media.
+  const rendered = await renderAffiliateProductWithFirecrawl(resolvedUrl);
+  if (directCandidateQuality(rendered) < 3 || !rendered.title || !rendered.imageUrls.length) {
+    throw new ProductImportError(
+      "rendered_import_incomplete",
+      "The merchant page was rendered, but Growth could not confirm enough real product data to create a safe affiliate draft.",
+      422,
+    );
+  }
+
   return {
     ...rendered,
     mediaWarnings: [
-      ...(rendered.mediaWarnings || []),
-      ...(rendered.retrievalMethod === "rendered"
-        ? ["Firecrawl was used because normal merchant reading was incomplete or blocked."]
+      ...(resolvedUrl !== originalUrl
+        ? ["Affiliate short link was resolved to the merchant product page before Firecrawl was used."]
         : []),
+      ...(rendered.mediaWarnings || []),
     ],
   };
 }
