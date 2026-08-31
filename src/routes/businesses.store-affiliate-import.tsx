@@ -12,6 +12,7 @@ import {
   Save,
   ShieldCheck,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -275,6 +276,15 @@ function AffiliateSmartImport() {
     setDraft((current) => (current ? { ...current, [key]: value } : current));
   }
 
+  function removeImage(index: number) {
+    setDraft((current) => {
+      if (!current) return current;
+      const nextImages = current.imageUrls.filter((_, imageIndex) => imageIndex !== index);
+      return { ...current, imageUrls: nextImages };
+    });
+    toast.success("Image removed from this Cossa Store draft.");
+  }
+
   async function saveMediaRegistry(productId: string, current: Draft) {
     const rows = [
       ...current.imageUrls.map((url, index) => ({
@@ -453,7 +463,7 @@ function AffiliateSmartImport() {
           </div>
           <div className="rounded-xl border border-border/60 p-3">
             <ImageIcon className="mb-2 h-4 w-4 text-primary" />
-            The importer collects directly exposed product images, up to the safety limit.
+            Imported images can be reviewed and removed before the Cossa Store draft is saved.
           </div>
           <div className="rounded-xl border border-border/60 p-3">
             <PlayCircle className="mb-2 h-4 w-4 text-primary" />
@@ -549,17 +559,34 @@ function AffiliateSmartImport() {
 
           {draft.imageUrls.length > 0 ? (
             <div className="mt-5">
-              <p className="text-sm font-medium">Imported product images ({draft.imageUrls.length})</p>
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-medium">Imported product images ({draft.imageUrls.length})</p>
+                <p className="text-xs text-muted-foreground">Remove anything you do not want displayed before saving.</p>
+              </div>
               <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {draft.imageUrls.map((url, index) => (
-                  <div key={`${url}-${index}`} className="relative">
-                    <img src={url} alt={`Imported product ${index + 1}`} className="aspect-square w-full rounded-xl border border-border/60 bg-background object-contain" />
-                    <span className="absolute bottom-2 right-2 rounded bg-background/85 px-1.5 py-0.5 text-[10px]">{index + 1}</span>
+                  <div key={`${url}-${index}`} className="group relative overflow-hidden rounded-xl border border-border/60 bg-background">
+                    <img src={url} alt={`Imported product ${index + 1}`} className="aspect-square w-full object-contain" />
+                    <span className="absolute bottom-2 right-2 rounded bg-background/90 px-1.5 py-0.5 text-[10px]">{index + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-lg border border-destructive/40 bg-background/95 px-2 py-1.5 text-[11px] font-medium text-destructive shadow-sm transition hover:bg-destructive hover:text-destructive-foreground"
+                      aria-label={`Remove imported image ${index + 1}`}
+                      title="Remove this image from the draft"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+              All imported images were removed. Keep at least one genuine product image before saving the draft.
+            </div>
+          )}
 
           {draft.videoUrls.length > 0 ? (
             <div className="mt-5">
@@ -580,7 +607,7 @@ function AffiliateSmartImport() {
           ) : null}
 
           <div className="mt-6 flex flex-wrap gap-2">
-            <Button onClick={() => void saveDraft()} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Button onClick={() => void saveDraft()} disabled={saving || draft.imageUrls.length === 0} className="bg-primary text-primary-foreground hover:bg-primary/90">
               {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
               Save Cossa Store draft
             </Button>
