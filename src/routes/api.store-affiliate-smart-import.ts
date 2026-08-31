@@ -19,7 +19,9 @@ function isTemuUrl(value: unknown): value is string {
   if (typeof value !== "string") return false;
   try {
     const host = new URL(value).hostname.toLowerCase();
-    return host === "temu.com" || host === "share.temu.com" || host.endsWith(".temu.com");
+    // Affiliate links are normally share.temu.com. Keep the check broad enough
+    // for Temu's regional/share hosts while still excluding unrelated domains.
+    return host === "temu.com" || host.endsWith(".temu.com");
   } catch {
     return false;
   }
@@ -44,12 +46,14 @@ export const Route = createFileRoute("/api/store-affiliate-smart-import")({
                 ...imported,
                 title: repair.title ?? imported.title,
                 brand: repair.brand ?? imported.brand,
-                imageUrls: repair.imageUrls.length ? repair.imageUrls : imported.imageUrls,
+                // Never preserve the generic page/UI image set when the Temu-specific
+                // repair ran. An empty repaired gallery is safer than payment/social icons.
+                imageUrls: repair.imageUrls,
                 mediaWarnings: [
                   ...(imported.mediaWarnings || []),
                   ...(repair.imageUrls.length
                     ? ["Temu gallery repair replaced page/UI graphics with validated product images."]
-                    : []),
+                    : ["Temu gallery repair rejected page/UI graphics; no verified product gallery image was exposed." ]),
                 ],
               });
             }
