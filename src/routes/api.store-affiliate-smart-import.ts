@@ -25,11 +25,6 @@ function isTemuUrl(value: unknown): value is string {
   }
 }
 
-function titleNeedsRepair(title: string | null): boolean {
-  if (!title) return true;
-  return /^(?:temu|shop|home|product|item)$/i.test(title.trim()) || /&#\d+;|&[a-z]+;/i.test(title);
-}
-
 export const Route = createFileRoute("/api/store-affiliate-smart-import")({
   server: {
     handlers: {
@@ -39,26 +34,16 @@ export const Route = createFileRoute("/api/store-affiliate-smart-import")({
           const payload = record(await request.json().catch(() => null));
           const imported = await smartImportAffiliateProduct(payload.sourceUrl);
 
-          // Preserve the working importer exactly as-is. Only when a Temu import still has
-          // weak title/price/media do we repair those three fields and leave every other field untouched.
-          if (
-            isTemuUrl(payload.sourceUrl) &&
-            (titleNeedsRepair(imported.title) || imported.supplierSalePrice == null || imported.imageUrls.length < 3)
-          ) {
+          // Do not change any product data here. Temu repair is now limited strictly to images.
+          if (isTemuUrl(payload.sourceUrl) && imported.imageUrls.length < 3) {
             const repair = await repairTemuTitlePriceAndImages(payload.sourceUrl);
-            if (repair) {
+            if (repair?.imageUrls.length) {
               return agentRuntimeJson({
                 ...imported,
-                title: repair.title ?? imported.title,
-                supplierSalePrice: repair.price ?? imported.supplierSalePrice,
-                supplierSalePriceSourceLabel:
-                  repair.price != null
-                    ? "Rendered Temu current advertised price"
-                    : imported.supplierSalePriceSourceLabel,
-                imageUrls: repair.imageUrls.length ? repair.imageUrls : imported.imageUrls,
+                imageUrls: repair.imageUrls,
                 mediaWarnings: [
                   ...(imported.mediaWarnings || []),
-                  "Temu repair touched only product name, current advertised price and product images.",
+                  "Temu image repair validated and replaced product images only.",
                 ],
               });
             }
