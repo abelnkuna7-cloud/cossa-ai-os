@@ -7,7 +7,7 @@ const IMAGE_VALIDATION_CONCURRENCY = 5;
 
 type TemuFieldRepair = {
   title: string | null;
-  price: number | null;
+  brand: string | null;
   imageUrls: string[];
 };
 
@@ -37,6 +37,12 @@ function usefulTitle(value: string | null): value is string {
   return !/^(?:temu|shop|home|product|item|sale|deals?)$/i.test(value.trim());
 }
 
+function usefulBrand(value: string | null): value is string {
+  if (!value) return false;
+  const normalized = value.trim();
+  return normalized.length >= 2 && normalized.length <= 50 && !/^(?:temu|unknown|unbranded|generic|n\/a)$/i.test(normalized);
+}
+
 function meta(html: string, key: string): string | null {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const patterns = [
@@ -53,36 +59,10 @@ function meta(html: string, key: string): string | null {
 function quoted(html: string, keys: string[]): string | null {
   for (const key of keys) {
     const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = html.match(new RegExp(`["']${escaped}["']\\s*:\\s*["']((?:\\\\.|[^"']){2,1600})["']`, "i"));
+    const match = html.match(
+      new RegExp(`["']${escaped}["']\\s*:\\s*["']((?:\\\\.|[^"']){2,1600})["']`, "i"),
+    );
     const value = clean(match?.[1]);
-    if (value) return value;
-  }
-  return null;
-}
-
-function numberFrom(raw: string | null | undefined): number | null {
-  if (!raw) return null;
-  const parsed = Number(raw.replace(/[^0-9.,]/g, "").replace(/,/g, ""));
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function currentTemuPrice(html: string): number | null {
-  const visiblePatterns = [
-    /after applying promos to\s*(?:ZAR\s*)?R\s*([0-9][0-9 ,.]*?(?:\.[0-9]{1,2})?)(?=\s|<|$)/i,
-    /(?:current\s+(?:advertised\s+)?price|current\s+price|now)\s*[:\-]?\s*(?:ZAR\s*)?R\s*([0-9][0-9 ,.]*?(?:\.[0-9]{1,2})?)(?=\s|<|$)/i,
-  ];
-  for (const pattern of visiblePatterns) {
-    const value = numberFrom(html.match(pattern)?.[1]);
-    if (value) return value;
-  }
-
-  const productMeta = numberFrom(meta(html, "product:price:amount")) ?? numberFrom(meta(html, "og:price:amount"));
-  if (productMeta) return productMeta;
-
-  for (const key of ["salePrice", "sale_price", "currentPrice", "localPrice", "priceAmount"]) {
-    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = html.match(new RegExp(`["']${escaped}["']\\s*:\\s*(?:["'])?([0-9]+(?:\\.[0-9]{1,2})?)(?:["'])?`, "i"));
-    const value = numberFrom(match?.[1]);
     if (value) return value;
   }
   return null;
@@ -117,81 +97,111 @@ function canonicalImageKey(input: string): string {
   }
 }
 
-function imageRegion(html: string, title: string | null): string {
-  if (!title) return html;
-  const probes = [title.slice(0, 80), title.slice(0, 45), title.split(/[,|]/)[0] ?? title]
-    .map((value) => value.trim().toLowerCase())
-    .filter((value) => value.length >= 12);
+function visibleTitle(html: string): string | null {
+  const h1 = clean(html.match(/<h1\b[^>]*>([\s\S]{8,1800}?)<\/h1>/i)?.[1]);
+  if (usefulTitle(h1)) return h1;
+  const structured = quoted(html, ["goodsName", "goodsTitle", "productName", "productTitle"]);
+  if (usefulTitle(structured)) return structured;
+  const og = meta(html, "og:title") ?? meta(html, "twitter:title");
+  return usefulTitle(og) ? og : null;
+}
+
+function visibleBrand(html: string): string | null {
+  const structured = quoted(html, ["brandName", "brand_name", "goodsBrandName", "productBrandName"]);
+  if (usefulBrand(structured)) return structured;
+
+  const brandLabel = html.match(
+    /\bBrand\s*:\s*(?:<[^>]+>\s*){0,6}([A-Za-z0-9][A-Za-z0-9&.' _-]{1,48})(?=\s*(?:<|\||$))/i,
+  )?.[1];
+  const cleaned = clean(brandLabel);
+  if (usefulBrand(cleaned)) return cleaned;
+
+  return null;
+}
+
+function productRegion(html: string, title: string | null): string {
+  if (!title) return html.slice(0, Math.min(html.length, 500_000));
   const lower = html.toLowerCase();
+  const probes = [title.slice(0, 120), title.slice(0, 80), title.slice(0, 45)]
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length >= 16);
   for (const probe of probes) {
     const index = lower.indexOf(probe);
-    if (index >= 0) return html.slice(Math.max(0, index - 80_000), Math.min(html.length, index + 220_000));
+    if (index >= 0) {
+      return html.slice(Math.max(0, index - 120_000), Math.min(html.length, index + 320_000));
+    }
   }
-  return html;
+  return html.slice(0, Math.min(html.length, 500_000));
+}
+
+function isStrictTemuProductImage(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    const host = url.hostname.toLowerCase();
+    const path = url.pathname.toLowerCase();
+
+    // Temu product photography is served from product paths on its image CDN.
+    // Page chrome, payment marks and social/app icons typically use upload_aimg or UI asset paths.
+    if (host.endsWith("kwcdn.com") && /\/product\//.test(path) && !/upload_aimg|\/aimg\//.test(path)) {
+      return true;
+    }
+
+    // Retain other merchant CDN images only when their path itself is explicitly product/gallery scoped.
+    return /\/(?:product|goods|gallery|sku)[/_-]/i.test(path) && !/(?:logo|icon|payment|social|badge|banner|promo)/i.test(path);
+  } catch {
+    return false;
+  }
 }
 
 function imageCandidates(html: string, base: string, title: string | null): string[] {
-  const region = imageRegion(html, title);
+  const region = productRegion(html, title);
   const values: string[] = [];
 
-  for (const key of ["og:image", "og:image:url", "og:image:secure_url", "twitter:image"]) {
-    const value = meta(html, key);
-    if (value) values.push(value);
+  // Product-gallery fields embedded in Temu's rendered product payload.
+  const structured = /["'](?:galleryImage(?:Url|URL)?|mainImage(?:Url|URL)?|productImage(?:Url|URL)?|goodsImage(?:Url|URL)?|skuImage(?:Url|URL)?|detailImage(?:Url|URL)?|originImage(?:Url|URL)?|originalImage(?:Url|URL)?|largeImage(?:Url|URL)?|thumbUrl|thumbnailUrl|imageUrl|imageURL|image_url)["']\s*:\s*["']([^"']+)["']/gi;
+  for (const match of region.matchAll(structured)) {
+    if (match[1]) values.push(match[1]);
   }
 
-  const structured = /["'](?:imageUrl|imageURL|image_url|galleryImage|galleryUrl|galleryURL|mainImage|mainImageUrl|productImage|productImageUrl|goodsImage|goodsImageUrl|skuImage|skuImageUrl|detailImage|detailImageUrl|originImage|originImageUrl|originalImage|originalImageUrl|largeImage|largeImageUrl|thumbUrl|thumbnailUrl)["']\s*:\s*["']([^"']+)["']/gi;
-  for (const match of region.matchAll(structured)) if (match[1]) values.push(match[1]);
-
+  // Actual rendered gallery <img> elements near the product heading.
   for (const match of region.matchAll(/<img\b[^>]*>/gi)) {
     const tag = match[0];
-    for (const attr of ["src", "data-src", "data-original", "data-lazy-src", "data-zoom-image", "data-image", "data-src-large", "data-large", "data-origin-src"]) {
+    for (const attr of [
+      "src",
+      "data-src",
+      "data-original",
+      "data-lazy-src",
+      "data-zoom-image",
+      "data-image",
+      "data-src-large",
+      "data-large",
+      "data-origin-src",
+    ]) {
       const found = tag.match(new RegExp(`${attr}\\s*=\\s*["']([^"']+)["']`, "i"))?.[1];
       if (found) values.push(found);
     }
     const srcset = tag.match(/(?:srcset|data-srcset)\s*=\s*["']([^"']+)["']/i)?.[1];
     if (srcset) {
-      const entries = srcset
-        .split(",")
-        .map((item) => item.trim().split(/\s+/)[0])
-        .filter(Boolean)
-        .reverse();
-      values.push(...entries);
+      values.push(
+        ...srcset
+          .split(",")
+          .map((item) => item.trim().split(/\s+/)[0])
+          .filter(Boolean)
+          .reverse(),
+      );
     }
   }
 
+  // Temu commonly embeds escaped product CDN URLs in page state rather than normal attributes.
   for (const match of region.matchAll(/["']((?:https?:)?(?:\\?\/\\?\/)[^"'\s<>]+?(?:\.avif|\.webp|\.png|\.jpe?g)(?:\?[^"'\s<>]*)?)["']/gi)) {
     if (match[1]) values.push(match[1]);
   }
 
-  const resolved = values
-    .map((value) => absolute(value, base))
-    .filter((value): value is string => Boolean(value))
-    .filter(
-      (url) =>
-        !/(?:logo|icon|avatar|profile|account|wallet|payment|coupon|gift|bonus|spin|shipping|delivery|truck|review|rating|heart|wishlist|security|shield|appstore|google[-_ ]?play|apple|instagram|facebook|whatsapp|tiktok|captcha|sprite|favicon|badge|social|promo|reward|footer|header|nav(?:igation)?)/i.test(
-          url,
-        ),
-    );
-
-  const anchor = resolved[0] ? new URL(resolved[0]) : null;
-  const sameFamily = anchor
-    ? resolved.filter((candidate) => {
-        try {
-          const url = new URL(candidate);
-          if (url.hostname !== anchor.hostname) return false;
-          const anchorParts = anchor.pathname.split("/").filter(Boolean);
-          const candidateParts = url.pathname.split("/").filter(Boolean);
-          return !anchorParts.length || !candidateParts.length || anchorParts[0] === candidateParts[0];
-        } catch {
-          return false;
-        }
-      })
-    : resolved;
-
-  const preferred = sameFamily.length >= 2 ? sameFamily : resolved;
   const seen = new Set<string>();
   const output: string[] = [];
-  for (const url of preferred) {
+  for (const raw of values) {
+    const url = absolute(raw, base);
+    if (!url || !isStrictTemuProductImage(url)) continue;
     const key = canonicalImageKey(url);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -210,7 +220,7 @@ async function isUsableImage(imageUrl: string, pageUrl: string): Promise<boolean
       redirect: "follow",
       signal: controller.signal,
       headers: {
-        Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
         "Accept-Language": "en-ZA,en;q=0.9",
         Referer: pageUrl,
         Range: "bytes=0-4095",
@@ -257,7 +267,8 @@ export async function repairTemuTitlePriceAndImages(sourceUrl: string): Promise<
   } catch {
     return null;
   }
-  if (parsed.hostname.toLowerCase() !== "share.temu.com" && !parsed.hostname.toLowerCase().endsWith(".temu.com") && parsed.hostname.toLowerCase() !== "temu.com") return null;
+  const host = parsed.hostname.toLowerCase();
+  if (host !== "share.temu.com" && host !== "temu.com" && !host.endsWith(".temu.com")) return null;
 
   const apiKey = process.env.FIRECRAWL_API_KEY?.trim();
   if (!apiKey) return null;
@@ -281,6 +292,7 @@ export async function repairTemuTitlePriceAndImages(sourceUrl: string): Promise<
       }),
     });
     if (!response.ok) return null;
+
     const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
     if (!payload) return null;
     const data = payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)
@@ -288,6 +300,7 @@ export async function repairTemuTitlePriceAndImages(sourceUrl: string): Promise<
       : payload;
     const html = typeof data.html === "string" ? data.html : typeof data.rawHtml === "string" ? data.rawHtml : "";
     if (!html.trim()) return null;
+
     const metadata = data.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
       ? (data.metadata as Record<string, unknown>)
       : {};
@@ -297,19 +310,11 @@ export async function repairTemuTitlePriceAndImages(sourceUrl: string): Promise<
         ? metadata.sourceUrl
         : resolvedUrl;
 
-    const candidates = [
-      quoted(html, ["goodsName", "goodsTitle", "productName", "productTitle"]),
-      meta(html, "og:title"),
-      meta(html, "twitter:title"),
-      clean(html.match(/<h1\b[^>]*>([\s\S]{8,1200}?)<\/h1>/i)?.[1]),
-    ].filter((value): value is string => usefulTitle(value));
-    const title = candidates.sort((a, b) => b.length - a.length)[0] ?? null;
+    const title = visibleTitle(html);
+    const brand = visibleBrand(html);
+    const imageUrls = await productImages(html, finalUrl, title);
 
-    return {
-      title,
-      price: currentTemuPrice(html),
-      imageUrls: await productImages(html, finalUrl, title),
-    };
+    return { title, brand, imageUrls };
   } catch {
     return null;
   } finally {
