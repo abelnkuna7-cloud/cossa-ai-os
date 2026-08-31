@@ -34,16 +34,22 @@ export const Route = createFileRoute("/api/store-affiliate-smart-import")({
           const payload = record(await request.json().catch(() => null));
           const imported = await smartImportAffiliateProduct(payload.sourceUrl);
 
-          // Do not change any product data here. Temu repair is now limited strictly to images.
-          if (isTemuUrl(payload.sourceUrl) && imported.imageUrls.length < 3) {
+          // Temu correction is intentionally restricted to three fields only:
+          // the visible product title, the actual product brand, and genuine product-gallery images.
+          // Price, descriptions, SKU, category, SEO, variants and every other imported field stay untouched.
+          if (isTemuUrl(payload.sourceUrl)) {
             const repair = await repairTemuTitlePriceAndImages(payload.sourceUrl);
-            if (repair?.imageUrls.length) {
+            if (repair) {
               return agentRuntimeJson({
                 ...imported,
-                imageUrls: repair.imageUrls,
+                title: repair.title ?? imported.title,
+                brand: repair.brand ?? imported.brand,
+                imageUrls: repair.imageUrls.length ? repair.imageUrls : imported.imageUrls,
                 mediaWarnings: [
                   ...(imported.mediaWarnings || []),
-                  "Temu image repair validated and replaced product images only.",
+                  ...(repair.imageUrls.length
+                    ? ["Temu gallery repair replaced page/UI graphics with validated product images."]
+                    : []),
                 ],
               });
             }
