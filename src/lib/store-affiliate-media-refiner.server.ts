@@ -8,19 +8,17 @@ type AffiliateCandidateLike = {
   mediaWarnings: string[];
 };
 
-type RankedImage = {
-  url: string;
-  score: number;
-  order: number;
-};
+type RankedImage = { url: string; score: number; order: number };
+type MediaFamily = { host: string; prefix: string };
+type ValidatedImage = { url: string; fingerprint: string };
 
-const MAX_PRODUCT_IMAGES = 24;
+const MAX_PRODUCT_IMAGES = 16;
 const FETCH_TIMEOUT_MS = 10_000;
 const FIRECRAWL_TIMEOUT_MS = 35_000;
 const UI_TERMS =
-  /(?:logo|icon|avatar|profile|account|wallet|payment|coupon|gift|bonus|spin|shipping|delivery|truck|review|rating|heart|wishlist|security|shield|app(?:store)?|download|google[-_ ]?play|apple|storefront|message|chat|support|captcha|sprite|pixel|tracking|favicon|badge|social|facebook|whatsapp|instagram|tiktok|header|footer|nav(?:igation)?|menu)/i;
+  /(?:logo|icon|avatar|profile|account|wallet|payment|coupon|gift|bonus|spin|shipping|delivery|truck|review|rating|heart|wishlist|security|shield|app(?:store)?|download|google[-_ ]?play|apple|storefront|message|chat|support|captcha|sprite|pixel|tracking|favicon|badge|social|facebook|whatsapp|instagram|tiktok|header|footer|nav(?:igation)?|menu|reward|promo|promotion)/i;
 const PRODUCT_TERMS =
-  /(?:product|goods|item|sku|gallery|detail|main[-_ ]?image|image[-_ ]?list|media[-_ ]?list|product[-_ ]?image|goods[-_ ]?image|sku[-_ ]?image|zoom|carousel|picture)/i;
+  /(?:product|goods|item|sku|gallery|detail|main[-_ ]?image|image[-_ ]?list|media[-_ ]?list|product[-_ ]?image|goods[-_ ]?image|sku[-_ ]?image|zoom|carousel|picture|thumbnail[-_ ]?list)/i;
 
 function decode(value: string): string {
   return value
@@ -56,6 +54,24 @@ function canonicalKey(input: string): string {
   }
 }
 
+function familyOf(input: string): MediaFamily | null {
+  try {
+    const url = new URL(input);
+    const parts = url.pathname.split("/").filter(Boolean);
+    return { host: url.hostname, prefix: parts.slice(0, 2).join("/") };
+  } catch {
+    return null;
+  }
+}
+
+function sameFamily(url: string, anchor: MediaFamily | null): boolean {
+  if (!anchor) return false;
+  const current = familyOf(url);
+  if (!current || current.host !== anchor.host) return false;
+  if (!anchor.prefix || !current.prefix) return true;
+  return current.prefix === anchor.prefix;
+}
+
 function titleTokens(title: string | null): string[] {
   if (!title) return [];
   return title
@@ -63,34 +79,31 @@ function titleTokens(title: string | null): string[] {
     .replace(/[^a-z0-9]+/g, " ")
     .split(/\s+/)
     .filter((token) => token.length >= 4)
-    .filter((token) => !/(?:with|from|this|that|your|more|shop|sale|free|temu)/i.test(token))
-    .slice(0, 12);
+    .filter((token) => !/(?:with|from|this|that|your|more|shop|sale|free|temu|deal|price)/i.test(token))
+    .slice(0, 10);
 }
 
 function contextScore(context: string, title: string | null): number {
-  let score = 0;
-  if (PRODUCT_TERMS.test(context)) score += 5;
-  if (UI_TERMS.test(context)) score -= 10;
+  if (UI_TERMS.test(context)) return -20;
+  let score = PRODUCT_TERMS.test(context) ? 7 : 0;
   const lower = context.toLowerCase();
-  const tokens = titleTokens(title);
-  const matches = tokens.filter((token) => lower.includes(token)).length;
-  score += Math.min(matches, 4) * 2;
+  score += Math.min(4, titleTokens(title).filter((token) => lower.includes(token)).length) * 2;
   return score;
 }
 
 function productRegion(html: string, title: string | null): string {
   if (!title) return html;
   const lower = html.toLowerCase();
-  const probes = [title, title.split(/\s+/).slice(0, 8).join(" "), title.split(/\s+/).slice(0, 4).join(" ")]
+  const probes = [
+    title,
+    title.split(/\s+/).slice(0, 8).join(" "),
+    title.split(/\s+/).slice(0, 4).join(" "),
+  ]
     .map((value) => value.trim().toLowerCase())
     .filter((value) => value.length >= 12);
   for (const probe of probes) {
     const index = lower.indexOf(probe);
-    if (index >= 0) {
-      const start = Math.max(0, index - 90_000);
-      const end = Math.min(html.length, index + 180_000);
-      return html.slice(start, end);
-    }
+    if (index >= 0) return html.slice(Math.max(0, index - 45_000), Math.min(html.length, index + 95_000));
   }
   return html;
 }
@@ -101,9 +114,12 @@ function pushRanked(
   sourceUrl: string,
   score: number,
   order: number,
+  anchor: MediaFamily | null,
+  requireFamily = false,
 ) {
   const url = absolute(raw, sourceUrl);
   if (!url || UI_TERMS.test(url)) return;
+  if (requireFamily && anchor && !sameFamily(url, anchor)) return;
   const key = canonicalKey(url);
   const previous = map.get(key);
   if (!previous || score > previous.score) map.set(key, { url, score, order });
@@ -119,70 +135,58 @@ function rankedImageCandidates(
   const map = new Map<string, RankedImage>();
   let order = 0;
 
-  for (const url of existing) pushRanked(map, url, sourceUrl, 50, order++);
+  const primary = existing.find((url) => !UI_TERMS.test(url)) ?? null;
+  const anchor = primary ? familyOf(primary) : null;
+  if (primary) pushRanked(map, primary, sourceUrl, 100, order++, anchor);
 
-  for (const match of region.matchAll(/<img\b[^>]*>/gi)) {
-    const tag = match[0];
-    const context = region.slice(Math.max(0, (match.index ?? 0) - 500), Math.min(region.length, (match.index ?? 0) + tag.length + 500));
-    const width = Number(tag.match(/\bwidth\s*=\s*["']?(\d{1,4})/i)?.[1] ?? 0);
-    const height = Number(tag.match(/\bheight\s*=\s*["']?(\d{1,4})/i)?.[1] ?? 0);
-    if (width && height && (width < 180 || height < 180)) continue;
-    if (UI_TERMS.test(tag) || UI_TERMS.test(context)) continue;
-    const score = 8 + contextScore(context, title);
-    for (const attr of ["src", "data-src", "data-original", "data-lazy-src", "data-zoom-image", "data-image", "data-src-large", "data-large", "data-origin-src"]) {
-      const found = tag.match(new RegExp(`${attr}\\s*=\\s*["']([^"']+)["']`, "i"))?.[1];
-      if (found) pushRanked(map, found, sourceUrl, score, order++);
-    }
-    const srcset = tag.match(/(?:srcset|data-srcset)\s*=\s*["']([^"']+)["']/i)?.[1];
-    if (srcset) {
-      const entries = srcset.split(",").map((entry) => entry.trim().split(/\s+/)[0]).filter(Boolean).reverse();
-      for (const entry of entries) pushRanked(map, entry, sourceUrl, score + 1, order++);
-    }
+  // Existing URLs from the broad importer are no longer trusted automatically.
+  // Keep only those that belong to the same CDN/path family as the primary product image.
+  for (const url of existing.slice(1)) {
+    if (sameFamily(url, anchor)) pushRanked(map, url, sourceUrl, 30, order++, anchor, true);
   }
 
-  const structured = /["'](?:gallery(?:Image|Url|URL|Images|Urls)|image(?:Url|URL|_url|List|Urls)|largeImage(?:Url)?|originImage(?:Url)?|originalImage(?:Url)?|mainImage(?:Url)?|goodsImage(?:Url)?|skuImage(?:Url)?|detailImage(?:Url)?|productImage(?:Url)?)["']\s*:\s*["']([^"']+)["']/gi;
+  // Explicit product/gallery properties are high confidence.
+  const structured = /["'](?:gallery(?:Image|Url|URL|Images|Urls)|image(?:List|Urls)|largeImage(?:Url)?|originImage(?:Url)?|originalImage(?:Url)?|mainImage(?:Url)?|goodsImage(?:Url)?|skuImage(?:Url)?|detailImage(?:Url)?|productImage(?:Url)?)["']\s*:\s*["']([^"']+)["']/gi;
   for (const match of region.matchAll(structured)) {
     const index = match.index ?? 0;
-    const context = region.slice(Math.max(0, index - 350), Math.min(region.length, index + match[0].length + 350));
-    const score = 15 + contextScore(context, title);
-    if (score > 5) pushRanked(map, match[1], sourceUrl, score, order++);
+    const context = region.slice(Math.max(0, index - 300), Math.min(region.length, index + match[0].length + 300));
+    const score = 22 + contextScore(context, title) + (sameFamily(absolute(match[1], sourceUrl) ?? "", anchor) ? 8 : 0);
+    if (score >= 18) pushRanked(map, match[1], sourceUrl, score, order++, anchor);
   }
 
-  const broad = /["']((?:https?:)?(?:\\?\/\\?\/)[^"'\s<>]+?(?:\.avif|\.webp|\.png|\.jpe?g)(?:\?[^"'\s<>]*)?)["']/gi;
-  for (const match of region.matchAll(broad)) {
+  // Rendered product galleries often expose their thumbnails as img tags. Only keep images
+  // whose surrounding markup is product/gallery related, or which match the primary image family.
+  for (const match of region.matchAll(/<img\b[^>]*>/gi)) {
+    const tag = match[0];
     const index = match.index ?? 0;
-    const context = region.slice(Math.max(0, index - 450), Math.min(region.length, index + match[0].length + 450));
-    const score = contextScore(context, title);
-    if (score >= 4) pushRanked(map, match[1], sourceUrl, score, order++);
+    const context = region.slice(Math.max(0, index - 500), Math.min(region.length, index + tag.length + 500));
+    if (UI_TERMS.test(tag) || UI_TERMS.test(context)) continue;
+    const width = Number(tag.match(/\bwidth\s*=\s*["']?(\d{1,4})/i)?.[1] ?? 0);
+    const height = Number(tag.match(/\bheight\s*=\s*["']?(\d{1,4})/i)?.[1] ?? 0);
+    if (width && height && (width < 160 || height < 160)) continue;
+    const baseScore = contextScore(context, title);
+
+    const foundUrls: string[] = [];
+    for (const attr of ["src", "data-src", "data-original", "data-lazy-src", "data-zoom-image", "data-image", "data-src-large", "data-large", "data-origin-src"]) {
+      const found = tag.match(new RegExp(`${attr}\\s*=\\s*["']([^"']+)["']`, "i"))?.[1];
+      if (found) foundUrls.push(found);
+    }
+    const srcset = tag.match(/(?:srcset|data-srcset)\s*=\s*["']([^"']+)["']/i)?.[1];
+    if (srcset) foundUrls.push(...srcset.split(",").map((entry) => entry.trim().split(/\s+/)[0]).filter(Boolean).reverse());
+
+    for (const raw of foundUrls) {
+      const resolved = absolute(raw, sourceUrl);
+      if (!resolved) continue;
+      const familyMatch = sameFamily(resolved, anchor);
+      if (!familyMatch && baseScore < 7) continue;
+      pushRanked(map, resolved, sourceUrl, 10 + baseScore + (familyMatch ? 10 : 0), order++, anchor);
+    }
   }
 
-  const anchors = existing.map((url) => {
-    try {
-      const parsed = new URL(url);
-      const parts = parsed.pathname.split("/").filter(Boolean);
-      return { host: parsed.hostname, prefix: parts.slice(0, 2).join("/") };
-    } catch {
-      return null;
-    }
-  }).filter(Boolean) as Array<{ host: string; prefix: string }>;
-
-  const ranked = [...map.values()].map((item) => {
-    try {
-      const parsed = new URL(item.url);
-      const parts = parsed.pathname.split("/").filter(Boolean);
-      const prefix = parts.slice(0, 2).join("/");
-      const sameHost = anchors.some((anchor) => anchor.host === parsed.hostname);
-      const samePrefix = anchors.some((anchor) => anchor.host === parsed.hostname && anchor.prefix && anchor.prefix === prefix);
-      return { ...item, score: item.score + (sameHost ? 3 : 0) + (samePrefix ? 5 : 0) };
-    } catch {
-      return item;
-    }
-  });
-
-  return ranked
-    .filter((item) => item.score >= 4)
+  return [...map.values()]
+    .filter((item) => item.score >= 12)
     .sort((a, b) => b.score - a.score || a.order - b.order)
-    .slice(0, 40)
+    .slice(0, 30)
     .map((item) => item.url);
 }
 
@@ -210,8 +214,6 @@ async function renderedHtml(sourceUrl: string): Promise<string | null> {
   }
 }
 
-type ValidatedImage = { url: string; fingerprint: string };
-
 async function validateImage(url: string, pageUrl: string): Promise<ValidatedImage | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -228,12 +230,10 @@ async function validateImage(url: string, pageUrl: string): Promise<ValidatedIma
     });
     if (!response.ok && response.status !== 206) return null;
     const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
-    if (!contentType.startsWith("image/")) return null;
-    if (contentType.includes("svg")) return null;
+    if (!contentType.startsWith("image/") || contentType.includes("svg")) return null;
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.length < 1200) return null;
-    const fingerprint = createHash("sha256").update(bytes).digest("hex");
-    return { url, fingerprint };
+    if (bytes.length < 1800) return null;
+    return { url, fingerprint: createHash("sha256").update(bytes).digest("hex") };
   } catch {
     return null;
   } finally {
@@ -245,9 +245,9 @@ async function cleanImages(urls: string[], pageUrl: string): Promise<string[]> {
   const seenUrl = new Set<string>();
   const candidates = urls.filter((url) => {
     const key = canonicalKey(url);
-    if (seenUrl.has(key)) return false;
+    if (seenUrl.has(key) || UI_TERMS.test(url)) return false;
     seenUrl.add(key);
-    return !UI_TERMS.test(url);
+    return true;
   });
 
   const results: Array<ValidatedImage | null> = new Array(candidates.length).fill(null);
@@ -278,19 +278,27 @@ export async function refineAffiliateProductMedia<T extends AffiliateCandidateLi
 
   const ranked = rankedImageCandidates(html, candidate.sourceUrl, candidate.title, candidate.imageUrls);
   const clean = await cleanImages(ranked, candidate.sourceUrl);
-  if (!clean.length) return candidate;
-
-  const removed = Math.max(0, candidate.imageUrls.length - clean.length);
-  const mediaWarnings = [
-    ...candidate.mediaWarnings,
-    ...(removed > 0
-      ? [`Smart media filtering removed ${removed} duplicate or non-product image(s) from the merchant page.`]
-      : []),
-  ];
+  if (!clean.length) {
+    return {
+      ...candidate,
+      imageUrls: candidate.imageUrls.slice(0, 1),
+      mediaWarnings: [
+        ...new Set([
+          ...candidate.mediaWarnings,
+          "Smart media filtering could not confirm the full product gallery; only the primary validated product image was retained.",
+        ]),
+      ],
+    };
+  }
 
   return {
     ...candidate,
     imageUrls: clean,
-    mediaWarnings: [...new Set(mediaWarnings)],
+    mediaWarnings: [
+      ...new Set([
+        ...candidate.mediaWarnings,
+        `Smart media filtering retained ${clean.length} product-gallery image(s) and excluded unrelated merchant interface assets.`,
+      ]),
+    ],
   };
 }
