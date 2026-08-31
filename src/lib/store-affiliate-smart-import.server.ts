@@ -9,11 +9,9 @@ import {
 
 const MAX_DOCUMENT_BYTES = 3_000_000;
 const FETCH_TIMEOUT_MS = 15_000;
-const MEDIA_TIMEOUT_MS = 9_000;
 const MAX_REDIRECTS = 4;
 const MAX_IMAGES = 40;
 const MAX_VIDEOS = 12;
-const MEDIA_CONCURRENCY = 6;
 const FIRECRAWL_TIMEOUT_MS = 35_000;
 
 type SmartAffiliateCandidate = ImportedProductCandidate & {
@@ -127,7 +125,7 @@ async function fetchDirectPage(input: string): Promise<LoadedPage> {
           Accept: "text/html,application/xhtml+xml",
           "Accept-Language": "en-ZA,en;q=0.9",
           "User-Agent":
-            "Mozilla/5.0 (compatible; CossaStoreAffiliateImport/4.0; +https://cossanexusholdings.co.za)",
+            "Mozilla/5.0 (compatible; CossaStoreAffiliateImport/3.0; +https://cossanexusholdings.co.za)",
         },
       });
     } catch (error) {
@@ -216,7 +214,7 @@ async function fetchRenderedPage(input: string): Promise<LoadedPage> {
         url: url.toString(),
         formats: ["html"],
         onlyMainContent: false,
-        waitFor: 3500,
+        waitFor: 2500,
       }),
     });
 
@@ -264,42 +262,15 @@ function decode(value: string): string {
     .replace(/&quot;/gi, '"')
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/\\u0026/gi, "&")
-    .replace(/\\u002F/gi, "/")
-    .replace(/\\x2F/gi, "/")
-    .replace(/\\\//g, "/")
-    .replace(/\\u002D/gi, "-")
-    .replace(/\\u003A/gi, ":");
+    .replace(/\\\//g, "/");
 }
 
 function absolute(value: string, sourceUrl: string): string | null {
   try {
-    const cleaned = decode(value).trim().replace(/^['\"]|['\"]$/g, "");
-    const url = new URL(cleaned, sourceUrl);
+    const url = new URL(decode(value), sourceUrl);
     return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
   } catch {
     return null;
-  }
-}
-
-function canonicalMediaKey(input: string): string {
-  try {
-    const url = new URL(input);
-    const disposable = [
-      "width",
-      "height",
-      "w",
-      "h",
-      "resize",
-      "quality",
-      "q",
-      "format",
-      "thumbnail",
-      "thumb",
-    ];
-    for (const key of disposable) url.searchParams.delete(key);
-    return `${url.origin}${url.pathname}${url.search}`;
-  } catch {
-    return input;
   }
 }
 
@@ -308,10 +279,8 @@ function unique(values: string[], sourceUrl: string, max: number): string[] {
   const result: string[] = [];
   for (const value of values) {
     const url = absolute(value, sourceUrl);
-    if (!url) continue;
-    const key = canonicalMediaKey(url);
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
     result.push(url);
     if (result.length >= max) break;
   }
@@ -320,7 +289,6 @@ function unique(values: string[], sourceUrl: string, max: number): string[] {
 
 function imageCandidates(html: string): string[] {
   const values: string[] = [];
-
   for (const match of html.matchAll(/<(?:img|source)\b[^>]*>/gi)) {
     const tag = match[0];
     for (const attr of [
@@ -330,49 +298,31 @@ function imageCandidates(html: string): string[] {
       "data-lazy-src",
       "data-zoom-image",
       "data-image",
-      "data-src-large",
-      "data-large",
-      "data-origin-src",
     ]) {
       const found = tag.match(new RegExp(`${attr}\\s*=\\s*["']([^"']+)["']`, "i"))?.[1];
       if (found) values.push(found);
     }
     const srcset = tag.match(/(?:srcset|data-srcset)\s*=\s*["']([^"']+)["']/i)?.[1];
     if (srcset) {
-      const entries = srcset
-        .split(",")
-        .map((item) => item.trim().split(/\s+/)[0])
-        .filter(Boolean);
-      values.push(...entries.reverse());
+      for (const item of srcset.split(",")) {
+        const candidate = item.trim().split(/\s+/)[0];
+        if (candidate) values.push(candidate);
+      }
     }
   }
-
   for (const match of html.matchAll(
-    /<meta\b[^>]*(?:property|name)\s*=\s*["'](?:og:image|og:image:url|og:image:secure_url|twitter:image|twitter:image:src)["'][^>]*>/gi,
+    /<meta\b[^>]*(?:property|name)\s*=\s*["'](?:og:image|twitter:image|twitter:image:src)["'][^>]*>/gi,
   )) {
     const content = match[0].match(/content\s*=\s*["']([^"']+)["']/i)?.[1];
     if (content) values.push(content);
   }
-
   for (const match of html.matchAll(
-    /["'](?:image|imageUrl|imageURL|image_url|galleryImage|galleryUrl|galleryURL|largeImage|largeImageUrl|thumbUrl|thumbnailUrl|originImage|originImageUrl|originalImage|originalImageUrl|mainImage|mainImageUrl|goodsImage|goodsImageUrl|skuImage|skuImageUrl|detailImage|detailImageUrl)["']\s*:\s*["']([^"']+)["']/gi,
+    /["'](?:image|imageUrl|image_url|galleryImage|largeImage|thumbUrl|originImage|mainImage)["']\s*:\s*["']([^"']+)["']/gi,
   )) {
     if (match[1]) values.push(match[1]);
   }
-
-  // Modern marketplaces often keep the complete gallery inside hydrated JSON/script state.
-  // Capture quoted absolute CDN/image URLs even when the property names are minified or unknown.
-  for (const match of html.matchAll(
-    /["']((?:https?:)?(?:\\?\/\\?\/)[^"'\s<>]+?(?:\.avif|\.webp|\.png|\.jpe?g)(?:\?[^"'\s<>]*)?)["']/gi,
-  )) {
-    if (match[1]) values.push(match[1]);
-  }
-
   return values.filter(
-    (value) =>
-      !/(?:logo|icon|payment|sprite|avatar|banner|placeholder|tracking|pixel|favicon|captcha)/i.test(
-        value,
-      ),
+    (value) => !/(?:logo|icon|payment|sprite|avatar|banner|placeholder|tracking|pixel)/i.test(value),
   );
 }
 
@@ -390,12 +340,7 @@ function videoCandidates(html: string): string[] {
     if (content) values.push(content);
   }
   for (const match of html.matchAll(
-    /["'](?:videoUrl|videoURL|video_url|videoSrc|video_src|playUrl|playURL|play_url|videoPlayUrl|videoPlayURL)["']\s*:\s*["']([^"']+)["']/gi,
-  )) {
-    if (match[1]) values.push(match[1]);
-  }
-  for (const match of html.matchAll(
-    /["']((?:https?:)?(?:\\?\/\\?\/)[^"'\s<>]+?(?:\.mp4|\.webm|\.m3u8)(?:\?[^"'\s<>]*)?)["']/gi,
+    /["'](?:videoUrl|video_url|videoSrc|video_src|playUrl|play_url|videoPlayUrl)["']\s*:\s*["']([^"']+)["']/gi,
   )) {
     if (match[1]) values.push(match[1]);
   }
@@ -404,78 +349,9 @@ function videoCandidates(html: string): string[] {
 
 function productLikelyImages(values: string[]): string[] {
   const productish = values.filter((value) =>
-    /(?:product|goods|item|sku|gallery|detail|image|img|cdn|media|pic)/i.test(value),
+    /(?:product|goods|item|sku|gallery|detail|image|img|cdn)/i.test(value),
   );
   return productish.length >= 2 ? productish : values;
-}
-
-function mediaHeaders(pageUrl: string): HeadersInit {
-  return {
-    Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-    "Accept-Language": "en-ZA,en;q=0.9",
-    Referer: pageUrl,
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
-  };
-}
-
-async function isUsableImage(imageUrl: string, pageUrl: string): Promise<boolean> {
-  let parsed: URL;
-  try {
-    parsed = new URL(imageUrl);
-    await assertSafeExternalUrl(parsed);
-  } catch {
-    return false;
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), MEDIA_TIMEOUT_MS);
-  try {
-    const response = await fetch(parsed, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        ...mediaHeaders(pageUrl),
-        Range: "bytes=0-2047",
-      },
-    });
-    if (!response.ok && response.status !== 206) return false;
-    const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
-    if (contentType.startsWith("image/")) return true;
-    // A few CDNs return octet-stream for images. Accept only when the final URL clearly looks like image media.
-    if (
-      (contentType.includes("octet-stream") || !contentType) &&
-      /\.(?:avif|webp|png|jpe?g)(?:$|\?)/i.test(response.url || imageUrl)
-    ) {
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function validateImages(values: string[], pageUrl: string): Promise<string[]> {
-  const candidates = unique(values, pageUrl, MAX_IMAGES);
-  const valid = new Array<boolean>(candidates.length).fill(false);
-  let next = 0;
-
-  async function worker() {
-    while (true) {
-      const index = next;
-      next += 1;
-      if (index >= candidates.length) return;
-      valid[index] = await isUsableImage(candidates[index], pageUrl);
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(MEDIA_CONCURRENCY, candidates.length) }, () => worker()),
-  );
-  return candidates.filter((_, index) => valid[index]).slice(0, MAX_IMAGES);
 }
 
 function candidateQuality(candidate: ImportedProductCandidate): number {
@@ -500,17 +376,9 @@ async function buildFromPage(page: LoadedPage): Promise<SmartAffiliateCandidate>
     page.url,
     MAX_IMAGES,
   );
-  const rawImages = unique([...basic.imageUrls, ...discoveredImages], page.url, MAX_IMAGES);
-  const imageUrls = await validateImages(rawImages, page.url);
+  const imageUrls = unique([...basic.imageUrls, ...discoveredImages], page.url, MAX_IMAGES);
   const videoUrls = unique(videoCandidates(page.html), page.url, MAX_VIDEOS);
   const mediaWarnings: string[] = [];
-  const rejectedImageCount = Math.max(0, rawImages.length - imageUrls.length);
-
-  if (rejectedImageCount > 0) {
-    mediaWarnings.push(
-      `${rejectedImageCount} broken, blocked or non-image media URL(s) were rejected before the draft was created.`,
-    );
-  }
   if (!videoUrls.length) {
     mediaWarnings.push("No directly accessible product video was exposed by this page.");
   }
@@ -527,40 +395,6 @@ async function buildFromPage(page: LoadedPage): Promise<SmartAffiliateCandidate>
     videoUrls,
     mediaWarnings,
     retrievalMethod: page.method,
-  };
-}
-
-function mergeCandidates(
-  primary: SmartAffiliateCandidate,
-  secondary: SmartAffiliateCandidate,
-): SmartAffiliateCandidate {
-  return {
-    ...primary,
-    title: primary.title ?? secondary.title,
-    shortDescription: primary.shortDescription ?? secondary.shortDescription,
-    description: primary.description ?? secondary.description,
-    supplierCategory: primary.supplierCategory ?? secondary.supplierCategory,
-    brand: primary.brand ?? secondary.brand,
-    supplierProductRef: primary.supplierProductRef ?? secondary.supplierProductRef,
-    supplierCost: primary.supplierCost ?? secondary.supplierCost,
-    supplierCostConfidence:
-      primary.supplierCost != null ? primary.supplierCostConfidence : secondary.supplierCostConfidence,
-    supplierCostSourceLabel: primary.supplierCostSourceLabel ?? secondary.supplierCostSourceLabel,
-    supplierRrp: primary.supplierRrp ?? secondary.supplierRrp,
-    supplierRrpSourceLabel: primary.supplierRrpSourceLabel ?? secondary.supplierRrpSourceLabel,
-    supplierSalePrice: primary.supplierSalePrice ?? secondary.supplierSalePrice,
-    supplierSalePriceSourceLabel:
-      primary.supplierSalePriceSourceLabel ?? secondary.supplierSalePriceSourceLabel,
-    currency: primary.currency ?? secondary.currency,
-    variants: primary.variants.length ? primary.variants : secondary.variants,
-    imageUrls: unique([...primary.imageUrls, ...secondary.imageUrls], primary.sourceUrl, MAX_IMAGES),
-    videoUrls: unique([...primary.videoUrls, ...secondary.videoUrls], primary.sourceUrl, MAX_VIDEOS),
-    mediaWarnings: [...new Set([...primary.mediaWarnings, ...secondary.mediaWarnings])],
-    warnings: [...primary.warnings, ...secondary.warnings],
-    retrievalMethod:
-      primary.retrievalMethod === "rendered" || secondary.retrievalMethod === "rendered"
-        ? "rendered"
-        : "direct",
   };
 }
 
@@ -589,13 +423,11 @@ export async function smartImportAffiliateProduct(
   await assertSafeExternalUrl(parsed);
 
   let directError: unknown = null;
-  let directResult: SmartAffiliateCandidate | null = null;
-
   try {
     const directCandidate = await importSupplierProduct({ sourceUrl: parsed.toString() });
     const directPage = await fetchDirectPage(directCandidate.sourceUrl || parsed.toString());
     const direct = await buildFromPage(directPage);
-    const mergedBase: SmartAffiliateCandidate = {
+    const merged: SmartAffiliateCandidate = {
       ...direct,
       title: direct.title ?? directCandidate.title,
       shortDescription: direct.shortDescription ?? directCandidate.shortDescription,
@@ -617,27 +449,18 @@ export async function smartImportAffiliateProduct(
         direct.supplierSalePriceSourceLabel ?? directCandidate.supplierSalePriceSourceLabel,
       currency: direct.currency ?? directCandidate.currency,
       variants: direct.variants.length ? direct.variants : directCandidate.variants,
+      imageUrls: unique(
+        [...directCandidate.imageUrls, ...direct.imageUrls],
+        direct.sourceUrl,
+        MAX_IMAGES,
+      ),
       warnings: [...directCandidate.warnings, ...direct.warnings],
     };
 
-    const combinedRawImages = unique(
-      [...directCandidate.imageUrls, ...mergedBase.imageUrls],
-      mergedBase.sourceUrl,
-      MAX_IMAGES,
-    );
-    directResult = {
-      ...mergedBase,
-      imageUrls: await validateImages(combinedRawImages, mergedBase.sourceUrl),
-    };
-
-    // A normal reader can have enough text fields while still exposing only one or two gallery images.
-    // In that case keep the valid direct result, but also try the rendered reader for gallery enrichment.
-    if (candidateQuality(directResult) >= 4 && directResult.imageUrls.length >= 4) {
-      return directResult;
-    }
+    if (candidateQuality(merged) >= 4) return merged;
     directError = new ProductImportError(
       "direct_import_incomplete",
-      "The normal reader found the product but did not expose enough complete product/gallery data.",
+      "The merchant page did not expose enough product data to the normal reader.",
       422,
     );
   } catch (error) {
@@ -647,24 +470,15 @@ export async function smartImportAffiliateProduct(
   try {
     const renderedPage = await fetchRenderedPage(parsed.toString());
     const rendered = await buildFromPage(renderedPage);
-    const enriched = directResult ? mergeCandidates(rendered, directResult) : rendered;
-    if (candidateQuality(enriched) < 2) {
+    if (candidateQuality(rendered) < 2) {
       throw new ProductImportError(
         "rendered_import_incomplete",
         "The merchant page was reached, but it still did not expose enough product information to import safely.",
         422,
       );
     }
-    return enriched;
+    return rendered;
   } catch (renderedError) {
-    // Do not throw away a usable direct import just because rendered enrichment is unavailable.
-    if (directResult && candidateQuality(directResult) >= 4 && directResult.imageUrls.length > 0) {
-      directResult.mediaWarnings = [
-        ...directResult.mediaWarnings,
-        "The complete rendered gallery could not be loaded. Only validated directly exposed media is shown.",
-      ];
-      return directResult;
-    }
     if (renderedError instanceof ProductImportError) throw renderedError;
     if (directError instanceof ProductImportError) throw directError;
     throw new ProductImportError(
