@@ -5,6 +5,7 @@ import {
   agentRuntimeJson,
   requireRuntimeMember,
 } from "@/lib/agent-runtime.server";
+import { sanitizeAffiliateCandidate } from "@/lib/store-affiliate-truth-sanitizer.server";
 import { smartImportAffiliateProduct } from "@/lib/store-affiliate-smart-import.server";
 import { ProductImportError } from "@/lib/store-product-import.server";
 
@@ -22,15 +23,14 @@ export const Route = createFileRoute("/api/store-affiliate-smart-import")({
           await requireRuntimeMember(request, ["owner", "admin", "manager"]);
           const payload = record(await request.json().catch(() => null));
 
-          // Restore the proven Smart Affiliate Import engine that was already successfully
-          // importing marketplace products. It performs its own cheap direct read first and
-          // invokes Firecrawl only when the merchant page is blocked or incomplete.
-          //
-          // Do not run the separate media refiner here: that path caused a second rendered-page
-          // read and introduced the later regression. The UI already provides manual image
-          // removal as the final human review gate before a Cossa Store draft is saved.
+          // Keep the proven Smart Affiliate Import engine unchanged. It performs the merchant
+          // read and uses Firecrawl only when that existing engine decides rendered fallback is
+          // required. After import, apply a conservative merchant truth-sanitizer so marketplace
+          // names, conditional promo prices and SEO marketing copy are not misrepresented as
+          // product facts.
           const imported = await smartImportAffiliateProduct(payload.sourceUrl);
-          return agentRuntimeJson(imported);
+          const sanitized = await sanitizeAffiliateCandidate(imported, payload.sourceUrl);
+          return agentRuntimeJson(sanitized);
         } catch (error) {
           if (error instanceof ProductImportError) {
             return agentRuntimeJson({ error: error.message, code: error.code }, error.httpStatus);
