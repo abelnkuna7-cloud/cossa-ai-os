@@ -180,6 +180,10 @@ function AffiliateSmartImport() {
       return;
     }
 
+    // Mark the URL as attempted before the request starts. This prevents the auto-import
+    // effect from retrying the same failed URL every time `importing` returns to false.
+    // A manual click on Smart import can still retry the same URL after configuration changes.
+    setLastImportedUrl(targetUrl);
     setImporting(true);
     setCandidate(null);
     setDraft(null);
@@ -246,7 +250,6 @@ function AffiliateSmartImport() {
         fieldsRequiringConfirmation: imported.fieldsRequiringConfirmation || [],
         importTrace: imported.importTrace || [],
       });
-      setLastImportedUrl(targetUrl);
       toast.success(
         `Product analysed: ${imported.imageUrls?.length ?? 0} image(s), ${imported.videoUrls?.length ?? 0} video(s).`,
       );
