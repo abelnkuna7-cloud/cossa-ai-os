@@ -147,11 +147,24 @@ function uniqueUrls(values: unknown[], sourceUrl: string): string[] {
     .filter((value): value is string => Boolean(value))
     .filter(isLikelyProductImage)
     .filter((value) => {
-      if (seen.has(value)) return false;
-      seen.add(value);
+      // Supplier CDNs often repeat an identical product asset with a cache or
+      // tracking query string. Compare the stable asset path so the intake
+      // retains genuinely distinct images without repeatedly surfacing copies.
+      const assetKey = imageAssetKey(value);
+      if (seen.has(assetKey)) return false;
+      seen.add(assetKey);
       return true;
     })
     .slice(0, 8);
+}
+
+function imageAssetKey(value: string): string {
+  try {
+    const url = new URL(value);
+    return `${url.hostname.toLowerCase()}${url.pathname.replace(/\/$/, "")}`;
+  } catch {
+    return value;
+  }
 }
 
 function numberValue(value: unknown): number | null {
@@ -554,8 +567,10 @@ function parseProductPage(
     trim(meta["product:retailer_item_id"]);
   const supplierCategory =
     trim(shopify?.product_type) ?? trim(shopify?.type) ?? trim(product?.category);
-  const brand =
-    trim(shopify?.vendor) ?? trim(valueAtPath(product, "brand", "name")) ?? trim(product?.brand);
+  // A platform's vendor field can be a supplier code, collection owner or
+  // internal label. Treat a brand as known only where direct product metadata
+  // declares it; otherwise leave it blank for review rather than inventing one.
+  const brand = trim(valueAtPath(product, "brand", "name")) ?? trim(product?.brand);
   const schemaAvailability = availabilityFrom(offer?.availability ?? meta["product:availability"]);
   const availability =
     schemaAvailability.status !== "unknown"
