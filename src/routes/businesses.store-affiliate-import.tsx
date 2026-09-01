@@ -94,6 +94,7 @@ type Draft = {
   description: string;
   price: string;
   compareAtPrice: string;
+  sourceCurrency: string;
   imageUrls: string[];
   videoUrls: string[];
   seoTitle: string;
@@ -138,13 +139,25 @@ function slugify(value: string) {
 }
 
 function internalSku(url: string, supplierRef: string | null) {
-  const ref = (supplierRef || "").replace(/[^a-z0-9]/gi, "").toUpperCase().slice(-12);
+  const ref = (supplierRef || "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toUpperCase()
+    .slice(-12);
   const fallback = Date.now().toString(36).toUpperCase();
   return `COS-AFF-${merchantCode(url)}-${ref || fallback}`.slice(0, 60);
 }
 
 function moneyValue(value: number | null | undefined) {
   return value != null && Number.isFinite(value) ? String(value) : "";
+}
+
+function isHttpUrl(value: string) {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 function AffiliateSmartImport() {
@@ -155,6 +168,7 @@ function AffiliateSmartImport() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [lastImportedUrl, setLastImportedUrl] = useState("");
+  const [manualImageUrl, setManualImageUrl] = useState("");
   const autoTimer = useRef<number | null>(null);
 
   const validUrl = useMemo(() => {
@@ -216,9 +230,15 @@ function AffiliateSmartImport() {
 
       const imported = payload as ImportCandidate;
       const merchant = merchantName(imported.sourceUrl || targetUrl);
-      const price = imported.supplierSalePrice ?? imported.supplierRrp ?? imported.supplierCost;
+      const sourceCurrency = imported.currency?.trim().toUpperCase() || "";
+      const advertisedPrice =
+        imported.supplierSalePrice ?? imported.supplierRrp ?? imported.supplierCost;
+      const price = sourceCurrency === "ZAR" ? advertisedPrice : null;
       const compareAt =
-        imported.supplierRrp != null && price != null && imported.supplierRrp >= price
+        sourceCurrency === "ZAR" &&
+        imported.supplierRrp != null &&
+        price != null &&
+        imported.supplierRrp >= price
           ? imported.supplierRrp
           : null;
       const name = imported.title?.trim() || "";
@@ -242,12 +262,28 @@ function AffiliateSmartImport() {
         description,
         price: moneyValue(price),
         compareAtPrice: moneyValue(compareAt),
+        sourceCurrency,
         imageUrls: imported.imageUrls || [],
         videoUrls: imported.videoUrls || [],
         seoTitle: name ? `${name} | Cossa Store` : "",
         seoDescription: (imported.shortDescription || description || "").slice(0, 160),
-        warnings: [...(imported.warnings || []), ...(imported.mediaWarnings || [])],
-        fieldsRequiringConfirmation: imported.fieldsRequiringConfirmation || [],
+        warnings: [
+          ...(imported.warnings || []),
+          ...(imported.mediaWarnings || []),
+          ...(advertisedPrice != null && sourceCurrency !== "ZAR"
+            ? [
+                sourceCurrency
+                  ? `The merchant exposed a ${sourceCurrency} price. It was not converted or saved as ZAR; enter a verified ZAR advertised price manually.`
+                  : "The merchant exposed a price without a confirmed currency. It was not treated as ZAR; enter a verified ZAR advertised price manually.",
+              ]
+            : []),
+        ],
+        fieldsRequiringConfirmation: [
+          ...(imported.fieldsRequiringConfirmation || []),
+          ...(advertisedPrice != null && sourceCurrency !== "ZAR"
+            ? ["current advertised price (ZAR)"]
+            : []),
+        ],
         importTrace: imported.importTrace || [],
       });
       toast.success(
@@ -286,6 +322,35 @@ function AffiliateSmartImport() {
       return { ...current, imageUrls: nextImages };
     });
     toast.success("Image removed from this Cossa Store draft.");
+  }
+
+  function addManualImage() {
+    const url = manualImageUrl.trim();
+    if (!isHttpUrl(url)) {
+      toast.error("Paste a complete http or https product image URL.");
+      return;
+    }
+    setDraft((current) => {
+      if (!current) return current;
+      if (current.imageUrls.includes(url)) return current;
+      return {
+        ...current,
+        imageUrls: [...current.imageUrls, url],
+        warnings: [
+          ...current.warnings,
+          "A manually supplied product image was added. Confirm that Cossa has permission to use it before publication.",
+        ],
+      };
+    });
+    setManualImageUrl("");
+    toast.success("Product image added to this draft for review.");
+  }
+
+  function needsConfirmation(...terms: string[]) {
+    if (!draft) return false;
+    return draft.fieldsRequiringConfirmation.some((field) =>
+      terms.some((term) => field.toLowerCase().includes(term.toLowerCase())),
+    );
   }
 
   async function saveMediaRegistry(productId: string, current: Draft) {
@@ -366,6 +431,7 @@ function AffiliateSmartImport() {
 
       const { data, error } = await db.from("store_products").insert(payload).select("id").single();
       if (error) throw error;
+      if (!data) throw new Error("The affiliate draft was not returned after saving.");
 
       const mediaSaved = await saveMediaRegistry(String(data.id), draft);
       if (mediaSaved) {
@@ -413,7 +479,8 @@ function AffiliateSmartImport() {
           <h2 className="font-display text-xl font-semibold">Paste affiliate product link</h2>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          No extra form is required. Paste a complete product URL and Smart Import starts after a short delay.
+          No extra form is required. Paste a complete product URL and Smart Import starts after a
+          short delay.
         </p>
         <div className="mt-4 flex flex-col gap-3 md:flex-row">
           <input
@@ -498,51 +565,161 @@ function AffiliateSmartImport() {
           </div>
 
           {(draft.warnings.length > 0 || draft.fieldsRequiringConfirmation.length > 0) && (
-            <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+            <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+              <p className="font-semibold text-destructive">
+                Review required before approval or publication
+              </p>
               {draft.warnings.map((warning) => (
-                <p key={warning}>• {warning}</p>
+                <p key={warning} className="mt-1">
+                  • {warning}
+                </p>
               ))}
               {draft.fieldsRequiringConfirmation.length > 0 && (
-                <p className="mt-2 font-medium">
-                  Confirm before publishing: {draft.fieldsRequiringConfirmation.join(", ")}.
+                <p className="mt-2 font-medium text-destructive">
+                  Needs information or confirmation: {draft.fieldsRequiringConfirmation.join(", ")}.
                 </p>
               )}
             </div>
           )}
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <Field label="Product name" span>
-              <input className={inputClass} value={draft.name} onChange={(e) => updateDraft("name", e.target.value)} />
+            <Field
+              label="Product name"
+              span
+              needsAttention={!draft.name.trim() || needsConfirmation("title")}
+            >
+              <input
+                className={inputClass}
+                value={draft.name}
+                onChange={(e) => updateDraft("name", e.target.value)}
+              />
             </Field>
-            <Field label="Merchant / affiliate partner">
-              <input className={inputClass} value={draft.merchant} onChange={(e) => updateDraft("merchant", e.target.value)} />
+            <Field label="Merchant / affiliate partner" needsAttention={!draft.merchant.trim()}>
+              <input
+                className={inputClass}
+                value={draft.merchant}
+                onChange={(e) => updateDraft("merchant", e.target.value)}
+              />
             </Field>
-            <Field label="Cossa SKU">
-              <input className={inputClass} value={draft.sku} onChange={(e) => updateDraft("sku", e.target.value)} />
+            <Field label="Cossa SKU" needsAttention={!draft.sku.trim()}>
+              <input
+                className={inputClass}
+                value={draft.sku}
+                onChange={(e) => updateDraft("sku", e.target.value)}
+              />
             </Field>
-            <Field label="Merchant product ID / SKU">
-              <input className={inputClass} value={draft.supplierProductRef} onChange={(e) => updateDraft("supplierProductRef", e.target.value)} />
+            <Field
+              label={
+                draft.merchant.toLowerCase() === "temu"
+                  ? "Temu product ID / SKU"
+                  : "Merchant product ID / SKU"
+              }
+              needsAttention={
+                !draft.supplierProductRef.trim() || needsConfirmation("SKU/product ID")
+              }
+            >
+              <input
+                className={inputClass}
+                value={draft.supplierProductRef}
+                onChange={(e) => updateDraft("supplierProductRef", e.target.value)}
+              />
             </Field>
-            <Field label="Brand">
-              <input className={inputClass} value={draft.brand} onChange={(e) => updateDraft("brand", e.target.value)} />
+            <Field label="Brand" needsAttention={!draft.brand.trim() || needsConfirmation("brand")}>
+              <input
+                className={inputClass}
+                value={draft.brand}
+                onChange={(e) => updateDraft("brand", e.target.value)}
+              />
             </Field>
-            <Field label="Category">
-              <input className={inputClass} value={draft.category} onChange={(e) => updateDraft("category", e.target.value)} />
+            <Field
+              label="Category"
+              needsAttention={!draft.category.trim() || needsConfirmation("category")}
+            >
+              <input
+                className={inputClass}
+                value={draft.category}
+                onChange={(e) => updateDraft("category", e.target.value)}
+              />
             </Field>
-            <Field label="Current advertised price (ZAR)">
-              <input className={inputClass} type="number" min="0" step="0.01" value={draft.price} onChange={(e) => updateDraft("price", e.target.value)} />
+            <Field
+              label={
+                draft.sourceCurrency && draft.sourceCurrency !== "ZAR"
+                  ? `Current advertised price (ZAR) · source: ${draft.sourceCurrency}`
+                  : "Current advertised price (ZAR)"
+              }
+              needsAttention={!draft.price.trim() || needsConfirmation("advertised price")}
+            >
+              <input
+                className={inputClass}
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.price}
+                onChange={(e) => updateDraft("price", e.target.value)}
+              />
             </Field>
             <Field label="Compare-at price">
-              <input className={inputClass} type="number" min="0" step="0.01" value={draft.compareAtPrice} onChange={(e) => updateDraft("compareAtPrice", e.target.value)} />
+              <input
+                className={inputClass}
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.compareAtPrice}
+                onChange={(e) => updateDraft("compareAtPrice", e.target.value)}
+              />
             </Field>
-            <Field label="Affiliate tracking URL" span>
-              <input className={inputClass} value={draft.affiliateUrl} onChange={(e) => updateDraft("affiliateUrl", e.target.value)} />
+            <Field label="Affiliate tracking URL" span needsAttention={!draft.affiliateUrl.trim()}>
+              <input
+                className={inputClass}
+                value={draft.affiliateUrl}
+                onChange={(e) => updateDraft("affiliateUrl", e.target.value)}
+              />
             </Field>
-            <Field label="Short description" span>
-              <textarea className={`${inputClass} min-h-20`} value={draft.shortDescription} onChange={(e) => updateDraft("shortDescription", e.target.value)} />
+            <Field label="Merchant product URL" span>
+              <input
+                className={inputClass}
+                value={draft.sourceUrl}
+                readOnly
+                aria-label="Merchant product URL"
+              />
             </Field>
-            <Field label="Description" span>
-              <textarea className={`${inputClass} min-h-36`} value={draft.description} onChange={(e) => updateDraft("description", e.target.value)} />
+            <Field
+              label="Short description"
+              span
+              needsAttention={
+                !draft.shortDescription.trim() || needsConfirmation("short description")
+              }
+            >
+              <textarea
+                className={`${inputClass} min-h-20`}
+                value={draft.shortDescription}
+                onChange={(e) => updateDraft("shortDescription", e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Full description"
+              span
+              needsAttention={!draft.description.trim() || needsConfirmation("description")}
+            >
+              <textarea
+                className={`${inputClass} min-h-36`}
+                value={draft.description}
+                onChange={(e) => updateDraft("description", e.target.value)}
+              />
+            </Field>
+            <Field label="SEO title" span needsAttention={!draft.seoTitle.trim()}>
+              <input
+                className={inputClass}
+                value={draft.seoTitle}
+                onChange={(e) => updateDraft("seoTitle", e.target.value)}
+              />
+            </Field>
+            <Field label="SEO description" span needsAttention={!draft.seoDescription.trim()}>
+              <textarea
+                className={`${inputClass} min-h-20`}
+                value={draft.seoDescription}
+                onChange={(e) => updateDraft("seoDescription", e.target.value)}
+              />
             </Field>
           </div>
 
@@ -551,9 +728,14 @@ function AffiliateSmartImport() {
               <p className="text-sm font-medium">Imported variants ({candidate.variants.length})</p>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 {candidate.variants.map((variant, index) => (
-                  <div key={`${variant.supplierVariantId || variant.supplierSku || variant.name}-${index}`} className="rounded-xl border border-border/60 p-3 text-xs">
+                  <div
+                    key={`${variant.supplierVariantId || variant.supplierSku || variant.name}-${index}`}
+                    className="rounded-xl border border-border/60 p-3 text-xs"
+                  >
                     <p className="font-medium">{variant.name}</p>
-                    <p className="mt-1 text-muted-foreground">SKU: {variant.supplierSku || "not exposed"} · {variant.availability}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      SKU: {variant.supplierSku || "not exposed"} · {variant.availability}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -563,14 +745,27 @@ function AffiliateSmartImport() {
           {draft.imageUrls.length > 0 ? (
             <div className="mt-5">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm font-medium">Imported product images ({draft.imageUrls.length})</p>
-                <p className="text-xs text-muted-foreground">Remove anything you do not want displayed before saving.</p>
+                <p className="text-sm font-medium">
+                  Imported product images ({draft.imageUrls.length})
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Remove anything you do not want displayed before saving.
+                </p>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {draft.imageUrls.map((url, index) => (
-                  <div key={`${url}-${index}`} className="group relative overflow-hidden rounded-xl border border-border/60 bg-background">
-                    <img src={url} alt={`Imported product ${index + 1}`} className="aspect-square w-full object-contain" />
-                    <span className="absolute bottom-2 right-2 rounded bg-background/90 px-1.5 py-0.5 text-[10px]">{index + 1}</span>
+                  <div
+                    key={`${url}-${index}`}
+                    className="group relative overflow-hidden rounded-xl border border-border/60 bg-background"
+                  >
+                    <img
+                      src={url}
+                      alt={`Imported product ${index + 1}`}
+                      className="aspect-square w-full object-contain"
+                    />
+                    <span className="absolute bottom-2 right-2 rounded bg-background/90 px-1.5 py-0.5 text-[10px]">
+                      {index + 1}
+                    </span>
                     <button
                       type="button"
                       onClick={() => removeImage(index)}
@@ -586,21 +781,54 @@ function AffiliateSmartImport() {
               </div>
             </div>
           ) : (
-            <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
-              All imported images were removed. Keep at least one genuine product image before saving the draft.
+            <div className="mt-5 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+              No verified product images are currently attached. Add at least one genuine product
+              image before saving the draft.
             </div>
           )}
 
+          <div className="mt-4 rounded-xl border border-border/60 p-4">
+            <p className="text-sm font-medium">Add a product image manually</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Use this only when the merchant did not expose a genuine product image. Confirm usage
+              rights before publication.
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <input
+                className={inputClass}
+                value={manualImageUrl}
+                onChange={(event) => setManualImageUrl(event.target.value)}
+                placeholder="https://merchant.example/product-image.jpg"
+                aria-label="Manual product image URL"
+              />
+              <Button type="button" variant="outline" onClick={addManualImage} className="shrink-0">
+                Add image
+              </Button>
+            </div>
+          </div>
+
           {draft.videoUrls.length > 0 ? (
             <div className="mt-5">
-              <p className="text-sm font-medium">Imported product videos ({draft.videoUrls.length})</p>
+              <p className="text-sm font-medium">
+                Imported product videos ({draft.videoUrls.length})
+              </p>
               <div className="mt-2 grid gap-3 sm:grid-cols-2">
                 {draft.videoUrls.map((url, index) => (
                   <div key={`${url}-${index}`} className="rounded-xl border border-border/60 p-3">
-                    <video controls preload="metadata" className="w-full rounded-lg bg-black" src={url}>
+                    <video
+                      controls
+                      preload="metadata"
+                      className="w-full rounded-lg bg-black"
+                      src={url}
+                    >
                       Your browser does not support this product video.
                     </video>
-                    <a href={url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs text-primary hover:underline">
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex text-xs text-primary hover:underline"
+                    >
                       <ExternalLink className="mr-1 h-3.5 w-3.5" /> Open source video
                     </a>
                   </div>
@@ -610,8 +838,16 @@ function AffiliateSmartImport() {
           ) : null}
 
           <div className="mt-6 flex flex-wrap gap-2">
-            <Button onClick={() => void saveDraft()} disabled={saving || draft.imageUrls.length === 0} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
+            <Button
+              onClick={() => void saveDraft()}
+              disabled={saving || draft.imageUrls.length === 0}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              {saving ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-1.5 h-4 w-4" />
+              )}
               Save Cossa Store draft
             </Button>
             <Button variant="outline" asChild>
@@ -624,10 +860,23 @@ function AffiliateSmartImport() {
   );
 }
 
-function Field({ label, span = false, children }: { label: string; span?: boolean; children: React.ReactNode }) {
+function Field({
+  label,
+  span = false,
+  needsAttention = false,
+  children,
+}: {
+  label: string;
+  span?: boolean;
+  needsAttention?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <label className={`${span ? "sm:col-span-2 " : ""}text-sm`}>
-      <span className="mb-1.5 block">{label}</span>
+      <span className={`mb-1.5 block ${needsAttention ? "font-medium text-destructive" : ""}`}>
+        {label}
+        {needsAttention ? " · needs information" : ""}
+      </span>
       {children}
     </label>
   );

@@ -128,3 +128,42 @@ test("invalid URLs are rejected before any supplier request", async () => {
     (error: unknown) => error instanceof ProductImportError && error.code === "invalid_source_url",
   );
 });
+
+test("affiliate-style product metadata keeps product fields separate from merchant chrome", () => {
+  const result = parseGenericProductPage({
+    sourceUrl: "https://merchant.example/products/travel-organiser?aff=partner-123",
+    html: `
+      <html>
+        <head>
+          <meta property="og:image" content="https://cdn.merchant.example/assets/logo.png" />
+          <meta property="product:price:amount" content="159.00" />
+          <meta property="product:price:currency" content="ZAR" />
+          <script type="application/ld+json">
+            {
+              "@context":"https://schema.org",
+              "@type":"Product",
+              "name":"Waterproof Travel Cable Organiser",
+              "sku":"MERCH-TRAVEL-42",
+              "brand":{"@type":"Brand","name":"Cossa Travel"},
+              "category":"Travel & Luggage",
+              "description":"A compact waterproof organiser for cables, chargers and travel accessories.",
+              "image":["https://cdn.merchant.example/products/travel-organiser-main.jpg"],
+              "offers":{"@type":"Offer","price":"159.00","priceCurrency":"ZAR","availability":"https://schema.org/InStock"}
+            }
+          </script>
+        </head>
+      </html>`,
+  });
+
+  assert.equal(result.title, "Waterproof Travel Cable Organiser");
+  assert.equal(result.supplierProductRef, "MERCH-TRAVEL-42");
+  assert.equal(result.brand, "Cossa Travel");
+  assert.equal(result.supplierCategory, "Travel & Luggage");
+  assert.equal(result.supplierSalePrice, 159);
+  assert.equal(result.currency, "ZAR");
+  assert.equal(result.stockStatus, "available");
+  assert.deepEqual(result.imageUrls, [
+    "https://cdn.merchant.example/products/travel-organiser-main.jpg",
+  ]);
+  assert.match(result.description ?? "", /waterproof organiser/i);
+});

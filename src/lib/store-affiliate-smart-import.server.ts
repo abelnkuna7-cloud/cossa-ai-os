@@ -6,6 +6,8 @@ import {
   ProductImportError,
   type ImportedProductCandidate,
 } from "./store-product-import.server";
+import { renderAffiliateProductWithFirecrawl } from "./store-affiliate-rendered-fallback.server";
+import { sanitizeAffiliateCandidate } from "./store-affiliate-truth-sanitizer.server";
 
 const MAX_DOCUMENT_BYTES = 3_000_000;
 const FETCH_TIMEOUT_MS = 15_000;
@@ -66,13 +68,23 @@ async function assertSafeExternalUrl(url: URL): Promise<void> {
     hostname.endsWith(".local") ||
     hostname.endsWith(".internal")
   ) {
-    throw new ProductImportError("unsafe_source_url", "This product URL is not publicly reachable.");
+    throw new ProductImportError(
+      "unsafe_source_url",
+      "This product URL is not publicly reachable.",
+    );
   }
   const records = await lookup(hostname, { all: true, verbatim: true }).catch(() => {
-    throw new ProductImportError("source_unreachable", "The affiliate URL could not be reached.", 422);
+    throw new ProductImportError(
+      "source_unreachable",
+      "The affiliate URL could not be reached.",
+      422,
+    );
   });
   if (!records.length || records.some((record) => blockedAddress(record.address))) {
-    throw new ProductImportError("unsafe_source_url", "This product URL is not publicly reachable.");
+    throw new ProductImportError(
+      "unsafe_source_url",
+      "This product URL is not publicly reachable.",
+    );
   }
 }
 
@@ -168,7 +180,11 @@ async function fetchDirectPage(input: string): Promise<LoadedPage> {
     }
     const html = await readLimitedText(response);
     if (!html.trim()) {
-      throw new ProductImportError("empty_source", "The merchant returned an empty product page.", 422);
+      throw new ProductImportError(
+        "empty_source",
+        "The merchant returned an empty product page.",
+        422,
+      );
     }
     return { html, url: current.toString(), method: "direct" };
   }
@@ -273,7 +289,9 @@ function decode(value: string): string {
 
 function absolute(value: string, sourceUrl: string): string | null {
   try {
-    const cleaned = decode(value).trim().replace(/^['\"]|['\"]$/g, "");
+    const cleaned = decode(value)
+      .trim()
+      .replace(/^['\"]|['\"]$/g, "");
     const url = new URL(cleaned, sourceUrl);
     return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
   } catch {
@@ -402,11 +420,21 @@ function videoCandidates(html: string): string[] {
   return values;
 }
 
+const UNRELATED_MEDIA_TERMS =
+  /(?:logo|icon|avatar|profile|account|wallet|payment|coupon|gift|bonus|spin|shipping|delivery|truck|review|rating|heart|wishlist|security|shield|app(?:store)?|download|google[-_ ]?play|apple|storefront|message|chat|support|captcha|sprite|pixel|tracking|favicon|badge|social|facebook|whatsapp|instagram|tiktok|header|footer|nav(?:igation)?|menu|reward|promo|promotion)/i;
+
 function productLikelyImages(values: string[]): string[] {
-  const productish = values.filter((value) =>
-    /(?:product|goods|item|sku|gallery|detail|image|img|cdn|media|pic)/i.test(value),
+  const eligible = values.filter((value) => !UNRELATED_MEDIA_TERMS.test(value));
+  const productish = eligible.filter((value) =>
+    /(?:product|goods|item|sku|gallery|detail|main[-_ ]?image|image[-_ ]?list|media|pic)/i.test(
+      value,
+    ),
   );
-  return productish.length >= 2 ? productish : values;
+
+  // Prefer explicitly product-scoped URLs. Some merchants use neutral CDN paths,
+  // so keep clean candidates as a reviewable fallback rather than inventing media
+  // or silently throwing away the only exposed product image.
+  return productish.length ? productish : eligible;
 }
 
 function mediaHeaders(pageUrl: string): HeadersInit {
@@ -478,6 +506,32 @@ async function validateImages(values: string[], pageUrl: string): Promise<string
   return candidates.filter((_, index) => valid[index]).slice(0, MAX_IMAGES);
 }
 
+async function normalizeCandidateMedia(
+  candidate: SmartAffiliateCandidate,
+): Promise<SmartAffiliateCandidate> {
+  const imageUrls = await validateImages(candidate.imageUrls, candidate.sourceUrl);
+  const videoUrls = unique(candidate.videoUrls, candidate.sourceUrl, MAX_VIDEOS);
+  const mediaWarnings = [...candidate.mediaWarnings];
+
+  if (candidate.imageUrls.length > imageUrls.length) {
+    mediaWarnings.push(
+      `${candidate.imageUrls.length - imageUrls.length} non-image, blocked or unreadable media URL(s) were excluded from the draft.`,
+    );
+  }
+  if (!imageUrls.length) {
+    mediaWarnings.push(
+      "No verified product image was exposed by this merchant page. Add a product image manually before saving.",
+    );
+  }
+
+  return {
+    ...candidate,
+    imageUrls,
+    videoUrls,
+    mediaWarnings: [...new Set(mediaWarnings)],
+  };
+}
+
 function candidateQuality(candidate: ImportedProductCandidate): number {
   return [
     candidate.title,
@@ -518,7 +572,9 @@ async function buildFromPage(page: LoadedPage): Promise<SmartAffiliateCandidate>
     mediaWarnings.push("No usable product images were exposed by this page.");
   }
   if (page.method === "rendered") {
-    mediaWarnings.push("This merchant required the rendered-page fallback to read its product page.");
+    mediaWarnings.push(
+      "This merchant required the rendered-page fallback to read its product page.",
+    );
   }
   return {
     ...basic,
@@ -544,7 +600,9 @@ function mergeCandidates(
     supplierProductRef: primary.supplierProductRef ?? secondary.supplierProductRef,
     supplierCost: primary.supplierCost ?? secondary.supplierCost,
     supplierCostConfidence:
-      primary.supplierCost != null ? primary.supplierCostConfidence : secondary.supplierCostConfidence,
+      primary.supplierCost != null
+        ? primary.supplierCostConfidence
+        : secondary.supplierCostConfidence,
     supplierCostSourceLabel: primary.supplierCostSourceLabel ?? secondary.supplierCostSourceLabel,
     supplierRrp: primary.supplierRrp ?? secondary.supplierRrp,
     supplierRrpSourceLabel: primary.supplierRrpSourceLabel ?? secondary.supplierRrpSourceLabel,
@@ -553,8 +611,16 @@ function mergeCandidates(
       primary.supplierSalePriceSourceLabel ?? secondary.supplierSalePriceSourceLabel,
     currency: primary.currency ?? secondary.currency,
     variants: primary.variants.length ? primary.variants : secondary.variants,
-    imageUrls: unique([...primary.imageUrls, ...secondary.imageUrls], primary.sourceUrl, MAX_IMAGES),
-    videoUrls: unique([...primary.videoUrls, ...secondary.videoUrls], primary.sourceUrl, MAX_VIDEOS),
+    imageUrls: unique(
+      [...primary.imageUrls, ...secondary.imageUrls],
+      primary.sourceUrl,
+      MAX_IMAGES,
+    ),
+    videoUrls: unique(
+      [...primary.videoUrls, ...secondary.videoUrls],
+      primary.sourceUrl,
+      MAX_VIDEOS,
+    ),
     mediaWarnings: [...new Set([...primary.mediaWarnings, ...secondary.mediaWarnings])],
     warnings: [...primary.warnings, ...secondary.warnings],
     retrievalMethod:
@@ -611,7 +677,8 @@ export async function smartImportAffiliateProduct(
       supplierCostSourceLabel:
         direct.supplierCostSourceLabel ?? directCandidate.supplierCostSourceLabel,
       supplierRrp: direct.supplierRrp ?? directCandidate.supplierRrp,
-      supplierRrpSourceLabel: direct.supplierRrpSourceLabel ?? directCandidate.supplierRrpSourceLabel,
+      supplierRrpSourceLabel:
+        direct.supplierRrpSourceLabel ?? directCandidate.supplierRrpSourceLabel,
       supplierSalePrice: direct.supplierSalePrice ?? directCandidate.supplierSalePrice,
       supplierSalePriceSourceLabel:
         direct.supplierSalePriceSourceLabel ?? directCandidate.supplierSalePriceSourceLabel,
@@ -625,10 +692,11 @@ export async function smartImportAffiliateProduct(
       mergedBase.sourceUrl,
       MAX_IMAGES,
     );
-    directResult = {
+    directResult = await normalizeCandidateMedia({
       ...mergedBase,
-      imageUrls: await validateImages(combinedRawImages, mergedBase.sourceUrl),
-    };
+      imageUrls: combinedRawImages,
+    });
+    directResult = await sanitizeAffiliateCandidate(directResult, parsed.toString());
 
     // A normal reader can have enough text fields while still exposing only one or two gallery images.
     // In that case keep the valid direct result, but also try the rendered reader for gallery enrichment.
@@ -645,8 +713,15 @@ export async function smartImportAffiliateProduct(
   }
 
   try {
-    const renderedPage = await fetchRenderedPage(parsed.toString());
-    const rendered = await buildFromPage(renderedPage);
+    // The rendered fallback includes merchant-specific product extraction (such as
+    // Temu product ID, title, price and category) and a strict product-gallery
+    // selector. It performs one rendered read; a second media scrape is never chained.
+    const rendered = await normalizeCandidateMedia(
+      await sanitizeAffiliateCandidate(
+        await renderAffiliateProductWithFirecrawl(parsed.toString()),
+        parsed.toString(),
+      ),
+    );
     const enriched = directResult ? mergeCandidates(rendered, directResult) : rendered;
     if (candidateQuality(enriched) < 2) {
       throw new ProductImportError(

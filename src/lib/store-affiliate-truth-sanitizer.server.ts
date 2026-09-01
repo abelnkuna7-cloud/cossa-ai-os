@@ -139,7 +139,8 @@ async function fetchTemuHtml(sourceUrl: string): Promise<string | null> {
     });
     if (!response.ok) return null;
     const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-    if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) return null;
+    if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml"))
+      return null;
     const length = Number(response.headers.get("content-length") ?? 0);
     if (Number.isFinite(length) && length > MAX_HTML_BYTES) return null;
     const html = await response.text();
@@ -155,10 +156,10 @@ function removeConfirmation(values: string[], needle: string): string[] {
   return values.filter((value) => !value.toLowerCase().includes(needle.toLowerCase()));
 }
 
-export async function sanitizeAffiliateCandidate(
-  candidate: AffiliateCandidate,
+export async function sanitizeAffiliateCandidate<T extends AffiliateCandidate>(
+  candidate: T,
   originalSourceUrl: unknown,
-): Promise<AffiliateCandidate> {
+): Promise<T> {
   const originalUrl = typeof originalSourceUrl === "string" ? originalSourceUrl.trim() : "";
   const temu = isTemuUrl(originalUrl) || isTemuUrl(candidate.sourceUrl);
   if (!temu) return candidate;
@@ -185,6 +186,7 @@ export async function sanitizeAffiliateCandidate(
   let supplierRrpSourceLabel = candidate.supplierRrpSourceLabel;
   let supplierSalePrice = candidate.supplierSalePrice;
   let supplierSalePriceSourceLabel = candidate.supplierSalePriceSourceLabel;
+  let currency = candidate.currency;
   let fieldsRequiringConfirmation = [...candidate.fieldsRequiringConfirmation];
 
   if (html) {
@@ -203,10 +205,12 @@ export async function sanitizeAffiliateCandidate(
     if (rrp != null) {
       supplierRrp = rrp;
       supplierRrpSourceLabel = "Temu visible RRP";
+      currency = "ZAR";
     }
     if (beforePromo != null) {
       supplierSalePrice = beforePromo;
       supplierSalePriceSourceLabel = "Temu visible current price before conditional promos";
+      currency = "ZAR";
     }
     if (estimatedPromo != null && estimatedPromo !== supplierSalePrice) {
       mediaWarnings.push(
@@ -215,7 +219,10 @@ export async function sanitizeAffiliateCandidate(
     }
 
     if (supplierProductRef) {
-      fieldsRequiringConfirmation = removeConfirmation(fieldsRequiringConfirmation, "supplier SKU/product ID");
+      fieldsRequiringConfirmation = removeConfirmation(
+        fieldsRequiringConfirmation,
+        "supplier SKU/product ID",
+      );
     }
   }
 
@@ -231,9 +238,10 @@ export async function sanitizeAffiliateCandidate(
     supplierRrpSourceLabel,
     supplierSalePrice,
     supplierSalePriceSourceLabel,
+    currency,
     shortDescription,
     description,
     fieldsRequiringConfirmation,
     mediaWarnings: [...new Set(mediaWarnings)],
-  };
+  } as T;
 }
