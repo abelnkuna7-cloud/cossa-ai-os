@@ -71,6 +71,18 @@ export function canScheduleAgentRetry(input: {
   );
 }
 
+/**
+ * A terminal upstream failure must resolve dependent work explicitly. Leaving
+ * it queued would make the dashboard imply that the work can still run, while
+ * letting it run would bypass the workflow's required evidence or approval.
+ */
+export function isDependencyCancelledAgentTask(input: {
+  status: string | null | undefined;
+  errorCode: string | null | undefined;
+}): boolean {
+  return input.status === "cancelled" && input.errorCode === "dependency_failed";
+}
+
 export function externalActionMayExecute(input: {
   requiresCeoApproval: boolean;
   approvalRecorded: boolean;

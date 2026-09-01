@@ -1,4 +1,4 @@
-import { canScheduleAgentRetry } from "./operational-truth";
+import { canScheduleAgentRetry, isDependencyCancelledAgentTask } from "./operational-truth";
 
 const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 const MAX_TASKS_PER_TICK = 6;
@@ -2110,11 +2110,12 @@ export async function runAgentRuntimeTick(): Promise<{
   completed: number;
   retried: number;
   failed: number;
+  dependencyCancelled: number;
   approvalsReactivated: number;
   scheduledTriggersQueued: number;
 }> {
   const environment = requireRuntimeEnvironment();
-  const [approvalsReactivated, scheduled] = await Promise.all([
+  const [approvalsReactivated, scheduled, dependencyCancelled] = await Promise.all([
     databaseRpc<number>(environment, "reactivate_approved_agent_tasks", {
       p_organisation_id: environment.organisationId,
     }),
@@ -2122,7 +2123,31 @@ export async function runAgentRuntimeTick(): Promise<{
       p_organisation_id: environment.organisationId,
       p_limit: 10,
     }),
+    databaseRpc<RuntimeTask[]>(environment, "cancel_agent_tasks_with_terminal_dependencies", {
+      p_organisation_id: environment.organisationId,
+      p_limit: 100,
+    }),
   ]);
+
+  for (const task of dependencyCancelled) {
+    if (!isDependencyCancelledAgentTask({ status: task.status, errorCode: task.error_code })) {
+      continue;
+    }
+    await logExecutionEvent(environment, {
+      organisationId: task.organisation_id,
+      taskId: task.id,
+      missionId: task.mission_id,
+      runId: task.run_id,
+      agentId: task.agent_id,
+      eventType: "task_cancelled_dependency_failed",
+      severity: "warning",
+      message: `Skipped ${task.task_type} because a required upstream task ended without completion.`,
+      metadata: {
+        error_code: "dependency_failed",
+        external_actions_enabled: false,
+      },
+    });
+  }
   const tasks = await databaseRpc<RuntimeTask[]>(environment, "claim_agent_tasks", {
     p_organisation_id: environment.organisationId,
     p_worker_id: crypto.randomUUID(),
@@ -2151,6 +2176,7 @@ export async function runAgentRuntimeTick(): Promise<{
       completed,
       retried,
       failed,
+      dependency_cancelled: dependencyCancelled.length,
       scheduled_triggers_queued: scheduled.length,
       external_sending_enabled: false,
     },
@@ -2171,6 +2197,7 @@ export async function runAgentRuntimeTick(): Promise<{
     completed,
     retried,
     failed,
+    dependencyCancelled: dependencyCancelled.length,
     approvalsReactivated,
     scheduledTriggersQueued: scheduled.length,
   };

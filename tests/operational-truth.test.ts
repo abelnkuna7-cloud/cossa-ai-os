@@ -9,6 +9,7 @@ import {
   crmPipelineForEntity,
   externalActionMayExecute,
   hasPublicationEvidence,
+  isDependencyCancelledAgentTask,
   isActiveSalesPipelineStage,
   leadConversionMayCreateOpportunity,
   readLegacyCrmField,
@@ -83,6 +84,21 @@ test("approval and configuration failures cannot create retry storms", () => {
   );
   assert.equal(
     canScheduleAgentRetry({ errorCode: "provider_timeout", attemptCount: 3, maxAttempts: 3 }),
+    false,
+  );
+});
+
+test("terminal dependency cancellation is explicit and cannot be mistaken for executable work", () => {
+  assert.equal(
+    isDependencyCancelledAgentTask({ status: "cancelled", errorCode: "dependency_failed" }),
+    true,
+  );
+  assert.equal(
+    isDependencyCancelledAgentTask({ status: "queued", errorCode: "dependency_failed" }),
+    false,
+  );
+  assert.equal(
+    isDependencyCancelledAgentTask({ status: "cancelled", errorCode: "provider_timeout" }),
     false,
   );
 });
