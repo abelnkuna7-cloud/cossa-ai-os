@@ -33,7 +33,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 import {
-  GrowthEagleArtwork,
+  GrowthHeroVideo,
   GrowthProductBrand,
   ParentBrandEndorsement,
 } from "@/components/brand/growth-brand";
@@ -704,7 +704,7 @@ function GrowthHome() {
             <section className="relative min-h-[180px] overflow-hidden border-b border-primary/25 bg-black p-5 sm:min-h-[190px] md:min-h-[210px] md:p-6">
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(217,177,36,0.16),transparent_52%)]" />
 
-              <GrowthEagleArtwork
+              <GrowthHeroVideo
                 eager
                 className="absolute -bottom-10 -right-16 h-[118%] w-[82%] object-contain object-[center_58%] opacity-100 sm:-right-10 sm:w-[72%] md:-right-2 md:w-[62%]"
               />
