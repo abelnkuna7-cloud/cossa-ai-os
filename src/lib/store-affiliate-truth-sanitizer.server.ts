@@ -111,7 +111,7 @@ function parseBreadcrumbCategory(html: string, title: string | null): string | n
 
 function factualDescription(value: string | null): string | null {
   if (!value) return null;
-  let text = cleanText(value)
+  const text = cleanText(value)
     .replace(/^(?:shop|find|buy)\s+/i, "")
     .replace(/\s+(?:on|at)\s+Temu\b[\s\S]*$/i, "")
     .replace(/\s+Free shipping\b[\s\S]*$/i, "")

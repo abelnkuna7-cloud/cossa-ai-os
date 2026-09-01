@@ -291,7 +291,7 @@ function absolute(value: string, sourceUrl: string): string | null {
   try {
     const cleaned = decode(value)
       .trim()
-      .replace(/^['\"]|['\"]$/g, "");
+      .replace(/^['"]|['"]$/g, "");
     const url = new URL(cleaned, sourceUrl);
     return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
   } catch {
