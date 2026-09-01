@@ -81,6 +81,7 @@ import { Route as MarketingAiDirectorRouteImport } from './routes/marketing.ai-d
 import { Route as BusinessesTechRouteImport } from './routes/businesses.tech'
 import { Route as BusinessesStoreProductsRouteImport } from './routes/businesses.store-products'
 import { Route as BusinessesStoreInventoryRouteImport } from './routes/businesses.store-inventory'
+import { Route as BusinessesStoreAffiliateImportRouteImport } from './routes/businesses.store-affiliate-import'
 import { Route as BusinessesStoreRouteImport } from './routes/businesses.store'
 import { Route as BusinessesNexdocsRouteImport } from './routes/businesses.nexdocs'
 import { Route as BusinessesFacilityServicesRouteImport } from './routes/businesses.facility-services'
@@ -88,6 +89,7 @@ import { Route as BusinessesConstructionRouteImport } from './routes/businesses.
 import { Route as ApiWebsiteHealthRouteImport } from './routes/api/website-health'
 import { Route as ApiStoreProductImportRouteImport } from './routes/api.store-product-import'
 import { Route as ApiStoreInventoryPublicationRouteImport } from './routes/api.store-inventory-publication'
+import { Route as ApiStoreAffiliateSmartImportRouteImport } from './routes/api.store-affiliate-smart-import'
 import { Route as ApiPlatformAnalyticsRouteImport } from './routes/api/platform-analytics'
 import { Route as ApiGrowthAnalyticsRouteImport } from './routes/api/growth-analytics'
 import { Route as ApiFathomWebhookRouteImport } from './routes/api/fathom-webhook'
@@ -488,6 +490,12 @@ const BusinessesStoreInventoryRoute =
     path: '/businesses/store-inventory',
     getParentRoute: () => rootRouteImport,
   } as any)
+const BusinessesStoreAffiliateImportRoute =
+  BusinessesStoreAffiliateImportRouteImport.update({
+    id: '/businesses/store-affiliate-import',
+    path: '/businesses/store-affiliate-import',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const BusinessesStoreRoute = BusinessesStoreRouteImport.update({
   id: '/businesses/store',
   path: '/businesses/store',
@@ -523,6 +531,12 @@ const ApiStoreInventoryPublicationRoute =
   ApiStoreInventoryPublicationRouteImport.update({
     id: '/api/store-inventory-publication',
     path: '/api/store-inventory-publication',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiStoreAffiliateSmartImportRoute =
+  ApiStoreAffiliateSmartImportRouteImport.update({
+    id: '/api/store-affiliate-smart-import',
+    path: '/api/store-affiliate-smart-import',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPlatformAnalyticsRoute = ApiPlatformAnalyticsRouteImport.update({
@@ -752,6 +766,7 @@ export interface FileRoutesByFullPath {
   '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
+  '/api/store-affiliate-smart-import': typeof ApiStoreAffiliateSmartImportRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
@@ -759,6 +774,7 @@ export interface FileRoutesByFullPath {
   '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
+  '/businesses/store-affiliate-import': typeof BusinessesStoreAffiliateImportRoute
   '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
@@ -867,6 +883,7 @@ export interface FileRoutesByTo {
   '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
+  '/api/store-affiliate-smart-import': typeof ApiStoreAffiliateSmartImportRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
@@ -874,6 +891,7 @@ export interface FileRoutesByTo {
   '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
+  '/businesses/store-affiliate-import': typeof BusinessesStoreAffiliateImportRoute
   '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
@@ -983,6 +1001,7 @@ export interface FileRoutesById {
   '/api/fathom-webhook': typeof ApiFathomWebhookRoute
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
+  '/api/store-affiliate-smart-import': typeof ApiStoreAffiliateSmartImportRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
@@ -990,6 +1009,7 @@ export interface FileRoutesById {
   '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
+  '/businesses/store-affiliate-import': typeof BusinessesStoreAffiliateImportRoute
   '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
@@ -1100,6 +1120,7 @@ export interface FileRouteTypes {
     | '/api/fathom-webhook'
     | '/api/growth-analytics'
     | '/api/platform-analytics'
+    | '/api/store-affiliate-smart-import'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
@@ -1107,6 +1128,7 @@ export interface FileRouteTypes {
     | '/businesses/facility-services'
     | '/businesses/nexdocs'
     | '/businesses/store'
+    | '/businesses/store-affiliate-import'
     | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
@@ -1215,6 +1237,7 @@ export interface FileRouteTypes {
     | '/api/fathom-webhook'
     | '/api/growth-analytics'
     | '/api/platform-analytics'
+    | '/api/store-affiliate-smart-import'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
@@ -1222,6 +1245,7 @@ export interface FileRouteTypes {
     | '/businesses/facility-services'
     | '/businesses/nexdocs'
     | '/businesses/store'
+    | '/businesses/store-affiliate-import'
     | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
@@ -1330,6 +1354,7 @@ export interface FileRouteTypes {
     | '/api/fathom-webhook'
     | '/api/growth-analytics'
     | '/api/platform-analytics'
+    | '/api/store-affiliate-smart-import'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
@@ -1337,6 +1362,7 @@ export interface FileRouteTypes {
     | '/businesses/facility-services'
     | '/businesses/nexdocs'
     | '/businesses/store'
+    | '/businesses/store-affiliate-import'
     | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
@@ -1446,6 +1472,7 @@ export interface RootRouteChildren {
   ApiFathomWebhookRoute: typeof ApiFathomWebhookRoute
   ApiGrowthAnalyticsRoute: typeof ApiGrowthAnalyticsRouteWithChildren
   ApiPlatformAnalyticsRoute: typeof ApiPlatformAnalyticsRoute
+  ApiStoreAffiliateSmartImportRoute: typeof ApiStoreAffiliateSmartImportRoute
   ApiStoreInventoryPublicationRoute: typeof ApiStoreInventoryPublicationRoute
   ApiStoreProductImportRoute: typeof ApiStoreProductImportRoute
   ApiWebsiteHealthRoute: typeof ApiWebsiteHealthRoute
@@ -1453,6 +1480,7 @@ export interface RootRouteChildren {
   BusinessesFacilityServicesRoute: typeof BusinessesFacilityServicesRoute
   BusinessesNexdocsRoute: typeof BusinessesNexdocsRoute
   BusinessesStoreRoute: typeof BusinessesStoreRoute
+  BusinessesStoreAffiliateImportRoute: typeof BusinessesStoreAffiliateImportRoute
   BusinessesStoreInventoryRoute: typeof BusinessesStoreInventoryRoute
   BusinessesStoreProductsRoute: typeof BusinessesStoreProductsRoute
   BusinessesTechRoute: typeof BusinessesTechRoute
@@ -2013,6 +2041,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BusinessesStoreInventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/businesses/store-affiliate-import': {
+      id: '/businesses/store-affiliate-import'
+      path: '/businesses/store-affiliate-import'
+      fullPath: '/businesses/store-affiliate-import'
+      preLoaderRoute: typeof BusinessesStoreAffiliateImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/businesses/store': {
       id: '/businesses/store'
       path: '/businesses/store'
@@ -2060,6 +2095,13 @@ declare module '@tanstack/react-router' {
       path: '/api/store-inventory-publication'
       fullPath: '/api/store-inventory-publication'
       preLoaderRoute: typeof ApiStoreInventoryPublicationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/store-affiliate-smart-import': {
+      id: '/api/store-affiliate-smart-import'
+      path: '/api/store-affiliate-smart-import'
+      fullPath: '/api/store-affiliate-smart-import'
+      preLoaderRoute: typeof ApiStoreAffiliateSmartImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/platform-analytics': {
@@ -2380,6 +2422,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiFathomWebhookRoute: ApiFathomWebhookRoute,
   ApiGrowthAnalyticsRoute: ApiGrowthAnalyticsRouteWithChildren,
   ApiPlatformAnalyticsRoute: ApiPlatformAnalyticsRoute,
+  ApiStoreAffiliateSmartImportRoute: ApiStoreAffiliateSmartImportRoute,
   ApiStoreInventoryPublicationRoute: ApiStoreInventoryPublicationRoute,
   ApiStoreProductImportRoute: ApiStoreProductImportRoute,
   ApiWebsiteHealthRoute: ApiWebsiteHealthRoute,
@@ -2387,6 +2430,7 @@ const rootRouteChildren: RootRouteChildren = {
   BusinessesFacilityServicesRoute: BusinessesFacilityServicesRoute,
   BusinessesNexdocsRoute: BusinessesNexdocsRoute,
   BusinessesStoreRoute: BusinessesStoreRoute,
+  BusinessesStoreAffiliateImportRoute: BusinessesStoreAffiliateImportRoute,
   BusinessesStoreInventoryRoute: BusinessesStoreInventoryRoute,
   BusinessesStoreProductsRoute: BusinessesStoreProductsRoute,
   BusinessesTechRoute: BusinessesTechRoute,
