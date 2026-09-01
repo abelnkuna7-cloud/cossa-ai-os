@@ -10,5 +10,6 @@ export const GROWTH_BRAND = {
     parentMark: "/brand/cossa-nexus-holdings/parent-logo.png",
     parentLogo: "/brand/cossa-nexus-holdings/parent-logo.png",
     eagle: "/brand/eagle/cossa-eagle-hero.webp",
+    eagleHeroVideo: "/brand/eagle/eagle-nexus-hero-video.mp4",
   },
 } as const;

@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { GROWTH_BRAND } from "@/lib/brand";
+import { useEffect, useState } from "react";
 
 interface BrandClassNameProps {
   className?: string;
@@ -111,5 +112,52 @@ export function GrowthEagleArtwork({
       loading={eager ? "eager" : "lazy"}
       className={cn("object-cover", className)}
     />
+  );
+}
+
+export function GrowthHeroVideo({
+  className,
+  eager = false,
+}: BrandClassNameProps & {
+  eager?: boolean;
+}) {
+  const [motionAllowed, setMotionAllowed] = useState(false);
+
+  useEffect(() => {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updateMotionPreference = () => setMotionAllowed(!reducedMotion.matches);
+
+    updateMotionPreference();
+    reducedMotion.addEventListener("change", updateMotionPreference);
+    return () => reducedMotion.removeEventListener("change", updateMotionPreference);
+  }, []);
+
+  return (
+    <>
+      <img
+        src={GROWTH_BRAND.assets.eagle}
+        alt=""
+        aria-hidden="true"
+        width={1146}
+        height={1368}
+        decoding="async"
+        loading={eager ? "eager" : "lazy"}
+        className={cn("object-cover", className)}
+      />
+      {motionAllowed ? (
+        <video
+          aria-hidden
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="metadata"
+          poster={GROWTH_BRAND.assets.eagle}
+          className={cn("object-cover", className)}
+        >
+          <source src={GROWTH_BRAND.assets.eagleHeroVideo} type="video/mp4" />
+        </video>
+      ) : null}
+    </>
   );
 }
