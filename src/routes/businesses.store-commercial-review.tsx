@@ -11,7 +11,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { loadStoreCommercialReviews } from "@/lib/store-commercial-review.client";
+import { loadStoreCommercialReviews } from "@/lib/store-commercial-review-client";
 import {
   MINIMUM_COMMERCIAL_MARGIN_PERCENT,
   type CommercialReviewItem,
