@@ -344,8 +344,12 @@ function CommercialReviewCard({ item }: { item: CommercialReviewItem }) {
         <span>
           SA benchmark:{" "}
           {item.marketEvidence.sourceUrl
-            ? "Source saved — exact/strong match still requires review"
-            : "Not recorded"}
+            ? `${item.marketEvidence.matchStrength.replaceAll("_", " ")} ${
+                item.marketEvidence.confidencePercent != null
+                  ? `(${item.marketEvidence.confidencePercent}% confidence)`
+                  : ""
+              }`
+            : "Not recorded — add reviewed source, match and confidence in Inventory notes"}
         </span>
         {benchmarkUrl ? (
           <a
@@ -420,6 +424,11 @@ function EvidenceLedger({ entries }: { entries: CommercialReviewItem["review"]["
         <p className="mt-1 text-xs text-muted-foreground">
           Each item preserves the available source and check time. Missing evidence stays explicit
           and cannot be converted into a price recommendation.
+        </p>
+        <p className="mt-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
+          Decision-grade market note: [commercial-match: EXACT_MATCH or STRONG_COMPARABLE]
+          {"\n"}[commercial-confidence: 80–100] [commercial-comparison: model/specification
+          evidence]
         </p>
       </div>
       <div className="mt-3 grid gap-2 lg:grid-cols-2">

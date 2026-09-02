@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
 import {
   assessLocalSourceCandidate,
+  assessSavedMarketEvidence,
   reviewCommercialCompetitiveness,
   type CommercialEvidenceItem,
   type CommercialReview,
@@ -100,6 +101,9 @@ export type CommercialReviewItem = {
     sourceUrl: string | null;
     checkedAt: string | null;
     note: string | null;
+    matchStrength: MarketMatchStrength;
+    confidencePercent: number | null;
+    comparisonNote: string | null;
   };
   inventoryLastVerifiedAt: string | null;
 };
@@ -476,7 +480,8 @@ export async function loadStoreCommercialReviews(): Promise<CommercialReviewItem
           : hasConfirmedIntakeCost
             ? "verified"
             : "unknown";
-      const marketMatchStrength: MarketMatchStrength = "NOT_COMPARABLE";
+      const marketAssessment = assessSavedMarketEvidence(intake?.market_price_notes);
+      const marketMatchStrength = marketAssessment.matchStrength;
       const localMatch = localSourceMatch(product, products, suppliers);
       const currentSellingPriceZar = asNumber(variant?.price_zar) ?? asNumber(product.price);
       const evidence = commercialEvidenceFor({
@@ -555,6 +560,9 @@ export async function loadStoreCommercialReviews(): Promise<CommercialReviewItem
           sourceUrl: intake?.market_price_source_url ?? null,
           checkedAt: intake?.last_price_checked_at ?? null,
           note: intake?.market_price_notes ?? null,
+          matchStrength: marketAssessment.matchStrength,
+          confidencePercent: marketAssessment.confidencePercent,
+          comparisonNote: marketAssessment.comparisonNote,
         },
         inventoryLastVerifiedAt: product.inventory_last_verified_at,
       };

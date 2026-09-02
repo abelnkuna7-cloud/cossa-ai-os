@@ -141,6 +141,12 @@ export type LocalSourceCandidateEvidence = {
   landedCostVerified?: boolean;
 };
 
+export type SavedMarketEvidenceAssessment = {
+  matchStrength: MarketMatchStrength;
+  confidencePercent: number | null;
+  comparisonNote: string | null;
+};
+
 function money(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -176,6 +182,50 @@ function isVerifiedLocalMatch(match: LocalSourceMatch | null): match is LocalSou
     match.landedCostVerified &&
     positive(match.landedCostZar) != null,
   );
+}
+
+/**
+ * The existing Inventory market-evidence fields are deliberately reused rather
+ * than introducing a migration for a review-only gate. A reviewer can add the
+ * following labelled facts to Market price notes after inspecting the source:
+ *
+ * [commercial-match: EXACT_MATCH]
+ * [commercial-confidence: 90]
+ * [commercial-comparison: same model, 10W output, 230×90×57.5 mm]
+ *
+ * Unlabelled notes, title resemblance, category matches and low-confidence
+ * claims stay NOT_COMPARABLE and cannot influence a recommendation.
+ */
+export function assessSavedMarketEvidence(
+  note: string | null | undefined,
+): SavedMarketEvidenceAssessment {
+  const text = note ?? "";
+  const match = text.match(
+    /\[commercial-match:\s*(EXACT_MATCH|STRONG_COMPARABLE|BROADER_MARKET_CONTEXT|NOT_COMPARABLE)\s*\]/i,
+  );
+  const confidence = text.match(/\[commercial-confidence:\s*(\d{1,3})\s*\]/i);
+  const comparison = text.match(/\[commercial-comparison:\s*([^\]]+)\]/i);
+  const confidencePercent = confidence ? Number(confidence[1]) : null;
+  const markedStrength = match?.[1]?.toUpperCase() as MarketMatchStrength | undefined;
+  const hasDecisionGradeComparison =
+    (markedStrength === "EXACT_MATCH" || markedStrength === "STRONG_COMPARABLE") &&
+    confidencePercent != null &&
+    confidencePercent >= 80 &&
+    confidencePercent <= 100 &&
+    Boolean(comparison?.[1]?.trim());
+
+  return {
+    matchStrength: hasDecisionGradeComparison
+      ? markedStrength!
+      : markedStrength === "BROADER_MARKET_CONTEXT"
+        ? "BROADER_MARKET_CONTEXT"
+        : "NOT_COMPARABLE",
+    confidencePercent:
+      confidencePercent != null && confidencePercent >= 0 && confidencePercent <= 100
+        ? confidencePercent
+        : null,
+    comparisonNote: comparison?.[1]?.trim() || null,
+  };
 }
 
 function reviewedLandedCost(input: CommercialReviewInput): {

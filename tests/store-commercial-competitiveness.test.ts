@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   assessLocalSourceCandidate,
+  assessSavedMarketEvidence,
   reviewCommercialCompetitiveness,
   type CommercialReviewInput,
 } from "../src/lib/store-commercial-competitiveness.ts";
@@ -197,6 +198,22 @@ test("source-preserving evidence is returned unchanged for review", () => {
   assert.equal(result.evidence.length, 1);
   assert.equal(result.evidence[0]?.sourceLabel, "CJ destination quotation");
   assert.equal(result.evidence[0]?.observedAt, "2026-09-02T00:00:00.000Z");
+});
+
+test("saved market evidence requires labelled comparison and high confidence before it can drive pricing", () => {
+  const exact = assessSavedMarketEvidence(
+    "[commercial-match: EXACT_MATCH] [commercial-confidence: 92] [commercial-comparison: same model, 10W output and 230×90×57.5 mm]",
+  );
+  const titleOnly = assessSavedMarketEvidence(
+    "[commercial-match: EXACT_MATCH] [commercial-confidence: 92] Similar title only.",
+  );
+  const lowConfidence = assessSavedMarketEvidence(
+    "[commercial-match: STRONG_COMPARABLE] [commercial-confidence: 60] [commercial-comparison: same stated power and dimensions]",
+  );
+  assert.equal(exact.matchStrength, "EXACT_MATCH");
+  assert.equal(exact.confidencePercent, 92);
+  assert.equal(titleOnly.matchStrength, "NOT_COMPARABLE");
+  assert.equal(lowConfidence.matchStrength, "NOT_COMPARABLE");
 });
 
 test("the existing Three in One Wireless Charger record stays HOLD until its international cost and comparable-market evidence is complete", () => {
