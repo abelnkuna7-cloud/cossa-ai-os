@@ -18,6 +18,7 @@ const completeInternational = (
   minimumGrossMarginPercent: 35,
   cost: {
     supplierProductCostZar: 250,
+    supplierProductCostEvidence: "verified",
     internationalOrLocalFreightZar: 50,
     currencyConversionZar: 0,
     dutiesTaxesFeesZar: 25,
@@ -32,7 +33,7 @@ const completeInternational = (
     priceZar: 700,
     sourceUrl: "https://competitor.example/products/charger",
     checkedAt: "2026-09-02T00:00:00.000Z",
-    matchStrength: "exact_model",
+    matchStrength: "EXACT_MATCH",
     note: "Same model identifier and specifications.",
   },
   localSourceMatch: null,
@@ -107,7 +108,7 @@ test("a credible market price below the sustainable floor becomes an archive can
         priceZar: 450,
         sourceUrl: "https://competitor.example/products/charger",
         checkedAt: "2026-09-02T00:00:00.000Z",
-        matchStrength: "exact_model",
+        matchStrength: "EXACT_MATCH",
         note: null,
       },
     }),
@@ -123,13 +124,79 @@ test("category-only pricing is not accepted as a credible South African benchmar
         priceZar: 500,
         sourceUrl: "https://competitor.example/search?q=charger",
         checkedAt: "2026-09-02T00:00:00.000Z",
-        matchStrength: "category_only",
+        matchStrength: "BROADER_MARKET_CONTEXT",
         note: "Same broad product category only.",
       },
     }),
   );
   assert.equal(result.outcome, "HOLD");
   assert.ok(result.requirements.some((item) => item.includes("comparable South African market")));
+});
+
+test("a strong comparable can support a decision, while broader market context cannot", () => {
+  const strongComparable = reviewCommercialCompetitiveness(
+    completeInternational({
+      marketBenchmark: {
+        priceZar: 700,
+        sourceUrl: "https://competitor.example/products/strong-comparable",
+        checkedAt: "2026-09-02T00:00:00.000Z",
+        matchStrength: "STRONG_COMPARABLE",
+        note: "Power, dimensions, connectors and supported devices were compared.",
+      },
+    }),
+  );
+  const broaderContext = reviewCommercialCompetitiveness(
+    completeInternational({
+      marketBenchmark: {
+        priceZar: 700,
+        sourceUrl: "https://competitor.example/search?q=wireless+charger",
+        checkedAt: "2026-09-02T00:00:00.000Z",
+        matchStrength: "BROADER_MARKET_CONTEXT",
+        note: "Same broad category but no feature/model comparison.",
+      },
+    }),
+  );
+  assert.equal(strongComparable.outcome, "KEEP");
+  assert.equal(strongComparable.evidenceDecisionState, "SUFFICIENT");
+  assert.equal(broaderContext.outcome, "HOLD");
+  assert.equal(broaderContext.evidenceDecisionState, "MISSING_EVIDENCE");
+});
+
+test("a numeric supplier cost without current source evidence cannot support a decision", () => {
+  const input = completeInternational();
+  input.cost.supplierProductCostEvidence = "unknown";
+  const result = reviewCommercialCompetitiveness(input);
+  assert.equal(result.outcome, "HOLD");
+  assert.ok(result.requirements.some((item) => item.includes("Supplier product cost")));
+});
+
+test("known supplier freight still fails closed when duties or import fees are unknown", () => {
+  const input = completeInternational();
+  input.cost.dutiesTaxesFeesEvidence = "unknown";
+  input.cost.dutiesTaxesFeesZar = null;
+  const result = reviewCommercialCompetitiveness(input);
+  assert.equal(result.outcome, "HOLD");
+  assert.ok(result.requirements.some((item) => item.includes("duties, taxes or import fees")));
+});
+
+test("source-preserving evidence is returned unchanged for review", () => {
+  const result = reviewCommercialCompetitiveness({
+    ...completeInternational(),
+    evidence: [
+      {
+        kind: "SUPPLIER_FREIGHT",
+        state: "verified",
+        sourceLabel: "CJ destination quotation",
+        sourceUrl: "https://supplier.example/quote/za",
+        observedAt: "2026-09-02T00:00:00.000Z",
+        valueZar: 50,
+        note: "ZA freight quote.",
+      },
+    ],
+  });
+  assert.equal(result.evidence.length, 1);
+  assert.equal(result.evidence[0]?.sourceLabel, "CJ destination quotation");
+  assert.equal(result.evidence[0]?.observedAt, "2026-09-02T00:00:00.000Z");
 });
 
 test("the existing Three in One Wireless Charger record stays HOLD until its international cost and comparable-market evidence is complete", () => {
@@ -144,6 +211,7 @@ test("the existing Three in One Wireless Charger record stays HOLD until its int
       // Current product-record values; this is not asserted to be a complete
       // landed-cost breakdown.
       supplierProductCostZar: 108.9,
+      supplierProductCostEvidence: "verified",
       internationalOrLocalFreightZar: null,
       currencyConversionZar: 0,
       dutiesTaxesFeesZar: null,

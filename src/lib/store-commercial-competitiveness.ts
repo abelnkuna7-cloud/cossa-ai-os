@@ -22,11 +22,16 @@ export type SupplierPriority =
   | "AFFILIATE_OR_PARTNER";
 
 export type EvidenceState = "verified" | "not_applicable" | "unknown" | "unavailable";
+/**
+ * A South African price can influence a recommendation only when the product
+ * comparison itself is evidence-backed. A familiar-looking title, category or
+ * keyword is deliberately not enough.
+ */
 export type MarketMatchStrength =
-  | "exact_model"
-  | "verified_functional_equivalent"
-  | "category_only"
-  | "unknown";
+  | "EXACT_MATCH"
+  | "STRONG_COMPARABLE"
+  | "BROADER_MARKET_CONTEXT"
+  | "NOT_COMPARABLE";
 export type LocalSourceMatchStrength =
   | "verified_identity"
   | "verified_functional_equivalence"
@@ -35,6 +40,7 @@ export type LocalSourceMatchStrength =
 
 export type CommercialCostEvidence = {
   supplierProductCostZar: number | null;
+  supplierProductCostEvidence: EvidenceState;
   internationalOrLocalFreightZar: number | null;
   currencyConversionZar: number | null;
   dutiesTaxesFeesZar: number | null;
@@ -52,6 +58,33 @@ export type SouthAfricanMarketBenchmark = {
   sourceUrl: string | null;
   checkedAt: string | null;
   matchStrength: MarketMatchStrength;
+  note: string | null;
+};
+
+export type CommercialEvidenceKind =
+  | "SUPPLIER_PRODUCT_COST"
+  | "SUPPLIER_FREIGHT"
+  | "CURRENCY_CONVERSION"
+  | "DUTIES_TAXES_FEES"
+  | "PAYMENT_OR_OPERATIONAL_COST"
+  | "COSSA_SELLING_PRICE"
+  | "SUPPLIER_AVAILABILITY"
+  | "SOUTH_AFRICAN_MARKET"
+  | "LOCAL_SUPPLIER_MATCH";
+
+/**
+ * A source-preserving, review-only evidence item. It can be populated from a
+ * supplier/API response, an existing Cossa record, or a human-reviewed market
+ * source. Missing values are represented explicitly instead of guessed.
+ */
+export type CommercialEvidenceItem = {
+  kind: CommercialEvidenceKind;
+  state: EvidenceState;
+  sourceLabel: string;
+  sourceUrl: string | null;
+  observedAt: string | null;
+  valueZar: number | null;
+  matchStrength?: MarketMatchStrength | LocalSourceMatchStrength | null;
   note: string | null;
 };
 
@@ -74,6 +107,7 @@ export type CommercialReviewInput = {
   cost: CommercialCostEvidence;
   marketBenchmark: SouthAfricanMarketBenchmark | null;
   localSourceMatch: LocalSourceMatch | null;
+  evidence?: CommercialEvidenceItem[];
 };
 
 export type CommercialReview = {
@@ -90,6 +124,8 @@ export type CommercialReview = {
   rationale: string[];
   merchantWarnings: string[];
   localSourceMatch: LocalSourceMatch | null;
+  evidence: CommercialEvidenceItem[];
+  evidenceDecisionState: "SUFFICIENT" | "MISSING_EVIDENCE";
   changesAutomatically: false;
 };
 
@@ -129,7 +165,7 @@ function hasCredibleBenchmark(
     positive(benchmark.priceZar) != null &&
     benchmark.priceZar! > 0 &&
     benchmark.sourceUrl?.trim() &&
-    ["exact_model", "verified_functional_equivalent"].includes(benchmark.matchStrength),
+    ["EXACT_MATCH", "STRONG_COMPARABLE"].includes(benchmark.matchStrength),
   );
 }
 
@@ -156,7 +192,7 @@ function reviewedLandedCost(input: CommercialReviewInput): {
   const payment = positive(cost.paymentOperationalCostZar);
   const recorded = positive(cost.recordedTotalLandedCostZar);
 
-  if (supplierCost == null)
+  if (supplierCost == null || cost.supplierProductCostEvidence !== "verified")
     requirements.push("Supplier product cost needs current source evidence.");
   if (needsInternationalFreight(input.supplierPriority) && cost.freightEvidence !== "verified")
     requirements.push("International freight/logistics needs a current South Africa quotation.");
@@ -179,6 +215,7 @@ function reviewedLandedCost(input: CommercialReviewInput): {
 
   const canDerive =
     supplierCost != null &&
+    cost.supplierProductCostEvidence === "verified" &&
     (!needsInternationalFreight(input.supplierPriority) || freight != null) &&
     (!needsInternationalFreight(input.supplierPriority) ||
       cost.dutiesTaxesFeesEvidence !== "unknown") &&
@@ -351,6 +388,8 @@ export function reviewCommercialCompetitiveness(input: CommercialReviewInput): C
       minimumMargin: input.minimumGrossMarginPercent,
     }),
     localSourceMatch: input.localSourceMatch,
+    evidence: input.evidence ?? [],
+    evidenceDecisionState: requirements.length ? "MISSING_EVIDENCE" : "SUFFICIENT",
     changesAutomatically: false,
   };
 }

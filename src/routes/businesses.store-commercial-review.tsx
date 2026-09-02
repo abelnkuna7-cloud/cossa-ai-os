@@ -89,6 +89,33 @@ function StoreCommercialReview() {
       }, {}),
     [commercialReview.data],
   );
+  const evidenceCounts = useMemo(
+    () =>
+      (commercialReview.data ?? []).reduce(
+        (current, item) => {
+          if (item.review.evidenceDecisionState === "SUFFICIENT") current.sufficient += 1;
+          else current.missing += 1;
+          return current;
+        },
+        { sufficient: 0, missing: 0 },
+      ),
+    [commercialReview.data],
+  );
+  const cjPortfolio = useMemo(
+    () =>
+      (commercialReview.data ?? []).filter(
+        (item) => item.supplierPriority === "INTERNATIONAL_DROPSHIPPING",
+      ),
+    [commercialReview.data],
+  );
+  const cjCounts = useMemo(
+    () =>
+      cjPortfolio.reduce<Record<string, number>>((current, item) => {
+        current[item.review.outcome] = (current[item.review.outcome] ?? 0) + 1;
+        return current;
+      }, {}),
+    [cjPortfolio],
+  );
 
   return (
     <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
@@ -156,7 +183,7 @@ function StoreCommercialReview() {
             onClick={() => void commercialReview.refetch()}
             disabled={commercialReview.isFetching}
           >
-            {commercialReview.isFetching ? "Refreshing…" : "Refresh evidence"}
+            {commercialReview.isFetching ? "Refreshing…" : "Refresh saved evidence"}
           </Button>
         </div>
 
@@ -180,6 +207,39 @@ function StoreCommercialReview() {
               <p className="mt-1 font-display text-2xl font-semibold">{counts[item] ?? 0}</p>
             </button>
           ))}
+        </div>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+            <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+              Sufficient decision evidence
+            </p>
+            <p className="mt-1 font-display text-2xl font-semibold">{evidenceCounts.sufficient}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Complete cost, availability and credible comparable evidence.
+            </p>
+          </div>
+          <div className="rounded-xl border border-warning/30 bg-warning/5 p-4">
+            <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+              Blocked by missing evidence
+            </p>
+            <p className="mt-1 font-display text-2xl font-semibold">{evidenceCounts.missing}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              HOLD is an evidence state, not a verdict against the product.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
+          <p className="text-[10px] font-medium uppercase tracking-widest text-primary">
+            CJ / international portfolio intelligence
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {cjPortfolio.length} active international product{cjPortfolio.length === 1 ? "" : "s"} ·{" "}
+            KEEP {cjCounts.KEEP ?? 0} · REPRICE {cjCounts.REPRICE ?? 0} · LOCAL SOURCE{" "}
+            {cjCounts.LOCAL_SOURCE_OPPORTUNITY ?? 0} · HOLD {cjCounts.HOLD ?? 0} · ARCHIVE{" "}
+            {cjCounts.ARCHIVE_CANDIDATE ?? 0}
+          </p>
         </div>
 
         <label className="mt-5 flex items-center gap-2 rounded-xl border border-border/70 bg-background px-3 py-2.5">
@@ -236,12 +296,17 @@ function CommercialReviewCard({ item }: { item: CommercialReviewItem }) {
           </p>
         </div>
         <p className="text-sm text-muted-foreground">
-          Current Cossa price{" "}
+          Customer price used for review{" "}
           <strong className="text-foreground">{zar(item.currentSellingPriceZar)}</strong>
         </p>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <Fact
+          label="Decision evidence"
+          value={review.evidenceDecisionState.replaceAll("_", " ")}
+          note={item.reviewedVariant?.title ? `Variant: ${item.reviewedVariant.title}` : undefined}
+        />
         <Fact
           label="Recorded landed cost"
           value={zar(review.totalLandedCostZar)}
@@ -273,11 +338,13 @@ function CommercialReviewCard({ item }: { item: CommercialReviewItem }) {
         />
       </div>
 
+      <EvidenceLedger entries={review.evidence} />
+
       <div className="mt-5 flex flex-wrap gap-3 text-xs text-muted-foreground">
         <span>
           SA benchmark:{" "}
           {item.marketEvidence.sourceUrl
-            ? "Source saved — match still requires review"
+            ? "Source saved — exact/strong match still requires review"
             : "Not recorded"}
         </span>
         {benchmarkUrl ? (
@@ -342,5 +409,64 @@ function EvidenceList({
         <p className="mt-3 text-xs text-muted-foreground">{empty}</p>
       )}
     </div>
+  );
+}
+
+function EvidenceLedger({ entries }: { entries: CommercialReviewItem["review"]["evidence"] }) {
+  return (
+    <section className="mt-5 rounded-xl border border-border/60 bg-background/50 p-4">
+      <div>
+        <h4 className="text-sm font-semibold">Evidence ledger</h4>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Each item preserves the available source and check time. Missing evidence stays explicit
+          and cannot be converted into a price recommendation.
+        </p>
+      </div>
+      <div className="mt-3 grid gap-2 lg:grid-cols-2">
+        {entries.map((entry) => {
+          const sourceUrl = safeExternalUrl(entry.sourceUrl);
+          return (
+            <div
+              key={`${entry.kind}-${entry.sourceLabel}`}
+              className="rounded-lg border border-border/60 bg-card/35 px-3 py-2.5 text-xs"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium">{entry.kind.replaceAll("_", " ")}</p>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                    entry.state === "verified"
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                      : "border-warning/30 bg-warning/10 text-warning"
+                  }`}
+                >
+                  {entry.state.replaceAll("_", " ")}
+                </span>
+              </div>
+              <p className="mt-1 text-muted-foreground">{entry.sourceLabel}</p>
+              <p className="mt-1 text-muted-foreground">
+                {entry.valueZar == null ? "No amount recorded" : zar(entry.valueZar)}
+                {entry.matchStrength ? ` · ${entry.matchStrength.replaceAll("_", " ")}` : ""}
+                {entry.observedAt
+                  ? ` · checked ${new Date(entry.observedAt).toLocaleDateString("en-ZA")}`
+                  : ""}
+              </p>
+              {entry.note ? (
+                <p className="mt-1 leading-relaxed text-muted-foreground">{entry.note}</p>
+              ) : null}
+              {sourceUrl ? (
+                <a
+                  className="mt-1.5 inline-flex items-center gap-1 text-primary hover:underline"
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Evidence source <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
