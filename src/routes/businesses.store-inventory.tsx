@@ -51,6 +51,14 @@ import {
   supplierRegistryPayload,
   type SupplierRegistryStatus,
 } from "@/lib/store-supplier-registry";
+import {
+  assessPricingKnowledge,
+  assessProductKnowledge,
+  classifySupplierEvidence,
+  findDeterministicStoreProductDuplicates,
+  findStoreProductDuplicates,
+  recommendCossaCategory,
+} from "@/lib/store-knowledge-policy";
 import type {
   ImportConfidence,
   ImportedVariant,
@@ -248,6 +256,14 @@ type CatalogueSnapshot = {
 };
 
 type CatalogueCountRow = { id: string; status: "active" | "draft" | "archived" };
+
+type StoreTaxonomyProduct = {
+  id: string;
+  name: string;
+  category: string | null;
+  supplier_product_ref: string | null;
+  supplier_url: string | null;
+};
 
 function productFromIntake(source: ProductSource): StoreProduct {
   return {
@@ -574,6 +590,7 @@ function StoreInventoryIntake() {
   const [suppliers, setSuppliers] = useState<StoreSupplier[]>([]);
   const [profiles, setProfiles] = useState<FulfilmentProfile[]>([]);
   const [categoryMappings, setCategoryMappings] = useState<SupplierCategoryMapping[]>([]);
+  const [storeTaxonomyProducts, setStoreTaxonomyProducts] = useState<StoreTaxonomyProduct[]>([]);
   const [sources, setSources] = useState<ProductSource[]>([]);
   const [lifecycleHistory, setLifecycleHistory] = useState<IntakeLifecycleHistory[]>([]);
   const [form, setForm] = useState<IntakeForm>(() => emptyForm());
@@ -640,6 +657,133 @@ function StoreInventoryIntake() {
       }),
     [form.marketPrice, grossMargin, sellingPrice],
   );
+  const storeTaxonomy = useMemo(
+    () =>
+      [
+        ...new Set(
+          storeTaxonomyProducts
+            .map((product) => product.category?.trim())
+            .filter((category): category is string => Boolean(category)),
+        ),
+      ].sort((left, right) => left.localeCompare(right)),
+    [storeTaxonomyProducts],
+  );
+  const categoryRecommendation = useMemo(
+    () =>
+      recommendCossaCategory({
+        supplierCategory: form.supplierCategory,
+        taxonomy: storeTaxonomy,
+        mappings: categoryMappings.filter((mapping) => mapping.supplier_id === form.supplierId),
+      }),
+    [categoryMappings, form.supplierCategory, form.supplierId, storeTaxonomy],
+  );
+  const intakeDuplicates = useMemo(
+    () =>
+      findStoreProductDuplicates(
+        [
+          ...sources.map((source) => ({
+            id: source.id,
+            name: source.name,
+            supplier_id: source.supplier_id,
+            supplier_product_ref: source.supplier_product_ref,
+            source_url: source.source_url,
+          })),
+          ...storeTaxonomyProducts.map((product) => ({
+            ...product,
+            source_url: product.supplier_url,
+          })),
+        ],
+        {
+          supplierId: form.supplierId,
+          supplierProductRef: form.sku,
+          sourceUrl: form.sourceUrl,
+          name: form.name,
+        },
+      ).filter((match) => match.id !== form.sourceId),
+    [
+      form.name,
+      form.sourceId,
+      form.sourceUrl,
+      form.sku,
+      form.supplierId,
+      sources,
+      storeTaxonomyProducts,
+    ],
+  );
+  const currentLinkedStoreProductId = useMemo(
+    () =>
+      sources.find((source) => source.id === form.sourceId)?.publication_store_product_id ?? null,
+    [form.sourceId, sources],
+  );
+  const blockingStoreProductDuplicate = useMemo(
+    () =>
+      findDeterministicStoreProductDuplicates(
+        storeTaxonomyProducts.map((product) => ({
+          ...product,
+          source_url: product.supplier_url,
+        })),
+        {
+          supplierId: form.supplierId,
+          supplierProductRef: form.sku,
+          sourceUrl: form.sourceUrl,
+          name: form.name,
+        },
+      ).find((match) => match.id !== currentLinkedStoreProductId) ?? null,
+    [
+      currentLinkedStoreProductId,
+      form.name,
+      form.sourceUrl,
+      form.sku,
+      form.supplierId,
+      storeTaxonomyProducts,
+    ],
+  );
+  const duplicateNotice = useMemo(
+    () => intakeDuplicates.find((match) => match.kind !== "name") ?? intakeDuplicates[0] ?? null,
+    [intakeDuplicates],
+  );
+  const productKnowledge = useMemo(
+    () =>
+      assessProductKnowledge({
+        title: form.name,
+        description: form.description,
+        specifications: form.specifications.split("\n").filter((item) => item.trim()),
+        features: form.features.split("\n").filter((item) => item.trim()),
+        brand: form.brand,
+        brandClassification: form.brand.trim() ? "SUPPLIER_CLAIM" : "UNVERIFIED",
+        imageCount: form.imageUrls.length,
+        duplicateImagesRemoved: 0,
+        supplierSku: form.sku,
+        stockStatus: form.stockStatus,
+      }),
+    [
+      form.brand,
+      form.description,
+      form.features,
+      form.imageUrls.length,
+      form.name,
+      form.sku,
+      form.specifications,
+      form.stockStatus,
+    ],
+  );
+  const pricingKnowledge = useMemo(
+    () =>
+      assessPricingKnowledge({
+        supplierCost: num(form.supplierCost),
+        supplierRrp: num(form.supplierRrp),
+        marketPrice: num(form.marketPrice),
+        marketPriceSourceUrl: form.marketPriceSourceUrl,
+        sellingPrice,
+      }),
+    [
+      form.marketPrice,
+      form.marketPriceSourceUrl,
+      form.supplierCost,
+      form.supplierRrp,
+      sellingPrice,
+    ],
+  );
   const currentLifecycleHistory = useMemo(
     () => lifecycleHistory.filter((entry) => entry.intake_id === form.sourceId),
     [form.sourceId, lifecycleHistory],
@@ -652,6 +796,23 @@ function StoreInventoryIntake() {
         websiteUrl: supplierDraft.websiteUrl,
       }),
     [supplierDraft.name, supplierDraft.recognisedDomains, supplierDraft.websiteUrl, suppliers],
+  );
+  const supplierDraftVerification = useMemo(
+    () =>
+      classifySupplierEvidence({
+        websiteUrl: supplierDraft.websiteUrl,
+        contactInformation: supplierDraft.contactInformation,
+        policyReference: supplierDraft.agreementPolicyReference,
+        sourceProductUrl: form.sourceUrl,
+        conflictingDomain: Boolean(supplierDraftDuplicate),
+      }),
+    [
+      form.sourceUrl,
+      supplierDraft.agreementPolicyReference,
+      supplierDraft.contactInformation,
+      supplierDraft.websiteUrl,
+      supplierDraftDuplicate,
+    ],
   );
   const effectiveDeliveryPayer =
     form.deliveryPayerOverride === "inherit"
@@ -807,6 +968,7 @@ function StoreInventoryIntake() {
         publicCatalogueCountResult,
         snapshotResult,
         lifecycleHistoryResult,
+        storeTaxonomyResult,
       ] = await Promise.all([
         db.from<{ id: string }>("organisations").select("id").limit(1),
         db.from<StoreSupplier>("store_suppliers").select("*").order("name"),
@@ -844,6 +1006,9 @@ function StoreInventoryIntake() {
           .from<IntakeLifecycleHistory>("store_inventory_intake_lifecycle_history")
           .select("*")
           .order("created_at", { ascending: false }),
+        db
+          .from<StoreTaxonomyProduct>("store_products")
+          .select("id,name,category,supplier_product_ref,supplier_url"),
       ]);
 
       const error =
@@ -858,7 +1023,8 @@ function StoreInventoryIntake() {
         archivedCatalogueCountResult.error ??
         publicCatalogueCountResult.error ??
         snapshotResult.error ??
-        lifecycleHistoryResult.error;
+        lifecycleHistoryResult.error ??
+        storeTaxonomyResult.error;
       if (error) {
         toast.error(
           `Could not load Store Operations Book: ${error.message}. Apply the intake migration before using this section.`,
@@ -872,6 +1038,7 @@ function StoreInventoryIntake() {
       setSuppliers(nextSuppliers);
       setProfiles(nextProfiles);
       setCategoryMappings(categoryMappingResult.data ?? []);
+      setStoreTaxonomyProducts(storeTaxonomyResult.data ?? []);
       const nextSources = sourceResult.data ?? [];
       setSources(nextSources);
       setLifecycleHistory(lifecycleHistoryResult.data ?? []);
@@ -1046,12 +1213,13 @@ function StoreInventoryIntake() {
         );
         return;
       }
-      const matchedCategory = categoryMappings.find(
-        (mapping) =>
-          mapping.supplier_id === identifiedSupplier?.id &&
-          mapping.supplier_category.trim().toLowerCase() ===
-            (payload.supplierCategory ?? "").trim().toLowerCase(),
-      );
+      const importedCategoryRecommendation = recommendCossaCategory({
+        supplierCategory: payload.supplierCategory,
+        taxonomy: storeTaxonomy,
+        mappings: categoryMappings.filter(
+          (mapping) => mapping.supplier_id === identifiedSupplier?.id,
+        ),
+      });
       setSupplierRecognitionMessage(
         identifiedSupplier
           ? `${identifiedSupplier.name} recognised from its configured domain. Defaults were inherited.`
@@ -1097,7 +1265,13 @@ function StoreInventoryIntake() {
         shortDescription: payload.shortDescription ?? current.shortDescription,
         description: payload.description ?? current.description,
         supplierCategory: payload.supplierCategory ?? current.supplierCategory,
-        category: matchedCategory?.cossa_category ?? current.category,
+        // A Store category is only preselected from an exact taxonomy match or
+        // a semantically coherent historical mapping. Ambiguous and stale
+        // mappings stay visible for human review instead of being propagated.
+        category:
+          importedCategoryRecommendation.action === "AUTO"
+            ? (importedCategoryRecommendation.category ?? current.category)
+            : current.category,
         brand: payload.brand ?? current.brand,
         features: payload.features.length > 0 ? payload.features.join("\n") : current.features,
         specifications:
@@ -1137,6 +1311,7 @@ function StoreInventoryIntake() {
           payload.stockAvailabilityText
             ? `Supplier page availability: ${payload.stockAvailabilityText}.`
             : "",
+          `Category intelligence: ${importedCategoryRecommendation.reason}`,
           ...payload.warnings,
         ]
           .filter(Boolean)
@@ -1218,6 +1393,14 @@ function StoreInventoryIntake() {
     if (duplicate) {
       return toast.error(
         `${duplicate.name} already has this name or recognised supplier domain. Use the existing registry record instead.`,
+      );
+    }
+    if (
+      supplierDraft.registryStatus === "active" &&
+      supplierDraftVerification.outcome !== "PROVISIONALLY_VERIFIED"
+    ) {
+      return toast.error(
+        "Supplier verification is incomplete. Save as Candidate or Pending until public evidence and operational terms are reviewed.",
       );
     }
     setSavingSupplier(true);
@@ -1477,6 +1660,20 @@ function StoreInventoryIntake() {
       openSource(duplicate);
       return toast.error(
         `This supplier SKU is already in intake as ${duplicate.name}. The existing record was opened instead.`,
+      );
+    }
+    if (blockingStoreProductDuplicate) {
+      const linkedIntake = sources.find(
+        (source) => source.publication_store_product_id === blockingStoreProductDuplicate.id,
+      );
+      if (linkedIntake) {
+        openSource(linkedIntake);
+        return toast.error(
+          `${blockingStoreProductDuplicate.label} already exists in the Store. Its linked intake was opened instead; use the existing review path for changes.`,
+        );
+      }
+      return toast.error(
+        `${blockingStoreProductDuplicate.label} already exists in the Store and matches this ${blockingStoreProductDuplicate.kind.replace("_", " ")}. A new intake was not created. Review the existing Store product before making a deliberate update.`,
       );
     }
     setSaving(true);
@@ -2008,6 +2205,55 @@ function StoreInventoryIntake() {
             </div>
           </div>
 
+          <div className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-semibold">Source &amp; product intelligence</p>
+                <p className="mt-1 text-muted-foreground">
+                  Deterministic evidence checks prepare the record; they do not change its lifecycle
+                  or publish it.
+                </p>
+              </div>
+              <span className="rounded-full border border-border/60 px-2 py-1 font-medium text-muted-foreground">
+                {productKnowledge.action}
+              </span>
+            </div>
+            {duplicateNotice ? (
+              <div
+                className={
+                  duplicateNotice.kind === "name"
+                    ? "mt-3 rounded-lg border border-amber-500/45 bg-amber-500/10 p-3 text-amber-950 dark:text-amber-200"
+                    : "mt-3 rounded-lg border border-destructive/45 bg-destructive/10 p-3 text-destructive"
+                }
+              >
+                <strong>
+                  {duplicateNotice.kind === "name"
+                    ? "Possible duplicate:"
+                    : "Duplicate protection:"}
+                </strong>{" "}
+                {duplicateNotice.label} already matches this{" "}
+                {duplicateNotice.kind.replace("_", " ")}.{" "}
+                {duplicateNotice.kind === "name"
+                  ? "A title-only similarity remains available for human review."
+                  : "A new duplicate intake is blocked; use the existing record for deliberate updates."}
+              </div>
+            ) : null}
+            {productKnowledge.requiresVerification.length ? (
+              <ul className="mt-3 list-disc space-y-1 pl-4 text-muted-foreground">
+                {productKnowledge.requiresVerification.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : null}
+            {productKnowledge.blockers.length ? (
+              <ul className="mt-3 list-disc space-y-1 pl-4 text-destructive">
+                {productKnowledge.blockers.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+
           {hasUnsavedChanges ? (
             <p className="mt-3 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
               Unsaved changes — save for review before leaving this page.
@@ -2034,10 +2280,20 @@ function StoreInventoryIntake() {
             <Field label="Cossa Store category">
               <input
                 className={inputClass}
+                list="cossa-store-taxonomy"
                 value={form.category}
                 onChange={(event) => update("category", event.target.value)}
-                placeholder="e.g. Travel & Tech"
+                placeholder={
+                  storeTaxonomy.length
+                    ? "Choose a current Store category"
+                    : "Current taxonomy loading"
+                }
               />
+              <datalist id="cossa-store-taxonomy">
+                {storeTaxonomy.map((category) => (
+                  <option key={category} value={category} />
+                ))}
+              </datalist>
             </Field>
             <Field label="Supplier category / product type">
               <input
@@ -2047,6 +2303,30 @@ function StoreInventoryIntake() {
                 placeholder="Imported supplier taxonomy"
               />
             </Field>
+            {form.supplierCategory.trim() ? (
+              <div className="-mt-2 rounded-lg border border-border/60 bg-card/40 p-3 text-xs sm:col-span-2">
+                <p className="font-medium">
+                  Category intelligence · {categoryRecommendation.action}
+                </p>
+                <p className="mt-1 text-muted-foreground">{categoryRecommendation.reason}</p>
+                {categoryRecommendation.category ? (
+                  <p className="mt-2 text-primary">
+                    Suggested category: {categoryRecommendation.category}
+                  </p>
+                ) : null}
+                {categoryRecommendation.alternatives.length ? (
+                  <p className="mt-2 text-muted-foreground">
+                    Review: {categoryRecommendation.alternatives.join(" · ")}
+                  </p>
+                ) : null}
+                {categoryRecommendation.proposedCategory ? (
+                  <p className="mt-2 text-warning">
+                    New category proposal only: {categoryRecommendation.proposedCategory}. It will
+                    not be created automatically.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             {form.supplierCategory.trim() && form.category.trim() && form.supplierId ? (
               <div className="-mt-2 sm:col-span-2">
                 <Button
@@ -2059,12 +2339,12 @@ function StoreInventoryIntake() {
                 </Button>
               </div>
             ) : null}
-            <Field label="Brand (optional)">
+            <Field label="Brand (optional; direct product evidence only)">
               <input
                 className={inputClass}
                 value={form.brand}
                 onChange={(event) => update("brand", event.target.value)}
-                placeholder="Unbranded / Generic when the supplier gives no verified brand"
+                placeholder="Leave blank when no direct product brand is evidenced"
               />
             </Field>
             <Field label="Supplier / partner">
@@ -2458,6 +2738,24 @@ function StoreInventoryIntake() {
                   ) : null}
                 </div>
               )}
+            </div>
+            <div className="mt-3 rounded-xl border border-border/60 bg-card/40 p-3 text-xs">
+              <p className="font-medium">Pricing evidence · {pricingKnowledge.action}</p>
+              {pricingKnowledge.facts.map((item) => (
+                <p key={item} className="mt-1 text-muted-foreground">
+                  ✓ {item}
+                </p>
+              ))}
+              {pricingKnowledge.requiresVerification.map((item) => (
+                <p key={item} className="mt-1 text-warning">
+                  • {item}
+                </p>
+              ))}
+              {pricingKnowledge.blockers.map((item) => (
+                <p key={item} className="mt-1 text-destructive">
+                  • {item}
+                </p>
+              ))}
             </div>
           </div>
 
@@ -2936,7 +3234,7 @@ function StoreInventoryIntake() {
           <div className="mt-7 flex flex-wrap gap-2 border-t border-border/60 pt-6">
             <Button
               variant="outline"
-              disabled={saving}
+              disabled={saving || Boolean(blockingStoreProductDuplicate)}
               onClick={() =>
                 void saveIntake(
                   saveStatusForInventoryIntake(
@@ -3075,8 +3373,13 @@ function StoreInventoryIntake() {
             </div>
             <details className="mt-4 rounded-xl border border-border/60 p-3">
               <summary className="cursor-pointer text-sm font-medium">
-                Add supplier / partner
+                Supplier Hunter &amp; Verification
               </summary>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Start from real public names, URLs, social/contact details and policy references.
+                Discovery is not verification: the registry remains the source of truth, duplicates
+                are blocked, and a new supplier stays non-active until evidence is reviewed.
+              </p>
               <div className="mt-3 space-y-3">
                 <input
                   className={inputClass}
@@ -3163,6 +3466,22 @@ function StoreInventoryIntake() {
                     a duplicate cannot be added.
                   </div>
                 ) : null}
+                <div className="rounded-lg border border-border/60 bg-card/40 p-3 text-xs">
+                  <p className="font-medium">
+                    Evidence decision · {supplierDraftVerification.outcome.replace(/_/g, " ")}
+                  </p>
+                  <ul className="mt-2 space-y-1 text-muted-foreground">
+                    {supplierDraftVerification.entries.map((entry) => (
+                      <li key={`${entry.label}-${entry.classification}`}>
+                        {entry.classification.replace(/_/g, " ")}: {entry.label}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-warning">
+                    Only an authorised review may make a supplier active. This form never treats an
+                    uninspected URL, social profile or email as verification.
+                  </p>
+                </div>
                 <input
                   className={inputClass}
                   value={supplierDraft.contactInformation}
@@ -3172,7 +3491,7 @@ function StoreInventoryIntake() {
                       contactInformation: event.target.value,
                     }))
                   }
-                  placeholder="Contact information (non-secret)"
+                  placeholder="Contact, TikTok or social URL (non-secret)"
                 />
                 <input
                   className={inputClass}

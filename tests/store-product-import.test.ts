@@ -167,3 +167,28 @@ test("affiliate-style product metadata keeps product fields separate from mercha
   ]);
   assert.match(result.description ?? "", /waterproof organiser/i);
 });
+
+test("DM3762 stays evidence-bound: it has no inferred brand, dimensions or market price", () => {
+  const result = parseDmcWholesaleProductPage({
+    sourceUrl: "https://dmcwholesale.co.za/products/dm3762",
+    html: `
+      <html><head>
+        <meta property="product:price:amount" content="99.00" />
+        <meta property="product:price:currency" content="ZAR" />
+        <!-- Dedicated product price tags -->
+        <meta property="product:price:amount" content="79.20" />
+        <script>Samita.Wholesale.product={"title":"Self Care Organiser","description":"A compact organiser for daily essentials.","vendor":"M1","type":"Self Care - Organising","price":9900,"available":true,"variants":[{"id":1,"title":"Default Title","sku":"DM3762","available":true,"price":9900}],"images":["https://dmcwholesale.co.za/cdn/shop/files/dm3762.jpg?v=1","https://dmcwholesale.co.za/cdn/shop/files/dm3762.jpg?v=2"]};</script>
+      </head></html>`,
+  });
+
+  assert.equal(result.supplierProductRef, "DM3762");
+  assert.equal(result.supplierCategory, "Self Care - Organising");
+  assert.equal(result.brand, null);
+  assert.equal(result.supplierCost, 79.2);
+  assert.equal(result.supplierRrp, 99);
+  assert.equal(result.imageUrls.length, 1);
+  assert.equal(
+    result.specifications.some((item) => /^Size:/i.test(item)),
+    false,
+  );
+});
