@@ -81,6 +81,7 @@ import { Route as MarketingAiDirectorRouteImport } from './routes/marketing.ai-d
 import { Route as BusinessesTechRouteImport } from './routes/businesses.tech'
 import { Route as BusinessesStoreProductsRouteImport } from './routes/businesses.store-products'
 import { Route as BusinessesStoreInventoryRouteImport } from './routes/businesses.store-inventory'
+import { Route as BusinessesStoreCommercialReviewRouteImport } from './routes/businesses.store-commercial-review'
 import { Route as BusinessesStoreAffiliateImportRouteImport } from './routes/businesses.store-affiliate-import'
 import { Route as BusinessesStoreRouteImport } from './routes/businesses.store'
 import { Route as BusinessesNexdocsRouteImport } from './routes/businesses.nexdocs'
@@ -490,6 +491,12 @@ const BusinessesStoreInventoryRoute =
     path: '/businesses/store-inventory',
     getParentRoute: () => rootRouteImport,
   } as any)
+const BusinessesStoreCommercialReviewRoute =
+  BusinessesStoreCommercialReviewRouteImport.update({
+    id: '/businesses/store-commercial-review',
+    path: '/businesses/store-commercial-review',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const BusinessesStoreAffiliateImportRoute =
   BusinessesStoreAffiliateImportRouteImport.update({
     id: '/businesses/store-affiliate-import',
@@ -775,6 +782,7 @@ export interface FileRoutesByFullPath {
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
   '/businesses/store-affiliate-import': typeof BusinessesStoreAffiliateImportRoute
+  '/businesses/store-commercial-review': typeof BusinessesStoreCommercialReviewRoute
   '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
@@ -892,6 +900,7 @@ export interface FileRoutesByTo {
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
   '/businesses/store-affiliate-import': typeof BusinessesStoreAffiliateImportRoute
+  '/businesses/store-commercial-review': typeof BusinessesStoreCommercialReviewRoute
   '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
@@ -1010,6 +1019,7 @@ export interface FileRoutesById {
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
   '/businesses/store-affiliate-import': typeof BusinessesStoreAffiliateImportRoute
+  '/businesses/store-commercial-review': typeof BusinessesStoreCommercialReviewRoute
   '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
@@ -1129,6 +1139,7 @@ export interface FileRouteTypes {
     | '/businesses/nexdocs'
     | '/businesses/store'
     | '/businesses/store-affiliate-import'
+    | '/businesses/store-commercial-review'
     | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
@@ -1246,6 +1257,7 @@ export interface FileRouteTypes {
     | '/businesses/nexdocs'
     | '/businesses/store'
     | '/businesses/store-affiliate-import'
+    | '/businesses/store-commercial-review'
     | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
@@ -1363,6 +1375,7 @@ export interface FileRouteTypes {
     | '/businesses/nexdocs'
     | '/businesses/store'
     | '/businesses/store-affiliate-import'
+    | '/businesses/store-commercial-review'
     | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
@@ -1481,6 +1494,7 @@ export interface RootRouteChildren {
   BusinessesNexdocsRoute: typeof BusinessesNexdocsRoute
   BusinessesStoreRoute: typeof BusinessesStoreRoute
   BusinessesStoreAffiliateImportRoute: typeof BusinessesStoreAffiliateImportRoute
+  BusinessesStoreCommercialReviewRoute: typeof BusinessesStoreCommercialReviewRoute
   BusinessesStoreInventoryRoute: typeof BusinessesStoreInventoryRoute
   BusinessesStoreProductsRoute: typeof BusinessesStoreProductsRoute
   BusinessesTechRoute: typeof BusinessesTechRoute
@@ -2041,6 +2055,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BusinessesStoreInventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/businesses/store-commercial-review': {
+      id: '/businesses/store-commercial-review'
+      path: '/businesses/store-commercial-review'
+      fullPath: '/businesses/store-commercial-review'
+      preLoaderRoute: typeof BusinessesStoreCommercialReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/businesses/store-affiliate-import': {
       id: '/businesses/store-affiliate-import'
       path: '/businesses/store-affiliate-import'
@@ -2431,6 +2452,7 @@ const rootRouteChildren: RootRouteChildren = {
   BusinessesNexdocsRoute: BusinessesNexdocsRoute,
   BusinessesStoreRoute: BusinessesStoreRoute,
   BusinessesStoreAffiliateImportRoute: BusinessesStoreAffiliateImportRoute,
+  BusinessesStoreCommercialReviewRoute: BusinessesStoreCommercialReviewRoute,
   BusinessesStoreInventoryRoute: BusinessesStoreInventoryRoute,
   BusinessesStoreProductsRoute: BusinessesStoreProductsRoute,
   BusinessesTechRoute: BusinessesTechRoute,
