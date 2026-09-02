@@ -50,7 +50,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
       if (active) setSession(null);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      // INITIAL_SESSION is the same unverified browser-cache value handled above.
+      // Do not let it mount protected screens before restoreVerifiedSession finishes.
+      if (event === "INITIAL_SESSION") return;
       if (active) setSession(nextSession);
     });
     return () => {
