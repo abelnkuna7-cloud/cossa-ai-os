@@ -1,4 +1,5 @@
 import { canScheduleAgentRetry } from "./operational-truth";
+import { retrySupabaseIssuedAtFuture } from "./supabase-jwt-retry";
 
 const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 const MAX_TASKS_PER_TICK = 6;
@@ -261,6 +262,10 @@ function optionalEnvironmentValue(value: string | undefined): string | null {
   return trimmed || null;
 }
 
+function isNewSupabaseApiKey(value: string): boolean {
+  return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
+}
+
 function runtimeEnvironment(): RuntimeEnvironment | null {
   const supabaseUrl =
     optionalEnvironmentValue(process.env.SUPABASE_URL) ??
@@ -390,14 +395,23 @@ async function databaseRequest<T>(
 ): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("apikey", environment.supabaseServiceRoleKey);
-  headers.set("Authorization", `Bearer ${environment.supabaseServiceRoleKey}`);
+  // New Supabase API keys are opaque credentials, not JWT bearer tokens.
+  if (isNewSupabaseApiKey(environment.supabaseServiceRoleKey)) {
+    headers.delete("Authorization");
+  } else {
+    headers.set("Authorization", `Bearer ${environment.supabaseServiceRoleKey}`);
+  }
   headers.set("Accept", "application/json");
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
-  const response = await fetch(`${environment.supabaseUrl}/rest/v1/${path}`, {
-    ...init,
-    headers,
-  });
+  const response = await retrySupabaseIssuedAtFuture(
+    () =>
+      fetch(`${environment.supabaseUrl}/rest/v1/${path}`, {
+        ...init,
+        headers,
+      }),
+    typeof init.body !== "object" || init.body === null || typeof init.body === "string",
+  );
 
   if (!response.ok) {
     const detail = clip(await response.text().catch(() => ""), 1_200);
