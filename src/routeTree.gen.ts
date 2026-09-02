@@ -81,6 +81,7 @@ import { Route as MarketingAiDirectorRouteImport } from './routes/marketing.ai-d
 import { Route as BusinessesTechRouteImport } from './routes/businesses.tech'
 import { Route as BusinessesStoreProductsRouteImport } from './routes/businesses.store-products'
 import { Route as BusinessesStoreInventoryRouteImport } from './routes/businesses.store-inventory'
+import { Route as BusinessesStoreCommercialReviewRouteImport } from './routes/businesses.store-commercial-review'
 import { Route as BusinessesStoreAffiliateImportRouteImport } from './routes/businesses.store-affiliate-import'
 import { Route as BusinessesStoreRouteImport } from './routes/businesses.store'
 import { Route as BusinessesNexdocsRouteImport } from './routes/businesses.nexdocs'
@@ -89,6 +90,7 @@ import { Route as BusinessesConstructionRouteImport } from './routes/businesses.
 import { Route as ApiWebsiteHealthRouteImport } from './routes/api/website-health'
 import { Route as ApiStoreProductImportRouteImport } from './routes/api.store-product-import'
 import { Route as ApiStoreInventoryPublicationRouteImport } from './routes/api.store-inventory-publication'
+import { Route as ApiStoreCommercialReviewRouteImport } from './routes/api.store-commercial-review'
 import { Route as ApiStoreAffiliateSmartImportRouteImport } from './routes/api.store-affiliate-smart-import'
 import { Route as ApiPlatformAnalyticsRouteImport } from './routes/api/platform-analytics'
 import { Route as ApiGrowthAnalyticsRouteImport } from './routes/api/growth-analytics'
@@ -490,6 +492,12 @@ const BusinessesStoreInventoryRoute =
     path: '/businesses/store-inventory',
     getParentRoute: () => rootRouteImport,
   } as any)
+const BusinessesStoreCommercialReviewRoute =
+  BusinessesStoreCommercialReviewRouteImport.update({
+    id: '/businesses/store-commercial-review',
+    path: '/businesses/store-commercial-review',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const BusinessesStoreAffiliateImportRoute =
   BusinessesStoreAffiliateImportRouteImport.update({
     id: '/businesses/store-affiliate-import',
@@ -531,6 +539,12 @@ const ApiStoreInventoryPublicationRoute =
   ApiStoreInventoryPublicationRouteImport.update({
     id: '/api/store-inventory-publication',
     path: '/api/store-inventory-publication',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiStoreCommercialReviewRoute =
+  ApiStoreCommercialReviewRouteImport.update({
+    id: '/api/store-commercial-review',
+    path: '/api/store-commercial-review',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiStoreAffiliateSmartImportRoute =
@@ -767,6 +781,7 @@ export interface FileRoutesByFullPath {
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
   '/api/store-affiliate-smart-import': typeof ApiStoreAffiliateSmartImportRoute
+  '/api/store-commercial-review': typeof ApiStoreCommercialReviewRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
@@ -775,6 +790,7 @@ export interface FileRoutesByFullPath {
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
   '/businesses/store-affiliate-import': typeof BusinessesStoreAffiliateImportRoute
+  '/businesses/store-commercial-review': typeof BusinessesStoreCommercialReviewRoute
   '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
@@ -884,6 +900,7 @@ export interface FileRoutesByTo {
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
   '/api/store-affiliate-smart-import': typeof ApiStoreAffiliateSmartImportRoute
+  '/api/store-commercial-review': typeof ApiStoreCommercialReviewRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
@@ -892,6 +909,7 @@ export interface FileRoutesByTo {
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
   '/businesses/store-affiliate-import': typeof BusinessesStoreAffiliateImportRoute
+  '/businesses/store-commercial-review': typeof BusinessesStoreCommercialReviewRoute
   '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
@@ -1002,6 +1020,7 @@ export interface FileRoutesById {
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
   '/api/store-affiliate-smart-import': typeof ApiStoreAffiliateSmartImportRoute
+  '/api/store-commercial-review': typeof ApiStoreCommercialReviewRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
@@ -1010,6 +1029,7 @@ export interface FileRoutesById {
   '/businesses/nexdocs': typeof BusinessesNexdocsRoute
   '/businesses/store': typeof BusinessesStoreRoute
   '/businesses/store-affiliate-import': typeof BusinessesStoreAffiliateImportRoute
+  '/businesses/store-commercial-review': typeof BusinessesStoreCommercialReviewRoute
   '/businesses/store-inventory': typeof BusinessesStoreInventoryRoute
   '/businesses/store-products': typeof BusinessesStoreProductsRoute
   '/businesses/tech': typeof BusinessesTechRoute
@@ -1121,6 +1141,7 @@ export interface FileRouteTypes {
     | '/api/growth-analytics'
     | '/api/platform-analytics'
     | '/api/store-affiliate-smart-import'
+    | '/api/store-commercial-review'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
@@ -1129,6 +1150,7 @@ export interface FileRouteTypes {
     | '/businesses/nexdocs'
     | '/businesses/store'
     | '/businesses/store-affiliate-import'
+    | '/businesses/store-commercial-review'
     | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
@@ -1238,6 +1260,7 @@ export interface FileRouteTypes {
     | '/api/growth-analytics'
     | '/api/platform-analytics'
     | '/api/store-affiliate-smart-import'
+    | '/api/store-commercial-review'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
@@ -1246,6 +1269,7 @@ export interface FileRouteTypes {
     | '/businesses/nexdocs'
     | '/businesses/store'
     | '/businesses/store-affiliate-import'
+    | '/businesses/store-commercial-review'
     | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
@@ -1355,6 +1379,7 @@ export interface FileRouteTypes {
     | '/api/growth-analytics'
     | '/api/platform-analytics'
     | '/api/store-affiliate-smart-import'
+    | '/api/store-commercial-review'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
@@ -1363,6 +1388,7 @@ export interface FileRouteTypes {
     | '/businesses/nexdocs'
     | '/businesses/store'
     | '/businesses/store-affiliate-import'
+    | '/businesses/store-commercial-review'
     | '/businesses/store-inventory'
     | '/businesses/store-products'
     | '/businesses/tech'
@@ -1473,6 +1499,7 @@ export interface RootRouteChildren {
   ApiGrowthAnalyticsRoute: typeof ApiGrowthAnalyticsRouteWithChildren
   ApiPlatformAnalyticsRoute: typeof ApiPlatformAnalyticsRoute
   ApiStoreAffiliateSmartImportRoute: typeof ApiStoreAffiliateSmartImportRoute
+  ApiStoreCommercialReviewRoute: typeof ApiStoreCommercialReviewRoute
   ApiStoreInventoryPublicationRoute: typeof ApiStoreInventoryPublicationRoute
   ApiStoreProductImportRoute: typeof ApiStoreProductImportRoute
   ApiWebsiteHealthRoute: typeof ApiWebsiteHealthRoute
@@ -1481,6 +1508,7 @@ export interface RootRouteChildren {
   BusinessesNexdocsRoute: typeof BusinessesNexdocsRoute
   BusinessesStoreRoute: typeof BusinessesStoreRoute
   BusinessesStoreAffiliateImportRoute: typeof BusinessesStoreAffiliateImportRoute
+  BusinessesStoreCommercialReviewRoute: typeof BusinessesStoreCommercialReviewRoute
   BusinessesStoreInventoryRoute: typeof BusinessesStoreInventoryRoute
   BusinessesStoreProductsRoute: typeof BusinessesStoreProductsRoute
   BusinessesTechRoute: typeof BusinessesTechRoute
@@ -2041,6 +2069,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BusinessesStoreInventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/businesses/store-commercial-review': {
+      id: '/businesses/store-commercial-review'
+      path: '/businesses/store-commercial-review'
+      fullPath: '/businesses/store-commercial-review'
+      preLoaderRoute: typeof BusinessesStoreCommercialReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/businesses/store-affiliate-import': {
       id: '/businesses/store-affiliate-import'
       path: '/businesses/store-affiliate-import'
@@ -2095,6 +2130,13 @@ declare module '@tanstack/react-router' {
       path: '/api/store-inventory-publication'
       fullPath: '/api/store-inventory-publication'
       preLoaderRoute: typeof ApiStoreInventoryPublicationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/store-commercial-review': {
+      id: '/api/store-commercial-review'
+      path: '/api/store-commercial-review'
+      fullPath: '/api/store-commercial-review'
+      preLoaderRoute: typeof ApiStoreCommercialReviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/store-affiliate-smart-import': {
@@ -2423,6 +2465,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiGrowthAnalyticsRoute: ApiGrowthAnalyticsRouteWithChildren,
   ApiPlatformAnalyticsRoute: ApiPlatformAnalyticsRoute,
   ApiStoreAffiliateSmartImportRoute: ApiStoreAffiliateSmartImportRoute,
+  ApiStoreCommercialReviewRoute: ApiStoreCommercialReviewRoute,
   ApiStoreInventoryPublicationRoute: ApiStoreInventoryPublicationRoute,
   ApiStoreProductImportRoute: ApiStoreProductImportRoute,
   ApiWebsiteHealthRoute: ApiWebsiteHealthRoute,
@@ -2431,6 +2474,7 @@ const rootRouteChildren: RootRouteChildren = {
   BusinessesNexdocsRoute: BusinessesNexdocsRoute,
   BusinessesStoreRoute: BusinessesStoreRoute,
   BusinessesStoreAffiliateImportRoute: BusinessesStoreAffiliateImportRoute,
+  BusinessesStoreCommercialReviewRoute: BusinessesStoreCommercialReviewRoute,
   BusinessesStoreInventoryRoute: BusinessesStoreInventoryRoute,
   BusinessesStoreProductsRoute: BusinessesStoreProductsRoute,
   BusinessesTechRoute: BusinessesTechRoute,

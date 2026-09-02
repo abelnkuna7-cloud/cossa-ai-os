@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   BarChart3,
+  BadgeDollarSign,
   BrainCircuit,
   Megaphone,
   PackageCheck,
@@ -52,6 +53,13 @@ const STORE_TOOLS = [
       "Paste a supplier product link, review real data, record source and fulfilment rules, then approve before publication.",
     to: "/businesses/store-inventory",
     icon: PackagePlus,
+  },
+  {
+    title: "Commercial Competitiveness",
+    description:
+      "Review published products against evidenced South African market pricing and sustainable landed economics before prioritising promotion.",
+    to: "/businesses/store-commercial-review",
+    icon: BadgeDollarSign,
   },
   {
     title: "Product Manager",
