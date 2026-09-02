@@ -55,6 +55,7 @@ import {
   assessPricingKnowledge,
   assessProductKnowledge,
   classifySupplierEvidence,
+  findDeterministicStoreProductDuplicates,
   findStoreProductDuplicates,
   recommendCossaCategory,
 } from "@/lib/store-knowledge-policy";
@@ -687,7 +688,10 @@ function StoreInventoryIntake() {
             supplier_product_ref: source.supplier_product_ref,
             source_url: source.source_url,
           })),
-          ...storeTaxonomyProducts,
+          ...storeTaxonomyProducts.map((product) => ({
+            ...product,
+            source_url: product.supplier_url,
+          })),
         ],
         {
           supplierId: form.supplierId,
@@ -705,6 +709,38 @@ function StoreInventoryIntake() {
       sources,
       storeTaxonomyProducts,
     ],
+  );
+  const currentLinkedStoreProductId = useMemo(
+    () =>
+      sources.find((source) => source.id === form.sourceId)?.publication_store_product_id ?? null,
+    [form.sourceId, sources],
+  );
+  const blockingStoreProductDuplicate = useMemo(
+    () =>
+      findDeterministicStoreProductDuplicates(
+        storeTaxonomyProducts.map((product) => ({
+          ...product,
+          source_url: product.supplier_url,
+        })),
+        {
+          supplierId: form.supplierId,
+          supplierProductRef: form.sku,
+          sourceUrl: form.sourceUrl,
+          name: form.name,
+        },
+      ).find((match) => match.id !== currentLinkedStoreProductId) ?? null,
+    [
+      currentLinkedStoreProductId,
+      form.name,
+      form.sourceUrl,
+      form.sku,
+      form.supplierId,
+      storeTaxonomyProducts,
+    ],
+  );
+  const duplicateNotice = useMemo(
+    () => intakeDuplicates.find((match) => match.kind !== "name") ?? intakeDuplicates[0] ?? null,
+    [intakeDuplicates],
   );
   const productKnowledge = useMemo(
     () =>
@@ -1626,6 +1662,20 @@ function StoreInventoryIntake() {
         `This supplier SKU is already in intake as ${duplicate.name}. The existing record was opened instead.`,
       );
     }
+    if (blockingStoreProductDuplicate) {
+      const linkedIntake = sources.find(
+        (source) => source.publication_store_product_id === blockingStoreProductDuplicate.id,
+      );
+      if (linkedIntake) {
+        openSource(linkedIntake);
+        return toast.error(
+          `${blockingStoreProductDuplicate.label} already exists in the Store. Its linked intake was opened instead; use the existing review path for changes.`,
+        );
+      }
+      return toast.error(
+        `${blockingStoreProductDuplicate.label} already exists in the Store and matches this ${blockingStoreProductDuplicate.kind.replace("_", " ")}. A new intake was not created. Review the existing Store product before making a deliberate update.`,
+      );
+    }
     setSaving(true);
     try {
       const remainingFields = status === "approved" ? [] : form.fieldsRequiringConfirmation;
@@ -2168,11 +2218,24 @@ function StoreInventoryIntake() {
                 {productKnowledge.action}
               </span>
             </div>
-            {intakeDuplicates.length ? (
-              <div className="mt-3 rounded-lg border border-destructive/45 bg-destructive/10 p-3 text-destructive">
-                <strong>Duplicate protection:</strong> {intakeDuplicates[0].label} already matches
-                this {intakeDuplicates[0].kind.replace("_", " ")}. Review the existing record; no
-                new duplicate should be saved.
+            {duplicateNotice ? (
+              <div
+                className={
+                  duplicateNotice.kind === "name"
+                    ? "mt-3 rounded-lg border border-amber-500/45 bg-amber-500/10 p-3 text-amber-950 dark:text-amber-200"
+                    : "mt-3 rounded-lg border border-destructive/45 bg-destructive/10 p-3 text-destructive"
+                }
+              >
+                <strong>
+                  {duplicateNotice.kind === "name"
+                    ? "Possible duplicate:"
+                    : "Duplicate protection:"}
+                </strong>{" "}
+                {duplicateNotice.label} already matches this{" "}
+                {duplicateNotice.kind.replace("_", " ")}.{" "}
+                {duplicateNotice.kind === "name"
+                  ? "A title-only similarity remains available for human review."
+                  : "A new duplicate intake is blocked; use the existing record for deliberate updates."}
               </div>
             ) : null}
             {productKnowledge.requiresVerification.length ? (
@@ -3171,7 +3234,7 @@ function StoreInventoryIntake() {
           <div className="mt-7 flex flex-wrap gap-2 border-t border-border/60 pt-6">
             <Button
               variant="outline"
-              disabled={saving}
+              disabled={saving || Boolean(blockingStoreProductDuplicate)}
               onClick={() =>
                 void saveIntake(
                   saveStatusForInventoryIntake(

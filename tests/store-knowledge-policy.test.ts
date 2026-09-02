@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   assessPricingKnowledge,
   classifySupplierEvidence,
+  findDeterministicStoreProductDuplicates,
   findStoreProductDuplicates,
   recommendCossaCategory,
 } from "../src/lib/store-knowledge-policy.ts";
@@ -53,7 +54,7 @@ test("pricing keeps supplier RRP separate from independently sourced market evid
   );
 });
 
-test("duplicate checks compare supplier SKU and canonical source URLs before names", () => {
+test("an existing intake supplier SKU remains a blocked/reopen identity", () => {
   const matches = findStoreProductDuplicates(
     [
       {
@@ -73,6 +74,93 @@ test("duplicate checks compare supplier SKU and canonical source URLs before nam
   );
 
   assert.equal(matches[0]?.kind, "supplier_sku");
+});
+
+test("an existing Store product supplier SKU blocks a new intake", () => {
+  const matches = findDeterministicStoreProductDuplicates(
+    [
+      {
+        id: "store-dm3762",
+        name: "Self Care Organiser",
+        supplier_product_ref: "DM3762",
+        source_url: "https://dmcwholesale.co.za/products/self-care-organiser",
+      },
+    ],
+    {
+      supplierId: "dmc-wholesale",
+      supplierProductRef: "DM3762",
+      sourceUrl: "https://dmcwholesale.co.za/products/self-care-organiser",
+      name: "New draft title",
+    },
+  );
+
+  assert.deepEqual(
+    matches.map((match) => match.kind),
+    ["supplier_sku"],
+  );
+});
+
+test("an existing canonical supplier URL blocks a new intake", () => {
+  const matches = findDeterministicStoreProductDuplicates(
+    [
+      {
+        id: "store-url-match",
+        name: "Portable organiser",
+        supplier_product_ref: null,
+        source_url: "https://dmcwholesale.co.za/products/organiser?utm_source=old",
+      },
+    ],
+    {
+      supplierId: "dmc-wholesale",
+      supplierProductRef: null,
+      sourceUrl: "https://dmcwholesale.co.za/products/organiser?utm_source=new",
+      name: "Different customer title",
+    },
+  );
+
+  assert.deepEqual(
+    matches.map((match) => match.kind),
+    ["source_url"],
+  );
+});
+
+test("a title-only possible duplicate remains a review warning, not a hard block", () => {
+  const product = {
+    id: "store-title-match",
+    name: "Portable organiser",
+    supplier_product_ref: null,
+    source_url: "https://supplier.example/products/organiser",
+  };
+  const candidate = {
+    supplierId: "other-supplier",
+    supplierProductRef: null,
+    sourceUrl: "https://other.example/products/organiser",
+    name: "Portable organiser",
+  };
+
+  assert.equal(findStoreProductDuplicates([product], candidate)[0]?.kind, "name");
+  assert.deepEqual(findDeterministicStoreProductDuplicates([product], candidate), []);
+});
+
+test("a unique product keeps the normal Save for review path available", () => {
+  const matches = findDeterministicStoreProductDuplicates(
+    [
+      {
+        id: "existing",
+        name: "Existing product",
+        supplier_product_ref: "DM1000",
+        source_url: "https://dmcwholesale.co.za/products/existing-product",
+      },
+    ],
+    {
+      supplierId: "dmc-wholesale",
+      supplierProductRef: "DM9999",
+      sourceUrl: "https://dmcwholesale.co.za/products/new-product",
+      name: "New product",
+    },
+  );
+
+  assert.deepEqual(matches, []);
 });
 
 test("supplier discovery stays non-active until evidence is inspected", () => {

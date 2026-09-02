@@ -202,6 +202,25 @@ export function findStoreProductDuplicates(
   });
 }
 
+/**
+ * Only supplier SKU and canonical supplier URL are strong enough to prevent a
+ * new intake. A matching title is deliberately left as a review warning: it
+ * may describe a different supplier item or a legitimate variant.
+ */
+export function findDeterministicStoreProductDuplicates(
+  products: ExistingProduct[],
+  candidate: {
+    supplierId: string | null | undefined;
+    supplierProductRef: string | null | undefined;
+    sourceUrl: string | null | undefined;
+    name: string | null | undefined;
+  },
+): ProductDuplicateMatch[] {
+  return findStoreProductDuplicates(products, candidate).filter(
+    (match) => match.kind === "supplier_sku" || match.kind === "source_url",
+  );
+}
+
 export function assessProductKnowledge(input: {
   title: string | null | undefined;
   description: string | null | undefined;
