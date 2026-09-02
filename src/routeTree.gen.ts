@@ -90,6 +90,7 @@ import { Route as BusinessesConstructionRouteImport } from './routes/businesses.
 import { Route as ApiWebsiteHealthRouteImport } from './routes/api/website-health'
 import { Route as ApiStoreProductImportRouteImport } from './routes/api.store-product-import'
 import { Route as ApiStoreInventoryPublicationRouteImport } from './routes/api.store-inventory-publication'
+import { Route as ApiStoreCommercialReviewRouteImport } from './routes/api.store-commercial-review'
 import { Route as ApiStoreAffiliateSmartImportRouteImport } from './routes/api.store-affiliate-smart-import'
 import { Route as ApiPlatformAnalyticsRouteImport } from './routes/api/platform-analytics'
 import { Route as ApiGrowthAnalyticsRouteImport } from './routes/api/growth-analytics'
@@ -540,6 +541,12 @@ const ApiStoreInventoryPublicationRoute =
     path: '/api/store-inventory-publication',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiStoreCommercialReviewRoute =
+  ApiStoreCommercialReviewRouteImport.update({
+    id: '/api/store-commercial-review',
+    path: '/api/store-commercial-review',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiStoreAffiliateSmartImportRoute =
   ApiStoreAffiliateSmartImportRouteImport.update({
     id: '/api/store-affiliate-smart-import',
@@ -774,6 +781,7 @@ export interface FileRoutesByFullPath {
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
   '/api/store-affiliate-smart-import': typeof ApiStoreAffiliateSmartImportRoute
+  '/api/store-commercial-review': typeof ApiStoreCommercialReviewRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
@@ -892,6 +900,7 @@ export interface FileRoutesByTo {
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
   '/api/store-affiliate-smart-import': typeof ApiStoreAffiliateSmartImportRoute
+  '/api/store-commercial-review': typeof ApiStoreCommercialReviewRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
@@ -1011,6 +1020,7 @@ export interface FileRoutesById {
   '/api/growth-analytics': typeof ApiGrowthAnalyticsRouteWithChildren
   '/api/platform-analytics': typeof ApiPlatformAnalyticsRoute
   '/api/store-affiliate-smart-import': typeof ApiStoreAffiliateSmartImportRoute
+  '/api/store-commercial-review': typeof ApiStoreCommercialReviewRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
@@ -1131,6 +1141,7 @@ export interface FileRouteTypes {
     | '/api/growth-analytics'
     | '/api/platform-analytics'
     | '/api/store-affiliate-smart-import'
+    | '/api/store-commercial-review'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
@@ -1249,6 +1260,7 @@ export interface FileRouteTypes {
     | '/api/growth-analytics'
     | '/api/platform-analytics'
     | '/api/store-affiliate-smart-import'
+    | '/api/store-commercial-review'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
@@ -1367,6 +1379,7 @@ export interface FileRouteTypes {
     | '/api/growth-analytics'
     | '/api/platform-analytics'
     | '/api/store-affiliate-smart-import'
+    | '/api/store-commercial-review'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
     | '/api/website-health'
@@ -1486,6 +1499,7 @@ export interface RootRouteChildren {
   ApiGrowthAnalyticsRoute: typeof ApiGrowthAnalyticsRouteWithChildren
   ApiPlatformAnalyticsRoute: typeof ApiPlatformAnalyticsRoute
   ApiStoreAffiliateSmartImportRoute: typeof ApiStoreAffiliateSmartImportRoute
+  ApiStoreCommercialReviewRoute: typeof ApiStoreCommercialReviewRoute
   ApiStoreInventoryPublicationRoute: typeof ApiStoreInventoryPublicationRoute
   ApiStoreProductImportRoute: typeof ApiStoreProductImportRoute
   ApiWebsiteHealthRoute: typeof ApiWebsiteHealthRoute
@@ -2118,6 +2132,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiStoreInventoryPublicationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/store-commercial-review': {
+      id: '/api/store-commercial-review'
+      path: '/api/store-commercial-review'
+      fullPath: '/api/store-commercial-review'
+      preLoaderRoute: typeof ApiStoreCommercialReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/store-affiliate-smart-import': {
       id: '/api/store-affiliate-smart-import'
       path: '/api/store-affiliate-smart-import'
@@ -2444,6 +2465,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiGrowthAnalyticsRoute: ApiGrowthAnalyticsRouteWithChildren,
   ApiPlatformAnalyticsRoute: ApiPlatformAnalyticsRoute,
   ApiStoreAffiliateSmartImportRoute: ApiStoreAffiliateSmartImportRoute,
+  ApiStoreCommercialReviewRoute: ApiStoreCommercialReviewRoute,
   ApiStoreInventoryPublicationRoute: ApiStoreInventoryPublicationRoute,
   ApiStoreProductImportRoute: ApiStoreProductImportRoute,
   ApiWebsiteHealthRoute: ApiWebsiteHealthRoute,

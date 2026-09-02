@@ -1,5 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
-import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
+import type { DynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
 import {
   assessLocalSourceCandidate,
   assessSavedMarketEvidence,
@@ -108,7 +107,6 @@ export type CommercialReviewItem = {
   inventoryLastVerifiedAt: string | null;
 };
 
-const db = asDynamicSupabaseClient(supabase);
 const MINIMUM_COMMERCIAL_MARGIN_PERCENT = 35;
 
 function asNumber(value: unknown): number | null {
@@ -410,25 +408,29 @@ function commercialEvidenceFor(input: {
  * Store table. Market-price notes are useful evidence but have no structured
  * proof of a same-model match, so they begin as unverified in the review.
  */
-export async function loadStoreCommercialReviews(): Promise<CommercialReviewItem[]> {
-  const [productsResult, intakesResult, suppliersResult, variantsResult] = await Promise.all([
+export async function loadStoreCommercialReviews(
+  db: DynamicSupabaseClient,
+  organisationId: string,
+): Promise<CommercialReviewItem[]> {
+  const [productsResult, intakesResult, suppliersResult] = await Promise.all([
     db
       .from<StoreCommercialProduct>("store_products")
       .select(
         "id,name,sku,status,supplier_name,supplier_product_ref,supplier_url,product_type,fulfilment_model,inventory_ownership,inventory_source_status,inventory_source_reference,cost_price,price,source_currency,source_cost,fx_rate_to_zar,inventory_last_verified_at",
       )
+      .eq("organisation_id", organisationId)
+      .eq("status", "active")
       .order("updated_at", { ascending: false }),
     db
       .from<IntakeCommercialEvidence>("store_inventory_intakes")
       .select(
         "id,publication_store_product_id,supplier_cost,supplier_cost_confirmed,supplier_cost_confirmed_at,supplier_cost_source_label,stock_confirmed,stock_confirmed_at,market_price,market_price_source_url,market_price_notes,last_price_checked_at",
-      ),
-    db.from<SupplierRecord>("store_suppliers").select("name,status,registry_status,stock_origin"),
+      )
+      .eq("organisation_id", organisationId),
     db
-      .from<StoreProductVariant>("store_product_variants")
-      .select(
-        "id,product_id,title,source_currency,source_cost,fx_rate_to_zar,price_zar,cost_zar,is_default,is_available,availability_source_status,availability_source_reference,availability_last_verified_at,raw_provider_data,updated_at",
-      ),
+      .from<SupplierRecord>("store_suppliers")
+      .select("name,status,registry_status,stock_origin")
+      .eq("organisation_id", organisationId),
   ]);
   if (productsResult.error)
     throw new Error(
@@ -438,10 +440,22 @@ export async function loadStoreCommercialReviews(): Promise<CommercialReviewItem
     throw new Error(`Unable to load saved market evidence: ${intakesResult.error.message}`);
   if (suppliersResult.error)
     throw new Error(`Unable to load the Supplier Registry: ${suppliersResult.error.message}`);
-  if (variantsResult.error)
-    throw new Error(`Unable to load supplier variant evidence: ${variantsResult.error.message}`);
-
   const products = productsResult.data ?? [];
+  let variants: StoreProductVariant[] = [];
+  if (products.length) {
+    const variantsResult = await db
+      .from<StoreProductVariant>("store_product_variants")
+      .select(
+        "id,product_id,title,source_currency,source_cost,fx_rate_to_zar,price_zar,cost_zar,is_default,is_available,availability_source_status,availability_source_reference,availability_last_verified_at,raw_provider_data,updated_at",
+      )
+      .in(
+        "product_id",
+        products.map((product) => product.id),
+      );
+    if (variantsResult.error)
+      throw new Error(`Unable to load supplier variant evidence: ${variantsResult.error.message}`);
+    variants = variantsResult.data ?? [];
+  }
   const intakesByProduct = new Map(
     (intakesResult.data ?? [])
       .filter((item) => item.publication_store_product_id)
@@ -449,14 +463,13 @@ export async function loadStoreCommercialReviews(): Promise<CommercialReviewItem
   );
   const suppliers = suppliersResult.data ?? [];
   const variantsByProduct = new Map<string, StoreProductVariant[]>();
-  for (const variant of variantsResult.data ?? []) {
+  for (const variant of variants) {
     const current = variantsByProduct.get(variant.product_id) ?? [];
     current.push(variant);
     variantsByProduct.set(variant.product_id, current);
   }
 
   return products
-    .filter((product) => product.status === "active")
     .map((product) => {
       const intake = intakesByProduct.get(product.id);
       const priority = supplierPriorityFor(product, suppliers);
