@@ -26,7 +26,7 @@ test("category intelligence does not learn an unrelated historical supplier mapp
   assert.equal(result.proposedCategory, "Self Care - Organising");
 });
 
-test("category intelligence can safely retain an exact current taxonomy match", () => {
+test("legacy category intelligence resolves an approved department slug, not a product-derived label", () => {
   const result = recommendCossaCategory({
     supplierCategory: "Home & Living",
     taxonomy: ["Travel & Tech", "Home & Living"],
@@ -34,7 +34,7 @@ test("category intelligence can safely retain an exact current taxonomy match", 
   });
 
   assert.equal(result.action, "AUTO");
-  assert.equal(result.category, "Home & Living");
+  assert.equal(result.category, "home-living");
 });
 
 test("pricing keeps supplier RRP separate from independently sourced market evidence", () => {

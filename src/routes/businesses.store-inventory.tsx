@@ -57,8 +57,13 @@ import {
   classifySupplierEvidence,
   findDeterministicStoreProductDuplicates,
   findStoreProductDuplicates,
-  recommendCossaCategory,
 } from "@/lib/store-knowledge-policy";
+import {
+  CANONICAL_STORE_DEPARTMENTS,
+  canonicalDepartmentFor,
+  classifySupplierCategory,
+  isCanonicalStoreDepartment,
+} from "@/lib/store-taxonomy";
 import type {
   ImportConfidence,
   ImportedVariant,
@@ -257,10 +262,9 @@ type CatalogueSnapshot = {
 
 type CatalogueCountRow = { id: string; status: "active" | "draft" | "archived" };
 
-type StoreTaxonomyProduct = {
+type StoreProductIdentity = {
   id: string;
   name: string;
-  category: string | null;
   supplier_product_ref: string | null;
   supplier_url: string | null;
 };
@@ -590,7 +594,7 @@ function StoreInventoryIntake() {
   const [suppliers, setSuppliers] = useState<StoreSupplier[]>([]);
   const [profiles, setProfiles] = useState<FulfilmentProfile[]>([]);
   const [categoryMappings, setCategoryMappings] = useState<SupplierCategoryMapping[]>([]);
-  const [storeTaxonomyProducts, setStoreTaxonomyProducts] = useState<StoreTaxonomyProduct[]>([]);
+  const [storeProductIdentities, setStoreProductIdentities] = useState<StoreProductIdentity[]>([]);
   const [sources, setSources] = useState<ProductSource[]>([]);
   const [lifecycleHistory, setLifecycleHistory] = useState<IntakeLifecycleHistory[]>([]);
   const [form, setForm] = useState<IntakeForm>(() => emptyForm());
@@ -657,26 +661,19 @@ function StoreInventoryIntake() {
       }),
     [form.marketPrice, grossMargin, sellingPrice],
   );
-  const storeTaxonomy = useMemo(
-    () =>
-      [
-        ...new Set(
-          storeTaxonomyProducts
-            .map((product) => product.category?.trim())
-            .filter((category): category is string => Boolean(category)),
-        ),
-      ].sort((left, right) => left.localeCompare(right)),
-    [storeTaxonomyProducts],
-  );
-  const categoryRecommendation = useMemo(
-    () =>
-      recommendCossaCategory({
-        supplierCategory: form.supplierCategory,
-        taxonomy: storeTaxonomy,
-        mappings: categoryMappings.filter((mapping) => mapping.supplier_id === form.supplierId),
-      }),
-    [categoryMappings, form.supplierCategory, form.supplierId, storeTaxonomy],
-  );
+  const categoryRecommendation = useMemo(() => {
+    const matchingMapping = categoryMappings.find(
+      (mapping) =>
+        mapping.supplier_id === form.supplierId &&
+        mapping.supplier_category.trim().toLocaleLowerCase() ===
+          form.supplierCategory.trim().toLocaleLowerCase(),
+    );
+    return classifySupplierCategory({
+      supplierCategory: form.supplierCategory,
+      productTitle: form.name,
+      mappedDepartment: matchingMapping?.cossa_category,
+    });
+  }, [categoryMappings, form.name, form.supplierCategory, form.supplierId]);
   const intakeDuplicates = useMemo(
     () =>
       findStoreProductDuplicates(
@@ -688,7 +685,7 @@ function StoreInventoryIntake() {
             supplier_product_ref: source.supplier_product_ref,
             source_url: source.source_url,
           })),
-          ...storeTaxonomyProducts.map((product) => ({
+          ...storeProductIdentities.map((product) => ({
             ...product,
             source_url: product.supplier_url,
           })),
@@ -707,7 +704,7 @@ function StoreInventoryIntake() {
       form.sku,
       form.supplierId,
       sources,
-      storeTaxonomyProducts,
+      storeProductIdentities,
     ],
   );
   const currentLinkedStoreProductId = useMemo(
@@ -718,7 +715,7 @@ function StoreInventoryIntake() {
   const blockingStoreProductDuplicate = useMemo(
     () =>
       findDeterministicStoreProductDuplicates(
-        storeTaxonomyProducts.map((product) => ({
+        storeProductIdentities.map((product) => ({
           ...product,
           source_url: product.supplier_url,
         })),
@@ -735,7 +732,7 @@ function StoreInventoryIntake() {
       form.sourceUrl,
       form.sku,
       form.supplierId,
-      storeTaxonomyProducts,
+      storeProductIdentities,
     ],
   );
   const duplicateNotice = useMemo(
@@ -968,7 +965,7 @@ function StoreInventoryIntake() {
         publicCatalogueCountResult,
         snapshotResult,
         lifecycleHistoryResult,
-        storeTaxonomyResult,
+        storeProductIdentityResult,
       ] = await Promise.all([
         db.from<{ id: string }>("organisations").select("id").limit(1),
         db.from<StoreSupplier>("store_suppliers").select("*").order("name"),
@@ -1007,8 +1004,8 @@ function StoreInventoryIntake() {
           .select("*")
           .order("created_at", { ascending: false }),
         db
-          .from<StoreTaxonomyProduct>("store_products")
-          .select("id,name,category,supplier_product_ref,supplier_url"),
+          .from<StoreProductIdentity>("store_products")
+          .select("id,name,supplier_product_ref,supplier_url"),
       ]);
 
       const error =
@@ -1024,7 +1021,7 @@ function StoreInventoryIntake() {
         publicCatalogueCountResult.error ??
         snapshotResult.error ??
         lifecycleHistoryResult.error ??
-        storeTaxonomyResult.error;
+        storeProductIdentityResult.error;
       if (error) {
         toast.error(
           `Could not load Store Operations Book: ${error.message}. Apply the intake migration before using this section.`,
@@ -1038,7 +1035,7 @@ function StoreInventoryIntake() {
       setSuppliers(nextSuppliers);
       setProfiles(nextProfiles);
       setCategoryMappings(categoryMappingResult.data ?? []);
-      setStoreTaxonomyProducts(storeTaxonomyResult.data ?? []);
+      setStoreProductIdentities(storeProductIdentityResult.data ?? []);
       const nextSources = sourceResult.data ?? [];
       setSources(nextSources);
       setLifecycleHistory(lifecycleHistoryResult.data ?? []);
@@ -1213,12 +1210,16 @@ function StoreInventoryIntake() {
         );
         return;
       }
-      const importedCategoryRecommendation = recommendCossaCategory({
+      const importedCategoryMapping = categoryMappings.find(
+        (mapping) =>
+          mapping.supplier_id === identifiedSupplier?.id &&
+          mapping.supplier_category.trim().toLocaleLowerCase() ===
+            payload.supplierCategory?.trim().toLocaleLowerCase(),
+      );
+      const importedCategoryRecommendation = classifySupplierCategory({
         supplierCategory: payload.supplierCategory,
-        taxonomy: storeTaxonomy,
-        mappings: categoryMappings.filter(
-          (mapping) => mapping.supplier_id === identifiedSupplier?.id,
-        ),
+        productTitle: payload.title,
+        mappedDepartment: importedCategoryMapping?.cossa_category,
       });
       setSupplierRecognitionMessage(
         identifiedSupplier
@@ -1265,12 +1266,11 @@ function StoreInventoryIntake() {
         shortDescription: payload.shortDescription ?? current.shortDescription,
         description: payload.description ?? current.description,
         supplierCategory: payload.supplierCategory ?? current.supplierCategory,
-        // A Store category is only preselected from an exact taxonomy match or
-        // a semantically coherent historical mapping. Ambiguous and stale
-        // mappings stay visible for human review instead of being propagated.
+        // Only an approved department or explicit approved alias is selected
+        // automatically. Historical Store product values never seed this list.
         category:
-          importedCategoryRecommendation.action === "AUTO"
-            ? (importedCategoryRecommendation.category ?? current.category)
+          importedCategoryRecommendation.action === "AUTO_SELECT"
+            ? (importedCategoryRecommendation.departmentSlug ?? current.category)
             : current.category,
         brand: payload.brand ?? current.brand,
         features: payload.features.length > 0 ? payload.features.join("\n") : current.features,
@@ -1459,6 +1459,11 @@ function StoreInventoryIntake() {
       toast.error("Choose a supplier category and Cossa category before saving a mapping.");
       return;
     }
+    const canonicalDepartment = canonicalDepartmentFor(form.category);
+    if (!canonicalDepartment) {
+      toast.error("Choose an active Cossa Store department before saving a supplier mapping.");
+      return;
+    }
     const { data, error } = await db
       .from<SupplierCategoryMapping>("store_supplier_category_mappings")
       .upsert(
@@ -1466,7 +1471,7 @@ function StoreInventoryIntake() {
           organisation_id: organisationId,
           supplier_id: form.supplierId,
           supplier_category: form.supplierCategory.trim(),
-          cossa_category: form.category.trim(),
+          cossa_category: canonicalDepartment.slug,
         },
         { onConflict: "organisation_id,supplier_id,supplier_category" },
       )
@@ -1559,7 +1564,7 @@ function StoreInventoryIntake() {
         .filter(Boolean),
       variants: form.variants,
       supplier_category: form.supplierCategory.trim() || null,
-      category: form.category.trim() || null,
+      category: canonicalDepartmentFor(form.category)?.slug ?? null,
       brand: form.brand.trim() || null,
       image_urls: form.imageUrls,
       affiliate_url:
@@ -1617,6 +1622,9 @@ function StoreInventoryIntake() {
     }
     if (status === "review" && !form.supplierId) {
       return "Select the product's supplier or partner before saving for review.";
+    }
+    if (form.category.trim() && !isCanonicalStoreDepartment(form.category)) {
+      return "Choose an active Cossa Store department. Historical category text cannot be saved as taxonomy.";
     }
     const missing =
       status === "approved"
@@ -2277,23 +2285,23 @@ function StoreInventoryIntake() {
                 placeholder="e.g. DM8363"
               />
             </Field>
-            <Field label="Cossa Store category">
-              <input
+            <Field label="Cossa Store department">
+              <select
                 className={inputClass}
-                list="cossa-store-taxonomy"
                 value={form.category}
                 onChange={(event) => update("category", event.target.value)}
-                placeholder={
-                  storeTaxonomy.length
-                    ? "Choose a current Store category"
-                    : "Current taxonomy loading"
-                }
-              />
-              <datalist id="cossa-store-taxonomy">
-                {storeTaxonomy.map((category) => (
-                  <option key={category} value={category} />
+              >
+                <option value="">Choose an approved Store department</option>
+                {CANONICAL_STORE_DEPARTMENTS.map((department) => (
+                  <option key={department.slug} value={department.slug}>
+                    {department.name}
+                  </option>
                 ))}
-              </datalist>
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Only active Cossa Store departments are selectable. Historical product category text
+                is never added here.
+              </p>
             </Field>
             <Field label="Supplier category / product type">
               <input
@@ -2309,9 +2317,12 @@ function StoreInventoryIntake() {
                   Category intelligence · {categoryRecommendation.action}
                 </p>
                 <p className="mt-1 text-muted-foreground">{categoryRecommendation.reason}</p>
-                {categoryRecommendation.category ? (
+                {categoryRecommendation.departmentName ? (
                   <p className="mt-2 text-primary">
-                    Suggested category: {categoryRecommendation.category}
+                    Suggested department: {categoryRecommendation.departmentName}
+                    {categoryRecommendation.subcategory
+                      ? ` → ${categoryRecommendation.subcategory}`
+                      : ""}
                   </p>
                 ) : null}
                 {categoryRecommendation.alternatives.length ? (
@@ -2319,10 +2330,10 @@ function StoreInventoryIntake() {
                     Review: {categoryRecommendation.alternatives.join(" · ")}
                   </p>
                 ) : null}
-                {categoryRecommendation.proposedCategory ? (
+                {categoryRecommendation.action === "PROPOSE_CATEGORY" ? (
                   <p className="mt-2 text-warning">
-                    New category proposal only: {categoryRecommendation.proposedCategory}. It will
-                    not be created automatically.
+                    Category proposal only: {form.supplierCategory.trim()}. It will not be created
+                    automatically.
                   </p>
                 ) : null}
               </div>

@@ -6,6 +6,8 @@
  * or manufacture a commercial fact.
  */
 
+import { classifySupplierCategory } from "./store-taxonomy.ts";
+
 export type KnowledgeAction = "AUTO" | "VERIFY" | "BLOCK" | "ESCALATE";
 export type EvidenceClassification =
   | "VERIFIED_FACT"
@@ -68,22 +70,6 @@ function normalise(value: string | null | undefined): string {
     .trim();
 }
 
-function tokens(value: string): Set<string> {
-  return new Set(
-    normalise(value)
-      .split(" ")
-      .filter((item) => item.length > 2 && !["and", "the", "for", "with"].includes(item)),
-  );
-}
-
-function overlap(left: string, right: string): number {
-  const leftTokens = tokens(left);
-  const rightTokens = tokens(right);
-  if (!leftTokens.size || !rightTokens.size) return 0;
-  const shared = [...leftTokens].filter((item) => rightTokens.has(item)).length;
-  return shared / Math.max(leftTokens.size, rightTokens.size);
-}
-
 function canonicalUrl(value: string | null | undefined): string | null {
   if (!text(value)) return null;
   try {
@@ -99,78 +85,32 @@ function canonicalUrl(value: string | null | undefined): string | null {
 }
 
 /**
- * Recommends only from the actual current Store taxonomy supplied by the
- * caller. Historical mappings are not trusted if their source and target do
- * not describe materially similar categories.
+ * @deprecated New consumers must use `classifySupplierCategory` directly.
+ *
+ * Kept as a compatibility adapter for existing callers, but it intentionally
+ * ignores product-derived taxonomy input. Only the audited canonical Store
+ * contract may determine selectable category targets.
  */
 export function recommendCossaCategory(input: {
   supplierCategory: string | null | undefined;
   taxonomy: string[];
   mappings: ExistingCategoryMapping[];
 }): CategoryRecommendation {
-  const supplierCategory = text(input.supplierCategory);
-  const taxonomy = [...new Set(input.taxonomy.map(text).filter(Boolean))];
-  if (!supplierCategory) {
-    return {
-      action: "VERIFY",
-      category: null,
-      reason:
-        "The supplier did not expose a category. Choose an existing Cossa category during review.",
-      proposedCategory: null,
-      alternatives: taxonomy.slice(0, 8),
-    };
-  }
-
-  const exact = taxonomy.find((category) => normalise(category) === normalise(supplierCategory));
-  if (exact) {
-    return {
-      action: "AUTO",
-      category: exact,
-      reason: "The supplier category exactly matches an existing Cossa Store category.",
-      proposedCategory: null,
-      alternatives: [],
-    };
-  }
-
-  const coherentMapping = input.mappings.find(
-    (mapping) =>
-      normalise(mapping.supplier_category) === normalise(supplierCategory) &&
-      taxonomy.some((category) => normalise(category) === normalise(mapping.cossa_category)) &&
-      overlap(mapping.supplier_category, mapping.cossa_category) >= 0.5,
-  );
-  if (coherentMapping) {
-    return {
-      action: "AUTO",
-      category: coherentMapping.cossa_category,
-      reason:
-        "A semantically coherent supplier-to-Cossa mapping exists in the Store Operations Book.",
-      proposedCategory: null,
-      alternatives: [],
-    };
-  }
-
-  const ranked = taxonomy
-    .map((category) => ({ category, score: overlap(supplierCategory, category) }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score);
-  if (ranked[0]?.score >= 0.5) {
-    return {
-      action: "VERIFY",
-      category: null,
-      reason:
-        "A similar existing category was found, but category assignment still needs a human confirmation.",
-      proposedCategory: null,
-      alternatives: ranked.slice(0, 3).map((item) => item.category),
-    };
-  }
-
+  const mappedDepartment = input.mappings.find(
+    (mapping) => normalise(mapping.supplier_category) === normalise(input.supplierCategory),
+  )?.cossa_category;
+  const result = classifySupplierCategory({
+    supplierCategory: input.supplierCategory,
+    mappedDepartment,
+  });
   return {
-    action: "ESCALATE",
-    category: null,
-    reason:
-      "No reliable match exists in the current Cossa Store taxonomy. Propose a category; do not create one automatically.",
-    proposedCategory: supplierCategory,
-    alternatives: ranked.slice(0, 3).map((item) => item.category),
+    action:
+      result.action === "AUTO_SELECT" ? "AUTO" : result.action === "VERIFY" ? "VERIFY" : "ESCALATE",
+    category: result.departmentSlug,
+    reason: result.reason,
+    proposedCategory:
+      result.action === "PROPOSE_CATEGORY" ? text(input.supplierCategory) || null : null,
+    alternatives: result.alternatives,
   };
 }
 
