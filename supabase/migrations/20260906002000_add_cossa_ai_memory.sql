@@ -33,7 +33,9 @@ create table if not exists public.cossa_ai_conversation_memory (
   conversation_id text not null,
   rolling_summary text not null default '',
   important_facts jsonb not null default '[]'::jsonb,
+  decisions jsonb not null default '[]'::jsonb,
   open_loops jsonb not null default '[]'::jsonb,
+  last_summarized_message_count integer not null default 0 check (last_summarized_message_count >= 0),
   last_message_at timestamptz null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -46,9 +48,10 @@ create index if not exists cossa_ai_conversation_memory_user_idx
 alter table public.cossa_ai_memory_items enable row level security;
 alter table public.cossa_ai_conversation_memory enable row level security;
 
--- Authenticated active organisation members may read internal Cossa memory.
--- Visibility filtering (public/customer/internal/ceo) is still enforced by the
--- application gateway so public-facing assistants never receive CEO context.
+-- Active organisation members may read shared Cossa memory.
+-- CEO memory requires a user binding and is readable only by that authenticated
+-- user. This protects CEO-only context at the database layer as well as the
+-- application gateway.
 create policy "cossa members read ai memory"
   on public.cossa_ai_memory_items
   for select
@@ -60,6 +63,10 @@ create policy "cossa members read ai memory"
       where om.organisation_id = cossa_ai_memory_items.organisation_id
         and om.user_id = auth.uid()
         and om.status = 'active'
+    )
+    and (
+      cossa_ai_memory_items.visibility <> 'ceo'
+      or cossa_ai_memory_items.user_id = auth.uid()
     )
   );
 
@@ -113,4 +120,4 @@ comment on table public.cossa_ai_memory_items is
   'Durable Cossa institutional memory used before external AI/research calls.';
 
 comment on table public.cossa_ai_conversation_memory is
-  'Rolling conversation summaries and important facts so Cossa AI can maintain long conversations without sending full raw history to providers.';
+  'Rolling conversation summaries, decisions and important facts so Cossa AI can maintain long conversations without sending full raw history to providers.';
