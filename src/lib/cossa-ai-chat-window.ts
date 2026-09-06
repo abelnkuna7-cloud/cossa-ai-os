@@ -1,4 +1,4 @@
-import { selectRecentConversationWindow, type CossaConversationMessage } from "./cossa-ai-memory";
+import { selectRecentConversationWindow, type CossaConversationMessage } from "./cossa-ai-memory.ts";
 
 /**
  * User-facing conversations are not capped at a small fixed turn count.
