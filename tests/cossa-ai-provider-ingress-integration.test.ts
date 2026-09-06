@@ -20,6 +20,21 @@ test("automatic provider steering only changes auto mode when telemetry changes 
   assert.match(source, /provider = selectedCandidate/);
 });
 
+test("closed feedback loop records safe capacity failures and successful provider recovery", () => {
+  assert.match(source, /async function observeChatGatewayOutcome/);
+  assert.match(source, /successfulProviderFromGatewayResponse\(response\)/);
+  assert.match(source, /observeProviderResponse\(successfulProvider, response\)/);
+  assert.match(source, /capacityFailedProvidersFromGatewayText\(safeGatewayText\)/);
+  assert.match(source, /observeProviderCapacityFailure\(provider, response\)/);
+  assert.match(source, /await observeChatGatewayOutcome\(prepared, normalizedResponse\)/);
+});
+
+test("capacity feedback inspects only the safe final gateway response", () => {
+  assert.match(source, /if \(response\.status !== 429\) return/);
+  assert.match(source, /safeGatewayText = await response\.clone\(\)\.text\(\)/);
+  assert.doesNotMatch(source, /response\.json\(\)[\s\S]{0,160}observeProviderCapacityFailure/);
+});
+
 test("route-level provider observability wins over ingress fallback headers", () => {
   assert.match(source, /if \(!headers\.has\(responseHeader\)\) headers\.set\(responseHeader, value\)/);
 });
