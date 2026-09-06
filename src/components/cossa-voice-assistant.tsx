@@ -30,10 +30,17 @@ import { streamChatWithMetadata } from "@/lib/ai-stream";
 import { queueLeadHunterRuntimeProof } from "@/lib/agent-runtime";
 import {
   COSSA_VOICE_RESTART_DELAY_MS,
-  isBenignRecognitionError,
   shouldRestartHandsFreeConversation,
   splitSpeechText,
+  type CossaVoiceRecoveryPlan,
 } from "@/lib/cossa-ai-voice-continuity";
+import {
+  INITIAL_COSSA_VOICE_SESSION_RECOVERY,
+  planVoiceRecognitionSessionRecovery,
+  resetVoiceRecognitionRecovery,
+  resetVoiceSessionRecovery,
+  type CossaVoiceSessionRecoveryState,
+} from "@/lib/cossa-ai-voice-session-recovery";
 
 type AssistantState =
   | "READY"
@@ -218,7 +225,10 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   const speechGenerationRef = useRef(0);
   const stateRef = useRef<AssistantState>("READY");
   const settingsRef = useRef<VoiceSettings>(DEFAULT_SETTINGS);
-  const transientRecognitionErrorRef = useRef<string | null>(null);
+  const voiceRecoveryStateRef = useRef<CossaVoiceSessionRecoveryState>({
+    ...INITIAL_COSSA_VOICE_SESSION_RECOVERY,
+  });
+  const recognitionRecoveryPlanRef = useRef<CossaVoiceRecoveryPlan | null>(null);
 
   const conversations = useQuery({
     queryKey: ["ai-conversations"],
@@ -247,6 +257,23 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
       window.clearTimeout(restartTimerRef.current);
       restartTimerRef.current = null;
     }
+  }
+
+  function planRecognitionSessionRecovery(errorValue: unknown): CossaVoiceRecoveryPlan {
+    const result = planVoiceRecognitionSessionRecovery({
+      state: voiceRecoveryStateRef.current,
+      error: errorValue,
+      conversationMode: settingsRef.current.conversationMode,
+      paused: conversationPausedRef.current,
+    });
+    voiceRecoveryStateRef.current = result.nextState;
+    recognitionRecoveryPlanRef.current = result.plan;
+    return result.plan;
+  }
+
+  function markRecognitionHealthy() {
+    voiceRecoveryStateRef.current = resetVoiceRecognitionRecovery(voiceRecoveryStateRef.current);
+    recognitionRecoveryPlanRef.current = null;
   }
 
   useEffect(() => {
@@ -314,6 +341,8 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
     () => () => {
       conversationPausedRef.current = true;
       pendingConversationTranscriptRef.current = null;
+      recognitionRecoveryPlanRef.current = null;
+      voiceRecoveryStateRef.current = resetVoiceSessionRecovery();
       clearRestartTimer();
       recognitionRef.current?.abort?.();
       abortRef.current?.abort();
@@ -373,12 +402,13 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
 
     if (manual && settingsRef.current.conversationMode) {
       conversationPausedRef.current = false;
+      markRecognitionHealthy();
     }
 
     const recognition = new Recognition();
     const startingInput = input.trim();
     pendingConversationTranscriptRef.current = null;
-    transientRecognitionErrorRef.current = null;
+    recognitionRecoveryPlanRef.current = null;
     recognition.lang = settingsRef.current.language;
     recognition.continuous = false;
     recognition.interimResults = true;
@@ -395,6 +425,7 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
       setInput(nextInput);
 
       if (results.some((result) => result.isFinal) && nextInput) {
+        markRecognitionHealthy();
         pendingConversationTranscriptRef.current = nextInput;
         recognition.stop();
       }
@@ -402,28 +433,19 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
 
     recognition.onerror = (event) => {
       const recognitionError = event.error ?? "unknown";
-      transientRecognitionErrorRef.current = recognitionError;
-      const denied =
-        recognitionError === "not-allowed" || recognitionError === "service-not-allowed";
-      const benign = isBenignRecognitionError(recognitionError);
+      const recovery = planRecognitionSessionRecovery(recognitionError);
 
-      if (denied) {
+      if (recovery.action === "pause") {
         conversationPausedRef.current = true;
         pendingConversationTranscriptRef.current = null;
         setInputProvider("error");
-        setError("Microphone permission was denied. Text chat remains available.");
+        setError(recovery.reason);
         updateAssistantState("ERROR");
         return;
       }
 
       setInputProvider("available");
-      if (benign) {
-        setError(null);
-        updateAssistantState("READY");
-        return;
-      }
-
-      setError(`Voice input was interrupted: ${recognitionError}. Cossa will retry.`);
+      setError(recovery.action === "retry" ? recovery.reason : null);
       updateAssistantState("READY");
     };
 
@@ -432,12 +454,13 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
       setInterimTranscript("");
       const pending = pendingConversationTranscriptRef.current;
       pendingConversationTranscriptRef.current = null;
-      const recognitionError = transientRecognitionErrorRef.current;
-      transientRecognitionErrorRef.current = null;
+      const recovery = recognitionRecoveryPlanRef.current;
+      recognitionRecoveryPlanRef.current = null;
 
       if (stateRef.current !== "ERROR") updateAssistantState("READY");
 
       if (pending) {
+        markRecognitionHealthy();
         window.setTimeout(() => void send(pending), 0);
         return;
       }
@@ -447,7 +470,7 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
         !conversationPausedRef.current &&
         stateRef.current !== "ERROR"
       ) {
-        scheduleListeningRestart(isBenignRecognitionError(recognitionError) ? 500 : 900);
+        scheduleListeningRestart(recovery?.delayMs ?? COSSA_VOICE_RESTART_DELAY_MS);
       }
     };
 
@@ -460,10 +483,19 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
     } catch {
       recognitionRef.current = null;
       pendingConversationTranscriptRef.current = null;
-      setError("Microphone could not start. Cossa will retry if hands-free mode is active.");
+      const recovery = planRecognitionSessionRecovery("audio-capture");
+      setError(recovery.reason);
+
+      if (recovery.action === "pause") {
+        conversationPausedRef.current = true;
+        setInputProvider("error");
+        updateAssistantState("ERROR");
+        return;
+      }
+
       updateAssistantState("READY");
       if (settingsRef.current.conversationMode && !conversationPausedRef.current) {
-        scheduleListeningRestart(900);
+        scheduleListeningRestart(recovery.delayMs);
       }
     }
   }
@@ -642,7 +674,7 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
         window.setTimeout(() => {
           if (stateRef.current === "ERROR") {
             updateAssistantState("READY");
-            scheduleListeningRestart(900);
+            scheduleListeningRestart(COSSA_VOICE_RESTART_DELAY_MS);
           }
         }, 1200);
       }
@@ -654,6 +686,8 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   function stopAll() {
     conversationPausedRef.current = true;
     pendingConversationTranscriptRef.current = null;
+    recognitionRecoveryPlanRef.current = null;
+    voiceRecoveryStateRef.current = resetVoiceSessionRecovery();
     clearRestartTimer();
     recognitionRef.current?.abort?.();
     recognitionRef.current = null;
@@ -665,6 +699,8 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   function setConversationMode(enabled: boolean) {
     conversationPausedRef.current = !enabled;
     pendingConversationTranscriptRef.current = null;
+    recognitionRecoveryPlanRef.current = null;
+    if (enabled) voiceRecoveryStateRef.current = resetVoiceSessionRecovery();
     setSettings((current) => ({ ...current, conversationMode: enabled }));
     if (!enabled) {
       clearRestartTimer();
