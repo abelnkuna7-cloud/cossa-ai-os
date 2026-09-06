@@ -9,6 +9,11 @@ test("parses labelled product dimensions with attached units", () => {
   assert.equal(result.dimensions?.kind, "product");
 });
 
+test("parses supplier meta-description dimension labels", () => {
+  const result = parseStoreDeliveryEvidence("Big capacity accessory bag size L 28 x W 21 x H 9 cm");
+  assert.deepEqual(result.dimensions && [result.dimensions.length, result.dimensions.width, result.dimensions.height], [28, 21, 9]);
+});
+
 test("parses millimetres and packed dimensions without guessing", () => {
   const result = parseStoreDeliveryEvidence("Packed Dimensions: 300 x 200 x 100 mm");
   assert.deepEqual(result.dimensions && [result.dimensions.length, result.dimensions.width, result.dimensions.height], [30, 20, 10]);
