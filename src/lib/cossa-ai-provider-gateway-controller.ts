@@ -7,6 +7,7 @@ import {
   type CossaProviderObservability,
 } from "./cossa-ai-provider-observability.ts";
 import {
+  observeProviderCapacityFailure,
   observeProviderConnectionFailure,
   observeProviderResponse,
   providerRuntimeDecision,
@@ -20,6 +21,11 @@ export interface CossaProviderGatewayController {
   executionPlan: CossaProviderExecutionPlan;
   decisionFor(provider: CossaRuntimeProvider, nowMs?: number): ProviderRuntimeDecision;
   recordHttpResponse(
+    provider: CossaRuntimeProvider,
+    response: Pick<Response, "headers" | "status" | "ok">,
+    observedAt?: string,
+  ): void;
+  recordCapacityFailure(
     provider: CossaRuntimeProvider,
     response: Pick<Response, "headers" | "status" | "ok">,
     observedAt?: string,
@@ -39,7 +45,8 @@ export interface CossaProviderGatewayController {
  * - reads the already-computed Cossa priority/reasoning headers;
  * - orders configured providers from current capacity telemetry;
  * - exposes each selected provider's bounded input/output budget;
- * - records safe HTTP rate-limit telemetry after provider attempts; and
+ * - records safe HTTP rate-limit telemetry after provider attempts;
+ * - records adapter-classified capacity failures such as provider-specific 413s; and
  * - produces a non-secret response snapshot for diagnostics/UI.
  *
  * Keeping this logic in one helper makes the eventual route wiring small and
@@ -76,6 +83,10 @@ export function createCossaProviderGatewayController({
 
     recordHttpResponse(provider, response, observedAt) {
       observeProviderResponse(provider, response, observedAt);
+    },
+
+    recordCapacityFailure(provider, response, observedAt) {
+      observeProviderCapacityFailure(provider, response, observedAt);
     },
 
     recordConnectionFailure(provider, observedAt) {
