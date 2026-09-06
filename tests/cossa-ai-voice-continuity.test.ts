@@ -4,8 +4,12 @@ import test from "node:test";
 import {
   cleanSpeechText,
   isBenignRecognitionError,
+  isRecoverableVoiceProviderStatus,
+  planRecognitionRecovery,
+  planVoiceProviderRecovery,
   shouldRestartHandsFreeConversation,
   splitSpeechText,
+  voiceRetryDelayMs,
 } from "../src/lib/cossa-ai-voice-continuity.ts";
 
 test("long spoken answers are split into bounded speech chunks", () => {
@@ -55,4 +59,53 @@ test("no-speech and intentional abort are recoverable recognition events", () =>
   assert.equal(isBenignRecognitionError("no-speech"), true);
   assert.equal(isBenignRecognitionError("aborted"), true);
   assert.equal(isBenignRecognitionError("not-allowed"), false);
+});
+
+test("recognition recovery retries transient network failure without losing conversation", () => {
+  const plan = planRecognitionRecovery({
+    error: "network",
+    attempt: 1,
+    conversationMode: true,
+    paused: false,
+  });
+
+  assert.equal(plan.action, "retry");
+  assert.equal(plan.delayMs, voiceRetryDelayMs(1));
+  assert.match(plan.reason, /without deleting the conversation/i);
+});
+
+test("microphone permission failure pauses instead of looping", () => {
+  const plan = planRecognitionRecovery({
+    error: "not-allowed",
+    attempt: 0,
+    conversationMode: true,
+    paused: false,
+  });
+
+  assert.equal(plan.action, "pause");
+  assert.equal(plan.delayMs, 0);
+});
+
+test("provider rate limit is recoverable with server retry-after when available", () => {
+  assert.equal(isRecoverableVoiceProviderStatus(429), true);
+  const plan = planVoiceProviderRecovery({
+    status: 429,
+    attempt: 0,
+    retryAfterMs: 2_500,
+  });
+
+  assert.equal(plan.action, "retry");
+  assert.equal(plan.delayMs, 2_500);
+  assert.match(plan.reason, /capacity/i);
+});
+
+test("authentication provider failures do not auto-retry spoken turns", () => {
+  assert.equal(isRecoverableVoiceProviderStatus(401), false);
+  const plan = planVoiceProviderRecovery({
+    status: 401,
+    attempt: 0,
+  });
+
+  assert.equal(plan.action, "pause");
+  assert.equal(plan.delayMs, 0);
 });
