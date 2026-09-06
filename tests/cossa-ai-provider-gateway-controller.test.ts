@@ -94,6 +94,37 @@ test("recorded 429 telemetry changes the next request route and exposes only saf
   assert.equal("reason" in snapshot, false);
 });
 
+test("provider-specific 413 can be protected only after the adapter classifies it as capacity", () => {
+  resetProviderRuntimeForTests();
+
+  const controller = createCossaProviderGatewayController({
+    configuredProviders: ["groq", "gemini"],
+    headers: headers(),
+    nowMs: Date.parse("2026-09-07T00:00:00.000Z"),
+  });
+
+  controller.recordCapacityFailure(
+    "groq",
+    response(413, {
+      "x-ratelimit-limit-tokens": "8000",
+      "x-ratelimit-remaining-tokens": "0",
+    }),
+    "2026-09-07T00:00:00.000Z",
+  );
+
+  const next = createCossaProviderGatewayController({
+    configuredProviders: ["groq", "gemini"],
+    headers: headers(),
+    nowMs: Date.parse("2026-09-07T00:00:01.000Z"),
+  });
+
+  assert.deepEqual(next.executionPlan.providers, ["gemini", "groq"]);
+  assert.equal(
+    next.decisionFor("groq", Date.parse("2026-09-07T00:00:01.000Z")).policy.capacityMode,
+    "protect",
+  );
+});
+
 test("successful provider response clears the runtime penalty", () => {
   resetProviderRuntimeForTests();
 
