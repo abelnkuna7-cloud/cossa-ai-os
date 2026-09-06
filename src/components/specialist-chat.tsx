@@ -920,6 +920,8 @@ export function SpecialistChat({ to }: Props) {
 
           provider: DEFAULT_CHAT_PROVIDER,
 
+          conversationId: convoId,
+
           onProviderAttempt: (event) => {
             setProviderAttempt(event);
           },
