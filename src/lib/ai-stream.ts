@@ -293,6 +293,12 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 
 const MIN_TIMEOUT_MS = 5_000;
 
+const MEMORY_REFRESH_INTERVAL = 6;
+
+const MAX_MEMORY_REFRESH_MESSAGES = 40;
+
+const MAX_MEMORY_REFRESH_CHARACTERS = 40_000;
+
 /* -------------------------------------------------------------------------- */
 /* RESPONSE HEADERS                                                           */
 /* -------------------------------------------------------------------------- */
@@ -399,6 +405,76 @@ async function getAccessToken(): Promise<string> {
   }
 
   return accessToken;
+}
+
+/* -------------------------------------------------------------------------- */
+/* MEMORY REFRESH                                                            */
+/* -------------------------------------------------------------------------- */
+
+function memoryRefreshWindow(messages: readonly ChatMessage[]): ChatMessage[] {
+  const selected: ChatMessage[] = [];
+  let characters = 0;
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const nextCharacters = characters + message.content.length;
+
+    if (selected.length >= MAX_MEMORY_REFRESH_MESSAGES) break;
+    if (selected.length > 0 && nextCharacters > MAX_MEMORY_REFRESH_CHARACTERS) break;
+
+    selected.push(message);
+    characters = nextCharacters;
+  }
+
+  return selected.reverse();
+}
+
+async function refreshConversationMemoryAfterSuccess({
+  accessToken,
+  conversationId,
+  messages,
+  assistantContent,
+}: {
+  accessToken: string;
+  conversationId?: string;
+  messages: readonly ChatMessage[];
+  assistantContent: string;
+}): Promise<void> {
+  const persistedConversationId = cleanConversationId(conversationId);
+  if (!persistedConversationId || !assistantContent.trim()) return;
+
+  const completedMessages = [
+    ...messages.filter((message) => message.role === "user" || message.role === "assistant"),
+    { role: "assistant" as const, content: assistantContent.trim() },
+  ];
+  const messageCount = completedMessages.length;
+
+  if (messageCount < MEMORY_REFRESH_INTERVAL || messageCount % MEMORY_REFRESH_INTERVAL !== 0) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/chat-memory", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        conversationId: persistedConversationId,
+        messages: memoryRefreshWindow(completedMessages),
+        messageCount,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn("Cossa AI memory refresh request failed.", response.status);
+    }
+  } catch (error) {
+    // Memory persistence must never break or replace a completed AI answer.
+    console.warn("Cossa AI memory refresh connection failed.", error);
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1107,6 +1183,13 @@ async function streamFromGateway({
       fallback: metadata.fallback,
 
       model: metadata.model ?? undefined,
+    });
+
+    void refreshConversationMemoryAfterSuccess({
+      accessToken,
+      conversationId,
+      messages,
+      assistantContent: content,
     });
 
     return {
