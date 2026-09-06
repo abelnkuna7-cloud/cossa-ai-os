@@ -5,7 +5,7 @@ import {
   buildServerMemoryGrounding,
   selectRelevantDurableMemory,
   type DurableMemoryItem,
-} from "../src/lib/cossa-ai-memory.server";
+} from "../src/lib/cossa-ai-memory.server.ts";
 
 function memory(
   overrides: Partial<DurableMemoryItem> & Pick<DurableMemoryItem, "title" | "body">,
