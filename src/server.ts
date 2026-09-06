@@ -17,6 +17,8 @@ import { deriveConversationIdentity } from "./lib/cossa-ai-conversation-identity
 import { resolveCossaMemoryActivation } from "./lib/cossa-ai-memory-activation.ts";
 import { loadServerMemoryGrounding } from "./lib/cossa-ai-memory.server.ts";
 import type { CossaConversationMessage } from "./lib/cossa-ai-memory.ts";
+import { createCossaProviderGatewayController } from "./lib/cossa-ai-provider-gateway-controller.ts";
+import type { CossaRuntimeProvider } from "./lib/cossa-ai-provider-runtime.ts";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
@@ -28,6 +30,7 @@ type ChatRequestPayload = {
   messages?: CossaConversationMessage[];
   system?: unknown;
   conversationId?: unknown;
+  provider?: unknown;
   [key: string]: unknown;
 };
 
@@ -103,6 +106,9 @@ function addChatExecutionHeaders(request: Request, response: Response): Response
     ["x-cossa-ai-evidence-standard", "X-Cossa-AI-Evidence-Standard"],
     ["x-cossa-ai-uncertainty-policy", "X-Cossa-AI-Uncertainty-Policy"],
     ["x-cossa-ai-conversation-continuity", "X-Cossa-AI-Conversation-Continuity"],
+    ["x-cossa-ai-provider-candidate-order", "X-Cossa-AI-Provider-Candidate-Order"],
+    ["x-cossa-ai-capacity-mode", "X-Cossa-AI-Capacity-Mode"],
+    ["x-cossa-ai-runtime-action", "X-Cossa-AI-Runtime-Action"],
   ] as const;
 
   const headers = new Headers(response.headers);
@@ -117,7 +123,7 @@ function addChatExecutionHeaders(request: Request, response: Response): Response
   for (const [requestHeader, responseHeader] of forwardedHeaders) {
     const value = request.headers.get(requestHeader);
     if (!value) continue;
-    headers.set(responseHeader, value);
+    if (!headers.has(responseHeader)) headers.set(responseHeader, value);
     exposed.add(responseHeader);
     annotated = true;
   }
@@ -171,6 +177,17 @@ function cleanConversationId(value: unknown): string | null {
   return cleaned.slice(0, 160);
 }
 
+function configuredCossaRuntimeProviders(): CossaRuntimeProvider[] {
+  const env = typeof process !== "undefined" ? process.env : {};
+  const providers: CossaRuntimeProvider[] = [];
+
+  if (env.OPENAI_API_KEY && env.OPENAI_MODEL) providers.push("openai");
+  if (env.GEMINI_API_KEY || env.GOOGLE_AI_API_KEY) providers.push("gemini");
+  if (env.GROQ_API_KEY) providers.push("groq");
+
+  return providers;
+}
+
 function mergeReasoningPlansIntoSystem(
   existingSystem: unknown,
   capabilityPlan: string,
@@ -210,11 +227,12 @@ function mergeMemoryIntoSystem(existingSystem: unknown, memoryGrounding: string)
  * - establish a stable conversation identity, preferring an explicit persisted ID;
  * - deterministically route each request to the relevant Cossa capabilities and reasoning depth;
  * - apply a deterministic answer-quality/evidence contract before provider reasoning;
+ * - prepare a capacity-aware provider candidate order without another AI call;
  * - optionally ground requests in RLS-protected durable/conversation memory;
  * - keep memory activation fail-closed until read mode is explicitly enabled.
  *
- * Capability and answer-quality planning are deterministic and do not spend a
- * second provider call.
+ * Capability, answer-quality and provider-capacity planning are deterministic and
+ * do not spend a second provider call.
  */
 async function prepareChatRequest(request: Request): Promise<Request | Response> {
   const url = new URL(request.url);
@@ -286,6 +304,35 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
   );
   if (shouldWindow) headers.set("x-cossa-ai-conversation-windowed", "true");
 
+  let provider = payload.provider;
+  const configuredProviders = configuredCossaRuntimeProviders();
+  if (configuredProviders.length > 0) {
+    const controller = createCossaProviderGatewayController({
+      configuredProviders,
+      headers,
+    });
+    const candidateOrder = controller.executionPlan.providers;
+    const selectedCandidate = candidateOrder[0];
+
+    if (candidateOrder.length > 0) {
+      headers.set("x-cossa-ai-provider-candidate-order", candidateOrder.join(">"));
+    }
+
+    if (selectedCandidate) {
+      const decision = controller.decisionFor(selectedCandidate);
+      headers.set("x-cossa-ai-capacity-mode", decision.policy.capacityMode);
+      headers.set("x-cossa-ai-runtime-action", decision.policy.action);
+
+      const currentPreference = typeof payload.provider === "string" ? payload.provider : "auto";
+      if (
+        currentPreference === "auto" &&
+        selectedCandidate !== configuredProviders[0]
+      ) {
+        provider = selectedCandidate;
+      }
+    }
+  }
+
   let system = mergeReasoningPlansIntoSystem(
     payload.system,
     formatCossaCapabilityPlan(capabilityPlan),
@@ -322,6 +369,7 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
       conversationId,
       system,
       messages: forwardedMessages,
+      ...(provider !== undefined ? { provider } : {}),
     }),
     signal: request.signal,
   });
