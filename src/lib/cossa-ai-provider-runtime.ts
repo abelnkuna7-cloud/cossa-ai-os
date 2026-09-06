@@ -112,7 +112,10 @@ export function providerRuntimeDecision({
   return {
     provider,
     policy,
-    consecutiveFailures: state.consecutiveFailures,
+    // Once a 429 cooldown has genuinely expired, do not keep penalising that
+    // provider in the ordering solely because of the historical rate-limit hit.
+    // A future failed response will immediately restore the failure penalty.
+    consecutiveFailures: staleRateLimit ? 0 : state.consecutiveFailures,
     cooldownRemainingMs: cooldown.remainingMs,
   };
 }
