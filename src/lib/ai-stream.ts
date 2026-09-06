@@ -130,6 +130,16 @@ export interface StreamChatOptions {
   system?: string;
 
   /**
+   * Persisted Cossa conversation identity.
+   *
+   * Pass the existing ai_conversations.id whenever the caller owns a saved
+   * conversation. The server still derives a compatibility identity when this
+   * is omitted, but explicit IDs keep text, voice and future Cossa surfaces on
+   * the same durable memory thread.
+   */
+  conversationId?: string;
+
+  /**
    * Provider routing request.
    *
    * Recommended default:
@@ -208,6 +218,8 @@ interface StreamGatewayInput {
   signal?: AbortSignal;
 
   system?: string;
+
+  conversationId?: string;
 
   provider: CossaAiProvider;
 
@@ -346,6 +358,11 @@ function requireMessages(messages: ChatMessage[]): ChatMessage[] {
       content,
     };
   });
+}
+
+function cleanConversationId(value: string | undefined): string | undefined {
+  const cleaned = value?.trim();
+  return cleaned ? cleaned.slice(0, 160) : undefined;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -944,6 +961,7 @@ async function streamFromGateway({
   onToken,
   signal,
   system,
+  conversationId,
   provider,
   timeoutMs,
   requireContent,
@@ -971,6 +989,8 @@ async function streamFromGateway({
       messages,
 
       system: system?.trim() || undefined,
+
+      conversationId: cleanConversationId(conversationId),
 
       provider,
     };
@@ -1303,6 +1323,8 @@ export async function streamChatWithMetadata(
     signal: options.signal,
 
     system: options.system,
+
+    conversationId: options.conversationId,
 
     provider,
 
