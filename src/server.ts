@@ -5,6 +5,10 @@ import {
   validateConversationMessages,
   type ChatWindowValidationResult,
 } from "./lib/cossa-ai-chat-window.ts";
+import {
+  formatCossaCapabilityPlan,
+  planCossaCapabilities,
+} from "./lib/cossa-ai-capability-router.ts";
 import { deriveConversationIdentity } from "./lib/cossa-ai-conversation-identity.ts";
 import { loadServerMemoryGrounding } from "./lib/cossa-ai-memory.server.ts";
 import type { CossaConversationMessage } from "./lib/cossa-ai-memory.ts";
@@ -24,6 +28,7 @@ type ChatRequestPayload = {
 
 const MAX_INGRESS_SYSTEM_CHARACTERS = 2_500;
 const MAX_EXISTING_SYSTEM_WITH_MEMORY = 1_250;
+const MAX_CAPABILITY_PLAN_CHARACTERS = 900;
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
@@ -76,29 +81,38 @@ function addSearchProtection(request: Request, response: Response): Response {
   });
 }
 
-function addMemoryExecutionHeaders(request: Request, response: Response): Response {
+function addChatExecutionHeaders(request: Request, response: Response): Response {
   if (new URL(request.url).pathname !== "/api/chat") return response;
 
-  const memoryGrounded = request.headers.get("x-cossa-ai-memory-grounded");
-  const conversationWindowed = request.headers.get("x-cossa-ai-conversation-windowed");
-  const conversationIdentity = request.headers.get("x-cossa-ai-conversation-identity");
-
-  if (!memoryGrounded && !conversationWindowed && !conversationIdentity) return response;
+  const forwardedHeaders = [
+    ["x-cossa-ai-memory-grounded", "X-Cossa-AI-Memory-Grounded"],
+    ["x-cossa-ai-conversation-windowed", "X-Cossa-AI-Conversation-Windowed"],
+    ["x-cossa-ai-conversation-identity", "X-Cossa-AI-Conversation-Identity"],
+    ["x-cossa-ai-capability-domains", "X-Cossa-AI-Capability-Domains"],
+    ["x-cossa-ai-reasoning-depth", "X-Cossa-AI-Reasoning-Depth"],
+    ["x-cossa-ai-intelligence-priority", "X-Cossa-AI-Intelligence-Priority"],
+    ["x-cossa-ai-external-research", "X-Cossa-AI-External-Research"],
+  ] as const;
 
   const headers = new Headers(response.headers);
-  if (memoryGrounded) headers.set("X-Cossa-AI-Memory-Grounded", memoryGrounded);
-  if (conversationWindowed) headers.set("X-Cossa-AI-Conversation-Windowed", conversationWindowed);
-  if (conversationIdentity) headers.set("X-Cossa-AI-Conversation-Identity", conversationIdentity);
-
   const exposed = new Set(
     (headers.get("Access-Control-Expose-Headers") ?? "")
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean),
   );
-  if (memoryGrounded) exposed.add("X-Cossa-AI-Memory-Grounded");
-  if (conversationWindowed) exposed.add("X-Cossa-AI-Conversation-Windowed");
-  if (conversationIdentity) exposed.add("X-Cossa-AI-Conversation-Identity");
+
+  let annotated = false;
+  for (const [requestHeader, responseHeader] of forwardedHeaders) {
+    const value = request.headers.get(requestHeader);
+    if (!value) continue;
+    headers.set(responseHeader, value);
+    exposed.add(responseHeader);
+    annotated = true;
+  }
+
+  if (!annotated) return response;
+
   headers.set("Access-Control-Expose-Headers", [...exposed].join(", "));
 
   return new Response(response.body, {
@@ -150,6 +164,18 @@ function cleanConversationId(value: unknown): string | null {
   return cleaned.slice(0, 160);
 }
 
+function mergeCapabilityIntoSystem(existingSystem: unknown, capabilityPlan: string): string {
+  const existing = typeof existingSystem === "string" ? existingSystem.trim() : "";
+  const boundedPlan = capabilityPlan.slice(0, MAX_CAPABILITY_PLAN_CHARACTERS);
+  const availableForExisting = Math.max(
+    0,
+    MAX_INGRESS_SYSTEM_CHARACTERS - boundedPlan.length - (boundedPlan ? 2 : 0),
+  );
+  const boundedExisting = existing.slice(0, availableForExisting);
+
+  return [boundedPlan, boundedExisting].filter(Boolean).join("\n\n");
+}
+
 function mergeMemoryIntoSystem(existingSystem: unknown, memoryGrounding: string): string {
   const existing = typeof existingSystem === "string" ? existingSystem.trim() : "";
   const boundedExisting = existing.slice(0, MAX_EXISTING_SYSTEM_WITH_MEMORY);
@@ -169,12 +195,13 @@ function mergeMemoryIntoSystem(existingSystem: unknown, memoryGrounding: string)
  * - preserve the existing /api/chat gateway and its provider safeguards;
  * - prevent legacy per-request limits from ending a conversation;
  * - establish a stable conversation identity, preferring an explicit persisted ID;
+ * - deterministically route each request to the relevant Cossa capabilities and reasoning depth;
  * - optionally ground requests in RLS-protected durable/conversation memory;
- * - fail open while the additive memory migration is not yet enabled.
+ * - fail open while the additive memory feature is not yet enabled.
  *
  * Memory is activated only when COSSA_AI_MEMORY_ENABLED=true in the protected
- * server environment. This lets the schema and retrieval path be verified
- * before any production database or deployment action.
+ * server environment. Capability routing is deterministic and does not spend a
+ * second provider call.
  */
 async function prepareChatRequest(request: Request): Promise<Request | Response> {
   const url = new URL(request.url);
@@ -217,6 +244,9 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
   const forwardedMessages = shouldWindow
     ? buildLegacyGatewayWindow(payload.messages)
     : payload.messages;
+  const latestUserMessage =
+    [...payload.messages].reverse().find((message) => message.role === "user")?.content ?? "";
+  const capabilityPlan = planCossaCapabilities(latestUserMessage);
 
   const headers = new Headers(request.headers);
   headers.set("content-type", "application/json");
@@ -224,14 +254,21 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     "x-cossa-ai-conversation-identity",
     explicitConversationId ? "explicit" : "derived",
   );
+  headers.set("x-cossa-ai-capability-domains", capabilityPlan.domains.join(","));
+  headers.set("x-cossa-ai-reasoning-depth", capabilityPlan.reasoningDepth);
+  headers.set("x-cossa-ai-intelligence-priority", capabilityPlan.priority);
+  headers.set(
+    "x-cossa-ai-external-research",
+    capabilityPlan.needsExternalResearch ? "required" : "not-required",
+  );
   if (shouldWindow) headers.set("x-cossa-ai-conversation-windowed", "true");
 
-  let system = payload.system;
+  let system = mergeCapabilityIntoSystem(
+    payload.system,
+    formatCossaCapabilityPlan(capabilityPlan),
+  );
 
   if (memoryFeatureEnabled()) {
-    const latestUserMessage =
-      [...payload.messages].reverse().find((message) => message.role === "user")?.content ?? "";
-
     const memory = await loadServerMemoryGrounding({
       latestUserMessage,
       bearerToken: getBearerToken(request),
@@ -239,7 +276,7 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     });
 
     if (memory.text) {
-      system = mergeMemoryIntoSystem(payload.system, memory.text);
+      system = mergeMemoryIntoSystem(system, memory.text);
       headers.set("x-cossa-ai-memory-grounded", "true");
       headers.set("x-cossa-ai-memory-items", String(memory.durableItems));
       headers.set(
@@ -257,7 +294,7 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     body: JSON.stringify({
       ...payload,
       conversationId,
-      ...(system !== undefined ? { system } : {}),
+      system,
       messages: forwardedMessages,
     }),
     signal: request.signal,
@@ -273,8 +310,8 @@ export default {
       const handler = await getServerEntry();
       const rawResponse = await handler.fetch(prepared, env, ctx);
       const normalizedResponse = await normalizeCatastrophicSsrResponse(rawResponse);
-      const memoryAnnotatedResponse = addMemoryExecutionHeaders(prepared, normalizedResponse);
-      return addSearchProtection(prepared, memoryAnnotatedResponse);
+      const annotatedResponse = addChatExecutionHeaders(prepared, normalizedResponse);
+      return addSearchProtection(prepared, annotatedResponse);
     } catch (error) {
       console.error(error);
       return new Response(renderErrorPage(), {

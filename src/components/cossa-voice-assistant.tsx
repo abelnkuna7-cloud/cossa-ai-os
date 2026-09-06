@@ -28,8 +28,20 @@ import {
 } from "@/lib/ai-data";
 import { streamChatWithMetadata } from "@/lib/ai-stream";
 import { queueLeadHunterRuntimeProof } from "@/lib/agent-runtime";
+import {
+  COSSA_VOICE_RESTART_DELAY_MS,
+  isBenignRecognitionError,
+  shouldRestartHandsFreeConversation,
+  splitSpeechText,
+} from "@/lib/cossa-ai-voice-continuity";
 
-type AssistantState = "READY" | "LISTENING" | "TRANSCRIBING" | "THINKING" | "SPEAKING" | "ERROR";
+type AssistantState =
+  | "READY"
+  | "LISTENING"
+  | "TRANSCRIBING"
+  | "THINKING"
+  | "SPEAKING"
+  | "ERROR";
 type VoiceProviderState = "available" | "unavailable" | "permission_required" | "error";
 
 type RecognitionResult = { isFinal?: boolean; 0?: { transcript?: string } };
@@ -49,7 +61,8 @@ type RecognitionConstructor = new () => Recognition;
 
 const ACTIVE_CONVERSATION_KEY = "cossa-ai-active-conversation";
 const ASSISTANT_OPEN_KEY = "cossa-voice-assistant-open";
-const VOICE_SETTINGS_KEY = "cossa-voice-settings";
+const VOICE_SETTINGS_KEY = "cossa-voice-settings-v2";
+const LEGACY_VOICE_SETTINGS_KEY = "cossa-voice-settings";
 
 interface VoiceSettings {
   muted: boolean;
@@ -62,7 +75,7 @@ interface VoiceSettings {
 const DEFAULT_SETTINGS: VoiceSettings = {
   muted: false,
   automaticSpeech: true,
-  conversationMode: false,
+  conversationMode: true,
   rate: 1,
   language: "en-ZA",
 };
@@ -79,15 +92,17 @@ function recognitionConstructor(): RecognitionConstructor | null {
 function readSettings(): VoiceSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
   try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(VOICE_SETTINGS_KEY) ?? "{}",
-    ) as Partial<VoiceSettings>;
+    const currentRaw = window.localStorage.getItem(VOICE_SETTINGS_KEY);
+    const legacyRaw = window.localStorage.getItem(LEGACY_VOICE_SETTINGS_KEY);
+    const parsed = JSON.parse(currentRaw ?? legacyRaw ?? "{}") as Partial<VoiceSettings>;
     return {
       muted: parsed.muted === true,
       automaticSpeech: parsed.automaticSpeech !== false,
-      conversationMode: parsed.conversationMode === true,
-      rate: typeof parsed.rate === "number" ? Math.min(1.5, Math.max(0.75, parsed.rate)) : 1,
-      language: typeof parsed.language === "string" && parsed.language ? parsed.language : "en-ZA",
+      conversationMode: currentRaw ? parsed.conversationMode !== false : true,
+      rate:
+        typeof parsed.rate === "number" ? Math.min(1.5, Math.max(0.75, parsed.rate)) : 1,
+      language:
+        typeof parsed.language === "string" && parsed.language ? parsed.language : "en-ZA",
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -164,7 +179,11 @@ function parseLeadHunterMission(message: string) {
       : tech
         ? "cossa_tech"
         : "cossa_facility_services",
-    targetService: construction ? "construction" : tech ? "website_design" : "facility_management",
+    targetService: construction
+      ? "construction"
+      : tech
+        ? "website_design"
+        : "facility_management",
     targetLocation: location,
     resultCount,
   };
@@ -172,7 +191,7 @@ function parseLeadHunterMission(message: string) {
 
 export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   const router = useRouter();
-  const location = useRouterState({ select: (state) => state.location });
+  const location = useRouterState({ select: (routerState) => routerState.location });
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(page);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -184,14 +203,22 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_SETTINGS);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [inputProvider, setInputProvider] = useState<VoiceProviderState>("permission_required");
-  const [outputProvider, setOutputProvider] = useState<VoiceProviderState>("permission_required");
+  const [inputProvider, setInputProvider] =
+    useState<VoiceProviderState>("permission_required");
+  const [outputProvider, setOutputProvider] =
+    useState<VoiceProviderState>("permission_required");
+
   const recognitionRef = useRef<Recognition | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const responseRef = useRef("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pendingConversationTranscriptRef = useRef<string | null>(null);
   const conversationPausedRef = useRef(false);
+  const restartTimerRef = useRef<number | null>(null);
+  const speechGenerationRef = useRef(0);
+  const stateRef = useRef<AssistantState>("READY");
+  const settingsRef = useRef<VoiceSettings>(DEFAULT_SETTINGS);
+  const transientRecognitionErrorRef = useRef<string | null>(null);
 
   const conversations = useQuery({
     queryKey: ["ai-conversations"],
@@ -199,7 +226,8 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   });
   const messages = useQuery({
     queryKey: ["ai-messages", activeId],
-    queryFn: () => (activeId ? listMessages(activeId) : Promise.resolve([] as AiMessage[])),
+    queryFn: () =>
+      activeId ? listMessages(activeId) : Promise.resolve([] as AiMessage[]),
     enabled: Boolean(activeId),
   });
 
@@ -209,13 +237,37 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
     return typeof search.record === "string" ? search.record : null;
   }, [location.search]);
 
+  function updateAssistantState(next: AssistantState) {
+    stateRef.current = next;
+    setState(next);
+  }
+
+  function clearRestartTimer() {
+    if (restartTimerRef.current !== null && typeof window !== "undefined") {
+      window.clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+  }
+
   useEffect(() => {
     const restored = readSettings();
+    settingsRef.current = restored;
     setSettings(restored);
     conversationPausedRef.current = !restored.conversationMode;
     setActiveId(window.localStorage.getItem(ACTIVE_CONVERSATION_KEY));
     if (!page) setOpen(window.localStorage.getItem(ASSISTANT_OPEN_KEY) === "true");
   }, [page]);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(VOICE_SETTINGS_KEY, JSON.stringify(settings));
+    }
+  }, [settings]);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     if (!activeId && conversations.data?.[0]) setActiveId(conversations.data[0].id);
@@ -224,18 +276,15 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   useEffect(() => {
     if (!activeId || typeof window === "undefined") return;
     window.localStorage.setItem(ACTIVE_CONVERSATION_KEY, activeId);
-    window.dispatchEvent(new CustomEvent("cossa-ai-conversation-change", { detail: activeId }));
+    window.dispatchEvent(
+      new CustomEvent("cossa-ai-conversation-change", { detail: activeId }),
+    );
   }, [activeId]);
 
   useEffect(() => {
     if (page || typeof window === "undefined") return;
     window.localStorage.setItem(ASSISTANT_OPEN_KEY, String(open));
   }, [open, page]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(VOICE_SETTINGS_KEY, JSON.stringify(settings));
-  }, [settings]);
 
   useEffect(() => {
     const Recognition = recognitionConstructor();
@@ -255,17 +304,23 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   }, []);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
   }, [messages.data, streaming]);
 
   useEffect(
     () => () => {
       conversationPausedRef.current = true;
       pendingConversationTranscriptRef.current = null;
+      clearRestartTimer();
       recognitionRef.current?.abort?.();
       abortRef.current?.abort();
-      if (typeof window !== "undefined" && "speechSynthesis" in window)
+      speechGenerationRef.current += 1;
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
+      }
     },
     [],
   );
@@ -279,118 +334,217 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   }
 
   function stopSpeech() {
-    if (typeof window !== "undefined" && "speechSynthesis" in window)
+    speechGenerationRef.current += 1;
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
-    setState("READY");
+    }
+    if (stateRef.current === "SPEAKING") updateAssistantState("READY");
   }
 
-  function startListening() {
-    if (state === "SPEAKING") stopSpeech();
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      return;
-    }
+  function scheduleListeningRestart(delay = COSSA_VOICE_RESTART_DELAY_MS) {
+    if (typeof window === "undefined") return;
+    clearRestartTimer();
+    restartTimerRef.current = window.setTimeout(() => {
+      restartTimerRef.current = null;
+      const currentState = stateRef.current;
+      const currentSettings = settingsRef.current;
+      const shouldRestart = shouldRestartHandsFreeConversation({
+        conversationMode: currentSettings.conversationMode,
+        paused: conversationPausedRef.current,
+        thinking: currentState === "THINKING",
+        speaking: currentState === "SPEAKING",
+      });
+      if (shouldRestart && !recognitionRef.current) startListening(false);
+    }, delay);
+  }
+
+  function startListening(manual = true) {
+    clearRestartTimer();
+    if (stateRef.current === "THINKING") return;
+    if (stateRef.current === "SPEAKING") stopSpeech();
+    if (recognitionRef.current) return;
+
     const Recognition = recognitionConstructor();
     if (!Recognition) {
       setInputProvider("unavailable");
       setError("Speech recognition is unavailable. Type your message instead.");
       return;
     }
+
+    if (manual && settingsRef.current.conversationMode) {
+      conversationPausedRef.current = false;
+    }
+
     const recognition = new Recognition();
     const startingInput = input.trim();
     pendingConversationTranscriptRef.current = null;
-    recognition.lang = settings.language;
+    transientRecognitionErrorRef.current = null;
+    recognition.lang = settingsRef.current.language;
     recognition.continuous = false;
     recognition.interimResults = true;
+
     recognition.onresult = (event) => {
-      setState("TRANSCRIBING");
+      updateAssistantState("TRANSCRIBING");
       const results = Array.from(event.results);
       const transcript = results
         .map((result) => result[0]?.transcript?.trim() ?? "")
         .filter(Boolean)
         .join(" ");
-      const nextInput = [startingInput, transcript].filter(Boolean).join(" ");
+      const nextInput = [startingInput, transcript].filter(Boolean).join(" ").trim();
       setInterimTranscript(transcript);
       setInput(nextInput);
-      if (
-        settings.conversationMode &&
-        results.some((result) => result.isFinal) &&
-        nextInput.trim()
-      ) {
-        pendingConversationTranscriptRef.current = nextInput.trim();
+
+      if (results.some((result) => result.isFinal) && nextInput) {
+        pendingConversationTranscriptRef.current = nextInput;
+        recognition.stop();
       }
     };
+
     recognition.onerror = (event) => {
-      pendingConversationTranscriptRef.current = null;
-      const denied = event.error === "not-allowed" || event.error === "service-not-allowed";
-      setInputProvider(denied ? "error" : "available");
-      setError(
-        denied
-          ? "Microphone permission was denied. Text chat remains available."
-          : `Voice input stopped${event.error ? `: ${event.error}` : "."}`,
-      );
-      setState("ERROR");
+      const recognitionError = event.error ?? "unknown";
+      transientRecognitionErrorRef.current = recognitionError;
+      const denied =
+        recognitionError === "not-allowed" || recognitionError === "service-not-allowed";
+      const benign = isBenignRecognitionError(recognitionError);
+
+      if (denied) {
+        conversationPausedRef.current = true;
+        pendingConversationTranscriptRef.current = null;
+        setInputProvider("error");
+        setError("Microphone permission was denied. Text chat remains available.");
+        updateAssistantState("ERROR");
+        return;
+      }
+
+      setInputProvider("available");
+      if (benign) {
+        setError(null);
+        updateAssistantState("READY");
+        return;
+      }
+
+      setError(`Voice input was interrupted: ${recognitionError}. Cossa will retry.`);
+      updateAssistantState("READY");
     };
+
     recognition.onend = () => {
       recognitionRef.current = null;
       setInterimTranscript("");
       const pending = pendingConversationTranscriptRef.current;
       pendingConversationTranscriptRef.current = null;
-      setState((current) => (current === "ERROR" ? current : "READY"));
-      if (settings.conversationMode && !conversationPausedRef.current && pending) {
+      const recognitionError = transientRecognitionErrorRef.current;
+      transientRecognitionErrorRef.current = null;
+
+      if (stateRef.current !== "ERROR") updateAssistantState("READY");
+
+      if (pending) {
         window.setTimeout(() => void send(pending), 0);
+        return;
+      }
+
+      if (
+        settingsRef.current.conversationMode &&
+        !conversationPausedRef.current &&
+        stateRef.current !== "ERROR"
+      ) {
+        scheduleListeningRestart(isBenignRecognitionError(recognitionError) ? 500 : 900);
       }
     };
+
     try {
       recognitionRef.current = recognition;
       setError(null);
       setInputProvider("available");
-      setState("LISTENING");
+      updateAssistantState("LISTENING");
       recognition.start();
     } catch {
       recognitionRef.current = null;
       pendingConversationTranscriptRef.current = null;
-      setState("ERROR");
-      setError("Microphone could not start. Type your message instead.");
+      setError("Microphone could not start. Cossa will retry if hands-free mode is active.");
+      updateAssistantState("READY");
+      if (settingsRef.current.conversationMode && !conversationPausedRef.current) {
+        scheduleListeningRestart(900);
+      }
     }
   }
 
   function speak(text: string) {
-    if (settings.muted || !settings.automaticSpeech || !("speechSynthesis" in window)) {
-      setState("READY");
+    const currentSettings = settingsRef.current;
+    if (
+      currentSettings.muted ||
+      !currentSettings.automaticSpeech ||
+      typeof window === "undefined" ||
+      !("speechSynthesis" in window)
+    ) {
+      updateAssistantState("READY");
+      if (currentSettings.conversationMode && !conversationPausedRef.current) {
+        scheduleListeningRestart();
+      }
       return;
     }
+
     const availableVoices = voices.length ? voices : window.speechSynthesis.getVoices();
     const selected =
       availableVoices.find(
-        (voice) => voice.lang.toLowerCase() === settings.language.toLowerCase(),
+        (voice) => voice.lang.toLowerCase() === currentSettings.language.toLowerCase(),
       ) ??
       availableVoices.find((voice) => voice.lang.toLowerCase().startsWith("en-za")) ??
       availableVoices.find((voice) => voice.lang.toLowerCase().startsWith("en"));
+
     if (!selected) {
       setOutputProvider("unavailable");
-      setState("READY");
+      updateAssistantState("READY");
+      if (currentSettings.conversationMode && !conversationPausedRef.current) {
+        scheduleListeningRestart();
+      }
       return;
     }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text.replace(/[*_#`>-]/g, " "));
-    utterance.voice = selected;
-    utterance.lang = selected.lang || settings.language;
-    utterance.rate = settings.rate;
-    utterance.onstart = () => setState("SPEAKING");
-    utterance.onend = () => {
-      setState("READY");
-      if (settings.conversationMode && !conversationPausedRef.current) {
-        window.setTimeout(() => startListening(), 250);
+
+    const chunks = splitSpeechText(text);
+    if (chunks.length === 0) {
+      updateAssistantState("READY");
+      if (currentSettings.conversationMode && !conversationPausedRef.current) {
+        scheduleListeningRestart();
       }
-    };
-    utterance.onerror = () => {
-      conversationPausedRef.current = true;
-      setOutputProvider("error");
-      setState("READY");
-      toast.error("Voice output failed", { description: "The written answer remains available." });
-    };
-    window.speechSynthesis.speak(utterance);
+      return;
+    }
+
+    stopSpeech();
+    const generation = speechGenerationRef.current;
+    updateAssistantState("SPEAKING");
+    setOutputProvider("available");
+
+    function speakChunk(index: number) {
+      if (generation !== speechGenerationRef.current) return;
+      if (index >= chunks.length) {
+        updateAssistantState("READY");
+        if (settingsRef.current.conversationMode && !conversationPausedRef.current) {
+          scheduleListeningRestart();
+        }
+        return;
+      }
+
+      const utterance = new SpeechSynthesisUtterance(chunks[index]);
+      utterance.voice = selected ?? null;
+      utterance.lang = selected?.lang || settingsRef.current.language;
+      utterance.rate = settingsRef.current.rate;
+      utterance.onstart = () => updateAssistantState("SPEAKING");
+      utterance.onend = () => speakChunk(index + 1);
+      utterance.onerror = () => {
+        if (generation !== speechGenerationRef.current) return;
+        setOutputProvider("error");
+        updateAssistantState("READY");
+        toast.error("Voice output was interrupted", {
+          description: "The written answer is preserved and hands-free listening can continue.",
+        });
+        if (settingsRef.current.conversationMode && !conversationPausedRef.current) {
+          scheduleListeningRestart(600);
+        }
+      };
+      window.speechSynthesis.speak(utterance);
+    }
+
+    speakChunk(0);
   }
 
   async function saveAssistantMessage(conversationId: string, content: string) {
@@ -401,13 +555,20 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
 
   async function send(text?: string) {
     const content = (text ?? input).trim();
-    if (!content || state === "THINKING") return;
-    conversationPausedRef.current = !settings.conversationMode;
-    recognitionRef.current?.stop();
+    if (!content || stateRef.current === "THINKING") return;
+
+    clearRestartTimer();
+    updateAssistantState("THINKING");
+    pendingConversationTranscriptRef.current = null;
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
     stopSpeech();
+    updateAssistantState("THINKING");
     setInput("");
     setError(null);
-    setState("THINKING");
+
     try {
       const conversationId = await ensureConversation(content);
       await insertMessage(conversationId, "user", content);
@@ -418,7 +579,7 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
         await router.navigate({ to: target });
         const answer = `Opened ${workspaceLabel(target)} inside GROWTH.`;
         await saveAssistantMessage(conversationId, answer);
-        setState("READY");
+        updateAssistantState("READY");
         speak(answer);
         return;
       }
@@ -428,7 +589,7 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
         const result = await queueLeadHunterRuntimeProof(mission);
         const answer = `I created Lead Hunter mission ${result.missionId}. ${result.queuedTasks} controlled stages are queued. No outreach was sent.`;
         await saveAssistantMessage(conversationId, answer);
-        setState("READY");
+        updateAssistantState("READY");
         speak(answer);
         return;
       }
@@ -437,9 +598,11 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
         role: message.role,
         content: message.content,
       }));
+
       responseRef.current = "";
       setStreaming("");
       abortRef.current = new AbortController();
+
       const result = await streamChatWithMetadata(
         prior,
         (chunk) => {
@@ -451,28 +614,38 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
           provider: "auto",
           conversationId,
           system: [
-            "You are the same authorised Cossa AI used by the main text workspace, presented through the voice interface.",
+            "You are the same authorised Cossa AI brain used by the main text workspace, presented through the voice interface.",
+            "Reason with the same evidence discipline, capability routing, memory plan and depth as text Cossa AI. Voice is only the input/output channel; do not reduce reasoning quality because the user is speaking.",
             `Current GROWTH workspace: ${currentWorkspace}. Current route: ${location.pathname}.`,
             recordContext
               ? `The UI has an affected record reference: ${recordContext}. Use only server-authorised records available to the logged-in user.`
               : "No specific record is selected in the current route.",
+            "Maintain conversational continuity across turns. Resolve short follow-ups from the saved conversation rather than treating every spoken turn as a new topic.",
             "Never claim an email, WhatsApp, social post, payment, tender, deployment, contract, deletion or other external action completed unless a verified execution record in authorised context proves it.",
-            "For voice delivery, lead with a concise direct answer. Keep evidence and approval boundaries intact.",
+            "For spoken delivery, lead with the direct answer, then explain naturally. Do not omit important reasoning, evidence, risks or next actions merely to keep the answer short.",
           ].join("\n"),
         },
       );
+
       await saveAssistantMessage(conversationId, result.content);
       setStreaming(null);
-      setState("READY");
+      updateAssistantState("READY");
       speak(result.content);
     } catch (caught) {
-      conversationPausedRef.current = true;
       setStreaming(null);
       const message =
         caught instanceof Error ? caught.message : "Cossa AI could not complete the request.";
       setError(message);
-      setState("ERROR");
+      updateAssistantState("ERROR");
       toast.error("Cossa AI request failed", { description: message });
+      if (settingsRef.current.conversationMode && !conversationPausedRef.current) {
+        window.setTimeout(() => {
+          if (stateRef.current === "ERROR") {
+            updateAssistantState("READY");
+            scheduleListeningRestart(900);
+          }
+        }, 1200);
+      }
     } finally {
       abortRef.current = null;
     }
@@ -481,18 +654,36 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
   function stopAll() {
     conversationPausedRef.current = true;
     pendingConversationTranscriptRef.current = null;
+    clearRestartTimer();
     recognitionRef.current?.abort?.();
     recognitionRef.current = null;
     abortRef.current?.abort();
     stopSpeech();
-    setState("READY");
+    updateAssistantState("READY");
   }
 
   function setConversationMode(enabled: boolean) {
     conversationPausedRef.current = !enabled;
     pendingConversationTranscriptRef.current = null;
     setSettings((current) => ({ ...current, conversationMode: enabled }));
-    if (!enabled && state === "LISTENING") recognitionRef.current?.stop();
+    if (!enabled) {
+      clearRestartTimer();
+      recognitionRef.current?.stop();
+      return;
+    }
+    if (stateRef.current === "READY" && !recognitionRef.current) {
+      scheduleListeningRestart(150);
+    }
+  }
+
+  function toggleListening() {
+    if (recognitionRef.current) {
+      conversationPausedRef.current = true;
+      recognitionRef.current.stop();
+      return;
+    }
+    if (settingsRef.current.conversationMode) conversationPausedRef.current = false;
+    startListening(true);
   }
 
   if (!page && !open) {
@@ -535,7 +726,7 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
             {settings.conversationMode ? (
               <>
                 <span>•</span>
-                <span>conversation</span>
+                <span>hands-free</span>
               </>
             ) : null}
           </div>
@@ -571,12 +762,15 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
               type="checkbox"
               checked={settings.automaticSpeech}
               onChange={(event) =>
-                setSettings((current) => ({ ...current, automaticSpeech: event.target.checked }))
+                setSettings((current) => ({
+                  ...current,
+                  automaticSpeech: event.target.checked,
+                }))
               }
             />
           </label>
           <label className="flex items-center justify-between gap-2">
-            Conversation mode{" "}
+            Hands-free conversation{" "}
             <input
               type="checkbox"
               checked={settings.conversationMode}
@@ -593,7 +787,10 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
               step="0.05"
               value={settings.rate}
               onChange={(event) =>
-                setSettings((current) => ({ ...current, rate: Number(event.target.value) }))
+                setSettings((current) => ({
+                  ...current,
+                  rate: Number(event.target.value),
+                }))
               }
             />
           </label>
@@ -624,13 +821,16 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
         ))}
         {streaming !== null ? (
           <div className="max-w-[88%] rounded-2xl border border-border/60 bg-card/50 px-3 py-2 text-sm">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{streaming || "Thinking…"}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {streaming || "Thinking…"}
+            </ReactMarkdown>
           </div>
         ) : null}
         {!messages.data?.length && streaming === null ? (
           <div className="rounded-2xl border border-dashed border-primary/30 p-5 text-center text-sm text-muted-foreground">
-            Speak or type to Cossa AI. Voice and text use one saved conversation and the same
-            authorised reasoning gateway.
+            Speak naturally to Cossa AI. Voice and text use one saved conversation, the same
+            authorised reasoning gateway and the same Cossa intelligence plan. In hands-free mode,
+            Cossa listens again after answering.
           </div>
         ) : null}
       </div>
@@ -671,8 +871,8 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
             type="button"
             size="icon"
             variant={state === "LISTENING" ? "default" : "outline"}
-            onClick={startListening}
-            aria-label={state === "LISTENING" ? "Stop listening" : "Start listening"}
+            onClick={toggleListening}
+            aria-label={state === "LISTENING" ? "Pause listening" : "Start listening"}
           >
             {inputProvider === "unavailable" ? (
               <MicOff className="h-4 w-4" />
@@ -695,23 +895,30 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
         </form>
         <div className="mt-2 flex items-center justify-between gap-2">
           <p className="text-[10px] text-muted-foreground">
-            Voice conversation inside GROWTH—not telephone calling. External actions remain
+            Hands-free voice conversation inside GROWTH—not telephone calling. Long answers are
+            spoken in reliable chunks and listening resumes automatically. External actions remain
             approval-controlled.
           </p>
           <div className="flex shrink-0 gap-1">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setSettings((current) => ({ ...current, muted: !current.muted }))}
+              onClick={() =>
+                setSettings((current) => ({ ...current, muted: !current.muted }))
+              }
               aria-label={settings.muted ? "Unmute" : "Mute"}
             >
-              {settings.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              {settings.muted ? (
+                <VolumeX className="h-4 w-4" />
+              ) : (
+                <Volume2 className="h-4 w-4" />
+              )}
             </Button>
             {state === "SPEAKING" ||
             state === "THINKING" ||
             state === "LISTENING" ||
             settings.conversationMode ? (
-              <Button variant="ghost" size="icon" onClick={stopAll} aria-label="Stop">
+              <Button variant="ghost" size="icon" onClick={stopAll} aria-label="Stop conversation">
                 <CircleStop className="h-4 w-4" />
               </Button>
             ) : null}
