@@ -4,9 +4,9 @@ import {
   buildLegacyGatewayWindow,
   validateConversationMessages,
   type ChatWindowValidationResult,
-} from "./lib/cossa-ai-chat-window";
-import { loadServerMemoryGrounding } from "./lib/cossa-ai-memory.server";
-import type { CossaConversationMessage } from "./lib/cossa-ai-memory";
+} from "./lib/cossa-ai-chat-window.ts";
+import { loadServerMemoryGrounding } from "./lib/cossa-ai-memory.server.ts";
+import type { CossaConversationMessage } from "./lib/cossa-ai-memory.ts";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
@@ -80,12 +80,14 @@ function addMemoryExecutionHeaders(request: Request, response: Response): Respon
 
   const memoryGrounded = request.headers.get("x-cossa-ai-memory-grounded");
   const conversationWindowed = request.headers.get("x-cossa-ai-conversation-windowed");
+  const conversationIdentity = request.headers.get("x-cossa-ai-conversation-identity");
 
-  if (!memoryGrounded && !conversationWindowed) return response;
+  if (!memoryGrounded && !conversationWindowed && !conversationIdentity) return response;
 
   const headers = new Headers(response.headers);
   if (memoryGrounded) headers.set("X-Cossa-AI-Memory-Grounded", memoryGrounded);
   if (conversationWindowed) headers.set("X-Cossa-AI-Conversation-Windowed", conversationWindowed);
+  if (conversationIdentity) headers.set("X-Cossa-AI-Conversation-Identity", conversationIdentity);
 
   const exposed = new Set(
     (headers.get("Access-Control-Expose-Headers") ?? "")
@@ -95,6 +97,7 @@ function addMemoryExecutionHeaders(request: Request, response: Response): Respon
   );
   if (memoryGrounded) exposed.add("X-Cossa-AI-Memory-Grounded");
   if (conversationWindowed) exposed.add("X-Cossa-AI-Conversation-Windowed");
+  if (conversationIdentity) exposed.add("X-Cossa-AI-Conversation-Identity");
   headers.set("Access-Control-Expose-Headers", [...exposed].join(", "));
 
   return new Response(response.body, {
@@ -146,6 +149,31 @@ function cleanConversationId(value: unknown): string | null {
   return cleaned.slice(0, 160);
 }
 
+/**
+ * Stable compatibility identity for callers that have not yet been upgraded to
+ * send their persisted ai_conversations.id explicitly.
+ *
+ * This intentionally uses only the first few conversation messages so the key
+ * remains stable as later turns are appended or the provider window is trimmed.
+ * Explicit caller-provided conversation IDs always take precedence.
+ */
+export function deriveConversationIdentity(messages: readonly CossaConversationMessage[]): string {
+  const seed = messages
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .slice(0, 3)
+    .map((message) => `${message.role}:${message.content.trim()}`)
+    .join("\n")
+    .slice(0, 12_000);
+
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return `derived-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
 function mergeMemoryIntoSystem(existingSystem: unknown, memoryGrounding: string): string {
   const existing = typeof existingSystem === "string" ? existingSystem.trim() : "";
   const boundedExisting = existing.slice(0, MAX_EXISTING_SYSTEM_WITH_MEMORY);
@@ -164,6 +192,7 @@ function mergeMemoryIntoSystem(existingSystem: unknown, memoryGrounding: string)
  * Responsibilities:
  * - preserve the existing /api/chat gateway and its provider safeguards;
  * - prevent legacy per-request limits from ending a conversation;
+ * - establish a stable conversation identity, preferring an explicit persisted ID;
  * - optionally ground requests in RLS-protected durable/conversation memory;
  * - fail open while the additive memory migration is not yet enabled.
  *
@@ -206,6 +235,8 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     return request;
   }
 
+  const explicitConversationId = cleanConversationId(payload.conversationId);
+  const conversationId = explicitConversationId ?? deriveConversationIdentity(payload.messages);
   const shouldWindow = shouldNormalizeLongChat(payload.messages);
   const forwardedMessages = shouldWindow
     ? buildLegacyGatewayWindow(payload.messages)
@@ -213,6 +244,10 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
 
   const headers = new Headers(request.headers);
   headers.set("content-type", "application/json");
+  headers.set(
+    "x-cossa-ai-conversation-identity",
+    explicitConversationId ? "explicit" : "derived",
+  );
   if (shouldWindow) headers.set("x-cossa-ai-conversation-windowed", "true");
 
   let system = payload.system;
@@ -224,7 +259,7 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     const memory = await loadServerMemoryGrounding({
       latestUserMessage,
       bearerToken: getBearerToken(request),
-      conversationId: cleanConversationId(payload.conversationId),
+      conversationId,
     });
 
     if (memory.text) {
@@ -240,15 +275,12 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     }
   }
 
-  if (!shouldWindow && system === payload.system && !memoryFeatureEnabled()) {
-    return request;
-  }
-
   return new Request(request.url, {
     method: request.method,
     headers,
     body: JSON.stringify({
       ...payload,
+      conversationId,
       ...(system !== undefined ? { system } : {}),
       messages: forwardedMessages,
     }),
