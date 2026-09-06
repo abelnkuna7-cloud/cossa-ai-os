@@ -64,6 +64,7 @@ test("provider in protect mode moves behind a healthy configured provider", () =
   assert.equal(decision.policy.capacityMode, "protect");
   assert.equal(decision.policy.action, "defer");
   assert.equal(decision.policy.retryAfterMs, 7000);
+  assert.ok(decision.cooldownRemainingMs > 0);
 });
 
 test("critical work is conserved rather than deferred under provider pressure", () => {
@@ -85,4 +86,36 @@ test("critical work is conserved rather than deferred under provider pressure", 
   assert.equal(decision.policy.action, "conserve");
   assert.ok(decision.policy.maxInputCharacters > 0);
   assert.ok(decision.policy.maxCompletionTokens > 0);
+});
+
+test("expired 429 cooldown does not leave a warm runtime permanently protected", () => {
+  resetProviderRuntimeForTests();
+  observeProviderResponse(
+    "groq",
+    response(429, {
+      "retry-after": "2",
+      "x-ratelimit-limit-tokens": "8000",
+      "x-ratelimit-remaining-tokens": "0",
+    }),
+    "2026-09-06T16:00:00.000Z",
+  );
+
+  const duringCooldown = providerRuntimeDecision({
+    provider: "groq",
+    priority: "normal",
+    reasoningDepth: "standard",
+    nowMs: Date.parse("2026-09-06T16:00:01.000Z"),
+  });
+  assert.equal(duringCooldown.policy.capacityMode, "protect");
+  assert.equal(duringCooldown.cooldownRemainingMs, 1_000);
+
+  const afterCooldown = providerRuntimeDecision({
+    provider: "groq",
+    priority: "normal",
+    reasoningDepth: "standard",
+    nowMs: Date.parse("2026-09-06T16:00:03.000Z"),
+  });
+  assert.equal(afterCooldown.cooldownRemainingMs, 0);
+  assert.equal(afterCooldown.policy.capacityMode, "normal");
+  assert.notEqual(afterCooldown.policy.action, "defer");
 });
