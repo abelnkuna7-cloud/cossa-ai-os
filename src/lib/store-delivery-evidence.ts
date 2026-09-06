@@ -11,7 +11,7 @@ export function resolveDeliveryEnrichmentMode(value: string | undefined): "HOLD"
 export function parseStoreDeliveryEvidence(text: string): DeliveryEvidence {
   const normalised = text.replace(/[–—]/g, "-").replace(/\s+/g, " ");
   const label = /(?:product\s+size|package\s+size|packed\s+dimensions?|carton\s+dimensions?|shipping\s+dimensions?|dimensions?|measurements?|size)\b/i;
-  const dimensionMatch = normalised.match(new RegExp(`${label.source}[^.!?]{0,100}?([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)?\\s*[x×*]\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)?\\s*[x×*]\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)`, "i"));
+  const dimensionMatch = normalised.match(new RegExp(`${label.source}[^.!?]{0,100}?(?:[lwh]\\s*)?([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)?\\s*[x×*]\\s*(?:[lwh]\\s*)?([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)?\\s*[x×*]\\s*(?:[lwh]\\s*)?([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)`, "i"));
   const dimensionUnit = dimensionMatch?.[6]?.toLowerCase() ?? dimensionMatch?.[2]?.toLowerCase();
   const dimensionKind = /carton/i.test(dimensionMatch?.[0] ?? "") ? "carton" : /package|packed|shipping/i.test(dimensionMatch?.[0] ?? "") ? "package" : /product/i.test(dimensionMatch?.[0] ?? "") ? "product" : "unknown";
   const weightMatch = normalised.match(/(?:net\s+weight|gross\s+weight|shipping\s+weight|package\s+weight|packed\s+weight|product\s+weight|weight)\b[^.!?]{0,80}?([0-9]+(?:\.[0-9]+)?)\s*(kg|g)\b/i);

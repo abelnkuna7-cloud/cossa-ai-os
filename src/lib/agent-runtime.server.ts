@@ -1847,7 +1847,10 @@ function storeEnrichmentInput(task: RuntimeTask): StoreDeliveryEnrichmentInput {
 }
 
 function htmlToEvidenceText(html: string): string {
-  return html
+  const metadata = [...html.matchAll(/<meta\b[^>]*?(?:name|property)=["'][^"']+["'][^>]*?content=["']([^"']+)["'][^>]*>/gi)]
+    .map((match) => match[1])
+    .join(" ");
+  return `${metadata} ${html}`
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
@@ -1865,7 +1868,7 @@ export function parseStoreDeliveryEvidence(text: string): {
 } {
   const normalised = text.replace(/[–—]/g, "-").replace(/\s+/g, " ");
   const dimensionLabel = /(?:product\s+size|package\s+size|packed\s+dimensions?|carton\s+dimensions?|shipping\s+dimensions?|dimensions?|measurements?|size)\b/i;
-  const dimensionMatch = normalised.match(new RegExp(`${dimensionLabel.source}[^.!?]{0,100}?([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)?\\s*[x×*]\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)?\\s*[x×*]\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)`, "i"));
+  const dimensionMatch = normalised.match(new RegExp(`${dimensionLabel.source}[^.!?]{0,100}?(?:[lwh]\\s*)?([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)?\\s*[x×*]\\s*(?:[lwh]\\s*)?([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)?\\s*[x×*]\\s*(?:[lwh]\\s*)?([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)`, "i"));
   const unit = dimensionMatch?.[6]?.toLowerCase() ?? dimensionMatch?.[2]?.toLowerCase();
   const factors = unit === "mm" ? 0.1 : 1;
   const label = dimensionMatch?.[0].slice(0, 80) ?? "";
