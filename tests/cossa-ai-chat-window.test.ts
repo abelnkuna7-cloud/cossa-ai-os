@@ -5,7 +5,7 @@ import {
   buildLegacyGatewayWindow,
   buildProviderConversationWindow,
   validateConversationMessages,
-} from "../src/lib/cossa-ai-chat-window";
+} from "../src/lib/cossa-ai-chat-window.ts";
 
 test("long conversations are accepted without a 40-message cutoff", () => {
   const messages = Array.from({ length: 100 }, (_, index) => ({
