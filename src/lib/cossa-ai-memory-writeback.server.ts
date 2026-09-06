@@ -5,6 +5,7 @@ const MAX_CONVERSATION_ID_LENGTH = 160;
 const MAX_SUMMARY_LENGTH = 8_000;
 const MAX_MEMORY_LIST_ITEMS = 32;
 const MAX_MEMORY_ITEM_LENGTH = 800;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface ConversationMemoryWritebackInput {
   bearerToken: string | null;
@@ -21,6 +22,7 @@ export interface ConversationMemoryWritebackResult {
     | "disabled"
     | "missing-auth"
     | "missing-conversation"
+    | "invalid-conversation"
     | "missing-config"
     | "invalid-user"
     | "request-failed";
@@ -117,6 +119,9 @@ export async function writeConversationMemorySnapshot(
 
   const conversationId = input.conversationId?.trim() || "";
   if (!conversationId) return { written: false, reason: "missing-conversation" };
+  if (!UUID_PATTERN.test(conversationId)) {
+    return { written: false, reason: "invalid-conversation" };
+  }
 
   const supabaseUrl =
     process.env.VITE_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim() || "";
