@@ -1,5 +1,6 @@
 import { canScheduleAgentRetry } from "./operational-truth";
 import { retrySupabaseIssuedAtFuture } from "./supabase-jwt-retry";
+import { resolveDeliveryEnrichmentMode } from "./store-delivery-evidence";
 
 const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 const MAX_TASKS_PER_TICK = 6;
@@ -453,7 +454,7 @@ async function bridgeStoreDeliveryEnrichment(
   // HOLD is the fail-closed production default. CONTROLLED is an owner-only
   // server configuration used for an explicit V2 allowlist; ACTIVE is not
   // enabled by default and must never be inferred from queue contents.
-  const mode = (process.env.STORE_DELIVERY_ENRICHMENT_MODE ?? "HOLD").toUpperCase();
+  const mode = resolveDeliveryEnrichmentMode(process.env.STORE_DELIVERY_ENRICHMENT_MODE);
   if (mode === "HOLD") return 0;
   const selectedIds = (process.env.STORE_DELIVERY_ENRICHMENT_V2_IDS ?? "")
     .split(",")
@@ -461,6 +462,20 @@ async function bridgeStoreDeliveryEnrichment(
     .filter(Boolean)
     .slice(0, 5);
   if (mode === "CONTROLLED" && selectedIds.length === 0) return 0;
+
+  const supplierQuery = new URLSearchParams({
+    select: "id,name,code,status",
+    organisation_id: `eq.${environment.organisationId}`,
+    name: "ilike.*DMC*Wholesale*",
+    status: "eq.active",
+    limit: "2",
+  });
+  const dmcSuppliers = await databaseRequest<Array<{ id: string; name: string; code: string; status: string }>>(
+    environment,
+    `store_suppliers?${supplierQuery.toString()}`,
+  );
+  const dmcSupplier = dmcSuppliers.length === 1 ? dmcSuppliers[0] : null;
+  if (!dmcSupplier) return 0;
 
   const agentQuery = new URLSearchParams({
     select: "id",
@@ -485,7 +500,8 @@ async function bridgeStoreDeliveryEnrichment(
   const intakeQuery = new URLSearchParams({
     select: "id,publication_store_product_id,name,supplier_product_ref,source_url",
     organisation_id: `eq.${environment.organisationId}`,
-    delivery_enrichment_status: "eq.QUEUED",
+    delivery_enrichment_status: mode === "CONTROLLED" ? "eq.PARTIAL" : "eq.QUEUED",
+    supplier_id: `eq.${dmcSupplier.id}`,
     publication_store_product_id: "not.is.null",
     order: "created_at.asc",
     ...(mode === "CONTROLLED" ? { id: `in.(${selectedIds.join(",")})` } : {}),
@@ -1956,7 +1972,7 @@ async function executeStoreDeliveryEnrichment(
       researched_at: now,
     },
   };
-  if (parsed.dimensions) {
+  if (parsed.dimensions && parsed.dimensions.kind !== "unknown" && parsed.dimensions.kind !== "carton") {
     Object.assign(patch, {
       length_cm: parsed.dimensions.length,
       width_cm: parsed.dimensions.width,
@@ -1967,7 +1983,7 @@ async function executeStoreDeliveryEnrichment(
       dimensions_verified_at: now,
       dimension_evidence_state: "SUPPLIER_VERIFIED",
     });
-  } else if (!attributes.length_cm || !attributes.width_cm || !attributes.height_cm) {
+  } else if (!attributes.length_cm || !attributes.width_cm || !attributes.height_cm || parsed.dimensions?.kind === "carton" || parsed.dimensions?.kind === "unknown") {
     patch.dimension_evidence_state = "MISSING";
   }
   if (parsed.weight) {

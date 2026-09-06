@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseStoreDeliveryEvidence } from "../src/lib/store-delivery-evidence.ts";
+import { parseStoreDeliveryEvidence, resolveDeliveryEnrichmentMode } from "../src/lib/store-delivery-evidence.ts";
 
 test("parses labelled product dimensions with attached units", () => {
   const result = parseStoreDeliveryEvidence("Product Size: 30cm x 20cm x 10cm");
@@ -26,4 +26,13 @@ test("rejects unlabelled triples and generic small-size claims", () => {
   const result = parseStoreDeliveryEvidence("Small size 30 x 20 x 10. Lightweight item.");
   assert.equal(result.dimensions, null);
   assert.equal(result.weight, null);
+});
+
+test("unknown or misspelled production modes fail closed to HOLD", () => {
+  assert.equal(resolveDeliveryEnrichmentMode(undefined), "HOLD");
+  assert.equal(resolveDeliveryEnrichmentMode(""), "HOLD");
+  assert.equal(resolveDeliveryEnrichmentMode("CONTROLED"), "HOLD");
+  assert.equal(resolveDeliveryEnrichmentMode("test"), "HOLD");
+  assert.equal(resolveDeliveryEnrichmentMode("CONTROLLED"), "CONTROLLED");
+  assert.equal(resolveDeliveryEnrichmentMode("ACTIVE"), "ACTIVE");
 });
