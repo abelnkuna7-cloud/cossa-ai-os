@@ -103,6 +103,7 @@ const DOMAIN_TERMS: Record<Exclude<CossaCapabilityDomain, "general">, readonly s
   ],
   tech: [
     "tech",
+    "technology",
     "website",
     "api",
     "webhook",
@@ -113,6 +114,12 @@ const DOMAIN_TERMS: Record<Exclude<CossaCapabilityDomain, "general">, readonly s
     "supabase",
     "github",
     "integration",
+    "architecture",
+    "system design",
+    "infrastructure",
+    "runtime",
+    "database",
+    "server",
   ],
   nexdocs: [
     "nexdocs",
