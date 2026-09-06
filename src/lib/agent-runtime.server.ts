@@ -3,6 +3,7 @@ import { retrySupabaseIssuedAtFuture } from "./supabase-jwt-retry";
 
 const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 const MAX_TASKS_PER_TICK = 6;
+const MAX_STORE_ENRICHMENT_BRIDGE_BATCH = 5;
 const TASK_LEASE_SECONDS = 420;
 const MAX_LEAD_HUNTER_RESULTS = 20;
 const MAX_MODEL_OUTPUT_CHARS = 9_000;
@@ -170,6 +171,15 @@ type RuntimeTask = {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+};
+
+type StoreDeliveryEnrichmentInput = {
+  intakeId: string;
+  storeProductId: string;
+  publication_store_product_id?: string | null;
+  productName: string;
+  supplierProductRef: string;
+  sourceUrl: string;
 };
 
 type RuntimeApproval = {
@@ -435,6 +445,78 @@ async function databaseRpc<T>(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+async function bridgeStoreDeliveryEnrichment(
+  environment: RuntimeEnvironment,
+): Promise<number> {
+  const agentQuery = new URLSearchParams({
+    select: "id",
+    organisation_id: `eq.${environment.organisationId}`,
+    agent_key: "eq.lead-enrichment-agent",
+    status: "eq.active",
+    limit: "1",
+  });
+  const agents = await databaseRequest<Array<{ id: string }>>(
+    environment,
+    `ai_agents?${agentQuery.toString()}`,
+  );
+  const agentId = agents[0]?.id;
+  if (!agentId) {
+    throw new AgentRuntimeError(
+      "store_delivery_agent_missing",
+      "The existing Cossa evidence-enrichment agent is not active.",
+      503,
+    );
+  }
+
+  const intakeQuery = new URLSearchParams({
+    select: "id,publication_store_product_id,name,supplier_product_ref,source_url",
+    organisation_id: `eq.${environment.organisationId}`,
+    delivery_enrichment_status: "eq.QUEUED",
+    publication_store_product_id: "not.is.null",
+    order: "created_at.asc",
+    limit: String(MAX_STORE_ENRICHMENT_BRIDGE_BATCH),
+  });
+  const intakes = await databaseRequest<StoreDeliveryEnrichmentInput[]>(
+    environment,
+    `store_inventory_intakes?${intakeQuery.toString()}`,
+  );
+  let created = 0;
+  for (const intake of intakes) {
+    if (!intake.id || !intake.publication_store_product_id) continue;
+    const sourceUrl = readString(intake.source_url);
+    if (!sourceUrl) continue;
+    const payload: StoreDeliveryEnrichmentInput = {
+      intakeId: intake.id,
+      storeProductId: intake.publication_store_product_id,
+      productName: readString(intake.name),
+      supplierProductRef: readString(intake.supplier_product_ref),
+      sourceUrl,
+    };
+    const rows = await databaseRequest<JsonObject[]>(
+      environment,
+      `agent_tasks?on_conflict=${encodeURIComponent("organisation_id,idempotency_key")}`,
+      {
+        method: "POST",
+        headers: {
+          Prefer: "resolution=ignore-duplicates,return=representation",
+        },
+        body: JSON.stringify({
+          organisation_id: environment.organisationId,
+          agent_id: agentId,
+          task_type: "store_delivery_enrichment",
+          action_key: "store_delivery_enrichment",
+          priority: 40,
+          max_attempts: 3,
+          payload,
+          idempotency_key: `store-delivery-enrichment:${intake.id}`,
+        }),
+      },
+    );
+    if (rows.length > 0) created += 1;
+  }
+  return created;
 }
 
 async function protectedUser(
@@ -1644,6 +1726,7 @@ function permissionClassForAction(actionKey: string): RuntimePermission["permiss
     payment_execute: "PAYMENT",
     banking_change: "FINANCIAL",
     delete_production_data: "DELETE",
+    store_delivery_enrichment: "WRITE_INTERNAL",
   };
   const permissionClass = classes[actionKey];
   if (!permissionClass)
@@ -1715,11 +1798,183 @@ function taskInput(task: RuntimeTask): LeadHunterInput {
   );
 }
 
+function storeEnrichmentInput(task: RuntimeTask): StoreDeliveryEnrichmentInput {
+  const payload = asRecord(task.payload);
+  const input = {
+    intakeId: readString(payload.intakeId),
+    storeProductId: readString(payload.storeProductId),
+    productName: readString(payload.productName),
+    supplierProductRef: readString(payload.supplierProductRef),
+    sourceUrl: readString(payload.sourceUrl),
+  };
+  if (!input.intakeId || !input.storeProductId || !input.sourceUrl) {
+    throw new AgentRuntimeError(
+      "invalid_store_delivery_task",
+      "The Store delivery-enrichment task is missing its stable intake, product or source identity.",
+      409,
+    );
+  }
+  return input;
+}
+
+function htmlToEvidenceText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&#x([0-9a-f]+);/gi, (_, value: string) => String.fromCodePoint(Number.parseInt(value, 16)))
+    .replace(/&#(\d+);/g, (_, value: string) => String.fromCodePoint(Number(value)))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseStoreDeliveryEvidence(text: string): {
+  dimensions: { length: number; width: number; height: number; evidence: string } | null;
+  weight: { kg: number; evidence: string } | null;
+} {
+  const dimensionsMatch = text.match(
+    /(?:dimensions?|size|measurements?)[^.!]{0,140}?([0-9]+(?:\.[0-9]+)?)\s*cm\s*[x×*]\s*([0-9]+(?:\.[0-9]+)?)\s*cm\s*[x×*]\s*([0-9]+(?:\.[0-9]+)?)\s*cm/i,
+  );
+  const weightMatch = text.match(
+    /(?:weight|shipping weight|product weight|packed weight)[^.!]{0,80}?([0-9]+(?:\.[0-9]+)?)\s*(kg|g)\b/i,
+  );
+  const dimensions = dimensionsMatch
+    ? {
+        length: Number(dimensionsMatch[1]),
+        width: Number(dimensionsMatch[2]),
+        height: Number(dimensionsMatch[3]),
+        evidence: clip(dimensionsMatch[0], 500),
+      }
+    : null;
+  const weight = weightMatch
+    ? {
+        kg: weightMatch[2].toLowerCase() === "g" ? Number(weightMatch[1]) / 1_000 : Number(weightMatch[1]),
+        evidence: clip(weightMatch[0], 500),
+      }
+    : null;
+  return {
+    dimensions: dimensions && Object.values(dimensions).every((value) => typeof value !== "number" || value > 0) ? dimensions : null,
+    weight: weight && weight.kg > 0 ? weight : null,
+  };
+}
+
+async function updateStoreEnrichmentStatus(
+  environment: RuntimeEnvironment,
+  input: StoreDeliveryEnrichmentInput,
+  status: "PROCESSING" | "SUCCEEDED" | "PARTIAL" | "CONFLICTING" | "FAILED" | "QUEUED",
+  result: JsonObject,
+): Promise<void> {
+  await databaseRequest(
+    environment,
+    `store_inventory_intakes?id=eq.${encodeURIComponent(input.intakeId)}&organisation_id=eq.${encodeURIComponent(environment.organisationId)}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        delivery_enrichment_status: status,
+        delivery_enrichment_last_attempt_at: new Date().toISOString(),
+        delivery_enrichment_result: result,
+      }),
+    },
+  );
+}
+
+async function executeStoreDeliveryEnrichment(
+  environment: RuntimeEnvironment,
+  task: RuntimeTask,
+): Promise<{ result: JsonObject; provider: string; model: string }> {
+  const input = storeEnrichmentInput(task);
+  await updateStoreEnrichmentStatus(environment, input, "PROCESSING", {
+    task_id: task.id,
+    source_url: input.sourceUrl,
+  });
+  const response = await fetchWithTimeout(input.sourceUrl, {
+    headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "CossaDeliveryEvidence/1.0" },
+  });
+  if (!response.ok) {
+    throw new AgentRuntimeError(
+      "delivery_source_unavailable",
+      `The authoritative supplier source returned HTTP ${response.status}.`,
+      response.status >= 500 ? 503 : 422,
+    );
+  }
+  const evidenceText = htmlToEvidenceText(await response.text());
+  const parsed = parseStoreDeliveryEvidence(evidenceText);
+  const now = new Date().toISOString();
+  const attributesQuery = new URLSearchParams({
+    select: "length_cm,width_cm,height_cm,weight_kg,dimension_kind,dimension_evidence_state,weight_evidence_state",
+    store_product_id: `eq.${input.storeProductId}`,
+    limit: "1",
+  });
+  const attributes = (await databaseRequest<JsonObject[]>(
+    environment,
+    `store_product_delivery_attributes?${attributesQuery.toString()}`,
+  ))[0] ?? {};
+  const patch: JsonObject = {
+    enrichment_last_attempt_at: now,
+    enrichment_agent: "cossa-ai-os:lead-enrichment-agent",
+    enrichment_result: {
+      source_url: input.sourceUrl,
+      supplier_product_ref: input.supplierProductRef,
+      dimensions_found: Boolean(parsed.dimensions),
+      weight_found: Boolean(parsed.weight),
+      researched_at: now,
+    },
+  };
+  if (parsed.dimensions) {
+    Object.assign(patch, {
+      length_cm: parsed.dimensions.length,
+      width_cm: parsed.dimensions.width,
+      height_cm: parsed.dimensions.height,
+      dimension_kind: "product",
+      dimensions_source_url: input.sourceUrl,
+      dimensions_source_evidence: parsed.dimensions.evidence,
+      dimensions_verified_at: now,
+      dimension_evidence_state: "SUPPLIER_VERIFIED",
+    });
+  } else if (!attributes.length_cm || !attributes.width_cm || !attributes.height_cm) {
+    patch.dimension_evidence_state = "MISSING";
+  }
+  if (parsed.weight) {
+    Object.assign(patch, {
+      weight_kg: parsed.weight.kg,
+      weight_source_url: input.sourceUrl,
+      weight_source_evidence: parsed.weight.evidence,
+      weight_verified_at: now,
+      weight_evidence_state: "SUPPLIER_VERIFIED",
+    });
+  } else if (!attributes.weight_kg) {
+    patch.weight_evidence_state = "MISSING";
+  }
+  await databaseRequest(
+    environment,
+    `store_product_delivery_attributes?store_product_id=eq.${encodeURIComponent(input.storeProductId)}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify(patch),
+    },
+  );
+  const status = parsed.dimensions && parsed.weight ? "SUCCEEDED" : "PARTIAL";
+  const result = { ...asRecord(patch.enrichment_result), evidence_text_length: evidenceText.length };
+  await updateStoreEnrichmentStatus(environment, input, status, result);
+  return {
+    provider: "dmc_authoritative_source",
+    model: "deterministic-evidence-parser-v1",
+    result: { ...result, store_status: status, dimensions: parsed.dimensions, weight: parsed.weight },
+  };
+}
+
 async function executeAgentTask(
   environment: RuntimeEnvironment,
   task: RuntimeTask,
   agent: RuntimeAgent,
 ): Promise<{ result: JsonObject; provider: string; model: string }> {
+  if (task.task_type === "store_delivery_enrichment") {
+    return executeStoreDeliveryEnrichment(environment, task);
+  }
   const input = taskInput(task);
 
   if (task.task_type === "orchestrate_lead_hunt") {
@@ -2086,6 +2341,22 @@ async function processOneTask(
       console.error("[agent-runtime] unable to fail run", failure),
     );
     const status = await failTask(environment, task, error);
+    if (task.task_type === "store_delivery_enrichment") {
+      try {
+        const input = storeEnrichmentInput(task);
+        await updateStoreEnrichmentStatus(
+          environment,
+          input,
+          status === "retry_scheduled" ? "QUEUED" : "FAILED",
+          {
+            error_code: error instanceof AgentRuntimeError ? error.code : "agent_task_failed",
+            message: clip(error.message, 500),
+          },
+        );
+      } catch (storeStatusError) {
+        console.error("[agent-runtime] unable to update Store enrichment status", storeStatusError);
+      }
+    }
     const capabilityKey = capabilityForTask(task.task_type);
     if (
       capabilityKey &&
@@ -2126,9 +2397,10 @@ export async function runAgentRuntimeTick(): Promise<{
   failed: number;
   approvalsReactivated: number;
   scheduledTriggersQueued: number;
+  storeDeliveryTasksBridged: number;
 }> {
   const environment = requireRuntimeEnvironment();
-  const [approvalsReactivated, scheduled] = await Promise.all([
+  const [approvalsReactivated, scheduled, storeDeliveryTasksBridged] = await Promise.all([
     databaseRpc<number>(environment, "reactivate_approved_agent_tasks", {
       p_organisation_id: environment.organisationId,
     }),
@@ -2136,6 +2408,7 @@ export async function runAgentRuntimeTick(): Promise<{
       p_organisation_id: environment.organisationId,
       p_limit: 10,
     }),
+    bridgeStoreDeliveryEnrichment(environment),
   ]);
   const tasks = await databaseRpc<RuntimeTask[]>(environment, "claim_agent_tasks", {
     p_organisation_id: environment.organisationId,
@@ -2166,6 +2439,7 @@ export async function runAgentRuntimeTick(): Promise<{
       retried,
       failed,
       scheduled_triggers_queued: scheduled.length,
+      store_delivery_tasks_bridged: storeDeliveryTasksBridged,
       external_sending_enabled: false,
     },
   });
@@ -2187,6 +2461,7 @@ export async function runAgentRuntimeTick(): Promise<{
     failed,
     approvalsReactivated,
     scheduledTriggersQueued: scheduled.length,
+    storeDeliveryTasksBridged,
   };
 }
 
