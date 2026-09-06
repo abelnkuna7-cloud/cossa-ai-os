@@ -3,8 +3,8 @@ import { selectRecentConversationWindow, type CossaConversationMessage } from ".
 /**
  * User-facing conversations are not capped at a small fixed turn count.
  *
- * The full conversation should be persisted by the application, while only a
- * bounded recent window plus rolling memory is sent to reasoning providers.
+ * The application may retain the full conversation, while only a bounded
+ * recent window plus rolling memory should be sent to reasoning providers.
  * This protects provider token/rate limits without ending the conversation.
  */
 export const MAX_CHAT_MESSAGE_LENGTH = 12_000;
@@ -65,7 +65,7 @@ export function validateConversationMessages(
     if (totalCharacters > MAX_CHAT_REQUEST_CHARACTERS) {
       return {
         ok: false,
-        error: "This request is too large to process safely. The conversation itself can continue; resend the newest message and Cossa AI can continue from saved memory plus recent context.",
+        error: "This request is too large to process safely. The conversation itself can continue; resend the newest message after the application has retained prior context, and Cossa AI can continue using durable memory plus recent context once memory persistence is enabled.",
       };
     }
   }
