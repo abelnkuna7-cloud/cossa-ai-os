@@ -31,7 +31,7 @@ import {
   type AiConversation,
   type AiMessage,
 } from "@/lib/ai-data";
-import { streamChat, type CossaAiProvider } from "@/lib/ai-stream";
+import { streamChatWithMetadata, type CossaAiProvider } from "@/lib/ai-stream";
 import { workspaceRuntimeDescription, workspaceRuntimeStatus } from "@/lib/workspace-runtime";
 
 export const Route = createFileRoute("/ai/cossa")({
@@ -284,15 +284,19 @@ function AiChatWorkspace() {
 
       setStreaming("");
 
-      const finalResponse = await streamChat(
+      const result = await streamChatWithMetadata(
         modelMessages,
         (chunk) => {
           setStreaming((current) => `${current ?? ""}${chunk}`);
         },
-        abortRef.current.signal,
-        undefined,
-        provider,
+        {
+          signal: abortRef.current.signal,
+          provider,
+          conversationId,
+        },
       );
+
+      const finalResponse = result.content;
 
       if (!finalResponse.trim()) {
         throw new Error("Cossa AI returned an empty response.");
