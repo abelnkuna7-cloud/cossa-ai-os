@@ -450,6 +450,20 @@ async function databaseRpc<T>(
 async function bridgeStoreDeliveryEnrichment(
   environment: RuntimeEnvironment,
 ): Promise<number> {
+  // Keep the first production activation a controlled proof run. Once any
+  // Store enrichment task exists, do not seed another batch until the owner
+  // has reviewed the evidence quality and explicitly promotes the lane.
+  const existingTasks = await databaseRequest<JsonObject[]>(
+    environment,
+    `agent_tasks?${new URLSearchParams({
+      select: "id",
+      organisation_id: `eq.${environment.organisationId}`,
+      task_type: "eq.store_delivery_enrichment",
+      limit: "1",
+    }).toString()}`,
+  );
+  if (existingTasks.length > 0) return 0;
+
   const agentQuery = new URLSearchParams({
     select: "id",
     organisation_id: `eq.${environment.organisationId}`,
