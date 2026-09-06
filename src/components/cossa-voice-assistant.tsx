@@ -449,6 +449,7 @@ export function CossaVoiceAssistant({ page = false }: { page?: boolean }) {
         {
           signal: abortRef.current.signal,
           provider: "auto",
+          conversationId,
           system: [
             "You are the same authorised Cossa AI used by the main text workspace, presented through the voice interface.",
             `Current GROWTH workspace: ${currentWorkspace}. Current route: ${location.pathname}.`,
