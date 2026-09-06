@@ -450,19 +450,17 @@ async function databaseRpc<T>(
 async function bridgeStoreDeliveryEnrichment(
   environment: RuntimeEnvironment,
 ): Promise<number> {
-  // Keep the first production activation a controlled proof run. Once any
-  // Store enrichment task exists, do not seed another batch until the owner
-  // has reviewed the evidence quality and explicitly promotes the lane.
-  const existingTasks = await databaseRequest<JsonObject[]>(
-    environment,
-    `agent_tasks?${new URLSearchParams({
-      select: "id",
-      organisation_id: `eq.${environment.organisationId}`,
-      task_type: "eq.store_delivery_enrichment",
-      limit: "1",
-    }).toString()}`,
-  );
-  if (existingTasks.length > 0) return 0;
+  // HOLD is the fail-closed production default. CONTROLLED is an owner-only
+  // server configuration used for an explicit V2 allowlist; ACTIVE is not
+  // enabled by default and must never be inferred from queue contents.
+  const mode = (process.env.STORE_DELIVERY_ENRICHMENT_MODE ?? "HOLD").toUpperCase();
+  if (mode === "HOLD") return 0;
+  const selectedIds = (process.env.STORE_DELIVERY_ENRICHMENT_V2_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  if (mode === "CONTROLLED" && selectedIds.length === 0) return 0;
 
   const agentQuery = new URLSearchParams({
     select: "id",
@@ -490,7 +488,8 @@ async function bridgeStoreDeliveryEnrichment(
     delivery_enrichment_status: "eq.QUEUED",
     publication_store_product_id: "not.is.null",
     order: "created_at.asc",
-    limit: String(MAX_STORE_ENRICHMENT_BRIDGE_BATCH),
+    ...(mode === "CONTROLLED" ? { id: `in.(${selectedIds.join(",")})` } : {}),
+    limit: String(mode === "CONTROLLED" ? selectedIds.length : MAX_STORE_ENRICHMENT_BRIDGE_BATCH),
   });
   const intakes = await databaseRequest<StoreDeliveryEnrichmentInput[]>(
     environment,
@@ -524,7 +523,7 @@ async function bridgeStoreDeliveryEnrichment(
           priority: 40,
           max_attempts: 3,
           payload,
-          idempotency_key: `store-delivery-enrichment:${intake.id}`,
+          idempotency_key: `${mode === "CONTROLLED" ? "store-delivery-enrichment:v2" : "store-delivery-enrichment"}:${intake.id}`,
         }),
       },
     );
@@ -1844,32 +1843,38 @@ function htmlToEvidenceText(html: string): string {
     .trim();
 }
 
-function parseStoreDeliveryEvidence(text: string): {
-  dimensions: { length: number; width: number; height: number; evidence: string } | null;
-  weight: { kg: number; evidence: string } | null;
+export function parseStoreDeliveryEvidence(text: string): {
+  dimensions: { length: number; width: number; height: number; kind: "product" | "package" | "carton" | "unknown"; evidence: string } | null;
+  weight: { kg: number; kind: "product" | "package" | "shipping" | "unknown"; evidence: string } | null;
 } {
-  const dimensionsMatch = text.match(
-    /(?:dimensions?|size|measurements?)[^.!]{0,140}?([0-9]+(?:\.[0-9]+)?)\s*cm\s*[x×*]\s*([0-9]+(?:\.[0-9]+)?)\s*cm\s*[x×*]\s*([0-9]+(?:\.[0-9]+)?)\s*cm/i,
-  );
-  const weightMatch = text.match(
-    /(?:weight|shipping weight|product weight|packed weight)[^.!]{0,80}?([0-9]+(?:\.[0-9]+)?)\s*(kg|g)\b/i,
-  );
-  const dimensions = dimensionsMatch
+  const normalised = text.replace(/[–—]/g, "-").replace(/\s+/g, " ");
+  const dimensionLabel = /(?:product\s+size|package\s+size|packed\s+dimensions?|carton\s+dimensions?|shipping\s+dimensions?|dimensions?|measurements?|size)\b/i;
+  const dimensionMatch = normalised.match(new RegExp(`${dimensionLabel.source}[^.!?]{0,100}?([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)?\\s*[x×*]\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)?\\s*[x×*]\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(cm|mm)`, "i"));
+  const unit = dimensionMatch?.[6]?.toLowerCase() ?? dimensionMatch?.[2]?.toLowerCase();
+  const factors = unit === "mm" ? 0.1 : 1;
+  const label = dimensionMatch?.[0].slice(0, 80) ?? "";
+  const kind = /carton/i.test(label) ? "carton" : /package|packed|shipping/i.test(label) ? "package" : /product/i.test(label) ? "product" : "unknown";
+  const weightMatch = normalised.match(/(?:net\s+weight|gross\s+weight|shipping\s+weight|package\s+weight|packed\s+weight|product\s+weight|weight)\b[^.!?]{0,80}?([0-9]+(?:\.[0-9]+)?)\s*(kg|g)\b/i);
+  const weightLabel = weightMatch?.[0].slice(0, Math.max(0, weightMatch[0].indexOf(weightMatch[1] ?? ""))) ?? "";
+  const weightKind = /shipping/i.test(weightLabel) ? "shipping" : /package|packed|gross/i.test(weightLabel) ? "package" : /product|net/i.test(weightLabel) ? "product" : "unknown";
+  const dimensions = dimensionMatch
     ? {
-        length: Number(dimensionsMatch[1]),
-        width: Number(dimensionsMatch[2]),
-        height: Number(dimensionsMatch[3]),
-        evidence: clip(dimensionsMatch[0], 500),
+        length: Number(dimensionMatch![1]) * factors,
+        width: Number(dimensionMatch![3]) * ((dimensionMatch![4] ?? dimensionMatch![6])?.toLowerCase() === "mm" ? 0.1 : factors),
+        height: Number(dimensionMatch![5]) * (dimensionMatch![6]?.toLowerCase() === "mm" ? 0.1 : factors),
+        kind,
+        evidence: clip(dimensionMatch![0], 500),
       }
     : null;
   const weight = weightMatch
     ? {
         kg: weightMatch[2].toLowerCase() === "g" ? Number(weightMatch[1]) / 1_000 : Number(weightMatch[1]),
+        kind: weightKind,
         evidence: clip(weightMatch[0], 500),
       }
     : null;
   return {
-    dimensions: dimensions && Object.values(dimensions).every((value) => typeof value !== "number" || value > 0) ? dimensions : null,
+    dimensions: dimensions && [dimensions.length, dimensions.width, dimensions.height].every((value) => value > 0 && value < 1_000) ? dimensions : null,
     weight: weight && weight.kg > 0 ? weight : null,
   };
 }
@@ -1914,7 +1919,21 @@ async function executeStoreDeliveryEnrichment(
       response.status >= 500 ? 503 : 422,
     );
   }
-  const evidenceText = htmlToEvidenceText(await response.text());
+  const sourceHtml = await response.text();
+  let evidenceText = htmlToEvidenceText(sourceHtml);
+  // Shopify's official product JSON is a source-adjacent structured record. It
+  // is parsed as data only; scripts and analytics blobs are never executed.
+  try {
+    const structuredResponse = await fetchWithTimeout(`${input.sourceUrl.replace(/\/$/, "")}.js`, {
+      headers: { Accept: "application/json", "User-Agent": "CossaDeliveryEvidence/1.0" },
+    });
+    if (structuredResponse.ok) {
+      const structured = (await structuredResponse.json()) as { body_html?: unknown; description?: unknown; title?: unknown };
+      evidenceText = `${evidenceText} ${htmlToEvidenceText(readString(structured.body_html) || readString(structured.description) || "")} ${readString(structured.title)}`.trim();
+    }
+  } catch {
+    // The authoritative HTML remains sufficient; structured data is optional.
+  }
   const parsed = parseStoreDeliveryEvidence(evidenceText);
   const now = new Date().toISOString();
   const attributesQuery = new URLSearchParams({
@@ -1942,7 +1961,7 @@ async function executeStoreDeliveryEnrichment(
       length_cm: parsed.dimensions.length,
       width_cm: parsed.dimensions.width,
       height_cm: parsed.dimensions.height,
-      dimension_kind: "product",
+      dimension_kind: parsed.dimensions.kind === "product" ? "product" : "packed_parcel",
       dimensions_source_url: input.sourceUrl,
       dimensions_source_evidence: parsed.dimensions.evidence,
       dimensions_verified_at: now,
