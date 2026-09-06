@@ -4,12 +4,12 @@ import {
   shouldDeferBackgroundWork,
   type CossaTaskPriority,
   type GroqCapacitySnapshot,
-} from "./cossa-ai-intelligence";
+} from "./cossa-ai-intelligence.ts";
 import {
   buildMemoryGroundingBlock,
   type CossaConversationMemory,
   type CossaConversationMessage,
-} from "./cossa-ai-memory";
+} from "./cossa-ai-memory.ts";
 
 export interface CossaContextPlanInput {
   message: string;
