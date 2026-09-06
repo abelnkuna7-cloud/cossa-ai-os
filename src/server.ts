@@ -5,6 +5,7 @@ import {
   validateConversationMessages,
   type ChatWindowValidationResult,
 } from "./lib/cossa-ai-chat-window.ts";
+import { deriveConversationIdentity } from "./lib/cossa-ai-conversation-identity.ts";
 import { loadServerMemoryGrounding } from "./lib/cossa-ai-memory.server.ts";
 import type { CossaConversationMessage } from "./lib/cossa-ai-memory.ts";
 import { consumeLastCapturedError } from "./lib/error-capture";
@@ -147,31 +148,6 @@ function cleanConversationId(value: unknown): string | null {
   const cleaned = value.trim();
   if (!cleaned) return null;
   return cleaned.slice(0, 160);
-}
-
-/**
- * Stable compatibility identity for callers that have not yet been upgraded to
- * send their persisted ai_conversations.id explicitly.
- *
- * This intentionally uses only the first few conversation messages so the key
- * remains stable as later turns are appended or the provider window is trimmed.
- * Explicit caller-provided conversation IDs always take precedence.
- */
-export function deriveConversationIdentity(messages: readonly CossaConversationMessage[]): string {
-  const seed = messages
-    .filter((message) => message.role === "user" || message.role === "assistant")
-    .slice(0, 3)
-    .map((message) => `${message.role}:${message.content.trim()}`)
-    .join("\n")
-    .slice(0, 12_000);
-
-  let hash = 2166136261;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash ^= seed.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-
-  return `derived-${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 function mergeMemoryIntoSystem(existingSystem: unknown, memoryGrounding: string): string {
