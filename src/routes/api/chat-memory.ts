@@ -10,6 +10,7 @@ const MEMORY_REFRESH_INTERVAL = 6;
 interface MemoryRefreshPayload {
   conversationId?: unknown;
   messages?: unknown;
+  messageCount?: unknown;
 }
 
 function bearerToken(request: Request): string | null {
@@ -46,9 +47,15 @@ function validMessages(value: unknown): CossaConversationMessage[] | null {
   return result;
 }
 
-function refreshDue(messages: readonly CossaConversationMessage[]): boolean {
-  if (messages.length < MEMORY_REFRESH_INTERVAL) return false;
-  return messages.length % MEMORY_REFRESH_INTERVAL === 0;
+function cleanMessageCount(value: unknown, minimum: number): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const count = Math.max(0, Math.floor(value));
+  return count >= minimum ? count : null;
+}
+
+function refreshDue(messageCount: number): boolean {
+  if (messageCount < MEMORY_REFRESH_INTERVAL) return false;
+  return messageCount % MEMORY_REFRESH_INTERVAL === 0;
 }
 
 export const Route = createFileRoute("/api/chat-memory")({
@@ -65,8 +72,9 @@ export const Route = createFileRoute("/api/chat-memory")({
 
         const conversationId = cleanConversationId(payload.conversationId);
         const messages = validMessages(payload.messages);
+        const messageCount = messages ? cleanMessageCount(payload.messageCount, messages.length) : null;
 
-        if (!conversationId || !messages) {
+        if (!conversationId || !messages || messageCount === null) {
           return Response.json({ written: false, reason: "invalid-payload" }, { status: 400 });
         }
 
@@ -78,9 +86,11 @@ export const Route = createFileRoute("/api/chat-memory")({
           return Response.json({ written: false, reason: "incomplete-response" }, { status: 409 });
         }
 
-        // Refresh once per six completed messages (three normal user/assistant
-        // turns). This is deterministic and requires no second reasoning call.
-        if (!refreshDue(messages)) {
+        // Refresh once per six completed non-system messages (three normal
+        // user/assistant turns). The client may send only the newest 250
+        // messages for very long conversations while preserving the full
+        // completed-message count for cadence and persistence metadata.
+        if (!refreshDue(messageCount)) {
           return Response.json({ written: false, reason: "not-due" });
         }
 
@@ -89,7 +99,7 @@ export const Route = createFileRoute("/api/chat-memory")({
           bearerToken: bearerToken(request),
           conversationId,
           memory,
-          messageCount: messages.length,
+          messageCount,
           lastMessageAt: new Date().toISOString(),
         });
 
