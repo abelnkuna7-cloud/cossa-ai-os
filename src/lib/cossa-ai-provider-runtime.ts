@@ -42,6 +42,42 @@ function stateFor(provider: CossaRuntimeProvider): ProviderRuntimeState {
   );
 }
 
+function observedAtMilliseconds(observedAt: string): number {
+  const parsed = Date.parse(observedAt);
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+function storeProviderObservation({
+  provider,
+  snapshot,
+  status,
+  ok,
+  observedAt,
+}: {
+  provider: CossaRuntimeProvider;
+  snapshot: CossaProviderRateLimitSnapshot;
+  status: number;
+  ok: boolean;
+  observedAt: string;
+}): void {
+  const previous = stateFor(provider);
+  const cooldown = createProviderCooldown({
+    httpStatus: status,
+    retryAfterMs: snapshot.retryAfterMs,
+    resetTokensMs: snapshot.resetTokensMs,
+    resetRequestsMs: snapshot.resetRequestsMs,
+    observedAtMs: observedAtMilliseconds(observedAt),
+  });
+
+  states.set(provider, {
+    snapshot,
+    lastHttpStatus: status,
+    consecutiveFailures: ok ? 0 : previous.consecutiveFailures + 1,
+    cooldownUntilMs: ok ? null : cooldown.untilMs,
+    updatedAt: observedAt,
+  });
+}
+
 /**
  * Records only rate-limit/capacity metadata. Never store credentials, prompts,
  * response bodies, customer data or private Cossa context in this runtime map.
@@ -52,25 +88,36 @@ export function observeProviderResponse(
   observedAt = new Date().toISOString(),
 ): CossaProviderRateLimitSnapshot {
   const snapshot = readProviderRateLimitSnapshot(response.headers, observedAt);
-  const previous = stateFor(provider);
-  const observedAtMs = Date.parse(observedAt);
-  const safeObservedAtMs = Number.isFinite(observedAtMs) ? observedAtMs : Date.now();
-  const cooldown = createProviderCooldown({
-    httpStatus: response.status,
-    retryAfterMs: snapshot.retryAfterMs,
-    resetTokensMs: snapshot.resetTokensMs,
-    resetRequestsMs: snapshot.resetRequestsMs,
-    observedAtMs: safeObservedAtMs,
-  });
-
-  states.set(provider, {
+  storeProviderObservation({
+    provider,
     snapshot,
-    lastHttpStatus: response.status,
-    consecutiveFailures: response.ok ? 0 : previous.consecutiveFailures + 1,
-    cooldownUntilMs: response.ok ? null : cooldown.untilMs,
-    updatedAt: observedAt,
+    status: response.status,
+    ok: response.ok,
+    observedAt,
   });
+  return snapshot;
+}
 
+/**
+ * Records an upstream response that the provider adapter has already classified
+ * as a capacity/rate-limit failure. Some OpenAI-compatible providers return
+ * HTTP 413 for token-capacity limits rather than 429. The generic observer must
+ * not guess that every 413 is a rate limit, so the adapter uses this explicit
+ * method only after it has inspected the provider error safely.
+ */
+export function observeProviderCapacityFailure(
+  provider: CossaRuntimeProvider,
+  response: Pick<Response, "headers" | "status" | "ok">,
+  observedAt = new Date().toISOString(),
+): CossaProviderRateLimitSnapshot {
+  const snapshot = readProviderRateLimitSnapshot(response.headers, observedAt);
+  storeProviderObservation({
+    provider,
+    snapshot,
+    status: 429,
+    ok: false,
+    observedAt,
+  });
   return snapshot;
 }
 
