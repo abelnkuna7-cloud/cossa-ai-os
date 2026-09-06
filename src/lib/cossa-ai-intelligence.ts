@@ -40,6 +40,8 @@ const OPERATIONAL_TERMS = [
   "inventory",
   "stock",
   "supplier",
+  "suppliers",
+  "supplies",
   "agent",
   "mission",
   "approval",
