@@ -23,7 +23,7 @@ function response(status: number, values: Record<string, string> = {}) {
   };
 }
 
-test("gateway controller orders providers without making another reasoning call", () => {
+test("gateway controller orders providers and exposes bounded runtime budgets without another reasoning call", () => {
   resetProviderRuntimeForTests();
   const controller = createCossaProviderGatewayController({
     configuredProviders: ["groq", "gemini"],
@@ -37,6 +37,14 @@ test("gateway controller orders providers without making another reasoning call"
   assert.deepEqual(controller.executionPlan.providers, ["groq", "gemini"]);
   assert.equal(controller.executionPlan.priority, "high");
   assert.equal(controller.executionPlan.reasoningDepth, "deep");
+
+  const decision = controller.decisionFor(
+    "groq",
+    Date.parse("2026-09-07T00:00:00.000Z"),
+  );
+  assert.equal(decision.policy.action, "allow");
+  assert.equal(decision.policy.maxInputCharacters, 22_000);
+  assert.equal(decision.policy.maxCompletionTokens, 1_000);
 });
 
 test("recorded 429 telemetry changes the next request route and exposes only safe posture", () => {
@@ -64,6 +72,14 @@ test("recorded 429 telemetry changes the next request route and exposes only saf
   });
 
   assert.deepEqual(second.executionPlan.providers, ["gemini", "groq"]);
+
+  const constrained = second.decisionFor(
+    "groq",
+    Date.parse("2026-09-07T00:00:01.000Z"),
+  );
+  assert.equal(constrained.policy.capacityMode, "protect");
+  assert.equal(constrained.policy.maxInputCharacters, 8_000);
+  assert.equal(constrained.policy.maxCompletionTokens, 400);
 
   const snapshot = second.observabilityFor(
     "groq",
