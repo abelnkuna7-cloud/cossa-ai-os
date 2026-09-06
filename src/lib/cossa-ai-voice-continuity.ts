@@ -4,12 +4,12 @@ export const COSSA_VOICE_MAX_TRANSIENT_RETRIES = 4;
 export const COSSA_VOICE_MAX_RETRY_DELAY_MS = 8_000;
 
 const BENIGN_RECOGNITION_ERRORS = new Set(["aborted", "no-speech"]);
-const TRANSIENT_RECOGNITION_ERRORS = new Set([
-  "audio-capture",
-  "network",
+const TRANSIENT_RECOGNITION_ERRORS = new Set(["audio-capture", "network"]);
+const PERMISSION_RECOGNITION_ERRORS = new Set([
+  "not-allowed",
+  "permission-denied",
   "service-not-allowed",
 ]);
-const PERMISSION_RECOGNITION_ERRORS = new Set(["not-allowed", "permission-denied"]);
 
 export type CossaVoiceRecoveryAction = "restart" | "retry" | "pause";
 
