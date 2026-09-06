@@ -1,3 +1,4 @@
+import { resolveCossaMemoryActivation } from "./cossa-ai-memory-activation.ts";
 import type { CossaConversationMemory } from "./cossa-ai-memory.ts";
 
 const DEFAULT_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
@@ -110,7 +111,7 @@ export function buildConversationMemoryUpsertRow({
 export async function writeConversationMemorySnapshot(
   input: ConversationMemoryWritebackInput,
 ): Promise<ConversationMemoryWritebackResult> {
-  if (process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED !== "true") {
+  if (!resolveCossaMemoryActivation().writeEnabled) {
     return { written: false, reason: "disabled" };
   }
 
