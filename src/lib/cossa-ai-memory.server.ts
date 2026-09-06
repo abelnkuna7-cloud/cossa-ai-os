@@ -3,6 +3,7 @@ import { formatConversationMemory, type CossaConversationMemory } from "./cossa-
 const DEFAULT_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 const MAX_DURABLE_MEMORY_ITEMS = 12;
 const MAX_MEMORY_GROUNDING_CHARACTERS = 1_200;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface DurableMemoryItem {
   title: string;
@@ -52,6 +53,11 @@ function compactText(value: string): string {
 function truncate(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, Math.max(0, maxLength - 18))}… [truncated]`;
+}
+
+function persistedConversationId(value: string | null | undefined): string | null {
+  const cleaned = value?.trim() ?? "";
+  return UUID_PATTERN.test(cleaned) ? cleaned : null;
 }
 
 function extractTerms(value: string): Set<string> {
@@ -230,14 +236,19 @@ export async function loadServerMemoryGrounding(
   const durableItems = selectRelevantDurableMemory(durableRows, input.latestUserMessage);
 
   let conversationMemory: CossaConversationMemory | null = null;
+  const conversationId = persistedConversationId(input.conversationId);
 
-  if (input.conversationId?.trim()) {
+  // Durable conversation memory is deliberately bound only to a real persisted
+  // ai_conversations UUID. Derived compatibility identities still keep long
+  // requests stable, but they cannot read or write database memory until a UI
+  // surface owns an authenticated saved conversation.
+  if (conversationId) {
     const rows = await restSelect<ConversationMemoryRow>({
       table: "cossa_ai_conversation_memory",
       params: new URLSearchParams({
         select: "rolling_summary,important_facts,decisions,open_loops",
         organisation_id: `eq.${organisationId}`,
-        conversation_id: `eq.${input.conversationId.trim().slice(0, 160)}`,
+        conversation_id: `eq.${conversationId}`,
         limit: "1",
       }),
       token: input.bearerToken,
