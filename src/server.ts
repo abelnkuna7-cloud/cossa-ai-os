@@ -1,6 +1,10 @@
 import "./lib/error-capture";
 
 import {
+  formatCossaAnswerContract,
+  planCossaAnswerContract,
+} from "./lib/cossa-ai-answer-contract.ts";
+import {
   buildLegacyGatewayWindow,
   validateConversationMessages,
   type ChatWindowValidationResult,
@@ -28,7 +32,8 @@ type ChatRequestPayload = {
 
 const MAX_INGRESS_SYSTEM_CHARACTERS = 2_500;
 const MAX_EXISTING_SYSTEM_WITH_MEMORY = 1_250;
-const MAX_CAPABILITY_PLAN_CHARACTERS = 900;
+const MAX_CAPABILITY_PLAN_CHARACTERS = 800;
+const MAX_ANSWER_CONTRACT_CHARACTERS = 700;
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
@@ -92,6 +97,10 @@ function addChatExecutionHeaders(request: Request, response: Response): Response
     ["x-cossa-ai-reasoning-depth", "X-Cossa-AI-Reasoning-Depth"],
     ["x-cossa-ai-intelligence-priority", "X-Cossa-AI-Intelligence-Priority"],
     ["x-cossa-ai-external-research", "X-Cossa-AI-External-Research"],
+    ["x-cossa-ai-answer-mode", "X-Cossa-AI-Answer-Mode"],
+    ["x-cossa-ai-evidence-standard", "X-Cossa-AI-Evidence-Standard"],
+    ["x-cossa-ai-uncertainty-policy", "X-Cossa-AI-Uncertainty-Policy"],
+    ["x-cossa-ai-conversation-continuity", "X-Cossa-AI-Conversation-Continuity"],
   ] as const;
 
   const headers = new Headers(response.headers);
@@ -164,16 +173,22 @@ function cleanConversationId(value: unknown): string | null {
   return cleaned.slice(0, 160);
 }
 
-function mergeCapabilityIntoSystem(existingSystem: unknown, capabilityPlan: string): string {
+function mergeReasoningPlansIntoSystem(
+  existingSystem: unknown,
+  capabilityPlan: string,
+  answerContract: string,
+): string {
   const existing = typeof existingSystem === "string" ? existingSystem.trim() : "";
-  const boundedPlan = capabilityPlan.slice(0, MAX_CAPABILITY_PLAN_CHARACTERS);
+  const boundedCapability = capabilityPlan.slice(0, MAX_CAPABILITY_PLAN_CHARACTERS);
+  const boundedAnswer = answerContract.slice(0, MAX_ANSWER_CONTRACT_CHARACTERS);
+  const planning = [boundedCapability, boundedAnswer].filter(Boolean).join("\n\n");
   const availableForExisting = Math.max(
     0,
-    MAX_INGRESS_SYSTEM_CHARACTERS - boundedPlan.length - (boundedPlan ? 2 : 0),
+    MAX_INGRESS_SYSTEM_CHARACTERS - planning.length - (planning ? 2 : 0),
   );
   const boundedExisting = existing.slice(0, availableForExisting);
 
-  return [boundedPlan, boundedExisting].filter(Boolean).join("\n\n");
+  return [planning, boundedExisting].filter(Boolean).join("\n\n");
 }
 
 function mergeMemoryIntoSystem(existingSystem: unknown, memoryGrounding: string): string {
@@ -196,12 +211,13 @@ function mergeMemoryIntoSystem(existingSystem: unknown, memoryGrounding: string)
  * - prevent legacy per-request limits from ending a conversation;
  * - establish a stable conversation identity, preferring an explicit persisted ID;
  * - deterministically route each request to the relevant Cossa capabilities and reasoning depth;
+ * - apply a deterministic answer-quality/evidence contract before provider reasoning;
  * - optionally ground requests in RLS-protected durable/conversation memory;
  * - fail open while the additive memory feature is not yet enabled.
  *
  * Memory is activated only when COSSA_AI_MEMORY_ENABLED=true in the protected
- * server environment. Capability routing is deterministic and does not spend a
- * second provider call.
+ * server environment. Capability and answer-quality planning are deterministic
+ * and do not spend a second provider call.
  */
 async function prepareChatRequest(request: Request): Promise<Request | Response> {
   const url = new URL(request.url);
@@ -247,6 +263,7 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
   const latestUserMessage =
     [...payload.messages].reverse().find((message) => message.role === "user")?.content ?? "";
   const capabilityPlan = planCossaCapabilities(latestUserMessage);
+  const answerContract = planCossaAnswerContract(latestUserMessage);
 
   const headers = new Headers(request.headers);
   headers.set("content-type", "application/json");
@@ -261,11 +278,19 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     "x-cossa-ai-external-research",
     capabilityPlan.needsExternalResearch ? "required" : "not-required",
   );
+  headers.set("x-cossa-ai-answer-mode", answerContract.answerMode);
+  headers.set("x-cossa-ai-evidence-standard", answerContract.evidenceStandard);
+  headers.set("x-cossa-ai-uncertainty-policy", answerContract.uncertaintyPolicy);
+  headers.set(
+    "x-cossa-ai-conversation-continuity",
+    answerContract.preserveConversationContinuity ? "preserve" : "normal",
+  );
   if (shouldWindow) headers.set("x-cossa-ai-conversation-windowed", "true");
 
-  let system = mergeCapabilityIntoSystem(
+  let system = mergeReasoningPlansIntoSystem(
     payload.system,
     formatCossaCapabilityPlan(capabilityPlan),
+    formatCossaAnswerContract(answerContract),
   );
 
   if (memoryFeatureEnabled()) {
