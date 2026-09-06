@@ -452,11 +452,15 @@ async function bridgeStoreDeliveryEnrichment(
   environment: RuntimeEnvironment,
 ): Promise<number> {
   // HOLD is the fail-closed production default. CONTROLLED is an owner-only
-  // server configuration used for an explicit V2 allowlist; ACTIVE is not
+  // server configuration used for an explicit versioned allowlist; ACTIVE is not
   // enabled by default and must never be inferred from queue contents.
   const mode = resolveDeliveryEnrichmentMode(process.env.STORE_DELIVERY_ENRICHMENT_MODE);
   if (mode === "HOLD") return 0;
-  const selectedIds = (process.env.STORE_DELIVERY_ENRICHMENT_V2_IDS ?? "")
+  const controlledAllowlistVersion = process.env.STORE_DELIVERY_ENRICHMENT_V3_IDS !== undefined ? "v3" : "v2";
+  const controlledAllowlist = controlledAllowlistVersion === "v3"
+    ? process.env.STORE_DELIVERY_ENRICHMENT_V3_IDS
+    : process.env.STORE_DELIVERY_ENRICHMENT_V2_IDS;
+  const selectedIds = (controlledAllowlist ?? "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean)
@@ -539,7 +543,7 @@ async function bridgeStoreDeliveryEnrichment(
           priority: 40,
           max_attempts: 3,
           payload,
-          idempotency_key: `${mode === "CONTROLLED" ? "store-delivery-enrichment:v2" : "store-delivery-enrichment"}:${intake.id}`,
+          idempotency_key: `${mode === "CONTROLLED" ? `store-delivery-enrichment:${controlledAllowlistVersion}` : "store-delivery-enrichment"}:${intake.id}`,
         }),
       },
     );
