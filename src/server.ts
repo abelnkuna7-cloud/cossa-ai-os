@@ -14,6 +14,7 @@ import {
   planCossaCapabilities,
 } from "./lib/cossa-ai-capability-router.ts";
 import { deriveConversationIdentity } from "./lib/cossa-ai-conversation-identity.ts";
+import { resolveCossaMemoryActivation } from "./lib/cossa-ai-memory-activation.ts";
 import { loadServerMemoryGrounding } from "./lib/cossa-ai-memory.server.ts";
 import type { CossaConversationMessage } from "./lib/cossa-ai-memory.ts";
 import { consumeLastCapturedError } from "./lib/error-capture";
@@ -90,6 +91,7 @@ function addChatExecutionHeaders(request: Request, response: Response): Response
   if (new URL(request.url).pathname !== "/api/chat") return response;
 
   const forwardedHeaders = [
+    ["x-cossa-ai-memory-mode", "X-Cossa-AI-Memory-Mode"],
     ["x-cossa-ai-memory-grounded", "X-Cossa-AI-Memory-Grounded"],
     ["x-cossa-ai-conversation-windowed", "X-Cossa-AI-Conversation-Windowed"],
     ["x-cossa-ai-conversation-identity", "X-Cossa-AI-Conversation-Identity"],
@@ -162,10 +164,6 @@ function getBearerToken(request: Request): string | null {
   return authorization.slice(7).trim() || null;
 }
 
-function memoryFeatureEnabled(): boolean {
-  return process.env.COSSA_AI_MEMORY_ENABLED?.trim().toLowerCase() === "true";
-}
-
 function cleanConversationId(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const cleaned = value.trim();
@@ -213,11 +211,10 @@ function mergeMemoryIntoSystem(existingSystem: unknown, memoryGrounding: string)
  * - deterministically route each request to the relevant Cossa capabilities and reasoning depth;
  * - apply a deterministic answer-quality/evidence contract before provider reasoning;
  * - optionally ground requests in RLS-protected durable/conversation memory;
- * - fail open while the additive memory feature is not yet enabled.
+ * - keep memory activation fail-closed until read mode is explicitly enabled.
  *
- * Memory is activated only when COSSA_AI_MEMORY_ENABLED=true in the protected
- * server environment. Capability and answer-quality planning are deterministic
- * and do not spend a second provider call.
+ * Capability and answer-quality planning are deterministic and do not spend a
+ * second provider call.
  */
 async function prepareChatRequest(request: Request): Promise<Request | Response> {
   const url = new URL(request.url);
@@ -264,9 +261,11 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     [...payload.messages].reverse().find((message) => message.role === "user")?.content ?? "";
   const capabilityPlan = planCossaCapabilities(latestUserMessage);
   const answerContract = planCossaAnswerContract(latestUserMessage);
+  const memoryActivation = resolveCossaMemoryActivation();
 
   const headers = new Headers(request.headers);
   headers.set("content-type", "application/json");
+  headers.set("x-cossa-ai-memory-mode", memoryActivation.mode);
   headers.set(
     "x-cossa-ai-conversation-identity",
     explicitConversationId ? "explicit" : "derived",
@@ -293,7 +292,7 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     formatCossaAnswerContract(answerContract),
   );
 
-  if (memoryFeatureEnabled()) {
+  if (memoryActivation.readEnabled) {
     const memory = await loadServerMemoryGrounding({
       latestUserMessage,
       bearerToken: getBearerToken(request),
@@ -311,6 +310,8 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     } else {
       headers.set("x-cossa-ai-memory-grounded", "false");
     }
+  } else {
+    headers.set("x-cossa-ai-memory-grounded", "false");
   }
 
   return new Request(request.url, {
