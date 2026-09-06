@@ -14,11 +14,19 @@ import {
   planCossaCapabilities,
 } from "./lib/cossa-ai-capability-router.ts";
 import { deriveConversationIdentity } from "./lib/cossa-ai-conversation-identity.ts";
+import {
+  capacityFailedProvidersFromGatewayText,
+  successfulProviderFromGatewayResponse,
+} from "./lib/cossa-ai-gateway-outcome.ts";
 import { resolveCossaMemoryActivation } from "./lib/cossa-ai-memory-activation.ts";
 import { loadServerMemoryGrounding } from "./lib/cossa-ai-memory.server.ts";
 import type { CossaConversationMessage } from "./lib/cossa-ai-memory.ts";
 import { createCossaProviderGatewayController } from "./lib/cossa-ai-provider-gateway-controller.ts";
-import type { CossaRuntimeProvider } from "./lib/cossa-ai-provider-runtime.ts";
+import {
+  observeProviderCapacityFailure,
+  observeProviderResponse,
+  type CossaRuntimeProvider,
+} from "./lib/cossa-ai-provider-runtime.ts";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
@@ -137,6 +145,34 @@ function addChatExecutionHeaders(request: Request, response: Response): Response
     statusText: response.statusText,
     headers,
   });
+}
+
+async function observeChatGatewayOutcome(request: Request, response: Response): Promise<void> {
+  const url = new URL(request.url);
+  if (request.method !== "POST" || url.pathname !== "/api/chat") return;
+
+  const successfulProvider = successfulProviderFromGatewayResponse(response);
+  if (successfulProvider) {
+    observeProviderResponse(successfulProvider, response);
+    return;
+  }
+
+  if (response.status !== 429) return;
+
+  let safeGatewayText = "";
+  try {
+    safeGatewayText = await response.clone().text();
+  } catch {
+    return;
+  }
+
+  for (const provider of capacityFailedProvidersFromGatewayText(safeGatewayText)) {
+    // The inner gateway has already converted raw provider errors into a safe,
+    // provider-specific capacity message. Record only that classified signal.
+    // Until raw retry/reset headers are surfaced by each adapter this uses the
+    // runtime's short bounded fallback cooldown rather than inventing timing.
+    observeProviderCapacityFailure(provider, response);
+  }
 }
 
 function isH3SwallowedErrorBody(body: string): boolean {
@@ -324,10 +360,7 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
       headers.set("x-cossa-ai-runtime-action", decision.policy.action);
 
       const currentPreference = typeof payload.provider === "string" ? payload.provider : "auto";
-      if (
-        currentPreference === "auto" &&
-        selectedCandidate !== configuredProviders[0]
-      ) {
+      if (currentPreference === "auto" && selectedCandidate !== configuredProviders[0]) {
         provider = selectedCandidate;
       }
     }
@@ -384,6 +417,7 @@ export default {
       const handler = await getServerEntry();
       const rawResponse = await handler.fetch(prepared, env, ctx);
       const normalizedResponse = await normalizeCatastrophicSsrResponse(rawResponse);
+      await observeChatGatewayOutcome(prepared, normalizedResponse);
       const annotatedResponse = addChatExecutionHeaders(prepared, normalizedResponse);
       return addSearchProtection(prepared, annotatedResponse);
     } catch (error) {
