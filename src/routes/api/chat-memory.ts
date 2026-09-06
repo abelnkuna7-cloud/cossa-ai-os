@@ -6,6 +6,7 @@ import type { CossaConversationMessage } from "../../lib/cossa-ai-memory.ts";
 
 const MAX_MEMORY_MESSAGES = 250;
 const MEMORY_REFRESH_INTERVAL = 6;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 interface MemoryRefreshPayload {
   conversationId?: unknown;
@@ -22,7 +23,7 @@ function bearerToken(request: Request): string | null {
 function cleanConversationId(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const cleaned = value.trim();
-  return cleaned ? cleaned.slice(0, 160) : null;
+  return UUID_PATTERN.test(cleaned) ? cleaned : null;
 }
 
 function validMessages(value: unknown): CossaConversationMessage[] | null {
@@ -104,7 +105,12 @@ export const Route = createFileRoute("/api/chat-memory")({
         });
 
         return Response.json(result, {
-          status: result.reason === "missing-auth" || result.reason === "invalid-user" ? 401 : 200,
+          status:
+            result.reason === "missing-auth" ||
+            result.reason === "invalid-user" ||
+            result.reason === "invalid-conversation"
+              ? 401
+              : 200,
           headers: {
             "Cache-Control": "no-store",
             "X-Content-Type-Options": "nosniff",
