@@ -3,6 +3,11 @@ export type DeliveryEvidence = {
   weight: { kg: number; kind: "product" | "package" | "shipping" | "unknown"; evidence: string } | null;
 };
 
+export function resolveDeliveryEnrichmentMode(value: string | undefined): "HOLD" | "CONTROLLED" | "ACTIVE" {
+  const mode = (value ?? "").trim().toUpperCase();
+  return mode === "CONTROLLED" || mode === "ACTIVE" ? mode : "HOLD";
+}
+
 export function parseStoreDeliveryEvidence(text: string): DeliveryEvidence {
   const normalised = text.replace(/[–—]/g, "-").replace(/\s+/g, " ");
   const label = /(?:product\s+size|package\s+size|packed\s+dimensions?|carton\s+dimensions?|shipping\s+dimensions?|dimensions?|measurements?|size)\b/i;
