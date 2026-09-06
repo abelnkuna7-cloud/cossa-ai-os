@@ -1,4 +1,4 @@
-import { formatConversationMemory, type CossaConversationMemory } from "./cossa-ai-memory";
+import { formatConversationMemory, type CossaConversationMemory } from "./cossa-ai-memory.ts";
 
 const DEFAULT_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 const MAX_DURABLE_MEMORY_ITEMS = 12;
