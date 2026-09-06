@@ -68,3 +68,22 @@ test("enabled writeback still refuses missing authentication", async () => {
     else process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = previous;
   }
 });
+
+test("enabled writeback refuses compatibility or arbitrary conversation IDs", async () => {
+  const previous = process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+  process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = "true";
+
+  try {
+    const result = await writeConversationMemorySnapshot({
+      bearerToken: "present-but-not-used-before-id-validation",
+      conversationId: "cossa-compat-conversation",
+      memory: sampleMemory,
+      messageCount: 6,
+    });
+
+    assert.deepEqual(result, { written: false, reason: "invalid-conversation" });
+  } finally {
+    if (previous === undefined) delete process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+    else process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = previous;
+  }
+});
