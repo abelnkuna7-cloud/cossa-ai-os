@@ -36,6 +36,7 @@ import {
   saveStatusForInventoryIntake,
 } from "@/lib/store-inventory-safety";
 import { buildProductReadiness } from "@/lib/store-inventory-readiness";
+import { resolveStoreOperationsAccess } from "@/lib/store-operations-access";
 import {
   compareCatalogueSnapshots,
   type CatalogueSnapshotItem,
@@ -601,6 +602,7 @@ function StoreInventoryIntake() {
   const [supplierDraft, setSupplierDraft] = useState<SupplierDraft>(EMPTY_SUPPLIER);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
+  const [accessState, setAccessState] = useState<"authorized" | "unauthenticated" | "no_membership" | "insufficient_role" | "error">("authorized");
   const [importing, setImporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingSupplier, setSavingSupplier] = useState(false);
@@ -952,8 +954,18 @@ function StoreInventoryIntake() {
   async function loadOperationsBook() {
     setLoading(true);
     try {
+      const access = await resolveStoreOperationsAccess(db);
+      if (access.status !== "authorized") {
+        setAccessState(access.status);
+        setSuppliers([]);
+        setProfiles([]);
+        setSources([]);
+        setLoading(false);
+        return;
+      }
+      setAccessState("authorized");
+      const organisationId = access.organisationId;
       const [
-        organisationResult,
         supplierResult,
         profileResult,
         categoryMappingResult,
@@ -967,49 +979,56 @@ function StoreInventoryIntake() {
         lifecycleHistoryResult,
         storeProductIdentityResult,
       ] = await Promise.all([
-        db.from<{ id: string }>("organisations").select("id").limit(1),
-        db.from<StoreSupplier>("store_suppliers").select("*").order("name"),
-        db.from<FulfilmentProfile>("store_fulfilment_profiles").select("*").order("name"),
+        db.from<StoreSupplier>("store_suppliers").select("*").eq("organisation_id", organisationId).order("name"),
+        db.from<FulfilmentProfile>("store_fulfilment_profiles").select("*").eq("organisation_id", organisationId).order("name"),
         db
           .from<SupplierCategoryMapping>("store_supplier_category_mappings")
           .select("*")
+          .eq("organisation_id", organisationId)
           .order("supplier_category"),
         db
           .from<ProductSource>("store_inventory_intakes")
           .select("*")
+          .eq("organisation_id", organisationId)
           .order("created_at", { ascending: false }),
-        db.from<CatalogueCountRow>("store_products").select("id", { count: "exact", head: true }),
+        db.from<CatalogueCountRow>("store_products").select("id", { count: "exact", head: true }).eq("organisation_id", organisationId),
         db
           .from<CatalogueCountRow>("store_products")
           .select("id", { count: "exact", head: true })
+          .eq("organisation_id", organisationId)
           .eq("status", "active"),
         db
           .from<CatalogueCountRow>("store_products")
           .select("id", { count: "exact", head: true })
+          .eq("organisation_id", organisationId)
           .eq("status", "draft"),
         db
           .from<CatalogueCountRow>("store_products")
           .select("id", { count: "exact", head: true })
+          .eq("organisation_id", organisationId)
           .eq("status", "archived"),
         db
           .from<{ id: string }>("store_public_products")
-          .select("id", { count: "exact", head: true }),
+          .select("id", { count: "exact", head: true })
+          .eq("organisation_id", organisationId),
         db
           .from<CatalogueSnapshot>("store_catalogue_snapshots")
           .select("*")
+          .eq("organisation_id", organisationId)
           .order("created_at", { ascending: false })
           .limit(2),
         db
           .from<IntakeLifecycleHistory>("store_inventory_intake_lifecycle_history")
           .select("*")
+          .eq("organisation_id", organisationId)
           .order("created_at", { ascending: false }),
         db
           .from<StoreProductIdentity>("store_products")
-          .select("id,name,supplier_product_ref,supplier_url"),
+          .select("id,name,supplier_product_ref,supplier_url")
+          .eq("organisation_id", organisationId),
       ]);
 
       const error =
-        organisationResult.error ??
         supplierResult.error ??
         profileResult.error ??
         categoryMappingResult.error ??
@@ -1031,7 +1050,7 @@ function StoreInventoryIntake() {
 
       const nextSuppliers = supplierResult.data ?? [];
       const nextProfiles = profileResult.data ?? [];
-      setOrganisationId(organisationResult.data?.[0]?.id ?? "");
+      setOrganisationId(organisationId);
       setSuppliers(nextSuppliers);
       setProfiles(nextProfiles);
       setCategoryMappings(categoryMappingResult.data ?? []);
@@ -3329,13 +3348,25 @@ function StoreInventoryIntake() {
                   Supplier &amp; Partner Registry
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {suppliers.length} internal partner record{suppliers.length === 1 ? "" : "s"}
+                  {accessState === "authorized"
+                    ? `${suppliers.length} internal partner record${suppliers.length === 1 ? "" : "s"}`
+                    : accessState === "no_membership"
+                      ? "No active organisation membership"
+                      : accessState === "insufficient_role"
+                        ? "Insufficient organisation role"
+                        : accessState === "unauthenticated"
+                          ? "Sign in required"
+                          : "Unable to load registry"}
                 </p>
               </div>
             </div>
             <div className="mt-4 space-y-2">
               {loading ? (
                 <p className="text-sm text-muted-foreground">Loading registry…</p>
+              ) : accessState !== "authorized" ? (
+                <p className="text-sm text-destructive">
+                  Store Operations Book access could not be established. This is not an empty registry.
+                </p>
               ) : suppliers.length ? (
                 suppliers.map((supplier) => (
                   <div
