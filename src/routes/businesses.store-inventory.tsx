@@ -36,6 +36,7 @@ import {
   saveStatusForInventoryIntake,
 } from "@/lib/store-inventory-safety";
 import { buildProductReadiness } from "@/lib/store-inventory-readiness";
+import { resolveStoreOperationsAccess } from "@/lib/store-operations-access";
 import {
   compareCatalogueSnapshots,
   type CatalogueSnapshotItem,
@@ -601,6 +602,8 @@ function StoreInventoryIntake() {
   const [supplierDraft, setSupplierDraft] = useState<SupplierDraft>(EMPTY_SUPPLIER);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
+  const [accessState, setAccessState] = useState<"authorized" | "unauthenticated" | "no_membership" | "insufficient_role" | "error">("authorized");
+  const [diagnostic, setDiagnostic] = useState<Record<string, unknown> | null>(null);
   const [importing, setImporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingSupplier, setSavingSupplier] = useState(false);
@@ -952,8 +955,19 @@ function StoreInventoryIntake() {
   async function loadOperationsBook() {
     setLoading(true);
     try {
+      const access = await resolveStoreOperationsAccess(db);
+      if (access.status !== "authorized") {
+        setAccessState(access.status);
+        setDiagnostic({ authenticated: access.status !== "unauthenticated", membershipFound: access.status !== "no_membership", role: access.status === "insufficient_role" ? access.role : null, resolvedOrganisationId: null });
+        setSuppliers([]);
+        setProfiles([]);
+        setSources([]);
+        setLoading(false);
+        return;
+      }
+      setAccessState("authorized");
+      const organisationId = access.organisationId;
       const [
-        organisationResult,
         supplierResult,
         profileResult,
         categoryMappingResult,
@@ -967,49 +981,56 @@ function StoreInventoryIntake() {
         lifecycleHistoryResult,
         storeProductIdentityResult,
       ] = await Promise.all([
-        db.from<{ id: string }>("organisations").select("id").limit(1),
-        db.from<StoreSupplier>("store_suppliers").select("*").order("name"),
-        db.from<FulfilmentProfile>("store_fulfilment_profiles").select("*").order("name"),
+        db.from<StoreSupplier>("store_suppliers").select("*").eq("organisation_id", organisationId).order("name"),
+        db.from<FulfilmentProfile>("store_fulfilment_profiles").select("*").eq("organisation_id", organisationId).order("name"),
         db
           .from<SupplierCategoryMapping>("store_supplier_category_mappings")
           .select("*")
+          .eq("organisation_id", organisationId)
           .order("supplier_category"),
         db
           .from<ProductSource>("store_inventory_intakes")
           .select("*")
+          .eq("organisation_id", organisationId)
           .order("created_at", { ascending: false }),
-        db.from<CatalogueCountRow>("store_products").select("id", { count: "exact", head: true }),
+        db.from<CatalogueCountRow>("store_products").select("id", { count: "exact", head: true }).eq("organisation_id", organisationId),
         db
           .from<CatalogueCountRow>("store_products")
           .select("id", { count: "exact", head: true })
+          .eq("organisation_id", organisationId)
           .eq("status", "active"),
         db
           .from<CatalogueCountRow>("store_products")
           .select("id", { count: "exact", head: true })
+          .eq("organisation_id", organisationId)
           .eq("status", "draft"),
         db
           .from<CatalogueCountRow>("store_products")
           .select("id", { count: "exact", head: true })
+          .eq("organisation_id", organisationId)
           .eq("status", "archived"),
         db
           .from<{ id: string }>("store_public_products")
-          .select("id", { count: "exact", head: true }),
+          .select("id", { count: "exact", head: true })
+          .eq("organisation_id", organisationId),
         db
           .from<CatalogueSnapshot>("store_catalogue_snapshots")
           .select("*")
+          .eq("organisation_id", organisationId)
           .order("created_at", { ascending: false })
           .limit(2),
         db
           .from<IntakeLifecycleHistory>("store_inventory_intake_lifecycle_history")
           .select("*")
+          .eq("organisation_id", organisationId)
           .order("created_at", { ascending: false }),
         db
           .from<StoreProductIdentity>("store_products")
-          .select("id,name,supplier_product_ref,supplier_url"),
+          .select("id,name,supplier_product_ref,supplier_url")
+          .eq("organisation_id", organisationId),
       ]);
 
       const error =
-        organisationResult.error ??
         supplierResult.error ??
         profileResult.error ??
         categoryMappingResult.error ??
@@ -1023,15 +1044,19 @@ function StoreInventoryIntake() {
         lifecycleHistoryResult.error ??
         storeProductIdentityResult.error;
       if (error) {
+        setAccessState("error");
+        setDiagnostic({ authenticated: true, membershipFound: true, role: access.role, resolvedOrganisationId: organisationId, queries: { suppliers: supplierResult.data?.length ?? 0, fulfilmentProfiles: profileResult.data?.length ?? 0, inventoryIntakes: sourceResult.data?.length ?? 0 }, error: { code: error.code ?? null, message: error.message } });
         toast.error(
           `Could not load Store Operations Book: ${error.message}. Apply the intake migration before using this section.`,
         );
         return;
       }
 
+      setDiagnostic({ authenticated: true, membershipFound: true, role: access.role, resolvedOrganisationId: organisationId, queries: { suppliers: supplierResult.data?.length ?? 0, fulfilmentProfiles: profileResult.data?.length ?? 0, inventoryIntakes: sourceResult.data?.length ?? 0 }, errors: null });
+
       const nextSuppliers = supplierResult.data ?? [];
       const nextProfiles = profileResult.data ?? [];
-      setOrganisationId(organisationResult.data?.[0]?.id ?? "");
+      setOrganisationId(organisationId);
       setSuppliers(nextSuppliers);
       setProfiles(nextProfiles);
       setCategoryMappings(categoryMappingResult.data ?? []);
@@ -1950,6 +1975,9 @@ function StoreInventoryIntake() {
 
   return (
     <div className="mx-auto flex max-w-[1550px] flex-col gap-5 pb-12">
+      {typeof window !== "undefined" && window.location.hostname.endsWith("vercel.app") && diagnostic ? (
+        <pre className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">{JSON.stringify(diagnostic, null, 2)}</pre>
+      ) : null}
       <section className="glass-card relative overflow-hidden p-5 sm:p-7">
         <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -3329,13 +3357,25 @@ function StoreInventoryIntake() {
                   Supplier &amp; Partner Registry
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {suppliers.length} internal partner record{suppliers.length === 1 ? "" : "s"}
+                  {accessState === "authorized"
+                    ? `${suppliers.length} internal partner record${suppliers.length === 1 ? "" : "s"}`
+                    : accessState === "no_membership"
+                      ? "No active organisation membership"
+                      : accessState === "insufficient_role"
+                        ? "Insufficient organisation role"
+                        : accessState === "unauthenticated"
+                          ? "Sign in required"
+                          : "Unable to load registry"}
                 </p>
               </div>
             </div>
             <div className="mt-4 space-y-2">
               {loading ? (
                 <p className="text-sm text-muted-foreground">Loading registry…</p>
+              ) : accessState !== "authorized" ? (
+                <p className="text-sm text-destructive">
+                  Store Operations Book access could not be established. This is not an empty registry.
+                </p>
               ) : suppliers.length ? (
                 suppliers.map((supplier) => (
                   <div
