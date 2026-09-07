@@ -603,6 +603,7 @@ function StoreInventoryIntake() {
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
   const [accessState, setAccessState] = useState<"authorized" | "unauthenticated" | "no_membership" | "insufficient_role" | "error">("authorized");
+  const [diagnostic, setDiagnostic] = useState<Record<string, unknown> | null>(null);
   const [importing, setImporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingSupplier, setSavingSupplier] = useState(false);
@@ -957,6 +958,7 @@ function StoreInventoryIntake() {
       const access = await resolveStoreOperationsAccess(db);
       if (access.status !== "authorized") {
         setAccessState(access.status);
+        setDiagnostic({ authenticated: access.status !== "unauthenticated", membershipFound: access.status !== "no_membership", role: access.status === "insufficient_role" ? access.role : null, resolvedOrganisationId: null });
         setSuppliers([]);
         setProfiles([]);
         setSources([]);
@@ -1042,11 +1044,15 @@ function StoreInventoryIntake() {
         lifecycleHistoryResult.error ??
         storeProductIdentityResult.error;
       if (error) {
+        setAccessState("error");
+        setDiagnostic({ authenticated: true, membershipFound: true, role: access.role, resolvedOrganisationId: organisationId, queries: { suppliers: supplierResult.data?.length ?? 0, fulfilmentProfiles: profileResult.data?.length ?? 0, inventoryIntakes: sourceResult.data?.length ?? 0 }, error: { code: error.code ?? null, message: error.message } });
         toast.error(
           `Could not load Store Operations Book: ${error.message}. Apply the intake migration before using this section.`,
         );
         return;
       }
+
+      setDiagnostic({ authenticated: true, membershipFound: true, role: access.role, resolvedOrganisationId: organisationId, queries: { suppliers: supplierResult.data?.length ?? 0, fulfilmentProfiles: profileResult.data?.length ?? 0, inventoryIntakes: sourceResult.data?.length ?? 0 }, errors: null });
 
       const nextSuppliers = supplierResult.data ?? [];
       const nextProfiles = profileResult.data ?? [];
@@ -1969,6 +1975,9 @@ function StoreInventoryIntake() {
 
   return (
     <div className="mx-auto flex max-w-[1550px] flex-col gap-5 pb-12">
+      {typeof window !== "undefined" && window.location.hostname.endsWith("vercel.app") && diagnostic ? (
+        <pre className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">{JSON.stringify(diagnostic, null, 2)}</pre>
+      ) : null}
       <section className="glass-card relative overflow-hidden p-5 sm:p-7">
         <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
