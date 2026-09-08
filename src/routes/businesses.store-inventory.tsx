@@ -65,6 +65,13 @@ import {
   classifySupplierCategory,
   isCanonicalStoreDepartment,
 } from "@/lib/store-taxonomy";
+import {
+  STORE_MERCHANDISING_TAGS,
+  buildCompetitivePricingNotes,
+  normaliseAdditionalDepartments,
+  normaliseFeatureLines,
+  normaliseMerchandisingTags,
+} from "@/lib/store-merchandising";
 import type {
   ImportConfidence,
   ImportedVariant,
@@ -182,6 +189,9 @@ type ProductSource = {
   description: string | null;
   specifications: string | null;
   category: string | null;
+  additional_categories: unknown;
+  featured: boolean;
+  merchandising_tags: unknown;
   brand: string | null;
   image_urls: string[];
   affiliate_url: string | null;
@@ -309,6 +319,9 @@ type IntakeForm = {
   variants: ImportedVariant[];
   supplierCategory: string;
   category: string;
+  additionalCategories: string[];
+  featured: boolean;
+  merchandisingTags: string[];
   brand: string;
   imageUrls: string[];
   manualImageUrl: string;
@@ -441,6 +454,9 @@ function emptyForm(supplier?: StoreSupplier, profile?: FulfilmentProfile): Intak
     variants: [],
     supplierCategory: "",
     category: "",
+    additionalCategories: [],
+    featured: false,
+    merchandisingTags: [],
     brand: "",
     imageUrls: [],
     manualImageUrl: "",
@@ -1605,10 +1621,10 @@ function StoreInventoryIntake() {
       short_description: form.shortDescription.trim() || null,
       description: form.description.trim() || null,
       specifications: form.specifications.trim() || null,
-      features: form.features
-        .split("\n")
-        .map((value) => value.trim())
-        .filter(Boolean),
+      features: normaliseFeatureLines(form.features),
+      additional_categories: normaliseAdditionalDepartments(form.category, form.additionalCategories),
+      featured: form.featured,
+      merchandising_tags: normaliseMerchandisingTags(form.merchandisingTags),
       variants: form.variants,
       supplier_category: form.supplierCategory.trim() || null,
       category: canonicalDepartmentFor(form.category)?.slug ?? null,
@@ -1650,7 +1666,13 @@ function StoreInventoryIntake() {
       warranty_profile_override: form.warrantyProfileOverride.trim() || null,
       market_price: num(form.marketPrice),
       market_price_source_url: form.marketPriceSourceUrl.trim() || null,
-      market_price_notes: form.marketPriceNotes.trim() || null,
+      market_price_notes:
+        buildCompetitivePricingNotes({
+          cossaPrice: sellingPrice,
+          marketPrice: num(form.marketPrice),
+          marketPriceSourceUrl: form.marketPriceSourceUrl,
+          existingNotes: form.marketPriceNotes,
+        }) || null,
       approval_status: status,
       supplier_cost_confirmed: form.supplierCostConfirmed,
       stock_confirmed: form.stockConfirmed,
@@ -1930,10 +1952,16 @@ function StoreInventoryIntake() {
       shortDescription: product.short_description ?? "",
       description: product.description ?? "",
       specifications: source.specifications ?? "",
-      features: strings(source.features).join("\n"),
+      features: normaliseFeatureLines(source.features).join("\n"),
       variants: importedVariantRows(source.variants),
       supplierCategory: source.supplier_category ?? "",
       category: product.category ?? "",
+      additionalCategories: normaliseAdditionalDepartments(
+        product.category ?? "",
+        source.additional_categories,
+      ),
+      featured: Boolean(source.featured),
+      merchandisingTags: normaliseMerchandisingTags(source.merchandising_tags),
       brand: product.brand ?? "",
       imageUrls: product.image_urls ?? [],
       manualImageUrl: "",
@@ -2353,6 +2381,68 @@ function StoreInventoryIntake() {
                 is never added here.
               </p>
             </Field>
+            <Field label="Additional departments / collections" className="sm:col-span-2">
+              <div className="grid gap-2 rounded-xl border border-border/70 p-3 sm:grid-cols-2 lg:grid-cols-3">
+                {CANONICAL_STORE_DEPARTMENTS.filter((department) => department.slug !== form.category).map(
+                  (department) => {
+                    const checked = form.additionalCategories.includes(department.slug);
+                    return (
+                      <label key={department.slug} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            update(
+                              "additionalCategories",
+                              checked
+                                ? form.additionalCategories.filter((slug) => slug !== department.slug)
+                                : [...form.additionalCategories, department.slug],
+                            )
+                          }
+                        />
+                        <span>{department.name}</span>
+                      </label>
+                    );
+                  },
+                )}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                One primary department remains the reporting source of truth. Additional placements improve discovery without duplicating the SKU.
+              </p>
+            </Field>
+            <Field label="Merchandising & featuring" className="sm:col-span-2">
+              <div className="flex flex-wrap gap-3 rounded-xl border border-border/70 p-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={form.featured}
+                    onChange={(event) => update("featured", event.target.checked)}
+                  />
+                  Featured
+                </label>
+                {STORE_MERCHANDISING_TAGS.map((tag) => {
+                  const checked = form.merchandisingTags.includes(tag);
+                  const label = tag.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+                  return (
+                    <label key={tag} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          update(
+                            "merchandisingTags",
+                            checked
+                              ? form.merchandisingTags.filter((value) => value !== tag)
+                              : [...form.merchandisingTags, tag],
+                          )
+                        }
+                      />
+                      {label}
+                    </label>
+                  );
+                })}
+              </div>
+            </Field>
             <Field label="Supplier category / product type">
               <input
                 className={inputClass}
@@ -2770,7 +2860,16 @@ function StoreInventoryIntake() {
                   className={`${inputClass} min-h-20`}
                   value={form.marketPriceNotes}
                   onChange={(event) => update("marketPriceNotes", event.target.value)}
-                  placeholder="Why this price is fair and competitive before the product is published"
+                  onBlur={() => {
+                    if (form.marketPriceNotes.trim()) return;
+                    const generated = buildCompetitivePricingNotes({
+                      cossaPrice: sellingPrice,
+                      marketPrice: num(form.marketPrice),
+                      marketPriceSourceUrl: form.marketPriceSourceUrl,
+                    });
+                    if (generated) update("marketPriceNotes", generated);
+                  }}
+                  placeholder="Add notes or leave blank and the recorded benchmark will generate a factual comparison"
                 />
               </Field>
             </div>

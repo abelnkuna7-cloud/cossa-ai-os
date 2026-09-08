@@ -476,9 +476,17 @@ function enrichedSpecifications(description: string | null, initial: string[]): 
   return specifications.slice(0, 24);
 }
 
-function extractedFeatures(description: string | null): string[] {
+function extractedFeatures(description: string | null, rawDescription?: string | null): string[] {
   const features: string[] = [];
   const text = description ?? "";
+  if (rawDescription) {
+    for (const match of rawDescription.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)) {
+      const feature = cleanText(match[1]);
+      if (!feature || feature.length < 3 || feature.length > 500) continue;
+      addUnique(features, feature);
+      if (features.length >= 24) break;
+    }
+  }
   if (/three\s+layer|3\s*layer/i.test(text)) addUnique(features, "3-layer design");
   if (/double\s+zipper/i.test(text)) addUnique(features, "Double zipper");
   if (/mesh\s+pockets?/i.test(text)) addUnique(features, "Mesh pockets");
@@ -581,7 +589,10 @@ function parseProductPage(
           ? { status: "unavailable" as const, text: "Unavailable" }
           : schemaAvailability;
   const specs = enrichedSpecifications(description, genericSpecifications(product));
-  const features = extractedFeatures(description);
+  const features = extractedFeatures(
+    description,
+    typeof shopify?.description === "string" ? shopify.description : null,
+  );
   const variants = importedVariants(shopify);
   const imageUrls = uniqueUrls(pageImages, sourceUrl);
   const signals = priceSignalsFromVisibleText(input.html);
