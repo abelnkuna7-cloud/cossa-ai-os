@@ -1011,8 +1011,7 @@ function StoreInventoryIntake() {
           .eq("status", "archived"),
         db
           .from<{ id: string }>("store_public_products")
-          .select("id", { count: "exact", head: true })
-          .eq("organisation_id", organisationId),
+          .select("id", { count: "exact", head: true }),
         db
           .from<CatalogueSnapshot>("store_catalogue_snapshots")
           .select("*")
@@ -1039,7 +1038,6 @@ function StoreInventoryIntake() {
         activeCatalogueCountResult.error ??
         draftCatalogueCountResult.error ??
         archivedCatalogueCountResult.error ??
-        publicCatalogueCountResult.error ??
         snapshotResult.error ??
         lifecycleHistoryResult.error ??
         storeProductIdentityResult.error;
@@ -1052,7 +1050,31 @@ function StoreInventoryIntake() {
         return;
       }
 
-      setDiagnostic({ authenticated: true, membershipFound: true, role: access.role, resolvedOrganisationId: organisationId, queries: { suppliers: supplierResult.data?.length ?? 0, fulfilmentProfiles: profileResult.data?.length ?? 0, inventoryIntakes: sourceResult.data?.length ?? 0 }, errors: null });
+      setDiagnostic({
+        authenticated: true,
+        membershipFound: true,
+        role: access.role,
+        resolvedOrganisationId: organisationId,
+        queries: {
+          suppliers: supplierResult.data?.length ?? 0,
+          fulfilmentProfiles: profileResult.data?.length ?? 0,
+          inventoryIntakes: sourceResult.data?.length ?? 0,
+        },
+        errors: publicCatalogueCountResult.error
+          ? {
+              publicCatalogue: {
+                code: publicCatalogueCountResult.error.code ?? null,
+                message: publicCatalogueCountResult.error.message,
+              },
+            }
+          : null,
+      });
+
+      if (publicCatalogueCountResult.error) {
+        toast.warning(
+          `Public catalogue count could not be loaded: ${publicCatalogueCountResult.error.message}. Supplier and fulfilment data remain available.`,
+        );
+      }
 
       const nextSuppliers = supplierResult.data ?? [];
       const nextProfiles = profileResult.data ?? [];
