@@ -10,189 +10,42 @@ permissions:
 
 jobs:
   upgrade:
-    if: github.actor != 'github-actions[bot]'
+    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           ref: feat/store-intake-merchandising-upgrade
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Apply additive intake upgrade
-        shell: bash
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
 
-          route_path = Path('src/routes/businesses.store-inventory.tsx')
-          route = route_path.read_text()
+      - name: Apply guarded additive patch
+        run: python3 scripts/store_merchandising_upgrade.py
 
-          def once(old, new, label):
-              global route
-              count = route.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected exactly 1 match, found {count}')
-              route = route.replace(old, new, 1)
-
-          once(
-          'import {\n  CANONICAL_STORE_DEPARTMENTS,\n  canonicalDepartmentFor,\n  classifySupplierCategory,\n  isCanonicalStoreDepartment,\n} from "@/lib/store-taxonomy";\n',
-          'import {\n  CANONICAL_STORE_DEPARTMENTS,\n  canonicalDepartmentFor,\n  classifySupplierCategory,\n  isCanonicalStoreDepartment,\n} from "@/lib/store-taxonomy";\nimport {\n  STORE_MERCHANDISING_TAGS,\n  buildCompetitivePricingNotes,\n  normaliseAdditionalDepartments,\n  normaliseFeatureLines,\n  normaliseMerchandisingTags,\n} from "@/lib/store-merchandising";\n',
-          'merchandising imports')
-
-          once(
-          '  category: string | null;\n  brand: string | null;\n  image_urls: string[];\n',
-          '  category: string | null;\n  additional_categories: unknown;\n  featured: boolean;\n  merchandising_tags: unknown;\n  brand: string | null;\n  image_urls: string[];\n',
-          'ProductSource merchandising fields')
-
-          once(
-          '  supplierCategory: string;\n  category: string;\n  brand: string;\n',
-          '  supplierCategory: string;\n  category: string;\n  additionalCategories: string[];\n  featured: boolean;\n  merchandisingTags: string[];\n  brand: string;\n',
-          'IntakeForm merchandising fields')
-
-          once(
-          '    supplierCategory: "",\n    category: "",\n    brand: "",\n',
-          '    supplierCategory: "",\n    category: "",\n    additionalCategories: [],\n    featured: false,\n    merchandisingTags: [],\n    brand: "",\n',
-          'empty merchandising fields')
-
-          once(
-          '      features: strings(source.features).join("\\n"),\n      variants: importedVariantRows(source.variants),\n      supplierCategory: source.supplier_category ?? "",\n      category: product.category ?? "",\n      brand: product.brand ?? "",\n',
-          '      features: normaliseFeatureLines(source.features).join("\\n"),\n      variants: importedVariantRows(source.variants),\n      supplierCategory: source.supplier_category ?? "",\n      category: product.category ?? "",\n      additionalCategories: normaliseAdditionalDepartments(\n        product.category ?? "",\n        source.additional_categories,\n      ),\n      featured: Boolean(source.featured),\n      merchandisingTags: normaliseMerchandisingTags(source.merchandising_tags),\n      brand: product.brand ?? "",\n',
-          'load merchandising fields')
-
-          once(
-          '      specifications: form.specifications.trim() || null,\n      features: form.features\n        .split("\\n")\n        .map((value) => value.trim())\n        .filter(Boolean),\n      variants: form.variants,\n',
-          '      specifications: form.specifications.trim() || null,\n      features: normaliseFeatureLines(form.features),\n      additional_categories: normaliseAdditionalDepartments(form.category, form.additionalCategories),\n      featured: form.featured,\n      merchandising_tags: normaliseMerchandisingTags(form.merchandisingTags),\n      variants: form.variants,\n',
-          'save merchandising fields')
-
-          once(
-          '      market_price: num(form.marketPrice),\n      market_price_source_url: form.marketPriceSourceUrl.trim() || null,\n      market_price_notes: form.marketPriceNotes.trim() || null,\n',
-          '      market_price: num(form.marketPrice),\n      market_price_source_url: form.marketPriceSourceUrl.trim() || null,\n      market_price_notes:\n        buildCompetitivePricingNotes({\n          cossaPrice: sellingPrice,\n          marketPrice: num(form.marketPrice),\n          marketPriceSourceUrl: form.marketPriceSourceUrl,\n          existingNotes: form.marketPriceNotes,\n        }) || null,\n',
-          'competitive notes persistence')
-
-          once(
-          '                Only active Cossa Store departments are selectable. Historical product category text\n                is never added here.\n              </p>\n            </Field>\n            <Field label="Supplier category / product type">\n',
-          '''                Only active Cossa Store departments are selectable. Historical product category text
-                is never added here.
-              </p>
-            </Field>
-            <Field label="Additional departments / collections" className="sm:col-span-2">
-              <div className="grid gap-2 rounded-xl border border-border/70 p-3 sm:grid-cols-2 lg:grid-cols-3">
-                {CANONICAL_STORE_DEPARTMENTS.filter((department) => department.slug !== form.category).map(
-                  (department) => {
-                    const checked = form.additionalCategories.includes(department.slug);
-                    return (
-                      <label key={department.slug} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() =>
-                            update(
-                              "additionalCategories",
-                              checked
-                                ? form.additionalCategories.filter((slug) => slug !== department.slug)
-                                : [...form.additionalCategories, department.slug],
-                            )
-                          }
-                        />
-                        <span>{department.name}</span>
-                      </label>
-                    );
-                  },
-                )}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                One primary department remains the reporting source of truth. Additional placements improve discovery without duplicating the SKU.
-              </p>
-            </Field>
-            <Field label="Merchandising & featuring" className="sm:col-span-2">
-              <div className="flex flex-wrap gap-3 rounded-xl border border-border/70 p-3">
-                <label className="flex items-center gap-2 text-sm font-medium">
-                  <input
-                    type="checkbox"
-                    checked={form.featured}
-                    onChange={(event) => update("featured", event.target.checked)}
-                  />
-                  Featured
-                </label>
-                {STORE_MERCHANDISING_TAGS.map((tag) => {
-                  const checked = form.merchandisingTags.includes(tag);
-                  const label = tag.replace(/_/g, " ").replace(/\\b\\w/g, (letter) => letter.toUpperCase());
-                  return (
-                    <label key={tag} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() =>
-                          update(
-                            "merchandisingTags",
-                            checked
-                              ? form.merchandisingTags.filter((value) => value !== tag)
-                              : [...form.merchandisingTags, tag],
-                          )
-                        }
-                      />
-                      {label}
-                    </label>
-                  );
-                })}
-              </div>
-            </Field>
-            <Field label="Supplier category / product type">
-''',
-          'multi-department UI')
-
-          once(
-          '              <Field label="Competitive pricing notes" className="sm:col-span-2">\n                <textarea\n                  className={`${inputClass} min-h-20`}\n                  value={form.marketPriceNotes}\n                  onChange={(event) => update("marketPriceNotes", event.target.value)}\n                  placeholder="Why this price is fair and competitive before the product is published"\n',
-          '              <Field label="Competitive pricing notes" className="sm:col-span-2">\n                <textarea\n                  className={`${inputClass} min-h-20`}\n                  value={form.marketPriceNotes}\n                  onChange={(event) => update("marketPriceNotes", event.target.value)}\n                  onBlur={() => {\n                    if (form.marketPriceNotes.trim()) return;\n                    const generated = buildCompetitivePricingNotes({\n                      cossaPrice: sellingPrice,\n                      marketPrice: num(form.marketPrice),\n                      marketPriceSourceUrl: form.marketPriceSourceUrl,\n                    });\n                    if (generated) update("marketPriceNotes", generated);\n                  }}\n                  placeholder="Add notes or leave blank and the recorded benchmark will generate a factual comparison"\n',
-          'competitive notes UI')
-
-          route_path.write_text(route)
-
-          importer_path = Path('src/lib/store-product-import.server.ts')
-          importer = importer_path.read_text()
-          old = '''function extractedFeatures(description: string | null): string[] {
-  const features: string[] = [];
-  const text = description ?? "";
-'''
-          new = '''function extractedFeatures(description: string | null, rawDescription?: string | null): string[] {
-  const features: string[] = [];
-  const text = description ?? "";
-  if (rawDescription) {
-    for (const match of rawDescription.matchAll(/<li\\b[^>]*>([\\s\\S]*?)<\\/li>/gi)) {
-      const feature = cleanText(match[1]);
-      if (!feature || feature.length < 3 || feature.length > 500) continue;
-      addUnique(features, feature);
-      if (features.length >= 24) break;
-    }
-  }
-'''
-          if importer.count(old) != 1:
-              raise SystemExit(f'feature extractor: expected 1 match, found {importer.count(old)}')
-          importer = importer.replace(old, new, 1)
-          old_call = '  const features = extractedFeatures(description);\n'
-          new_call = '  const features = extractedFeatures(\n    description,\n    typeof shopify?.description === "string" ? shopify.description : null,\n  );\n'
-          if importer.count(old_call) != 1:
-              raise SystemExit(f'feature call: expected 1 match, found {importer.count(old_call)}')
-          importer = importer.replace(old_call, new_call, 1)
-          importer_path.write_text(importer)
-          PY
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Run tests
+
+      - name: Run unit tests
         run: npm test
-      - name: Build
+
+      - name: Build application
         run: npm run build
+
       - name: Commit verified upgrade
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/routes/businesses.store-inventory.tsx src/lib/store-product-import.server.ts src/lib/store-merchandising.ts tests/store-merchandising.test.ts supabase/migrations/20260908230000_store_intake_merchandising_upgrade.sql
+          git add src/routes/businesses.store-inventory.tsx src/lib/store-product-import.server.ts
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo "No upgrade changes to commit"
+            echo "No generated code changes to commit"
             exit 0
           fi
           git commit -m "feat(store): add smart multi-department merchandising intake"
