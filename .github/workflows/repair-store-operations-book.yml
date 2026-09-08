@@ -1,0 +1,109 @@
+name: Repair Store Operations Book regression
+
+on:
+  push:
+    branches:
+      - fix/store-operations-book-regression
+    paths:
+      - .github/workflows/repair-store-operations-book.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/store-operations-book-regression
+
+      - name: Apply minimal Store Operations Book repair
+        shell: python
+        run: |
+          from pathlib import Path
+
+          route = Path('src/routes/businesses.store-inventory.tsx')
+          text = route.read_text()
+
+          old_public_query = '''        db
+            .from<{ id: string }>("store_public_products")
+            .select("id", { count: "exact", head: true })
+            .eq("organisation_id", organisationId),'''
+          new_public_query = '''        db
+            .from<{ id: string }>("store_public_products")
+            .select("id", { count: "exact", head: true }),'''
+
+          if old_public_query not in text:
+              raise SystemExit('Expected invalid store_public_products organisation filter was not found; aborting without changes.')
+          text = text.replace(old_public_query, new_public_query, 1)
+
+          old_fatal_chain = '''        archivedCatalogueCountResult.error ??
+            publicCatalogueCountResult.error ??
+            snapshotResult.error ??'''
+          new_fatal_chain = '''        archivedCatalogueCountResult.error ??
+            snapshotResult.error ??'''
+          if old_fatal_chain not in text:
+              raise SystemExit('Expected public catalogue fatal-error chain was not found; aborting without changes.')
+          text = text.replace(old_fatal_chain, new_fatal_chain, 1)
+
+          old_diagnostic = '''      setDiagnostic({ authenticated: true, membershipFound: true, role: access.role, resolvedOrganisationId: organisationId, queries: { suppliers: supplierResult.data?.length ?? 0, fulfilmentProfiles: profileResult.data?.length ?? 0, inventoryIntakes: sourceResult.data?.length ?? 0 }, errors: null });'''
+          new_diagnostic = '''      setDiagnostic({
+            authenticated: true,
+            membershipFound: true,
+            role: access.role,
+            resolvedOrganisationId: organisationId,
+            queries: {
+              suppliers: supplierResult.data?.length ?? 0,
+              fulfilmentProfiles: profileResult.data?.length ?? 0,
+              inventoryIntakes: sourceResult.data?.length ?? 0,
+            },
+            errors: publicCatalogueCountResult.error
+              ? {
+                  publicCatalogue: {
+                    code: publicCatalogueCountResult.error.code ?? null,
+                    message: publicCatalogueCountResult.error.message,
+                  },
+                }
+              : null,
+          });
+
+          if (publicCatalogueCountResult.error) {
+            toast.warning(
+              `Public catalogue count could not be loaded: ${publicCatalogueCountResult.error.message}. Supplier and fulfilment data remain available.`,
+            );
+          }'''
+          if old_diagnostic not in text:
+              raise SystemExit('Expected success diagnostic block was not found; aborting without changes.')
+          text = text.replace(old_diagnostic, new_diagnostic, 1)
+
+          route.write_text(text)
+
+          test = Path('tests/store-operations-book-regression.test.ts')
+          test.write_text('''import assert from "node:assert/strict";\nimport { readFileSync } from "node:fs";\nimport test from "node:test";\n\nconst source = readFileSync(new URL("../src/routes/businesses.store-inventory.tsx", import.meta.url), "utf8");\n\ntest("public catalogue projection is not organisation-filtered", () => {\n  const publicQuery = source.match(/from<\\{ id: string \\}>\\(\\"store_public_products\\"\\)[\\s\\S]{0,180}?select\\(\\"id\\", \\{ count: \\"exact\\", head: true \\}\\)/);\n  assert.ok(publicQuery, "store_public_products count query should exist");\n  assert.doesNotMatch(publicQuery[0], /organisation_id/);\n});\n\ntest("public catalogue count failure is non-fatal to Store Operations Book loading", () => {\n  const fatalChain = source.match(/const error =[\\s\\S]{0,700}?storeProductIdentityResult\\.error;/);\n  assert.ok(fatalChain, "fatal Store Operations Book error chain should exist");\n  assert.doesNotMatch(fatalChain[0], /publicCatalogueCountResult\\.error/);\n  assert.match(source, /Supplier and fulfilment data remain available/);\n});\n''')
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused Store tests
+        run: >-
+          node --experimental-strip-types --test
+          tests/store-operations-access.test.ts
+          tests/store-supplier-registry.test.ts
+          tests/store-catalogue-snapshot.test.ts
+          tests/store-inventory-readiness.test.ts
+          tests/store-product-import.test.ts
+          tests/store-inventory-publication.test.ts
+          tests/store-operations-book-regression.test.ts
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit verified repair
+        run: |
+          git config user.name "cossa-repair-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/routes/businesses.store-inventory.tsx tests/store-operations-book-regression.test.ts
+          git commit -m "fix(store): restore Store Operations Book DMC loading"
+          git push origin HEAD:fix/store-operations-book-regression
