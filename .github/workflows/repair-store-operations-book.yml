@@ -28,52 +28,52 @@ jobs:
           text = route.read_text()
 
           old_public_query = '''        db
-            .from<{ id: string }>("store_public_products")
-            .select("id", { count: "exact", head: true })
-            .eq("organisation_id", organisationId),'''
+          .from<{ id: string }>("store_public_products")
+          .select("id", { count: "exact", head: true })
+          .eq("organisation_id", organisationId),'''
           new_public_query = '''        db
-            .from<{ id: string }>("store_public_products")
-            .select("id", { count: "exact", head: true }),'''
+          .from<{ id: string }>("store_public_products")
+          .select("id", { count: "exact", head: true }),'''
 
           if old_public_query not in text:
               raise SystemExit('Expected invalid store_public_products organisation filter was not found; aborting without changes.')
           text = text.replace(old_public_query, new_public_query, 1)
 
           old_fatal_chain = '''        archivedCatalogueCountResult.error ??
-            publicCatalogueCountResult.error ??
-            snapshotResult.error ??'''
+        publicCatalogueCountResult.error ??
+        snapshotResult.error ??'''
           new_fatal_chain = '''        archivedCatalogueCountResult.error ??
-            snapshotResult.error ??'''
+        snapshotResult.error ??'''
           if old_fatal_chain not in text:
               raise SystemExit('Expected public catalogue fatal-error chain was not found; aborting without changes.')
           text = text.replace(old_fatal_chain, new_fatal_chain, 1)
 
           old_diagnostic = '''      setDiagnostic({ authenticated: true, membershipFound: true, role: access.role, resolvedOrganisationId: organisationId, queries: { suppliers: supplierResult.data?.length ?? 0, fulfilmentProfiles: profileResult.data?.length ?? 0, inventoryIntakes: sourceResult.data?.length ?? 0 }, errors: null });'''
           new_diagnostic = '''      setDiagnostic({
-            authenticated: true,
-            membershipFound: true,
-            role: access.role,
-            resolvedOrganisationId: organisationId,
-            queries: {
-              suppliers: supplierResult.data?.length ?? 0,
-              fulfilmentProfiles: profileResult.data?.length ?? 0,
-              inventoryIntakes: sourceResult.data?.length ?? 0,
-            },
-            errors: publicCatalogueCountResult.error
-              ? {
-                  publicCatalogue: {
-                    code: publicCatalogueCountResult.error.code ?? null,
-                    message: publicCatalogueCountResult.error.message,
-                  },
-                }
-              : null,
-          });
+        authenticated: true,
+        membershipFound: true,
+        role: access.role,
+        resolvedOrganisationId: organisationId,
+        queries: {
+          suppliers: supplierResult.data?.length ?? 0,
+          fulfilmentProfiles: profileResult.data?.length ?? 0,
+          inventoryIntakes: sourceResult.data?.length ?? 0,
+        },
+        errors: publicCatalogueCountResult.error
+          ? {
+              publicCatalogue: {
+                code: publicCatalogueCountResult.error.code ?? null,
+                message: publicCatalogueCountResult.error.message,
+              },
+            }
+          : null,
+      });
 
-          if (publicCatalogueCountResult.error) {
-            toast.warning(
-              `Public catalogue count could not be loaded: ${publicCatalogueCountResult.error.message}. Supplier and fulfilment data remain available.`,
-            );
-          }'''
+      if (publicCatalogueCountResult.error) {
+        toast.warning(
+          `Public catalogue count could not be loaded: ${publicCatalogueCountResult.error.message}. Supplier and fulfilment data remain available.`,
+        );
+      }'''
           if old_diagnostic not in text:
               raise SystemExit('Expected success diagnostic block was not found; aborting without changes.')
           text = text.replace(old_diagnostic, new_diagnostic, 1)
@@ -81,7 +81,7 @@ jobs:
           route.write_text(text)
 
           test = Path('tests/store-operations-book-regression.test.ts')
-          test.write_text('''import assert from "node:assert/strict";\nimport { readFileSync } from "node:fs";\nimport test from "node:test";\n\nconst source = readFileSync(new URL("../src/routes/businesses.store-inventory.tsx", import.meta.url), "utf8");\n\ntest("public catalogue projection is not organisation-filtered", () => {\n  const publicQuery = source.match(/from<\\{ id: string \\}>\\(\\"store_public_products\\"\\)[\\s\\S]{0,180}?select\\(\\"id\\", \\{ count: \\"exact\\", head: true \\}\\)/);\n  assert.ok(publicQuery, "store_public_products count query should exist");\n  assert.doesNotMatch(publicQuery[0], /organisation_id/);\n});\n\ntest("public catalogue count failure is non-fatal to Store Operations Book loading", () => {\n  const fatalChain = source.match(/const error =[\\s\\S]{0,700}?storeProductIdentityResult\\.error;/);\n  assert.ok(fatalChain, "fatal Store Operations Book error chain should exist");\n  assert.doesNotMatch(fatalChain[0], /publicCatalogueCountResult\\.error/);\n  assert.match(source, /Supplier and fulfilment data remain available/);\n});\n''')
+          test.write_text('''import assert from "node:assert/strict";\nimport { readFileSync } from "node:fs";\nimport test from "node:test";\n\nconst source = readFileSync(new URL("../src/routes/businesses.store-inventory.tsx", import.meta.url), "utf8");\n\ntest("public catalogue projection is not organisation-filtered", () => {\n  const start = source.indexOf('from<{ id: string }>("store_public_products")');\n  assert.notEqual(start, -1, "store_public_products count query should exist");\n  const publicQuery = source.slice(start, start + 220);\n  assert.doesNotMatch(publicQuery, /organisation_id/);\n});\n\ntest("public catalogue count failure is non-fatal to Store Operations Book loading", () => {\n  const start = source.indexOf("const error =");\n  const end = source.indexOf("storeProductIdentityResult.error;", start);\n  assert.notEqual(start, -1, "fatal Store Operations Book error chain should exist");\n  assert.notEqual(end, -1, "fatal Store Operations Book error chain should terminate");\n  const fatalChain = source.slice(start, end + "storeProductIdentityResult.error;".length);\n  assert.doesNotMatch(fatalChain, /publicCatalogueCountResult\\.error/);\n  assert.match(source, /Supplier and fulfilment data remain available/);\n});\n''')
 
       - name: Install dependencies
         run: npm ci
