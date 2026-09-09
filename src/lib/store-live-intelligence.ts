@@ -19,6 +19,7 @@ export type SupplierIntelligenceRow = {
   published: number;
   draft: number;
   unavailable: number;
+  supplierAvailableUnits: number | null;
   lastSyncAt: string | null;
   syncHealth: "healthy" | "stale" | "manual" | "not_synced";
 };
@@ -37,6 +38,7 @@ type Intake = {
   stock_status: string;
   sync_status: string;
   published_at: string | null;
+  supplier_available_stock?: number | null;
 };
 
 export function buildSupplierIntelligence(
@@ -48,7 +50,9 @@ export function buildSupplierIntelligence(
     const syncMethod = supplier.sync_method?.trim().toLowerCase() ?? "";
     const connected = Boolean(syncMethod && !syncMethod.includes("manual"));
     const hasManualEvidence = supplierIntakes.length > 0 || syncMethod.includes("manual");
-    const stale = supplierIntakes.some((item) => item.sync_status === "stale" || item.sync_status === "failed");
+    const stale = supplierIntakes.some(
+      (item) => item.sync_status === "stale" || item.sync_status === "failed",
+    );
 
     return {
       supplierId: supplier.id,
@@ -61,8 +65,20 @@ export function buildSupplierIntelligence(
       published: supplierIntakes.filter((item) => item.approval_status === "published").length,
       draft: supplierIntakes.filter((item) => item.approval_status === "draft").length,
       unavailable: supplierIntakes.filter((item) => item.stock_status === "unavailable").length,
+      supplierAvailableUnits: supplierIntakes.some((item) => item.supplier_available_stock != null)
+        ? supplierIntakes.reduce(
+            (total, item) => total + (Number(item.supplier_available_stock) || 0),
+            0,
+          )
+        : null,
       lastSyncAt: supplier.last_verified_at,
-      syncHealth: stale ? "stale" : connected ? "healthy" : hasManualEvidence ? "manual" : "not_synced",
+      syncHealth: stale
+        ? "stale"
+        : connected
+          ? "healthy"
+          : hasManualEvidence
+            ? "manual"
+            : "not_synced",
     };
   });
 }
