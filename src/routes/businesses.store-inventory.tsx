@@ -97,13 +97,7 @@ const DEFAULT_MARKUP_PERCENT = 25;
 const MARKUP_PRESETS = [20, 25, 30, 35, 40] as const;
 
 type BusinessModel =
-  | "dropship"
-  | "affiliate"
-  | "wholesale"
-  | "pod"
-  | "marketplace"
-  | "cossa_stock"
-  | "other";
+  "dropship" | "affiliate" | "wholesale" | "pod" | "marketplace" | "cossa_stock" | "other";
 type IntakeStatus = "imported" | "review" | "draft" | "approved" | "published" | "paused";
 type ImportStatus = "manual" | "imported" | "partial" | "blocked" | "failed";
 type StockStatus = "available" | "unavailable" | "preorder" | "unknown" | "not_checked";
@@ -606,6 +600,22 @@ function InformationStatusBadge({ missingItems = [] }: { missingItems?: string[]
   );
 }
 
+function readinessStageLabel(id: string, requiredBefore: "draft" | "approval" | null): string {
+  if (id === "source-url" || id === "supplier") return "Required before Save for Review";
+  if (requiredBefore === "approval") return "Required before Approval";
+  if (requiredBefore === "draft") return "Required before Draft";
+  return "Required before Publish";
+}
+
+function readinessTargetId(id: string): string {
+  const targetByRequirement: Record<string, string> = {
+    "delivery-rule": "fulfilment-profile",
+    "supplier-cost-confirmation": "review-confirmations",
+    "stock-confirmation": "review-confirmations",
+  };
+  return `intake-field-${targetByRequirement[id] ?? id}`;
+}
+
 function StoreInventoryIntake() {
   const [organisationId, setOrganisationId] = useState("");
   const [suppliers, setSuppliers] = useState<StoreSupplier[]>([]);
@@ -618,7 +628,9 @@ function StoreInventoryIntake() {
   const [supplierDraft, setSupplierDraft] = useState<SupplierDraft>(EMPTY_SUPPLIER);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
-  const [accessState, setAccessState] = useState<"authorized" | "unauthenticated" | "no_membership" | "insufficient_role" | "error">("authorized");
+  const [accessState, setAccessState] = useState<
+    "authorized" | "unauthenticated" | "no_membership" | "insufficient_role" | "error"
+  >("authorized");
   const [diagnostic, setDiagnostic] = useState<Record<string, unknown> | null>(null);
   const [importing, setImporting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -883,6 +895,10 @@ function StoreInventoryIntake() {
       sellingPrice,
     ],
   );
+  const missingById = useMemo(
+    () => new Map(readiness.items.filter((item) => !item.satisfied).map((item) => [item.id, item])),
+    [readiness.items],
+  );
   const snapshotComparison = useMemo(() => {
     if (snapshots.length < 2) return null;
     const [latest, previous] = snapshots;
@@ -974,7 +990,12 @@ function StoreInventoryIntake() {
       const access = await resolveStoreOperationsAccess(db);
       if (access.status !== "authorized") {
         setAccessState(access.status);
-        setDiagnostic({ authenticated: access.status !== "unauthenticated", membershipFound: access.status !== "no_membership", role: access.status === "insufficient_role" ? access.role : null, resolvedOrganisationId: null });
+        setDiagnostic({
+          authenticated: access.status !== "unauthenticated",
+          membershipFound: access.status !== "no_membership",
+          role: access.status === "insufficient_role" ? access.role : null,
+          resolvedOrganisationId: null,
+        });
         setSuppliers([]);
         setProfiles([]);
         setSources([]);
@@ -997,8 +1018,16 @@ function StoreInventoryIntake() {
         lifecycleHistoryResult,
         storeProductIdentityResult,
       ] = await Promise.all([
-        db.from<StoreSupplier>("store_suppliers").select("*").eq("organisation_id", organisationId).order("name"),
-        db.from<FulfilmentProfile>("store_fulfilment_profiles").select("*").eq("organisation_id", organisationId).order("name"),
+        db
+          .from<StoreSupplier>("store_suppliers")
+          .select("*")
+          .eq("organisation_id", organisationId)
+          .order("name"),
+        db
+          .from<FulfilmentProfile>("store_fulfilment_profiles")
+          .select("*")
+          .eq("organisation_id", organisationId)
+          .order("name"),
         db
           .from<SupplierCategoryMapping>("store_supplier_category_mappings")
           .select("*")
@@ -1009,7 +1038,10 @@ function StoreInventoryIntake() {
           .select("*")
           .eq("organisation_id", organisationId)
           .order("created_at", { ascending: false }),
-        db.from<CatalogueCountRow>("store_products").select("id", { count: "exact", head: true }).eq("organisation_id", organisationId),
+        db
+          .from<CatalogueCountRow>("store_products")
+          .select("id", { count: "exact", head: true })
+          .eq("organisation_id", organisationId),
         db
           .from<CatalogueCountRow>("store_products")
           .select("id", { count: "exact", head: true })
@@ -1059,7 +1091,18 @@ function StoreInventoryIntake() {
         storeProductIdentityResult.error;
       if (error) {
         setAccessState("error");
-        setDiagnostic({ authenticated: true, membershipFound: true, role: access.role, resolvedOrganisationId: organisationId, queries: { suppliers: supplierResult.data?.length ?? 0, fulfilmentProfiles: profileResult.data?.length ?? 0, inventoryIntakes: sourceResult.data?.length ?? 0 }, error: { code: error.code ?? null, message: error.message } });
+        setDiagnostic({
+          authenticated: true,
+          membershipFound: true,
+          role: access.role,
+          resolvedOrganisationId: organisationId,
+          queries: {
+            suppliers: supplierResult.data?.length ?? 0,
+            fulfilmentProfiles: profileResult.data?.length ?? 0,
+            inventoryIntakes: sourceResult.data?.length ?? 0,
+          },
+          error: { code: error.code ?? null, message: error.message },
+        });
         toast.error(
           `Could not load Store Operations Book: ${error.message}. Apply the intake migration before using this section.`,
         );
@@ -1622,7 +1665,10 @@ function StoreInventoryIntake() {
       description: form.description.trim() || null,
       specifications: form.specifications.trim() || null,
       features: normaliseFeatureLines(form.features),
-      additional_categories: normaliseAdditionalDepartments(form.category, form.additionalCategories),
+      additional_categories: normaliseAdditionalDepartments(
+        form.category,
+        form.additionalCategories,
+      ),
       featured: form.featured,
       merchandising_tags: normaliseMerchandisingTags(form.merchandisingTags),
       variants: form.variants,
@@ -2025,8 +2071,12 @@ function StoreInventoryIntake() {
 
   return (
     <div className="mx-auto flex max-w-[1550px] flex-col gap-5 pb-12">
-      {typeof window !== "undefined" && window.location.hostname.endsWith("vercel.app") && diagnostic ? (
-        <pre className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">{JSON.stringify(diagnostic, null, 2)}</pre>
+      {typeof window !== "undefined" &&
+      window.location.hostname.endsWith("vercel.app") &&
+      diagnostic ? (
+        <pre className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">
+          {JSON.stringify(diagnostic, null, 2)}
+        </pre>
       ) : null}
       <section className="glass-card relative overflow-hidden p-5 sm:p-7">
         <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
@@ -2210,7 +2260,14 @@ function StoreInventoryIntake() {
                 <p className="font-semibold">Needs attention</p>
                 <ul className="mt-1 list-disc space-y-1 pl-4 text-xs">
                   {readiness.draftMissing.map((item) => (
-                    <li key={item.id}>{item.label}</li>
+                    <li key={item.id}>
+                      <a
+                        className="font-medium underline decoration-destructive/40 underline-offset-2 hover:decoration-destructive"
+                        href={`#${readinessTargetId(item.id)}`}
+                      >
+                        {readinessStageLabel(item.id, item.requiredBefore)}: {item.label}
+                      </a>
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -2219,7 +2276,16 @@ function StoreInventoryIntake() {
 
           <div className="mt-5 rounded-xl border border-primary/25 bg-primary/5 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <Field label="Supplier product URL" className="flex-1">
+              <Field
+                label="Supplier product URL"
+                className="flex-1"
+                fieldId={readinessTargetId("source-url")}
+                issue={missingById.get("source-url")?.label}
+                issueStage={readinessStageLabel(
+                  "source-url",
+                  missingById.get("source-url")?.requiredBefore ?? null,
+                )}
+              >
                 <input
                   className={inputClass}
                   type="url"
@@ -2347,7 +2413,16 @@ function StoreInventoryIntake() {
           ) : null}
 
           <div className="mt-7 grid gap-4 sm:grid-cols-2">
-            <Field label="Product title" className="sm:col-span-2">
+            <Field
+              label="Product title"
+              className="sm:col-span-2"
+              fieldId={readinessTargetId("title")}
+              issue={missingById.get("title")?.label}
+              issueStage={readinessStageLabel(
+                "title",
+                missingById.get("title")?.requiredBefore ?? null,
+              )}
+            >
               <input
                 className={inputClass}
                 value={form.name}
@@ -2355,7 +2430,15 @@ function StoreInventoryIntake() {
                 placeholder="Customer-facing product title"
               />
             </Field>
-            <Field label="Supplier SKU / product ID">
+            <Field
+              label="Supplier SKU / product ID"
+              fieldId={readinessTargetId("supplier-sku")}
+              issue={missingById.get("supplier-sku")?.label}
+              issueStage={readinessStageLabel(
+                "supplier-sku",
+                missingById.get("supplier-sku")?.requiredBefore ?? null,
+              )}
+            >
               <input
                 className={inputClass}
                 value={form.sku}
@@ -2363,7 +2446,15 @@ function StoreInventoryIntake() {
                 placeholder="e.g. DM8363"
               />
             </Field>
-            <Field label="Cossa Store department">
+            <Field
+              label="Cossa Store department"
+              fieldId={readinessTargetId("category")}
+              issue={missingById.get("category")?.label}
+              issueStage={readinessStageLabel(
+                "category",
+                missingById.get("category")?.requiredBefore ?? null,
+              )}
+            >
               <select
                 className={inputClass}
                 value={form.category}
@@ -2383,31 +2474,32 @@ function StoreInventoryIntake() {
             </Field>
             <Field label="Additional departments / collections" className="sm:col-span-2">
               <div className="grid gap-2 rounded-xl border border-border/70 p-3 sm:grid-cols-2 lg:grid-cols-3">
-                {CANONICAL_STORE_DEPARTMENTS.filter((department) => department.slug !== form.category).map(
-                  (department) => {
-                    const checked = form.additionalCategories.includes(department.slug);
-                    return (
-                      <label key={department.slug} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() =>
-                            update(
-                              "additionalCategories",
-                              checked
-                                ? form.additionalCategories.filter((slug) => slug !== department.slug)
-                                : [...form.additionalCategories, department.slug],
-                            )
-                          }
-                        />
-                        <span>{department.name}</span>
-                      </label>
-                    );
-                  },
-                )}
+                {CANONICAL_STORE_DEPARTMENTS.filter(
+                  (department) => department.slug !== form.category,
+                ).map((department) => {
+                  const checked = form.additionalCategories.includes(department.slug);
+                  return (
+                    <label key={department.slug} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          update(
+                            "additionalCategories",
+                            checked
+                              ? form.additionalCategories.filter((slug) => slug !== department.slug)
+                              : [...form.additionalCategories, department.slug],
+                          )
+                        }
+                      />
+                      <span>{department.name}</span>
+                    </label>
+                  );
+                })}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                One primary department remains the reporting source of truth. Additional placements improve discovery without duplicating the SKU.
+                One primary department remains the reporting source of truth. Additional placements
+                improve discovery without duplicating the SKU.
               </p>
             </Field>
             <Field label="Merchandising & featuring" className="sm:col-span-2">
@@ -2422,7 +2514,9 @@ function StoreInventoryIntake() {
                 </label>
                 {STORE_MERCHANDISING_TAGS.map((tag) => {
                   const checked = form.merchandisingTags.includes(tag);
-                  const label = tag.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+                  const label = tag
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (letter) => letter.toUpperCase());
                   return (
                     <label key={tag} className="flex items-center gap-2 text-sm">
                       <input
@@ -2498,7 +2592,15 @@ function StoreInventoryIntake() {
                 placeholder="Leave blank when no direct product brand is evidenced"
               />
             </Field>
-            <Field label="Supplier / partner">
+            <Field
+              label="Supplier / partner"
+              fieldId={readinessTargetId("supplier")}
+              issue={missingById.get("supplier")?.label}
+              issueStage={readinessStageLabel(
+                "supplier",
+                missingById.get("supplier")?.requiredBefore ?? null,
+              )}
+            >
               <select
                 className={inputClass}
                 value={form.supplierId}
@@ -2518,7 +2620,16 @@ function StoreInventoryIntake() {
                   ))}
               </select>
             </Field>
-            <Field label="Short customer description" className="sm:col-span-2">
+            <Field
+              label="Short customer description"
+              className="sm:col-span-2"
+              fieldId={readinessTargetId("short-description")}
+              issue={missingById.get("short-description")?.label}
+              issueStage={readinessStageLabel(
+                "short-description",
+                missingById.get("short-description")?.requiredBefore ?? null,
+              )}
+            >
               <textarea
                 className={`${inputClass} min-h-20`}
                 value={form.shortDescription}
@@ -2526,7 +2637,16 @@ function StoreInventoryIntake() {
                 placeholder="A short, clear customer-facing value statement"
               />
             </Field>
-            <Field label="Full customer description" className="sm:col-span-2">
+            <Field
+              label="Full customer description"
+              className="sm:col-span-2"
+              fieldId={readinessTargetId("description")}
+              issue={missingById.get("description")?.label}
+              issueStage={readinessStageLabel(
+                "description",
+                missingById.get("description")?.requiredBefore ?? null,
+              )}
+            >
               <textarea
                 className={`${inputClass} min-h-32`}
                 value={form.description}
@@ -2618,7 +2738,9 @@ function StoreInventoryIntake() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-semibold">Product images</h3>
+                  <h3 id={readinessTargetId("images")} className="scroll-mt-24 font-semibold">
+                    Product images
+                  </h3>
                   <InformationStatusBadge
                     missingItems={readiness.draftMissing
                       .filter((item) => item.id === "images")
@@ -2629,6 +2751,15 @@ function StoreInventoryIntake() {
                   Use a supplier-provided image URL or upload a permitted image file. The first
                   image becomes the Store image.
                 </p>
+                {missingById.get("images") ? (
+                  <p className="mt-2 text-xs font-semibold text-destructive">
+                    {readinessStageLabel(
+                      "images",
+                      missingById.get("images")?.requiredBefore ?? null,
+                    )}
+                    : {missingById.get("images")?.label}
+                  </p>
+                ) : null}
               </div>
               <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-primary/30 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/5">
                 <Upload className="mr-1.5 h-4 w-4" />{" "}
@@ -2727,6 +2858,12 @@ function StoreInventoryIntake() {
                     ? "Supplier price / cost context (R)"
                     : "Confirmed supplier cost (R)"
                 }
+                fieldId={readinessTargetId("supplier-cost")}
+                issue={missingById.get("supplier-cost")?.label}
+                issueStage={readinessStageLabel(
+                  "supplier-cost",
+                  missingById.get("supplier-cost")?.requiredBefore ?? null,
+                )}
               >
                 <input
                   className={inputClass}
@@ -2790,7 +2927,15 @@ function StoreInventoryIntake() {
                   ))}
                 </div>
               </Field>
-              <Field label="Override selling price (R)">
+              <Field
+                label="Override selling price (R)"
+                fieldId={readinessTargetId("final-price")}
+                issue={missingById.get("final-price")?.label}
+                issueStage={readinessStageLabel(
+                  "final-price",
+                  missingById.get("final-price")?.requiredBefore ?? null,
+                )}
+              >
                 <input
                   className={inputClass}
                   inputMode="decimal"
@@ -2976,7 +3121,20 @@ function StoreInventoryIntake() {
                     <option value="other">Other</option>
                   </select>
                 </Field>
-                <Field label="Fulfilment profile">
+                <Field
+                  label="Fulfilment profile"
+                  fieldId={readinessTargetId("fulfilment-profile")}
+                  issue={
+                    missingById.get("fulfilment-profile")?.label ??
+                    missingById.get("delivery-rule")?.label
+                  }
+                  issueStage={readinessStageLabel(
+                    missingById.get("fulfilment-profile") ? "fulfilment-profile" : "delivery-rule",
+                    missingById.get("fulfilment-profile")?.requiredBefore ??
+                      missingById.get("delivery-rule")?.requiredBefore ??
+                      null,
+                  )}
+                >
                   <select
                     className={inputClass}
                     value={form.fulfilmentProfileId}
@@ -2990,7 +3148,15 @@ function StoreInventoryIntake() {
                     ))}
                   </select>
                 </Field>
-                <Field label="Stock origin">
+                <Field
+                  label="Stock origin"
+                  fieldId={readinessTargetId("stock-origin")}
+                  issue={missingById.get("stock-origin")?.label}
+                  issueStage={readinessStageLabel(
+                    "stock-origin",
+                    missingById.get("stock-origin")?.requiredBefore ?? null,
+                  )}
+                >
                   <input
                     className={inputClass}
                     value={form.stockOrigin}
@@ -2998,7 +3164,15 @@ function StoreInventoryIntake() {
                     placeholder="e.g. South Africa"
                   />
                 </Field>
-                <Field label="Supplier stock / availability">
+                <Field
+                  label="Supplier stock / availability"
+                  fieldId={readinessTargetId("stock-status")}
+                  issue={missingById.get("stock-status")?.label}
+                  issueStage={readinessStageLabel(
+                    "stock-status",
+                    missingById.get("stock-status")?.requiredBefore ?? null,
+                  )}
+                >
                   <select
                     className={inputClass}
                     value={form.stockStatus}
@@ -3184,7 +3358,10 @@ function StoreInventoryIntake() {
                 placeholder="Record supplier constraints, delivery checks, licence notes, colour/variant limitations or a review decision."
               />
             </Field>
-            <div className="mt-4 rounded-xl border border-warning/40 bg-warning/5 p-4">
+            <div
+              id={readinessTargetId("supplier-cost-confirmation")}
+              className="mt-4 scroll-mt-24 rounded-xl border border-warning/40 bg-warning/5 p-4"
+            >
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 text-warning" />
                 <div>
@@ -3192,6 +3369,18 @@ function StoreInventoryIntake() {
                   <p className="mt-1 text-xs text-muted-foreground">
                     These actions record a trusted server timestamp. They never publish the product.
                   </p>
+                  {missingById.get("supplier-cost-confirmation") ||
+                  missingById.get("stock-confirmation") ? (
+                    <p className="mt-2 text-xs font-semibold text-destructive">
+                      Required before Approval:{" "}
+                      {[
+                        missingById.get("supplier-cost-confirmation")?.label,
+                        missingById.get("stock-confirmation")?.label,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -3293,7 +3482,7 @@ function StoreInventoryIntake() {
                       <p className="font-semibold">Not ready to publish</p>
                       <ul className="mt-2 list-disc space-y-1 pl-4">
                         {publicationPreview.blockers.map((blocker) => (
-                          <li key={blocker.code}>{blocker.message}</li>
+                          <li key={blocker.code}>Required before Publish: {blocker.message}</li>
                         ))}
                       </ul>
                     </div>
@@ -3495,7 +3684,8 @@ function StoreInventoryIntake() {
                 <p className="text-sm text-muted-foreground">Loading registry…</p>
               ) : accessState !== "authorized" ? (
                 <p className="text-sm text-destructive">
-                  Store Operations Book access could not be established. This is not an empty registry.
+                  Store Operations Book access could not be established. This is not an empty
+                  registry.
                 </p>
               ) : suppliers.length ? (
                 suppliers.map((supplier) => (
@@ -4007,15 +4197,38 @@ function Field({
   label,
   children,
   className = "",
+  issue,
+  issueStage,
+  fieldId,
 }: {
   label: string;
   children: React.ReactNode;
   className?: string;
+  issue?: string;
+  issueStage?: string;
+  fieldId?: string;
 }) {
   return (
-    <label className={`block ${className}`}>
-      <span className="mb-1.5 block text-xs font-medium text-muted-foreground">{label}</span>
+    <label
+      id={fieldId}
+      className={`block scroll-mt-24 ${
+        issue ? "rounded-xl border border-destructive/45 bg-destructive/5 p-2" : ""
+      } ${className}`}
+    >
+      <span
+        className={`mb-1.5 block text-xs font-medium ${
+          issue ? "text-destructive" : "text-muted-foreground"
+        }`}
+      >
+        {label}
+      </span>
       {children}
+      {issue ? (
+        <span className="mt-1.5 block text-[11px] font-semibold text-destructive">
+          {issueStage ? `${issueStage}: ` : ""}
+          {issue}
+        </span>
+      ) : null}
     </label>
   );
 }
