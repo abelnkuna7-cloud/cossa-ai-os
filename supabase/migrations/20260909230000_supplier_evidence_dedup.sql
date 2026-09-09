@@ -18,7 +18,7 @@ create table if not exists public.store_supplier_verification_evidence_duplicate
   created_at timestamptz not null,
   archived_at timestamptz not null default now(),
   archive_reason text not null,
-  canonical_evidence_id uuid references public.store_supplier_verification_evidence(id)
+  canonical_evidence_id uuid
 );
 
 alter table public.store_supplier_verification_evidence_duplicate_archive enable row level security;
