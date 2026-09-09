@@ -102,7 +102,13 @@ const DEFAULT_MARKUP_PERCENT = 25;
 const MARKUP_PRESETS = [20, 25, 30, 35, 40] as const;
 
 type BusinessModel =
-  "dropship" | "affiliate" | "wholesale" | "pod" | "marketplace" | "cossa_stock" | "other";
+  | "dropship"
+  | "affiliate"
+  | "wholesale"
+  | "pod"
+  | "marketplace"
+  | "cossa_stock"
+  | "other";
 type IntakeStatus = "imported" | "review" | "draft" | "approved" | "published" | "paused";
 type ImportStatus = "manual" | "imported" | "partial" | "blocked" | "failed";
 type StockStatus = "available" | "unavailable" | "preorder" | "unknown" | "not_checked";
@@ -925,26 +931,48 @@ function StoreInventoryIntake() {
     };
   }, [snapshotItems, snapshots]);
 
-  const livePublicCount = Math.max(catalogueCounts.publicCount, catalogueCounts.customerPublicCount);
+  const livePublicCount = Math.max(
+    catalogueCounts.publicCount,
+    catalogueCounts.customerPublicCount,
+  );
   const dmcSupplier = suppliers.find((supplier) => supplier.code === "dmc-wholesale") ?? null;
   const dmcPublishedCount = dmcSupplier
-    ? sources.filter((source) => source.supplier_id === dmcSupplier.id && source.approval_status === "published").length
+    ? sources.filter(
+        (source) => source.supplier_id === dmcSupplier.id && source.approval_status === "published",
+      ).length
     : 0;
-  const liveStoreIntelligence = useMemo(() => ({
-    totalProducts: catalogueCounts.source,
-    livePublic: livePublicCount,
-    draft: catalogueCounts.draft,
-    archived: catalogueCounts.archived,
-    dmcPublished: dmcPublishedCount,
-    otherSources: Math.max(0, livePublicCount - dmcPublishedCount),
-    awaitingReview: sources.filter((source) => source.approval_status === "review").length,
-    awaitingApproval: sources.filter((source) => source.approval_status === "draft").length,
-    outOfStock: sources.filter((source) => source.stock_status === "unavailable").length,
-  }), [catalogueCounts.archived, catalogueCounts.draft, catalogueCounts.source, dmcPublishedCount, livePublicCount, sources]);
-  const supplierIntelligence = useMemo(() => buildSupplierIntelligence(suppliers, sources), [sources, suppliers]);
+  const liveStoreIntelligence = useMemo(
+    () => ({
+      totalProducts: catalogueCounts.source,
+      livePublic: livePublicCount,
+      draft: catalogueCounts.draft,
+      archived: catalogueCounts.archived,
+      dmcPublished: dmcPublishedCount,
+      otherSources: Math.max(0, livePublicCount - dmcPublishedCount),
+      awaitingReview: sources.filter((source) => source.approval_status === "review").length,
+      awaitingApproval: sources.filter((source) => source.approval_status === "draft").length,
+      outOfStock: sources.filter((source) => source.stock_status === "unavailable").length,
+    }),
+    [
+      catalogueCounts.archived,
+      catalogueCounts.draft,
+      catalogueCounts.source,
+      dmcPublishedCount,
+      livePublicCount,
+      sources,
+    ],
+  );
+  const supplierIntelligence = useMemo(
+    () => buildSupplierIntelligence(suppliers, sources),
+    [sources, suppliers],
+  );
   const latestSnapshotAge = snapshotAgeLabel(snapshots[0]?.created_at ?? null);
-  const staleSupplierCount = supplierIntelligence.filter((supplier) => supplier.syncHealth === "stale").length;
-  const unsyncedSupplierCount = supplierIntelligence.filter((supplier) => supplier.catalogueAvailable == null).length;
+  const staleSupplierCount = supplierIntelligence.filter(
+    (supplier) => supplier.syncHealth === "stale",
+  ).length;
+  const unsyncedSupplierCount = supplierIntelligence.filter(
+    (supplier) => supplier.catalogueAvailable == null,
+  ).length;
 
   useEffect(() => {
     void loadOperationsBook();
@@ -1642,6 +1670,30 @@ function StoreInventoryIntake() {
     toast.success(`${data.name} is now ${status}.`);
   }
 
+  async function archiveSupplier(supplier: StoreSupplier) {
+    if (
+      !window.confirm(
+        `Archive ${supplier.name}? Historical intakes and import evidence will be preserved.`,
+      )
+    )
+      return;
+    const { data, error } = await db
+      .from<StoreSupplier>("store_suppliers")
+      .update({
+        status: "paused",
+        registry_status: "paused",
+        archived_at: new Date().toISOString(),
+        archive_reason: "Archived by authorised Store leader",
+      })
+      .eq("id", supplier.id)
+      .select("*")
+      .single();
+    if (error || !data)
+      return toast.error(`Could not archive supplier: ${error?.message ?? "Unknown error"}`);
+    setSuppliers((current) => current.map((item) => (item.id === data.id ? data : item)));
+    toast.success(`${data.name} archived. Historical relationships were preserved.`);
+  }
+
   async function saveProfile() {
     if (!organisationId || !form.supplierId) {
       toast.error("Select a supplier before adding its fulfilment profile.");
@@ -2180,11 +2232,20 @@ function StoreInventoryIntake() {
       <section className="glass-card p-5 sm:p-6">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">Live Store now</p>
-            <h2 className="mt-1 font-display text-xl font-semibold">Current production catalogue</h2>
-            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">Live Store totals from current catalogue projections, kept separate from historical snapshots.</p>
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
+              Live Store now
+            </p>
+            <h2 className="mt-1 font-display text-xl font-semibold">
+              Current production catalogue
+            </h2>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+              Live Store totals from current catalogue projections, kept separate from historical
+              snapshots.
+            </p>
           </div>
-          <span className="inline-flex w-fit items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary"><RefreshCw className="mr-1 h-3.5 w-3.5" /> Live on refresh</span>
+          <span className="inline-flex w-fit items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
+            <RefreshCw className="mr-1 h-3.5 w-3.5" /> Live on refresh
+          </span>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {[
@@ -2195,7 +2256,10 @@ function StoreInventoryIntake() {
             ["DMC Published", liveStoreIntelligence.dmcPublished],
             ["Other Sources", liveStoreIntelligence.otherSources],
           ].map(([label, count]) => (
-            <div key={String(label)} className="rounded-lg border border-border/60 bg-card/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1 text-lg font-semibold">{Number(count).toLocaleString("en-ZA")}</p></div>
+            <div key={String(label)} className="rounded-lg border border-border/60 bg-card/40 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+              <p className="mt-1 text-lg font-semibold">{Number(count).toLocaleString("en-ZA")}</p>
+            </div>
           ))}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -2204,21 +2268,81 @@ function StoreInventoryIntake() {
             ["Awaiting Approval", liveStoreIntelligence.awaitingApproval],
             ["Supplier Unavailable", liveStoreIntelligence.outOfStock],
           ].map(([label, count]) => (
-            <div key={String(label)} className="rounded-lg border border-border/60 p-3 text-xs"><p className="text-muted-foreground">{label}</p><p className="mt-1 text-base font-semibold">{Number(count).toLocaleString("en-ZA")}</p></div>
+            <div key={String(label)} className="rounded-lg border border-border/60 p-3 text-xs">
+              <p className="text-muted-foreground">{label}</p>
+              <p className="mt-1 text-base font-semibold">
+                {Number(count).toLocaleString("en-ZA")}
+              </p>
+            </div>
           ))}
         </div>
       </section>
 
       <section className="glass-card p-5 sm:p-6">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-          <div><p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">Supplier stock intelligence</p><h2 className="mt-1 font-display text-xl font-semibold">Supplier catalogue &amp; Cossa exposure</h2><p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">Supplier catalogue availability is not Cossa-owned stock. Supplier-wide counts appear only from a trusted synced or audited source; otherwise they show Not synced.</p></div>
-          <span className="inline-flex w-fit items-center rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground">{unsyncedSupplierCount} catalogue{unsyncedSupplierCount === 1 ? "" : "s"} not synced</span>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
+              Supplier stock intelligence
+            </p>
+            <h2 className="mt-1 font-display text-xl font-semibold">
+              Supplier catalogue &amp; Cossa exposure
+            </h2>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+              Supplier catalogue availability is not Cossa-owned stock. Supplier-wide counts appear
+              only from a trusted synced or audited source; otherwise they show Not synced.
+            </p>
+          </div>
+          <span className="inline-flex w-fit items-center rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground">
+            {unsyncedSupplierCount} catalogue{unsyncedSupplierCount === 1 ? "" : "s"} not synced
+          </span>
         </div>
-        {staleSupplierCount > 0 ? <div className="mt-4 flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/5 p-3 text-xs text-warning"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{staleSupplierCount} supplier connection{staleSupplierCount === 1 ? "" : "s"} need attention.</div> : null}
+        {staleSupplierCount > 0 ? (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/5 p-3 text-xs text-warning">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            {staleSupplierCount} supplier connection{staleSupplierCount === 1 ? "" : "s"} need
+            attention.
+          </div>
+        ) : null}
         <div className="mt-4 overflow-x-auto rounded-xl border border-border/60">
           <table className="w-full min-w-[900px] text-left text-xs">
-            <thead className="bg-card/60 text-muted-foreground"><tr><th className="px-3 py-3 font-medium">Supplier</th><th className="px-3 py-3 font-medium">Supplier catalogue available</th><th className="px-3 py-3 font-medium">Imported to Cossa</th><th className="px-3 py-3 font-medium">Published</th><th className="px-3 py-3 font-medium">Draft</th><th className="px-3 py-3 font-medium">Unavailable</th><th className="px-3 py-3 font-medium">Last sync / verification</th><th className="px-3 py-3 font-medium">Sync health</th></tr></thead>
-            <tbody>{supplierIntelligence.map((supplier) => (<tr key={supplier.supplierId} className="border-t border-border/60"><td className="px-3 py-3 font-semibold">{supplier.supplierName}</td><td className="px-3 py-3">{supplierCatalogueLabel(supplier.catalogueAvailable)}</td><td className="px-3 py-3">{supplier.imported.toLocaleString("en-ZA")}</td><td className="px-3 py-3">{supplier.published.toLocaleString("en-ZA")}</td><td className="px-3 py-3">{supplier.draft.toLocaleString("en-ZA")}</td><td className="px-3 py-3">{supplier.unavailable.toLocaleString("en-ZA")}</td><td className="px-3 py-3 text-muted-foreground">{supplier.lastSyncAt ? new Date(supplier.lastSyncAt).toLocaleString("en-ZA") : "Not recorded"}</td><td className="px-3 py-3"><span className={`rounded-full border px-2 py-1 ${supplier.syncHealth === "healthy" ? "border-primary/30 bg-primary/5 text-primary" : supplier.syncHealth === "stale" ? "border-warning/40 bg-warning/5 text-warning" : "border-border/60 text-muted-foreground"}`}>{supplier.syncHealth.replace(/_/g, " ")}</span></td></tr>))}</tbody>
+            <thead className="bg-card/60 text-muted-foreground">
+              <tr>
+                <th className="px-3 py-3 font-medium">Supplier</th>
+                <th className="px-3 py-3 font-medium">Supplier catalogue available</th>
+                <th className="px-3 py-3 font-medium">Imported to Cossa</th>
+                <th className="px-3 py-3 font-medium">Published</th>
+                <th className="px-3 py-3 font-medium">Draft</th>
+                <th className="px-3 py-3 font-medium">Unavailable</th>
+                <th className="px-3 py-3 font-medium">Last sync / verification</th>
+                <th className="px-3 py-3 font-medium">Sync health</th>
+              </tr>
+            </thead>
+            <tbody>
+              {supplierIntelligence.map((supplier) => (
+                <tr key={supplier.supplierId} className="border-t border-border/60">
+                  <td className="px-3 py-3 font-semibold">{supplier.supplierName}</td>
+                  <td className="px-3 py-3">
+                    {supplierCatalogueLabel(supplier.catalogueAvailable)}
+                  </td>
+                  <td className="px-3 py-3">{supplier.imported.toLocaleString("en-ZA")}</td>
+                  <td className="px-3 py-3">{supplier.published.toLocaleString("en-ZA")}</td>
+                  <td className="px-3 py-3">{supplier.draft.toLocaleString("en-ZA")}</td>
+                  <td className="px-3 py-3">{supplier.unavailable.toLocaleString("en-ZA")}</td>
+                  <td className="px-3 py-3 text-muted-foreground">
+                    {supplier.lastSyncAt
+                      ? new Date(supplier.lastSyncAt).toLocaleString("en-ZA")
+                      : "Not recorded"}
+                  </td>
+                  <td className="px-3 py-3">
+                    <span
+                      className={`rounded-full border px-2 py-1 ${supplier.syncHealth === "healthy" ? "border-primary/30 bg-primary/5 text-primary" : supplier.syncHealth === "stale" ? "border-warning/40 bg-warning/5 text-warning" : "border-border/60 text-muted-foreground"}`}
+                    >
+                      {supplier.syncHealth.replace(/_/g, " ")}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
           </table>
         </div>
       </section>
@@ -2231,9 +2355,13 @@ function StoreInventoryIntake() {
             </p>
             <h2 className="mt-1 font-display text-xl font-semibold">Catalogue snapshots</h2>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-              Historical read-only evidence for product IDs, SKUs, slugs, status and public presence. These figures are not current live Store totals and cannot publish, edit or remove products.
+              Historical read-only evidence for product IDs, SKUs, slugs, status and public
+              presence. These figures are not current live Store totals and cannot publish, edit or
+              remove products.
             </p>
-            <p className="mt-2 inline-flex items-center rounded-full border border-warning/40 bg-warning/5 px-2.5 py-1 text-[11px] font-medium text-warning">Historical snapshot · {latestSnapshotAge}</p>
+            <p className="mt-2 inline-flex items-center rounded-full border border-warning/40 bg-warning/5 px-2.5 py-1 text-[11px] font-medium text-warning">
+              Historical snapshot · {latestSnapshotAge}
+            </p>
           </div>
           <Button
             type="button"
@@ -3784,7 +3912,7 @@ function StoreInventoryIntake() {
                           variant="outline"
                           onClick={() => applySupplier(supplier)}
                         >
-                          Use supplier
+                          View
                         </Button>
                       ) : (
                         <span className="text-xs text-muted-foreground">
@@ -3801,6 +3929,14 @@ function StoreInventoryIntake() {
                           Pause
                         </Button>
                       ) : null}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void archiveSupplier(supplier)}
+                      >
+                        Archive
+                      </Button>
                     </div>
                   </div>
                 ))
