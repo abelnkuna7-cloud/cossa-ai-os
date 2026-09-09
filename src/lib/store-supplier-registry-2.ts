@@ -35,6 +35,26 @@ export function supplierVerificationTransition(input: {
     requiresReview: input.outcome !== "VERIFIED",
   };
 }
+
+export function supplierActivationEligibility(input: {
+  verificationStatus: VerificationOutcome;
+  hasAcceptableEvidence: boolean;
+  hasUnresolvedConflict: boolean;
+  isArchived: boolean;
+  isRejected: boolean;
+  isAuthorisedLeader: boolean;
+  confirmed: boolean;
+}) {
+  if (!input.isAuthorisedLeader) return { allowed: false, reason: "Authorised organisation leadership is required." };
+  if (!input.confirmed) return { allowed: false, reason: "Explicit activation confirmation is required." };
+  if (input.isArchived || input.isRejected) return { allowed: false, reason: "Archived or rejected suppliers cannot activate." };
+  if (input.verificationStatus === "HIGH_RISK" || input.verificationStatus === "REJECTED") return { allowed: false, reason: "High-risk or rejected suppliers cannot activate." };
+  if (input.verificationStatus === "NEEDS_MORE_EVIDENCE") return { allowed: false, reason: "Supplier needs more verification evidence." };
+  if (input.verificationStatus === "PROVISIONALLY_VERIFIED") return { allowed: false, reason: "Provisional verification is not eligible for normal activation." };
+  if (input.hasUnresolvedConflict) return { allowed: false, reason: "Resolve conflicting evidence before activation." };
+  if (!input.hasAcceptableEvidence) return { allowed: false, reason: "Recorded verified evidence is required." };
+  return { allowed: true, reason: null };
+}
 export function changedSupplierFields(
   previous: Record<string, unknown>,
   next: Record<string, unknown>,

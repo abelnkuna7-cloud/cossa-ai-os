@@ -1780,11 +1780,13 @@ function StoreInventoryIntake() {
   }
 
   async function activateSupplier(supplier: StoreSupplier) {
-    if (!["VERIFIED", "PROVISIONALLY_VERIFIED"].includes(supplier.verification_status ?? "")) return toast.error("Review evidence and verify this supplier before activation.");
-    if (!window.confirm(`Activate ${supplier.name}? Verification has already been recorded separately.`)) return;
-    const { data, error } = await db.from<StoreSupplier>("store_suppliers").update({ status: "active", registry_status: "active", activation_approved_at: new Date().toISOString(), activation_verification_status: supplier.verification_status }).eq("id", supplier.id).select("*").single();
+    if (supplier.verification_status !== "VERIFIED") return toast.error("Normal activation requires server-verified VERIFIED status; provisional verification cannot activate.");
+    if (!window.confirm(`Activate ${supplier.name}? The server will re-check leadership, evidence and conflicts.`)) return;
+    const { data, error } = await db.rpc("activate_store_supplier", { p_supplier_id: supplier.id, p_confirm: true });
     if (error || !data) return toast.error(`Could not activate supplier: ${error?.message ?? "Unknown error"}`);
-    setSuppliers((current) => current.map((item) => item.id === data.id ? data : item));
+    const activated = Array.isArray(data) ? data[0] : data as StoreSupplier;
+    if (!activated) return toast.error("The server did not return the activated supplier.");
+    setSuppliers((current) => current.map((item) => item.id === activated.id ? activated : item));
     toast.success("Supplier activated. This does not publish products or alter Cossa inventory.");
   }
 
@@ -4084,7 +4086,7 @@ function StoreInventoryIntake() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={() => beginSupplierEdit(managedSupplier)}>Edit</Button>
                   <Button type="button" size="sm" variant="outline" onClick={() => void verifySupplier(managedSupplier)}>Verify</Button>
-                  <Button type="button" size="sm" disabled={!['VERIFIED', 'PROVISIONALLY_VERIFIED'].includes(managedSupplier.verification_status ?? "")} onClick={() => void activateSupplier(managedSupplier)}>Activate</Button>
+                  <Button type="button" size="sm" disabled={managedSupplier.verification_status !== "VERIFIED"} onClick={() => void activateSupplier(managedSupplier)}>Activate</Button>
                   <Button type="button" size="sm" variant="ghost" onClick={() => void updateSupplierStatus(managedSupplier, "paused")}>Pause</Button>
                   <Button type="button" size="sm" variant="ghost" onClick={() => void archiveSupplier(managedSupplier)}>Archive</Button>
                 </div>
