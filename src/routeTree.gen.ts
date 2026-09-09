@@ -88,6 +88,7 @@ import { Route as BusinessesNexdocsRouteImport } from './routes/businesses.nexdo
 import { Route as BusinessesFacilityServicesRouteImport } from './routes/businesses.facility-services'
 import { Route as BusinessesConstructionRouteImport } from './routes/businesses.construction'
 import { Route as ApiWebsiteHealthRouteImport } from './routes/api/website-health'
+import { Route as ApiStoreSupplierCatalogueImportRouteImport } from './routes/api.store-supplier-catalogue-import'
 import { Route as ApiStoreProductImportRouteImport } from './routes/api.store-product-import'
 import { Route as ApiStoreInventoryPublicationRouteImport } from './routes/api.store-inventory-publication'
 import { Route as ApiStoreCommercialReviewRouteImport } from './routes/api.store-commercial-review'
@@ -530,6 +531,12 @@ const ApiWebsiteHealthRoute = ApiWebsiteHealthRouteImport.update({
   path: '/api/website-health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiStoreSupplierCatalogueImportRoute =
+  ApiStoreSupplierCatalogueImportRouteImport.update({
+    id: '/api/store-supplier-catalogue-import',
+    path: '/api/store-supplier-catalogue-import',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiStoreProductImportRoute = ApiStoreProductImportRouteImport.update({
   id: '/api/store-product-import',
   path: '/api/store-product-import',
@@ -784,6 +791,7 @@ export interface FileRoutesByFullPath {
   '/api/store-commercial-review': typeof ApiStoreCommercialReviewRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
+  '/api/store-supplier-catalogue-import': typeof ApiStoreSupplierCatalogueImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/businesses/construction': typeof BusinessesConstructionRoute
   '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
@@ -903,6 +911,7 @@ export interface FileRoutesByTo {
   '/api/store-commercial-review': typeof ApiStoreCommercialReviewRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
+  '/api/store-supplier-catalogue-import': typeof ApiStoreSupplierCatalogueImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/businesses/construction': typeof BusinessesConstructionRoute
   '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
@@ -1023,6 +1032,7 @@ export interface FileRoutesById {
   '/api/store-commercial-review': typeof ApiStoreCommercialReviewRoute
   '/api/store-inventory-publication': typeof ApiStoreInventoryPublicationRoute
   '/api/store-product-import': typeof ApiStoreProductImportRoute
+  '/api/store-supplier-catalogue-import': typeof ApiStoreSupplierCatalogueImportRoute
   '/api/website-health': typeof ApiWebsiteHealthRoute
   '/businesses/construction': typeof BusinessesConstructionRoute
   '/businesses/facility-services': typeof BusinessesFacilityServicesRoute
@@ -1144,6 +1154,7 @@ export interface FileRouteTypes {
     | '/api/store-commercial-review'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
+    | '/api/store-supplier-catalogue-import'
     | '/api/website-health'
     | '/businesses/construction'
     | '/businesses/facility-services'
@@ -1263,6 +1274,7 @@ export interface FileRouteTypes {
     | '/api/store-commercial-review'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
+    | '/api/store-supplier-catalogue-import'
     | '/api/website-health'
     | '/businesses/construction'
     | '/businesses/facility-services'
@@ -1382,6 +1394,7 @@ export interface FileRouteTypes {
     | '/api/store-commercial-review'
     | '/api/store-inventory-publication'
     | '/api/store-product-import'
+    | '/api/store-supplier-catalogue-import'
     | '/api/website-health'
     | '/businesses/construction'
     | '/businesses/facility-services'
@@ -1502,6 +1515,7 @@ export interface RootRouteChildren {
   ApiStoreCommercialReviewRoute: typeof ApiStoreCommercialReviewRoute
   ApiStoreInventoryPublicationRoute: typeof ApiStoreInventoryPublicationRoute
   ApiStoreProductImportRoute: typeof ApiStoreProductImportRoute
+  ApiStoreSupplierCatalogueImportRoute: typeof ApiStoreSupplierCatalogueImportRoute
   ApiWebsiteHealthRoute: typeof ApiWebsiteHealthRoute
   BusinessesConstructionRoute: typeof BusinessesConstructionRoute
   BusinessesFacilityServicesRoute: typeof BusinessesFacilityServicesRoute
@@ -2118,6 +2132,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebsiteHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/store-supplier-catalogue-import': {
+      id: '/api/store-supplier-catalogue-import'
+      path: '/api/store-supplier-catalogue-import'
+      fullPath: '/api/store-supplier-catalogue-import'
+      preLoaderRoute: typeof ApiStoreSupplierCatalogueImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/store-product-import': {
       id: '/api/store-product-import'
       path: '/api/store-product-import'
@@ -2468,6 +2489,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiStoreCommercialReviewRoute: ApiStoreCommercialReviewRoute,
   ApiStoreInventoryPublicationRoute: ApiStoreInventoryPublicationRoute,
   ApiStoreProductImportRoute: ApiStoreProductImportRoute,
+  ApiStoreSupplierCatalogueImportRoute: ApiStoreSupplierCatalogueImportRoute,
   ApiWebsiteHealthRoute: ApiWebsiteHealthRoute,
   BusinessesConstructionRoute: BusinessesConstructionRoute,
   BusinessesFacilityServicesRoute: BusinessesFacilityServicesRoute,
