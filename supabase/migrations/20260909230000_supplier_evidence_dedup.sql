@@ -1,6 +1,6 @@
 -- Supplier Registry evidence integrity repair.
--- Preserve accidental duplicate rows in an audit archive, remove only the duplicate
--- operational copies, and prevent identical evidence from being inserted again.
+-- Preserve accidental duplicate/malformed rows in an audit archive, remove only the
+-- operational copies that are not usable evidence, and prevent identical evidence replay.
 begin;
 
 create table if not exists public.store_supplier_verification_evidence_duplicate_archive (
@@ -41,8 +41,6 @@ revoke all on table public.store_supplier_verification_evidence_duplicate_archiv
 grant select, insert on table public.store_supplier_verification_evidence_duplicate_archive to authenticated;
 
 -- Keep the earliest exact evidence record as canonical and archive later accidental copies.
--- URL normalization ignores only case, whitespace and trailing slashes; materially different
--- sources, classifications, outcomes or notes remain separate evidence records.
 with ranked as (
   select
     evidence.*,
@@ -86,9 +84,7 @@ delete from public.store_supplier_verification_evidence evidence
 using archived
 where evidence.id = archived.id;
 
--- The Astrum source-less "official website" rows were incomplete form submissions rather
--- than usable verification evidence. Preserve them in the archive and remove them from the
--- operational review list so they cannot be mistaken for evidence that can support activation.
+-- Astrum source-less website rows were incomplete submissions, not usable evidence.
 with astrum_incomplete as (
   select evidence.*
   from public.store_supplier_verification_evidence evidence
@@ -114,6 +110,68 @@ with astrum_incomplete as (
 delete from public.store_supplier_verification_evidence evidence
 using archived
 where evidence.id = archived.id;
+
+-- During the incident the intended structured values were pasted into the source-reference
+-- field as one block. Preserve that malformed row in the audit archive, then create one clean
+-- canonical evidence record using the already reviewed Astrum registration URL and intended
+-- VERIFIED_FACT / VERIFIED values.
+with astrum_malformed as (
+  select evidence.*
+  from public.store_supplier_verification_evidence evidence
+  join public.store_suppliers supplier on supplier.id = evidence.supplier_id
+  where lower(supplier.code) = 'astrum'
+    and evidence.classification = 'UNVERIFIED'
+    and evidence.outcome = 'NEEDS_MORE_EVIDENCE'
+    and coalesce(evidence.source_reference, '') ilike 'Evidence type:%Source reference:%astrum.co.za/registration/%Classification:%'
+), archived as (
+  insert into public.store_supplier_verification_evidence_duplicate_archive (
+    id, organisation_id, supplier_id, evidence_type, source_reference, classification,
+    outcome, notes, conflict_status, reviewed_by, reviewed_at, created_at,
+    archive_reason, canonical_evidence_id
+  )
+  select
+    id, organisation_id, supplier_id, evidence_type, source_reference, classification,
+    outcome, notes, conflict_status, reviewed_by, reviewed_at, created_at,
+    'Malformed Astrum evidence: structured review values were pasted into source_reference', null
+  from astrum_malformed
+  on conflict (id) do nothing
+  returning id
+)
+delete from public.store_supplier_verification_evidence evidence
+using archived
+where evidence.id = archived.id;
+
+insert into public.store_supplier_verification_evidence (
+  organisation_id,
+  supplier_id,
+  evidence_type,
+  source_reference,
+  classification,
+  outcome,
+  notes,
+  reviewed_by,
+  reviewed_at
+)
+select
+  supplier.organisation_id,
+  supplier.id,
+  'Official website / reseller programme',
+  'https://astrum.co.za/registration/',
+  'VERIFIED_FACT',
+  'VERIFIED',
+  'Astrum official registration page confirms the reseller/partner programme, including online distributors, partner verification and platform access, plus the published South African contact details and Midrand address.',
+  auth.uid(),
+  now()
+from public.store_suppliers supplier
+where lower(supplier.code) = 'astrum'
+  and not exists (
+    select 1
+    from public.store_supplier_verification_evidence evidence
+    where evidence.supplier_id = supplier.id
+      and evidence.classification = 'VERIFIED_FACT'
+      and evidence.outcome = 'VERIFIED'
+      and regexp_replace(lower(trim(coalesce(evidence.source_reference, ''))), '/+$', '') = 'https://astrum.co.za/registration'
+  );
 
 -- Database-level idempotency guard. This is the final authority even if the browser sends
 -- the same request more than once because of a double-click, retry, stale tab or network replay.
