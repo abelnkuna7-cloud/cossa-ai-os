@@ -1,0 +1,411 @@
+name: Store live supplier intelligence upgrade
+
+on:
+  push:
+    branches:
+      - feat/store-live-supplier-intelligence
+    paths:
+      - .github/workflows/store-live-supplier-upgrade.yml
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/store-live-supplier-intelligence
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Patch Store Operations dashboard safely
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/routes/businesses.store-inventory.tsx')
+          text = path.read_text()
+
+          import_anchor = '''import {
+  STORE_MERCHANDISING_TAGS,
+  buildCompetitivePricingNotes,
+  normaliseAdditionalDepartments,
+  normaliseFeatureLines,
+  normaliseMerchandisingTags,
+} from "@/lib/store-merchandising";'''
+          live_import = '''import {
+  buildSupplierIntelligence,
+  snapshotAgeLabel,
+  supplierCatalogueLabel,
+} from "@/lib/store-live-intelligence";'''
+          if live_import not in text:
+              if import_anchor not in text:
+                  raise SystemExit('store merchandising import anchor not found')
+              text = text.replace(import_anchor, import_anchor + '\n' + live_import, 1)
+
+          state_old = '''  const [catalogueCounts, setCatalogueCounts] = useState({
+    source: 0,
+    active: 0,
+    draft: 0,
+    archived: 0,
+    publicCount: 0,
+  });'''
+          state_new = '''  const [catalogueCounts, setCatalogueCounts] = useState({
+    source: 0,
+    active: 0,
+    draft: 0,
+    archived: 0,
+    publicCount: 0,
+    customerPublicCount: 0,
+  });'''
+          if state_new not in text:
+              if state_old not in text:
+                  raise SystemExit('catalogue count state anchor not found')
+              text = text.replace(state_old, state_new, 1)
+
+          memo_anchor = '''  const snapshotComparisonLabel = useMemo(() => {
+    if (snapshots.length < 2) return null;
+    const [latest, previous] = snapshots;
+    return {
+      latest,
+      previous,
+      latestItems: snapshotItems.filter((item) => item.snapshot_id === latest.id).length,
+      previousItems: snapshotItems.filter((item) => item.snapshot_id === previous.id).length,
+    };
+  }, [snapshotItems, snapshots]);'''
+          memo_add = '''
+
+  const livePublicCount = Math.max(catalogueCounts.publicCount, catalogueCounts.customerPublicCount);
+  const dmcSupplier = suppliers.find((supplier) => supplier.code === "dmc-wholesale") ?? null;
+  const dmcPublishedCount = dmcSupplier
+    ? sources.filter(
+        (source) =>
+          source.supplier_id === dmcSupplier.id && source.approval_status === "published",
+      ).length
+    : 0;
+  const liveStoreIntelligence = useMemo(
+    () => ({
+      totalProducts: catalogueCounts.source,
+      livePublic: livePublicCount,
+      draft: catalogueCounts.draft,
+      archived: catalogueCounts.archived,
+      dmcPublished: dmcPublishedCount,
+      otherSources: Math.max(0, livePublicCount - dmcPublishedCount),
+      awaitingReview: sources.filter((source) => source.approval_status === "review").length,
+      awaitingApproval: sources.filter((source) => source.approval_status === "draft").length,
+      outOfStock: sources.filter((source) => source.stock_status === "unavailable").length,
+    }),
+    [catalogueCounts.archived, catalogueCounts.draft, catalogueCounts.source, dmcPublishedCount, livePublicCount, sources],
+  );
+  const supplierIntelligence = useMemo(
+    () => buildSupplierIntelligence(suppliers, sources),
+    [sources, suppliers],
+  );
+  const latestSnapshotAge = snapshotAgeLabel(snapshots[0]?.created_at ?? null);
+  const staleSupplierCount = supplierIntelligence.filter((supplier) => supplier.syncHealth === "stale").length;
+  const unsyncedSupplierCount = supplierIntelligence.filter(
+    (supplier) => supplier.catalogueAvailable == null,
+  ).length;'''
+          if 'const liveStoreIntelligence = useMemo' not in text:
+              if memo_anchor not in text:
+                  raise SystemExit('snapshot memo anchor not found')
+              text = text.replace(memo_anchor, memo_anchor + memo_add, 1)
+
+          destruct_old = '''        publicCatalogueCountResult,
+        snapshotResult,'''
+          destruct_new = '''        publicCatalogueCountResult,
+        customerCatalogueCountResult,
+        snapshotResult,'''
+          if destruct_new not in text:
+              if destruct_old not in text:
+                  raise SystemExit('promise result destructure anchor not found')
+              text = text.replace(destruct_old, destruct_new, 1)
+
+          query_old = '''        db
+          .from<{ id: string }>("store_public_products")
+          .select("id", { count: "exact", head: true }),
+        db
+          .from<CatalogueSnapshot>("store_catalogue_snapshots")'''
+          query_new = '''        db
+          .from<{ id: string }>("store_public_products")
+          .select("id", { count: "exact", head: true }),
+        db
+          .from<{ id: string }>("store_customer_products")
+          .select("id", { count: "exact", head: true }),
+        db
+          .from<CatalogueSnapshot>("store_catalogue_snapshots")'''
+          if 'from<{ id: string }>("store_customer_products")' not in text:
+              if query_old not in text:
+                  raise SystemExit('public catalogue query anchor not found')
+              text = text.replace(query_old, query_new, 1)
+
+          diag_old = '''        errors: publicCatalogueCountResult.error
+          ? {
+              publicCatalogue: {
+                code: publicCatalogueCountResult.error.code ?? null,
+                message: publicCatalogueCountResult.error.message,
+              },
+            }
+          : null,'''
+          diag_new = '''        errors:
+          publicCatalogueCountResult.error || customerCatalogueCountResult.error
+            ? {
+                publicCatalogue: publicCatalogueCountResult.error
+                  ? {
+                      code: publicCatalogueCountResult.error.code ?? null,
+                      message: publicCatalogueCountResult.error.message,
+                    }
+                  : null,
+                customerCatalogue: customerCatalogueCountResult.error
+                  ? {
+                      code: customerCatalogueCountResult.error.code ?? null,
+                      message: customerCatalogueCountResult.error.message,
+                    }
+                  : null,
+              }
+            : null,'''
+          if 'customerCatalogue: customerCatalogueCountResult.error' not in text:
+              if diag_old not in text:
+                  raise SystemExit('diagnostic error anchor not found')
+              text = text.replace(diag_old, diag_new, 1)
+
+          warning_old = '''      if (publicCatalogueCountResult.error) {
+        toast.warning(
+          `Public catalogue count could not be loaded: ${publicCatalogueCountResult.error.message}. Supplier and fulfilment data remain available.`,
+        );
+      }'''
+          warning_new = '''      if (publicCatalogueCountResult.error && customerCatalogueCountResult.error) {
+        toast.warning(
+          "Live public catalogue counts could not be loaded. Supplier and fulfilment data remain available.",
+        );
+      }'''
+          if warning_new not in text:
+              if warning_old not in text:
+                  raise SystemExit('public warning anchor not found')
+              text = text.replace(warning_old, warning_new, 1)
+
+          counts_old = '''      setCatalogueCounts({
+        source: sourceCatalogueCountResult.count ?? 0,
+        active: activeCatalogueCountResult.count ?? 0,
+        draft: draftCatalogueCountResult.count ?? 0,
+        archived: archivedCatalogueCountResult.count ?? 0,
+        publicCount: publicCatalogueCountResult.count ?? 0,
+      });'''
+          counts_new = '''      setCatalogueCounts({
+        source: sourceCatalogueCountResult.count ?? 0,
+        active: activeCatalogueCountResult.count ?? 0,
+        draft: draftCatalogueCountResult.count ?? 0,
+        archived: archivedCatalogueCountResult.count ?? 0,
+        publicCount: publicCatalogueCountResult.count ?? 0,
+        customerPublicCount: customerCatalogueCountResult.count ?? 0,
+      });'''
+          if counts_new not in text:
+              if counts_old not in text:
+                  raise SystemExit('set catalogue counts anchor not found')
+              text = text.replace(counts_old, counts_new, 1)
+
+          lifecycle_section = '''      <section className="grid gap-4 md:grid-cols-5">
+        {(["imported", "review", "draft", "approved", "published"] as IntakeStatus[]).map(
+          (stage, index) => (
+            <div
+              key={stage}
+              className={`rounded-xl border p-3 ${form.lifecycle === stage ? "border-primary/50 bg-primary/5" : "border-border/60 bg-card/40"}`}
+            >
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                {index + 1}
+              </p>
+              <p className="mt-1 text-sm font-semibold">{lifecycleCopy(stage)}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {stage === "imported"
+                  ? "Nothing is live."
+                  : stage === "review"
+                    ? "Confirm imported data."
+                    : stage === "draft"
+                      ? "Prepare customer copy."
+                      : stage === "approved"
+                        ? "CEO-ready, still private."
+                        : "Customer-facing catalogue."}
+              </p>
+            </div>
+          ),
+        )}
+      </section>'''
+          live_section = '''
+
+      <section className="glass-card p-5 sm:p-6">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">Live Store now</p>
+            <h2 className="mt-1 font-display text-xl font-semibold">Current production catalogue</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+              Current Store totals are read from live catalogue projections. These numbers are separate from historical audit snapshots.
+            </p>
+          </div>
+          <span className="inline-flex w-fit items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
+            <RefreshCw className="mr-1 h-3.5 w-3.5" /> Live on refresh
+          </span>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          {[
+            ["Total Products", liveStoreIntelligence.totalProducts],
+            ["Live / Public", liveStoreIntelligence.livePublic],
+            ["Draft", liveStoreIntelligence.draft],
+            ["Archived", liveStoreIntelligence.archived],
+            ["DMC Published", liveStoreIntelligence.dmcPublished],
+            ["Other Sources", liveStoreIntelligence.otherSources],
+          ].map(([label, count]) => (
+            <div key={String(label)} className="rounded-lg border border-border/60 bg-card/40 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+              <p className="mt-1 text-lg font-semibold">{Number(count).toLocaleString("en-ZA")}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {[
+            ["Awaiting Review", liveStoreIntelligence.awaitingReview],
+            ["Awaiting Approval", liveStoreIntelligence.awaitingApproval],
+            ["Supplier Unavailable", liveStoreIntelligence.outOfStock],
+          ].map(([label, count]) => (
+            <div key={String(label)} className="rounded-lg border border-border/60 p-3 text-xs">
+              <p className="text-muted-foreground">{label}</p>
+              <p className="mt-1 text-base font-semibold">{Number(count).toLocaleString("en-ZA")}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="glass-card p-5 sm:p-6">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">Supplier stock intelligence</p>
+            <h2 className="mt-1 font-display text-xl font-semibold">Supplier catalogue &amp; Cossa exposure</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+              Supplier catalogue availability is never treated as Cossa-owned stock. A supplier-wide count is shown only when a trusted feed or audited catalogue source exists; otherwise it is marked Not synced.
+            </p>
+          </div>
+          <span className="inline-flex w-fit items-center rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground">
+            {unsyncedSupplierCount} catalogue{unsyncedSupplierCount === 1 ? "" : "s"} not synced
+          </span>
+        </div>
+        {staleSupplierCount > 0 ? (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/5 p-3 text-xs text-warning">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            {staleSupplierCount} supplier connection{staleSupplierCount === 1 ? "" : "s"} need attention because intake sync evidence is stale or failed.
+          </div>
+        ) : null}
+        <div className="mt-4 overflow-x-auto rounded-xl border border-border/60">
+          <table className="w-full min-w-[900px] text-left text-xs">
+            <thead className="bg-card/60 text-muted-foreground">
+              <tr>
+                <th className="px-3 py-3 font-medium">Supplier</th>
+                <th className="px-3 py-3 font-medium">Supplier catalogue available</th>
+                <th className="px-3 py-3 font-medium">Imported to Cossa</th>
+                <th className="px-3 py-3 font-medium">Published</th>
+                <th className="px-3 py-3 font-medium">Draft</th>
+                <th className="px-3 py-3 font-medium">Unavailable</th>
+                <th className="px-3 py-3 font-medium">Last sync / verification</th>
+                <th className="px-3 py-3 font-medium">Sync health</th>
+              </tr>
+            </thead>
+            <tbody>
+              {supplierIntelligence.map((supplier) => (
+                <tr key={supplier.supplierId} className="border-t border-border/60">
+                  <td className="px-3 py-3 font-semibold">{supplier.supplierName}</td>
+                  <td className="px-3 py-3">{supplierCatalogueLabel(supplier.catalogueAvailable)}</td>
+                  <td className="px-3 py-3">{supplier.imported.toLocaleString("en-ZA")}</td>
+                  <td className="px-3 py-3">{supplier.published.toLocaleString("en-ZA")}</td>
+                  <td className="px-3 py-3">{supplier.draft.toLocaleString("en-ZA")}</td>
+                  <td className="px-3 py-3">{supplier.unavailable.toLocaleString("en-ZA")}</td>
+                  <td className="px-3 py-3 text-muted-foreground">
+                    {supplier.lastSyncAt ? new Date(supplier.lastSyncAt).toLocaleString("en-ZA") : "Not recorded"}
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={`rounded-full border px-2 py-1 ${supplier.syncHealth === "healthy" ? "border-primary/30 bg-primary/5 text-primary" : supplier.syncHealth === "stale" ? "border-warning/40 bg-warning/5 text-warning" : "border-border/60 text-muted-foreground"}`}>
+                      {supplier.syncHealth.replace(/_/g, " ")}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>'''
+          if 'Supplier catalogue &amp; Cossa exposure' not in text:
+              if lifecycle_section not in text:
+                  raise SystemExit('lifecycle UI anchor not found')
+              text = text.replace(lifecycle_section, lifecycle_section + live_section, 1)
+
+          audit_header_old = '''            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
+              Read-only catalogue audit
+            </p>
+            <h2 className="mt-1 font-display text-xl font-semibold">Catalogue snapshots</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+              Captures product IDs, SKUs, slugs, status and public presence for later comparison. It
+              cannot publish, edit or remove products.
+            </p>'''
+          audit_header_new = '''            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
+              Historical catalogue audit
+            </p>
+            <h2 className="mt-1 font-display text-xl font-semibold">Catalogue snapshots</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+              Historical read-only evidence for product IDs, SKUs, slugs, status and public presence. These figures are not the current live Store totals and cannot publish, edit or remove products.
+            </p>
+            <p className="mt-2 inline-flex items-center rounded-full border border-warning/40 bg-warning/5 px-2.5 py-1 text-[11px] font-medium text-warning">
+              Historical snapshot · {latestSnapshotAge}
+            </p>'''
+          if audit_header_new not in text:
+              if audit_header_old not in text:
+                  raise SystemExit('audit header anchor not found')
+              text = text.replace(audit_header_old, audit_header_new, 1)
+
+          audit_counts_old = '''          {[
+            ["Source", catalogueCounts.source],
+            ["Active", catalogueCounts.active],
+            ["Draft", catalogueCounts.draft],
+            ["Archived", catalogueCounts.archived],
+            ["Public", catalogueCounts.publicCount],
+          ].map(([label, count]) => ('''
+          audit_counts_new = '''          {[
+            ["Source", snapshots[0]?.source_total_count ?? 0],
+            ["Active", snapshots[0]?.active_count ?? 0],
+            ["Draft", snapshots[0]?.draft_count ?? 0],
+            ["Archived", snapshots[0]?.archived_count ?? 0],
+            ["Public", snapshots[0]?.public_catalogue_count ?? 0],
+          ].map(([label, count]) => ('''
+          if audit_counts_new not in text:
+              if audit_counts_old not in text:
+                  raise SystemExit('audit counts anchor not found')
+              text = text.replace(audit_counts_old, audit_counts_new, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit validated dashboard upgrade
+        run: |
+          if git diff --quiet; then
+            echo "No route changes to commit"
+            exit 0
+          fi
+          git config user.name "cossa-upgrade-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/routes/businesses.store-inventory.tsx
+          git commit -m "Upgrade Store Operations with live and supplier intelligence [skip ci]"
+          git push origin HEAD:feat/store-live-supplier-intelligence
