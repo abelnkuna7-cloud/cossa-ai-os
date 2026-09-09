@@ -59,6 +59,45 @@ $$;
 drop trigger if exists store_supplier_change_audit on public.store_suppliers;
 create trigger store_supplier_change_audit after update on public.store_suppliers for each row execute function public.audit_store_supplier_change();
 
+-- Deletion is deliberately exceptional: this server-side check is the authority for
+-- exposing the destructive control. Suppliers with any operational/audit dependency
+-- must be archived, never deleted from the registry UI.
+create or replace function public.store_supplier_delete_eligibility(p_supplier_id uuid)
+returns jsonb language plpgsql security invoker set search_path = public as $$
+declare v_organisation_id uuid; v_dependencies jsonb; v_total integer;
+begin
+  select organisation_id into v_organisation_id from public.store_suppliers where id = p_supplier_id;
+  if v_organisation_id is null or not (select private.has_organisation_role(v_organisation_id, array['owner','admin','manager'])) then
+    raise exception 'Supplier not found or not authorised';
+  end if;
+  select jsonb_build_object(
+    'inventory_intakes', (select count(*) from public.store_inventory_intakes where supplier_id = p_supplier_id),
+    'fulfilment_profiles', (select count(*) from public.store_fulfilment_profiles where supplier_id = p_supplier_id),
+    'import_batches', (select count(*) from public.store_supplier_import_batches where supplier_id = p_supplier_id),
+    'import_events', (select count(*) from public.store_supplier_import_events where supplier_id = p_supplier_id),
+    'contacts', (select count(*) from public.store_supplier_contacts where supplier_id = p_supplier_id),
+    'verification_evidence', (select count(*) from public.store_supplier_verification_evidence where supplier_id = p_supplier_id),
+    'change_history', (select count(*) from public.store_supplier_change_history where supplier_id = p_supplier_id)
+  ) into v_dependencies;
+  select coalesce(sum(value::integer), 0) into v_total from jsonb_each_text(v_dependencies);
+  return jsonb_build_object('eligible', v_total = 0, 'dependencies', v_dependencies,
+    'reason', case when v_total = 0 then 'No supplier dependencies found.' else 'Supplier has dependent operational or audit records. Archive it instead.' end);
+end;
+$$;
+
+create or replace function public.delete_store_supplier_if_unreferenced(p_supplier_id uuid, p_confirm boolean)
+returns void language plpgsql security invoker set search_path = public as $$
+declare v_eligibility jsonb;
+begin
+  if not p_confirm then raise exception 'Explicit deletion confirmation is required'; end if;
+  v_eligibility := public.store_supplier_delete_eligibility(p_supplier_id);
+  if not coalesce((v_eligibility->>'eligible')::boolean, false) then
+    raise exception '%', coalesce(v_eligibility->>'reason', 'Supplier has dependencies');
+  end if;
+  delete from public.store_suppliers where id = p_supplier_id;
+end;
+$$;
+
 alter table public.store_supplier_contacts enable row level security;
 alter table public.store_supplier_verification_evidence enable row level security;
 alter table public.store_supplier_change_history enable row level security;
@@ -70,4 +109,6 @@ create policy "members read supplier changes" on public.store_supplier_change_hi
 create policy "leaders write supplier changes" on public.store_supplier_change_history for insert to authenticated with check ((select private.has_organisation_role(organisation_id, array['owner','admin','manager'])));
 revoke all on table public.store_supplier_contacts, public.store_supplier_verification_evidence, public.store_supplier_change_history from public, anon;
 grant select, insert, update on table public.store_supplier_contacts, public.store_supplier_verification_evidence, public.store_supplier_change_history to authenticated;
+revoke all on function public.store_supplier_delete_eligibility(uuid), public.delete_store_supplier_if_unreferenced(uuid, boolean) from public, anon;
+grant execute on function public.store_supplier_delete_eligibility(uuid), public.delete_store_supplier_if_unreferenced(uuid, boolean) to authenticated;
 commit;

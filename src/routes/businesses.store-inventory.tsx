@@ -140,7 +140,15 @@ type StoreSupplier = {
   agreement_policy_reference: string | null;
   operational_notes: string | null;
   last_verified_at: string | null;
+  verification_status?: string;
+  verified_source?: string | null;
+  review_due_at?: string | null;
+  archived_at?: string | null;
 };
+type SupplierContact = { id: string; supplier_id: string; name: string | null; role_department: string | null; contact_type: string; email: string | null; main_phone: string | null; mobile_phone: string | null; whatsapp_number: string | null; street_address: string | null; city: string | null; province_state: string | null; country: string | null; account_reference: string | null; is_primary: boolean };
+type SupplierEvidence = { id: string; supplier_id: string; evidence_type: string; source_reference: string | null; classification: string; outcome: string | null; notes: string | null; reviewed_at: string };
+type SupplierChange = { id: string; supplier_id: string; field_name: string; requires_reverification: boolean; changed_at: string; source_reason: string | null };
+type SupplierDeletionEligibility = { eligible: boolean; dependencies: Record<string, number>; reason: string };
 
 type FulfilmentProfile = {
   id: string;
@@ -637,6 +645,13 @@ function StoreInventoryIntake() {
   const [lifecycleHistory, setLifecycleHistory] = useState<IntakeLifecycleHistory[]>([]);
   const [form, setForm] = useState<IntakeForm>(() => emptyForm());
   const [supplierDraft, setSupplierDraft] = useState<SupplierDraft>(EMPTY_SUPPLIER);
+  const [managedSupplierId, setManagedSupplierId] = useState<string | null>(null);
+  const [supplierContacts, setSupplierContacts] = useState<SupplierContact[]>([]);
+  const [supplierEvidence, setSupplierEvidence] = useState<SupplierEvidence[]>([]);
+  const [supplierChanges, setSupplierChanges] = useState<SupplierChange[]>([]);
+  const [deletionEligibility, setDeletionEligibility] = useState<SupplierDeletionEligibility | null>(null);
+  const [contactDraft, setContactDraft] = useState({ name: "", role: "", type: "general", email: "", phone: "", address: "", city: "", country: "South Africa", accountReference: "" });
+  const [evidenceDraft, setEvidenceDraft] = useState({ type: "official website", source: "", classification: "UNVERIFIED", outcome: "NEEDS_MORE_EVIDENCE", notes: "" });
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
   const [accessState, setAccessState] = useState<
@@ -672,6 +687,10 @@ function StoreInventoryIntake() {
   const selectedSupplier = useMemo(
     () => suppliers.find((supplier) => supplier.id === form.supplierId) ?? null,
     [form.supplierId, suppliers],
+  );
+  const managedSupplier = useMemo(
+    () => suppliers.find((supplier) => supplier.id === managedSupplierId) ?? null,
+    [managedSupplierId, suppliers],
   );
   const supplierProfiles = useMemo(
     () =>
@@ -1692,6 +1711,99 @@ function StoreInventoryIntake() {
       return toast.error(`Could not archive supplier: ${error?.message ?? "Unknown error"}`);
     setSuppliers((current) => current.map((item) => (item.id === data.id ? data : item)));
     toast.success(`${data.name} archived. Historical relationships were preserved.`);
+  }
+
+  async function openSupplierManagement(supplier: StoreSupplier) {
+    setManagedSupplierId(supplier.id);
+    setDeletionEligibility(null);
+    beginSupplierEdit(supplier);
+    const [contacts, evidence, changes] = await Promise.all([
+      db.from<SupplierContact>("store_supplier_contacts").select("*").eq("supplier_id", supplier.id).order("is_primary", { ascending: false }),
+      db.from<SupplierEvidence>("store_supplier_verification_evidence").select("*").eq("supplier_id", supplier.id).order("reviewed_at", { ascending: false }),
+      db.from<SupplierChange>("store_supplier_change_history").select("*").eq("supplier_id", supplier.id).order("changed_at", { ascending: false }).limit(12),
+    ]);
+    if (contacts.error || evidence.error || changes.error) return toast.error("Supplier detail history could not be loaded. Apply Supplier Registry 2.0 migration first.");
+    setSupplierContacts(contacts.data ?? []); setSupplierEvidence(evidence.data ?? []); setSupplierChanges(changes.data ?? []);
+  }
+  async function saveSupplierContact() {
+    if (!organisationId || !managedSupplierId) return;
+    const { data, error } = await db.from<SupplierContact>("store_supplier_contacts").insert({ organisation_id: organisationId, supplier_id: managedSupplierId, name: contactDraft.name || null, role_department: contactDraft.role || null, contact_type: contactDraft.type, email: contactDraft.email || null, main_phone: contactDraft.phone || null, street_address: contactDraft.address || null, city: contactDraft.city || null, country: contactDraft.country || null, account_reference: contactDraft.accountReference || null, is_primary: supplierContacts.length === 0 }).select("*").single();
+    if (error || !data) return toast.error(`Could not save contact: ${error?.message ?? "Unknown error"}`);
+    setSupplierContacts((current) => [...current, data]); setContactDraft({ name: "", role: "", type: "general", email: "", phone: "", address: "", city: "", country: "South Africa", accountReference: "" });
+  }
+  async function saveSupplierEvidence() {
+    if (!organisationId || !managedSupplierId) return;
+    const { data, error } = await db.from<SupplierEvidence>("store_supplier_verification_evidence").insert({ organisation_id: organisationId, supplier_id: managedSupplierId, evidence_type: evidenceDraft.type, source_reference: evidenceDraft.source || null, classification: evidenceDraft.classification, outcome: evidenceDraft.outcome, notes: evidenceDraft.notes || null }).select("*").single();
+    if (error || !data) return toast.error(`Could not save evidence: ${error?.message ?? "Unknown error"}`);
+    setSupplierEvidence((current) => [data, ...current]);
+  }
+  async function verifySupplier(supplier: StoreSupplier) {
+    const { data, error } = await db.from<StoreSupplier>("store_suppliers").update({ verification_status: "PROVISIONALLY_VERIFIED", last_verified_at: new Date().toISOString(), verified_source: evidenceDraft.source || supplier.source_url, review_due_at: new Date(Date.now() + 180 * 86400000).toISOString() }).eq("id", supplier.id).select("*").single();
+    if (error || !data) return toast.error(`Could not verify supplier: ${error?.message ?? "Unknown error"}`); setSuppliers((current) => current.map((item) => item.id === data.id ? data : item)); toast.success("Supplier verification recorded; activation remains a separate approval.");
+  }
+
+  function beginSupplierEdit(supplier: StoreSupplier) {
+    setSupplierDraft({
+      name: supplier.name, code: supplier.code, businessModel: supplier.business_model,
+      registryStatus: supplier.registry_status ?? "candidate", stockOrigin: supplier.stock_origin ?? "",
+      websiteUrl: supplier.source_url ?? "", recognisedDomains: Array.isArray(supplier.recognised_domains) ? supplier.recognised_domains.join(", ") : "",
+      contactInformation: supplier.contact_information ?? "", accountReference: supplier.account_reference ?? "",
+      skuTerminology: supplier.sku_terminology ?? "", defaultFulfilmentProfileCode: supplier.default_fulfilment_profile_code ?? "",
+      defaultDeliveryPayer: supplier.default_delivery_payer ?? "customer", defaultFreeShippingEligible: supplier.default_free_shipping_eligible,
+      syncMethod: supplier.sync_method ?? "", returnsNotes: supplier.returns_notes ?? "", warrantyNotes: supplier.warranty_notes ?? "",
+      operationalNotes: supplier.operational_notes ?? "", pricingImportNotes: supplier.pricing_import_notes ?? "", agreementPolicyReference: supplier.agreement_policy_reference ?? "",
+    });
+  }
+
+  async function saveManagedSupplier() {
+    if (!managedSupplier || !organisationId) return;
+    const name = supplierDraft.name.trim();
+    if (!name) return toast.error("Supplier name is required.");
+    if (supplierDraft.websiteUrl.trim()) {
+      try { const website = new URL(supplierDraft.websiteUrl); if (!/^https?:$/.test(website.protocol)) throw new Error(); } catch { return toast.error("Use a complete http or https supplier website URL."); }
+    }
+    setSavingSupplier(true);
+    const { data, error } = await db.from<StoreSupplier>("store_suppliers").update(supplierRegistryPayload({
+      organisationId, name, code: slugify(supplierDraft.code || name), businessModel: supplierDraft.businessModel,
+      registryStatus: managedSupplier.registry_status ?? "candidate", stockOrigin: supplierDraft.stockOrigin,
+      websiteUrl: supplierDraft.websiteUrl, recognisedDomains: supplierDraft.recognisedDomains, contactInformation: supplierDraft.contactInformation,
+      accountReference: supplierDraft.accountReference, skuTerminology: supplierDraft.skuTerminology,
+      defaultFulfilmentProfileCode: supplierDraft.defaultFulfilmentProfileCode, defaultDeliveryPayer: supplierDraft.defaultDeliveryPayer,
+      defaultFreeShippingEligible: supplierDraft.defaultFreeShippingEligible, syncMethod: supplierDraft.syncMethod,
+      returnsNotes: supplierDraft.returnsNotes, warrantyNotes: supplierDraft.warrantyNotes, operationalNotes: supplierDraft.operationalNotes,
+      pricingImportNotes: supplierDraft.pricingImportNotes, agreementPolicyReference: supplierDraft.agreementPolicyReference,
+    })).eq("id", managedSupplier.id).select("*").single();
+    setSavingSupplier(false);
+    if (error || !data) return toast.error(`Could not update supplier: ${error?.message ?? "Unknown error"}`);
+    setSuppliers((current) => current.map((item) => item.id === data.id ? data : item));
+    toast.success("Supplier record updated. Re-verification requirements are recorded in its change history.");
+  }
+
+  async function activateSupplier(supplier: StoreSupplier) {
+    if (!["VERIFIED", "PROVISIONALLY_VERIFIED"].includes(supplier.verification_status ?? "")) return toast.error("Review evidence and verify this supplier before activation.");
+    if (!window.confirm(`Activate ${supplier.name}? Verification has already been recorded separately.`)) return;
+    const { data, error } = await db.from<StoreSupplier>("store_suppliers").update({ status: "active", registry_status: "active", activation_approved_at: new Date().toISOString(), activation_verification_status: supplier.verification_status }).eq("id", supplier.id).select("*").single();
+    if (error || !data) return toast.error(`Could not activate supplier: ${error?.message ?? "Unknown error"}`);
+    setSuppliers((current) => current.map((item) => item.id === data.id ? data : item));
+    toast.success("Supplier activated. This does not publish products or alter Cossa inventory.");
+  }
+
+  async function checkSupplierDeletionEligibility(supplier: StoreSupplier) {
+    const { data, error } = await db.rpc("store_supplier_delete_eligibility", { p_supplier_id: supplier.id });
+    if (error || !data) return toast.error(`Could not check supplier dependencies: ${error?.message ?? "Unknown error"}`);
+    const result = data as SupplierDeletionEligibility;
+    setDeletionEligibility(result);
+    if (!result.eligible) toast.message(result.reason || "Supplier has dependencies and must be archived rather than deleted.");
+  }
+
+  async function deleteSupplierIfUnreferenced(supplier: StoreSupplier) {
+    if (!deletionEligibility?.eligible) return;
+    if (!window.confirm(`Permanently delete ${supplier.name}? This is only available because the server found zero dependencies.`)) return;
+    const { error } = await db.rpc("delete_store_supplier_if_unreferenced", { p_supplier_id: supplier.id, p_confirm: true });
+    if (error) return toast.error(`Could not delete supplier: ${error.message}`);
+    setSuppliers((current) => current.filter((item) => item.id !== supplier.id));
+    setManagedSupplierId(null); setDeletionEligibility(null);
+    toast.success("Supplier permanently deleted after a server-side zero-dependency check.");
   }
 
   async function saveProfile() {
@@ -3919,6 +4031,14 @@ function StoreInventoryIntake() {
                           Deactivated duplicate record
                         </span>
                       )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void openSupplierManagement(supplier)}
+                      >
+                        Manage
+                      </Button>
                       {supplier.registry_status !== "paused" && supplier.status !== "paused" ? (
                         <Button
                           type="button"
@@ -3947,6 +4067,68 @@ function StoreInventoryIntake() {
                 </p>
               )}
             </div>
+            {managedSupplier ? (
+              <section className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{managedSupplier.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Verification: {managedSupplier.verification_status ?? "NEEDS_MORE_EVIDENCE"} · {managedSupplier.last_verified_at ? `last reviewed ${new Date(managedSupplier.last_verified_at).toLocaleDateString()}` : "not yet reviewed"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {managedSupplier.review_due_at ? `Review due ${new Date(managedSupplier.review_due_at).toLocaleDateString()}` : "Review due date not set"}
+                    </p>
+                  </div>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setManagedSupplierId(null)}><X className="h-4 w-4" /></Button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => beginSupplierEdit(managedSupplier)}>Edit</Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => void verifySupplier(managedSupplier)}>Verify</Button>
+                  <Button type="button" size="sm" disabled={!['VERIFIED', 'PROVISIONALLY_VERIFIED'].includes(managedSupplier.verification_status ?? "")} onClick={() => void activateSupplier(managedSupplier)}>Activate</Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => void updateSupplierStatus(managedSupplier, "paused")}>Pause</Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => void archiveSupplier(managedSupplier)}>Archive</Button>
+                </div>
+                <details className="mt-3 rounded-lg border border-border/60 bg-background/60 p-3" open>
+                  <summary className="cursor-pointer text-sm font-medium">View / edit supplier operations</summary>
+                  <p className="mt-2 text-xs text-muted-foreground">Identity, commercial and operational metadata is internal only; it does not publish products, set Cossa prices, or create Cossa-owned stock.</p>
+                  <div className="mt-3 grid gap-2">
+                    <input className={inputClass} value={supplierDraft.name} onChange={(event) => setSupplierDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Supplier identity / name" />
+                    <div className="grid gap-2 sm:grid-cols-2"><input className={inputClass} value={supplierDraft.websiteUrl} onChange={(event) => setSupplierDraft((current) => ({ ...current, websiteUrl: event.target.value }))} placeholder="Website" /><input className={inputClass} value={supplierDraft.recognisedDomains} onChange={(event) => setSupplierDraft((current) => ({ ...current, recognisedDomains: event.target.value }))} placeholder="Recognised domains" /></div>
+                    <div className="grid gap-2 sm:grid-cols-2"><input className={inputClass} value={supplierDraft.accountReference} onChange={(event) => setSupplierDraft((current) => ({ ...current, accountReference: event.target.value }))} placeholder="Account / reference" /><input className={inputClass} value={supplierDraft.stockOrigin} onChange={(event) => setSupplierDraft((current) => ({ ...current, stockOrigin: event.target.value }))} placeholder="Stock origin (supplier-owned)" /></div>
+                    <div className="grid gap-2 sm:grid-cols-2"><input className={inputClass} value={supplierDraft.defaultFulfilmentProfileCode} onChange={(event) => setSupplierDraft((current) => ({ ...current, defaultFulfilmentProfileCode: event.target.value }))} placeholder="Fulfilment profile" /><select className={inputClass} value={supplierDraft.defaultDeliveryPayer} onChange={(event) => setSupplierDraft((current) => ({ ...current, defaultDeliveryPayer: event.target.value as DeliveryPayer }))}><option value="customer">Customer pays delivery</option><option value="cossa">Cossa pays delivery</option><option value="conditional">Conditional</option><option value="not_applicable">Not applicable</option></select></div>
+                    <textarea className={`${inputClass} min-h-16`} value={supplierDraft.returnsNotes} onChange={(event) => setSupplierDraft((current) => ({ ...current, returnsNotes: event.target.value }))} placeholder="Returns notes" />
+                    <textarea className={`${inputClass} min-h-16`} value={supplierDraft.warrantyNotes} onChange={(event) => setSupplierDraft((current) => ({ ...current, warrantyNotes: event.target.value }))} placeholder="Warranty notes" />
+                    <textarea className={`${inputClass} min-h-16`} value={supplierDraft.pricingImportNotes} onChange={(event) => setSupplierDraft((current) => ({ ...current, pricingImportNotes: event.target.value }))} placeholder="Pricing / import notes (not Cossa selling price)" />
+                    <textarea className={`${inputClass} min-h-16`} value={supplierDraft.operationalNotes} onChange={(event) => setSupplierDraft((current) => ({ ...current, operationalNotes: event.target.value }))} placeholder="Operational notes" />
+                    <input className={inputClass} value={supplierDraft.agreementPolicyReference} onChange={(event) => setSupplierDraft((current) => ({ ...current, agreementPolicyReference: event.target.value }))} placeholder="Policy / agreement reference" />
+                    <Button type="button" size="sm" variant="outline" disabled={savingSupplier} onClick={() => void saveManagedSupplier()}>{savingSupplier ? "Saving…" : "Save supplier changes"}</Button>
+                  </div>
+                </details>
+                <details className="mt-3 rounded-lg border border-border/60 bg-background/60 p-3">
+                  <summary className="cursor-pointer text-sm font-medium">Contacts &amp; physical address ({supplierContacts.length})</summary>
+                  <div className="mt-3 space-y-2">
+                    {supplierContacts.map((contact) => <p key={contact.id} className="rounded border border-border/50 p-2 text-xs"><span className="font-medium">{contact.name || "Unnamed contact"}</span> · {contact.contact_type} · {contact.role_department || "no role"}<br />{[contact.email, contact.main_phone, contact.street_address, contact.city, contact.country, contact.account_reference].filter(Boolean).join(" · ")}</p>)}
+                    <div className="grid gap-2 sm:grid-cols-2"><input className={inputClass} value={contactDraft.name} onChange={(event) => setContactDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Contact name" /><select className={inputClass} value={contactDraft.type} onChange={(event) => setContactDraft((current) => ({ ...current, type: event.target.value }))}><option value="general">General</option><option value="sales">Sales</option><option value="accounts">Accounts</option><option value="support">Support</option><option value="primary">Primary</option><option value="other">Other</option></select></div>
+                    <div className="grid gap-2 sm:grid-cols-2"><input className={inputClass} value={contactDraft.email} onChange={(event) => setContactDraft((current) => ({ ...current, email: event.target.value }))} placeholder="Email" /><input className={inputClass} value={contactDraft.phone} onChange={(event) => setContactDraft((current) => ({ ...current, phone: event.target.value }))} placeholder="Phone" /></div>
+                    <input className={inputClass} value={contactDraft.role} onChange={(event) => setContactDraft((current) => ({ ...current, role: event.target.value }))} placeholder="Role / department" /><input className={inputClass} value={contactDraft.address} onChange={(event) => setContactDraft((current) => ({ ...current, address: event.target.value }))} placeholder="Physical address" /><input className={inputClass} value={contactDraft.accountReference} onChange={(event) => setContactDraft((current) => ({ ...current, accountReference: event.target.value }))} placeholder="Contact account / reference" />
+                    <Button type="button" size="sm" variant="outline" onClick={() => void saveSupplierContact()}>Add contact</Button>
+                  </div>
+                </details>
+                <details className="mt-3 rounded-lg border border-border/60 bg-background/60 p-3">
+                  <summary className="cursor-pointer text-sm font-medium">Review evidence &amp; change history</summary>
+                  <div className="mt-3 space-y-2">
+                    {supplierEvidence.map((evidence) => <p key={evidence.id} className="rounded border border-border/50 p-2 text-xs"><span className="font-medium">{evidence.outcome ?? "NEEDS_MORE_EVIDENCE"}</span> · {evidence.evidence_type}<br />{evidence.source_reference || "No source reference"} · reviewer timestamp {new Date(evidence.reviewed_at).toLocaleDateString()}</p>)}
+                    {supplierChanges.map((change) => <p key={change.id} className="rounded border border-border/50 p-2 text-xs">Changed {change.field_name} · {new Date(change.changed_at).toLocaleDateString()}{change.requires_reverification ? " · re-verification required" : ""}</p>)}
+                    <input className={inputClass} value={evidenceDraft.source} onChange={(event) => setEvidenceDraft((current) => ({ ...current, source: event.target.value }))} placeholder="Evidence source / policy URL / documented reference" /><textarea className={`${inputClass} min-h-16`} value={evidenceDraft.notes} onChange={(event) => setEvidenceDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="Reviewer notes" />
+                    <Button type="button" size="sm" variant="outline" onClick={() => void saveSupplierEvidence()}>Record evidence for review</Button>
+                    <p className="text-xs text-muted-foreground">Change history is retained by the database audit trigger. Permanent deletion is unavailable unless the server-side dependency check confirms zero dependencies; archive preserves audit evidence.</p>
+                    <Button type="button" size="sm" variant="outline" onClick={() => void checkSupplierDeletionEligibility(managedSupplier)}>Check deletion dependencies</Button>
+                    {deletionEligibility ? <p className="text-xs text-muted-foreground">{deletionEligibility.eligible ? "Server confirmed zero dependencies." : deletionEligibility.reason}</p> : null}
+                    {deletionEligibility?.eligible ? <Button type="button" size="sm" variant="destructive" onClick={() => void deleteSupplierIfUnreferenced(managedSupplier)}>Permanently delete supplier</Button> : null}
+                  </div>
+                </details>
+              </section>
+            ) : null}
             <details className="mt-4 rounded-xl border border-border/60 p-3">
               <summary className="cursor-pointer text-sm font-medium">
                 Supplier Hunter &amp; Verification
