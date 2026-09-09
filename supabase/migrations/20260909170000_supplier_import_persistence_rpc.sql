@@ -1,5 +1,7 @@
 -- Atomic, generic persistence for a supplier catalogue plan.  This migration
 -- creates no catalogue products and never writes Cossa-owned stock or selling prices.
+-- Fatal persistence failures roll back the entire import transaction; failed attempts
+-- are returned to the server caller rather than persisted as completed import batches.
 begin;
 
 create or replace function public.persist_supplier_catalogue_import(
@@ -128,12 +130,6 @@ begin
   update public.store_supplier_import_batches set status = 'completed', completed_at = now()
    where id = v_batch.id;
   return jsonb_build_object('batchId', v_batch.id, 'idempotent', false, 'status', 'completed');
-exception when others then
-  if v_batch.id is not null then
-    update public.store_supplier_import_batches set status = 'failed', completed_at = now(), error_summary = jsonb_build_object('message', sqlerrm)
-     where id = v_batch.id;
-  end if;
-  raise;
 end;
 $$;
 
