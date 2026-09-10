@@ -49,8 +49,19 @@ export const Route = createFileRoute("/api/store-supplier-catalogue-import")({
               "No importable supplier products were found. Check the CSV headers and product data.",
             );
 
-          // Deployment and preview are non-writing. A second explicit request is required to persist.
-          if (payload.confirmWrite !== true) return agentRuntimeJson({ dryRun: true, plan });
+          // Preview never writes and intentionally returns only compact metadata, not supplier pricing rows.
+          if (payload.confirmWrite !== true)
+            return agentRuntimeJson({
+              dryRun: true,
+              contentHash: plan.contentHash,
+              counts: plan.counts,
+              preview: plan.upserts.slice(0, 8).map((row) => ({
+                sku: row.sku,
+                name: row.name,
+                stockStatus: (row.stock ?? 0) > 0 ? "available" : "unavailable",
+                category: row.category,
+              })),
+            });
 
           return agentRuntimeJson(
             await persistSupplierCatalogueImport({
