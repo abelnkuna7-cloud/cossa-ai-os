@@ -7,7 +7,6 @@ import {
   requireRuntimeMember,
 } from "@/lib/agent-runtime.server";
 import { validateAstrumProductionPackage } from "@/lib/store-astrum-validated-package";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -23,6 +22,7 @@ export const Route = createFileRoute("/api/store-astrum-catalogue-import")({
           const actor = await requireRuntimeMember(request, ["owner", "admin", "manager"]);
           const body = record(await request.json().catch(() => null));
           const validated = validateAstrumProductionPackage(body.package);
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
           const { data: supplier, error: supplierError } = await supabaseAdmin
             .from("store_suppliers")
