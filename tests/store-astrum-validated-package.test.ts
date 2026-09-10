@@ -45,5 +45,5 @@ test("Astrum intake page requires explicit approval and never claims publication
   const source = readFileSync("src/routes/businesses.store-astrum-csv-intake.tsx", "utf8");
   assert.match(source, /Execute controlled Astrum import/);
   assert.match(source, /No product publication is authorised by this action/);
-  assert.match(source, /disabled=!\{payload/);
+  assert.match(source, /disabled=\{!payload \|\| !expectedPreview \|\| !confirmed \|\| running\}/);
 });
