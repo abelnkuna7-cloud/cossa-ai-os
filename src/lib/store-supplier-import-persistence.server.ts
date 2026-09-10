@@ -65,7 +65,15 @@ export async function loadSupplierImportEvidence(organisationId: string, supplie
             value: string,
           ) => {
             single: () => Promise<{
-              data: { id: string } | null;
+              data:
+                | {
+                    id: string;
+                    status: string;
+                    registry_status: string | null;
+                    verification_status: string | null;
+                    archived_at: string | null;
+                  }
+                | null;
               error: { message: string } | null;
             }>;
           };
@@ -75,7 +83,7 @@ export async function loadSupplierImportEvidence(organisationId: string, supplie
   };
   const supplier = await client
     .from("store_suppliers")
-    .select("id")
+    .select("id,status,registry_status,verification_status,archived_at")
     .eq("id", supplierId)
     .eq("organisation_id", organisationId)
     .single();
@@ -84,6 +92,21 @@ export async function loadSupplierImportEvidence(organisationId: string, supplie
       "Supplier is not available in this organisation.",
       404,
     );
+  if (supplier.data.archived_at)
+    throw new SupplierImportPersistenceError(
+      "Archived suppliers cannot receive catalogue imports.",
+      409,
+    );
+  if (
+    supplier.data.status !== "active" ||
+    supplier.data.registry_status !== "active" ||
+    supplier.data.verification_status !== "VERIFIED"
+  )
+    throw new SupplierImportPersistenceError(
+      "Catalogue import requires an ACTIVE and VERIFIED supplier registry record.",
+      409,
+    );
+
   const admin = (await database()) as unknown as {
     from: (table: string) => {
       select: (columns: string) => {
