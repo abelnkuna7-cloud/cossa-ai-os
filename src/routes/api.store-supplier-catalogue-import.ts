@@ -27,19 +27,38 @@ export const Route = createFileRoute("/api/store-supplier-catalogue-import")({
           const payload = record(await request.json().catch(() => null));
           const sourceText = text(payload.sourceText);
           if (!sourceText.trim())
-            throw new SupplierImportPersistenceError("Supplier source text is required.");
+            throw new SupplierImportPersistenceError("Supplier CSV content is required.");
+          const sourceType = text(payload.sourceType).toLowerCase();
+          if (sourceType !== "csv")
+            throw new SupplierImportPersistenceError(
+              "This catalogue intaker currently accepts CSV sources only.",
+            );
+          const sourceFileName = text(payload.sourceFileName).trim();
+          if (!sourceFileName.toLowerCase().endsWith(".csv"))
+            throw new SupplierImportPersistenceError("Choose a .csv supplier catalogue file.");
           const supplierId = text(payload.supplierId);
+          if (!supplierId)
+            throw new SupplierImportPersistenceError("Choose an existing supplier registry record.");
+
           const existing = await loadSupplierImportEvidence(actor.organisationId, supplierId);
           const plan = planAstrumImport(sourceText, existing);
-          // This endpoint is deliberately explicit: deployment of the code never imports a catalogue.
+          if (plan.counts.sourceRows <= 0)
+            throw new SupplierImportPersistenceError("The CSV does not contain product rows.");
+          if (plan.counts.acceptedRows <= 0)
+            throw new SupplierImportPersistenceError(
+              "No importable supplier products were found. Check the CSV headers and product data.",
+            );
+
+          // Deployment and preview are non-writing. A second explicit request is required to persist.
           if (payload.confirmWrite !== true) return agentRuntimeJson({ dryRun: true, plan });
+
           return agentRuntimeJson(
             await persistSupplierCatalogueImport({
               organisationId: actor.organisationId,
               actorId: actor.userId,
               supplierId,
-              sourceType: text(payload.sourceType) as "csv",
-              sourceFileName: text(payload.sourceFileName),
+              sourceType: "csv",
+              sourceFileName,
               sourceUrl: text(payload.sourceUrl),
               sourceText,
               sourceObservedAt: text(payload.sourceObservedAt) || undefined,
