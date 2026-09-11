@@ -56,13 +56,13 @@
 }
 
 /* Cossa Nexus Holdings — official black, gold and white palette.
-   High-contrast dark system tuned for legibility on mobile and in bright light. */
+   True-black operating surface with restrained raised-state separation. */
 :root {
   --radius: 0.75rem;
 
   --black: #000000;
-  --charcoal: #080808;
-  --charcoal-raised: #0d0d0d;
+  --charcoal: #050505;
+  --charcoal-raised: #080808;
   --gold: #d4af37;
   --gold-action: #ffc400;
   --gold-shadow: #8c6a16;
@@ -71,18 +71,18 @@
   --background: #000000;
   --foreground: #ffffff;
 
-  --card: #080808;
+  --card: #000000;
   --card-foreground: #ffffff;
-  --popover: #0d0d0d;
+  --popover: #050505;
   --popover-foreground: #ffffff;
 
   --primary: var(--gold);
   --primary-foreground: #000000;
-  --secondary: #0d0d0d;
+  --secondary: #050505;
   --secondary-foreground: #ffffff;
-  --muted: #101010;
+  --muted: #080808;
   --muted-foreground: #d0d0d0;
-  --accent: #171717;
+  --accent: #0d0d0d;
   --accent-foreground: #ffffff;
   --destructive: oklch(0.62 0.22 25);
   --destructive-foreground: #ffffff;
@@ -90,9 +90,9 @@
   --warning: #ffc400;
   --info: #168bff;
 
-  /* Neutral borders make card boundaries clear without washing the UI in gold. */
-  --border: #2b2b2b;
-  --input: #343434;
+  /* Neutral borders preserve hierarchy without turning surfaces charcoal. */
+  --border: #242424;
+  --input: #2b2b2b;
   --ring: color-mix(in srgb, var(--gold) 72%, white 8%);
 
   --chart-1: oklch(0.79 0.13 86);
@@ -101,13 +101,13 @@
   --chart-4: oklch(0.65 0.2 15);
   --chart-5: #c94dff;
 
-  --sidebar: #030303;
+  --sidebar: #000000;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: var(--gold);
   --sidebar-primary-foreground: #000000;
-  --sidebar-accent: #171717;
+  --sidebar-accent: #0d0d0d;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #242424;
+  --sidebar-border: #1f1f1f;
   --sidebar-ring: color-mix(in srgb, var(--gold) 65%, transparent);
 
   --gradient-gold: linear-gradient(135deg, var(--gold-highlight), var(--gold), var(--gold-shadow));
@@ -193,9 +193,9 @@
 }
 
 @utility glass-card {
-  background: linear-gradient(180deg, rgb(13 13 13 / 0.98), rgb(5 5 5 / 0.98));
-  border: 1px solid #2b2b2b;
-  backdrop-filter: blur(12px);
+  background: #000000;
+  border: 1px solid #242424;
+  backdrop-filter: none;
   box-shadow: var(--shadow-premium);
   border-radius: var(--radius-xl);
 }
