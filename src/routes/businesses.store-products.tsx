@@ -3,13 +3,17 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Archive,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
+  Check,
   CheckCircle2,
   ExternalLink,
   Eye,
   EyeOff,
   FileDown,
   FileText,
+  GripVertical,
   ImagePlus,
   PackagePlus,
   Pencil,
@@ -261,6 +265,14 @@ function skuPrefix(type: ProductType) {
   return "COS-AFF-";
 }
 
+function moveItem<T>(items: T[], from: number, to: number) {
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return items;
+  const next = [...items];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
 function publicationIssues(form: ProductForm): string[] {
   const issues: string[] = [];
   if (!form.category.trim()) issues.push("category");
@@ -343,6 +355,11 @@ function StoreProductManager() {
   const [checkingPreflight, setCheckingPreflight] = useState(false);
   const [generatingSku, setGeneratingSku] = useState(false);
   const [portfolioIntel, setPortfolioIntel] = useState<PortfolioIntelligence | null>(null);
+  const [draggingImageIndex, setDraggingImageIndex] = useState<number | null>(null);
+  const [draggingDeliverableId, setDraggingDeliverableId] = useState<string | null>(null);
+  const [editingDeliverableId, setEditingDeliverableId] = useState<string | null>(null);
+  const [editingDeliverableLabel, setEditingDeliverableLabel] = useState("");
+  const [reorderingDeliverables, setReorderingDeliverables] = useState(false);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -408,6 +425,7 @@ function StoreProductManager() {
     setDeliverables([]);
     setDeliverableUploadError(null);
     setPreflight(null);
+    setEditingDeliverableId(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -415,6 +433,7 @@ function StoreProductManager() {
     setForm(rowToForm(product));
     setDeliverableUploadError(null);
     setPreflight(null);
+    setEditingDeliverableId(null);
     void loadDeliverables(product.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -427,6 +446,23 @@ function StoreProductManager() {
       toast.success(`Next available SKU: ${next}`);
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not generate SKU."); }
     finally { setGeneratingSku(false); }
+  }
+
+  async function persistImageOrder(nextUrls: string[]) {
+    update("image_urls", nextUrls);
+    if (!form.id) return;
+    const { error } = await db.from("store_products").update({ image_urls: nextUrls, updated_at: new Date().toISOString() }).eq("id", form.id);
+    if (error) {
+      toast.error(`Could not save image order: ${error.message}`);
+      return;
+    }
+    setProducts((current) => current.map((product) => product.id === form.id ? { ...product, image_urls: nextUrls } : product));
+  }
+
+  async function moveImage(from: number, to: number) {
+    const next = moveItem(form.image_urls, from, to);
+    if (next === form.image_urls) return;
+    await persistImageOrder(next);
   }
 
   async function uploadProductImage(file: File) {
@@ -529,9 +565,7 @@ function StoreProductManager() {
       const message = error instanceof Error ? error.message : "Unknown upload error";
       setDeliverableUploadError(message);
       toast.error(`Customer-file upload failed: ${message}`);
-      if (uploadedPaths.length) {
-        await db.storage.from("store-digital-products").remove(uploadedPaths);
-      }
+      if (uploadedPaths.length) await db.storage.from("store-digital-products").remove(uploadedPaths);
     } finally {
       setUploadingDeliverables(false);
     }
@@ -550,6 +584,50 @@ function StoreProductManager() {
     const { error } = await db.from("store_product_digital_deliverables").update({ is_customer_visible: !deliverable.is_customer_visible }).eq("id", deliverable.id);
     if (error) return toast.error(`Could not update file visibility: ${error.message}`);
     await loadDeliverables(deliverable.product_id);
+  }
+
+  function beginRenameDeliverable(deliverable: Deliverable) {
+    setEditingDeliverableId(deliverable.id);
+    setEditingDeliverableLabel(deliverable.label);
+  }
+
+  async function saveDeliverableLabel(deliverable: Deliverable) {
+    const label = editingDeliverableLabel.trim();
+    if (!label) return toast.error("Customer-file label cannot be empty.");
+    const { error } = await db.from("store_product_digital_deliverables").update({ label }).eq("id", deliverable.id);
+    if (error) return toast.error(`Could not rename customer file: ${error.message}`);
+    setEditingDeliverableId(null);
+    setEditingDeliverableLabel("");
+    toast.success("Customer-file label updated.");
+    await loadDeliverables(deliverable.product_id);
+  }
+
+  async function persistDeliverableOrder(next: Deliverable[]) {
+    if (!form.id || reorderingDeliverables) return;
+    const normalised = next.map((item, index) => ({ ...item, position: index }));
+    const previous = deliverables;
+    setDeliverables(normalised);
+    setReorderingDeliverables(true);
+    try {
+      for (let index = 0; index < normalised.length; index += 1) {
+        const item = normalised[index];
+        const { error } = await db.from("store_product_digital_deliverables").update({ position: index }).eq("id", item.id).eq("product_id", form.id);
+        if (error) throw new Error(error.message);
+      }
+      toast.success("Customer-file order saved.");
+    } catch (error) {
+      setDeliverables(previous);
+      toast.error(`Could not save customer-file order: ${error instanceof Error ? error.message : "Unknown error"}`);
+      await loadDeliverables(form.id);
+    } finally {
+      setReorderingDeliverables(false);
+    }
+  }
+
+  async function moveDeliverable(from: number, to: number) {
+    const next = moveItem(deliverables, from, to);
+    if (next === deliverables) return;
+    await persistDeliverableOrder(next);
   }
 
   async function removeDeliverable(deliverable: Deliverable) {
@@ -675,9 +753,14 @@ function StoreProductManager() {
 
           {tracksInventory ? <div className="mt-7 border-t border-border/60 pt-6"><h3 className="font-semibold">Inventory</h3><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Stock quantity"><input className={inputClass} inputMode="numeric" value={form.stock_quantity} onChange={(event) => update("stock_quantity", event.target.value)} /></Field><div className="flex flex-col justify-end gap-3 rounded-xl border border-border/60 p-3"><Toggle label="Track inventory" checked={form.track_inventory} onChange={(checked) => update("track_inventory", checked)} /><Toggle label="Unlimited stock" checked={form.unlimited_stock} onChange={(checked) => update("unlimited_stock", checked)} /></div></div></div> : null}
 
-          <div className="mt-7 border-t border-border/60 pt-6"><div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold">Store images</h3><p className="mt-1 text-xs text-muted-foreground">Marketing images shown on the Store. These are not customer download files.</p></div><label className="inline-flex cursor-pointer items-center rounded-lg border border-primary/30 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/5"><ImagePlus className="mr-1.5 h-4 w-4" />{uploadingImage ? "Uploading…" : "Upload image"}<input type="file" accept="image/*" className="hidden" disabled={uploadingImage} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadProductImage(file); event.currentTarget.value = ""; }} /></label></div>{form.image_urls.length > 0 ? <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">{form.image_urls.map((url, index) => <div key={`${url}-${index}`} className="relative overflow-hidden rounded-xl border border-border/60 bg-card"><img src={url} alt="" className="aspect-square w-full object-cover" /><button type="button" className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 text-foreground shadow" onClick={() => update("image_urls", form.image_urls.filter((_, itemIndex) => itemIndex !== index))} aria-label="Remove image from product"><X className="h-3.5 w-3.5" /></button>{index === 0 ? <span className="absolute bottom-2 left-2 rounded bg-background/90 px-2 py-1 text-[10px] font-medium">Main image</span> : null}</div>)}</div> : <div className="mt-4 rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">No Store image uploaded yet.</div>}</div>
+          <div className="mt-7 border-t border-border/60 pt-6">
+            <div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold">Store images</h3><p className="mt-1 text-xs text-muted-foreground">Drag images into order. Image #1 is the Store main image.</p></div><label className="inline-flex cursor-pointer items-center rounded-lg border border-primary/30 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/5"><ImagePlus className="mr-1.5 h-4 w-4" />{uploadingImage ? "Uploading…" : "Upload image"}<input type="file" accept="image/*" className="hidden" disabled={uploadingImage} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadProductImage(file); event.currentTarget.value = ""; }} /></label></div>
+            {form.image_urls.length > 0 ? <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">{form.image_urls.map((url, index) => <div key={`${url}-${index}`} draggable onDragStart={() => setDraggingImageIndex(index)} onDragEnd={() => setDraggingImageIndex(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const from = draggingImageIndex; setDraggingImageIndex(null); if (from != null && from !== index) void moveImage(from, index); }} className={`relative overflow-hidden rounded-xl border bg-card ${draggingImageIndex === index ? "border-primary/70 opacity-70" : "border-border/60"}`}><img src={url} alt="" className="aspect-square w-full object-cover" /><div className="absolute left-2 top-2 flex items-center gap-1 rounded-lg bg-background/90 p-1 shadow"><GripVertical className="h-3.5 w-3.5 cursor-grab text-muted-foreground" /><span className="px-1 text-[10px] font-semibold">#{index + 1}</span></div><button type="button" className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 text-foreground shadow" onClick={() => update("image_urls", form.image_urls.filter((_, itemIndex) => itemIndex !== index))} aria-label="Remove image from product"><X className="h-3.5 w-3.5" /></button><div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-1"><div>{index === 0 ? <span className="rounded bg-background/90 px-2 py-1 text-[10px] font-medium">Main image</span> : null}</div><div className="flex gap-1"><button type="button" disabled={index === 0} onClick={() => void moveImage(index, index - 1)} className="rounded bg-background/90 p-1.5 shadow disabled:opacity-40" aria-label="Move image earlier"><ArrowUp className="h-3.5 w-3.5" /></button><button type="button" disabled={index === form.image_urls.length - 1} onClick={() => void moveImage(index, index + 1)} className="rounded bg-background/90 p-1.5 shadow disabled:opacity-40" aria-label="Move image later"><ArrowDown className="h-3.5 w-3.5" /></button></div></div></div>)}</div> : <div className="mt-4 rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">No Store image uploaded yet.</div>}
+          </div>
 
-          {form.product_type === "digital" ? <div className="mt-7 border-t border-border/60 pt-6"><div><h3 className="font-semibold">Digital customer package</h3><p className="mt-1 text-xs text-muted-foreground">Manage the primary ZIP and all extra customer PDFs/resources here. No need to leave Product Manager.</p></div><div className="mt-4 rounded-2xl border border-primary/20 bg-primary/5 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold">Primary secure ZIP / package</p><p className="mt-1 text-xs text-muted-foreground">Required for backward-compatible one-click delivery.</p></div><label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-primary/30 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/5"><Upload className="mr-1.5 h-4 w-4" />{uploadingDigital ? "Uploading…" : form.digital_file_path ? "Replace primary file" : "Upload primary file"}<input type="file" className="hidden" disabled={uploadingDigital} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadDigitalFile(file); event.currentTarget.value = ""; }} /></label></div>{form.digital_file_path ? <div className="mt-3 flex items-center gap-3 rounded-xl border border-primary/20 bg-background/60 p-3"><FileDown className="h-5 w-5 text-primary" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{form.digital_file_name || "Digital file"}</p><p className="truncate text-[11px] text-muted-foreground">Private storage: {form.digital_file_path}</p></div></div> : null}</div><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Download limit"><input className={inputClass} inputMode="numeric" value={form.digital_download_limit} onChange={(event) => update("digital_download_limit", event.target.value)} placeholder="5" /></Field><Field label="Access period (days)"><input className={inputClass} inputMode="numeric" value={form.digital_access_days} onChange={(event) => update("digital_access_days", event.target.value)} placeholder="30" /></Field></div><div className="mt-5 rounded-2xl border border-border/70 p-4"><div className="flex items-start gap-3"><FileText className="mt-0.5 h-5 w-5 text-primary" /><div><p className="text-sm font-semibold">Extra customer files</p><p className="mt-1 text-xs text-muted-foreground">Course PDF, START HERE, workbook, templates, checklists and bonus resources.</p></div></div>{!form.id ? <div className="mt-4 rounded-xl border border-dashed border-warning/50 bg-warning/5 p-4 text-xs text-muted-foreground">Save this product as a draft once. Extra file upload will unlock here on the same screen.</div> : <><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Optional label" className="sm:col-span-2"><input className={inputClass} value={deliverableLabel} onChange={(event) => setDeliverableLabel(event.target.value)} placeholder="e.g. Complete Course PDF" /></Field><Toggle label="Mark first upload as primary deliverable" checked={makeDeliverablePrimary} onChange={setMakeDeliverablePrimary} /><Toggle label="Show to customer after confirmed payment" checked={customerVisible} onChange={setCustomerVisible} /></div><label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-primary/40 px-4 py-5 text-sm font-medium text-primary hover:bg-primary/5"><Upload className="mr-2 h-5 w-5" />{uploadingDeliverables ? "Uploading customer files…" : "Upload one or multiple customer files"}<input type="file" multiple className="hidden" disabled={uploadingDeliverables} accept=".zip,.pdf,.doc,.docx,.xlsx,.xls,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,application/zip,application/pdf" onChange={(event) => { const files = event.target.files ? Array.from(event.target.files) : []; event.currentTarget.value = ""; if (files.length) void uploadCustomerFiles(files); }} /></label>{deliverableUploadError ? <div className="mt-3 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">Upload failed: {deliverableUploadError}</div> : null}</>}<div className="mt-5 space-y-2">{loadingDeliverables ? <div className="rounded-xl border border-border/60 p-4 text-sm text-muted-foreground">Loading customer files…</div> : deliverables.length === 0 ? <div className="rounded-xl border border-dashed border-border p-5 text-center text-xs text-muted-foreground">No extra customer files attached yet.</div> : deliverables.map((item) => <article key={item.id} className="rounded-xl border border-border/60 bg-card/40 p-3"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 gap-3"><FileDown className="mt-0.5 h-5 w-5 shrink-0 text-primary" /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-sm font-semibold">{item.label}</p>{item.is_primary ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">Primary</span> : null}{item.is_customer_visible ? <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">Customer visible</span> : <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">Hidden</span>}</div><p className="mt-1 truncate text-xs text-muted-foreground">{item.file_name} · {formatBytes(item.file_size_bytes)}</p></div></div><div className="flex flex-wrap gap-1.5">{!item.is_primary ? <Button size="sm" variant="outline" onClick={() => void setPrimaryDeliverable(item)}><Star className="mr-1 h-3.5 w-3.5" /> Primary</Button> : null}<Button size="sm" variant="outline" onClick={() => void toggleDeliverableVisibility(item)}>{item.is_customer_visible ? <EyeOff className="mr-1 h-3.5 w-3.5" /> : <Eye className="mr-1 h-3.5 w-3.5" />}{item.is_customer_visible ? "Hide" : "Show"}</Button><Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => void removeDeliverable(item)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Remove</Button></div></div></article>)}</div></div><div className="mt-5 rounded-2xl border border-border/70 bg-muted/10 p-4"><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /><h4 className="font-semibold">Customer package intelligence</h4></div><div className="mt-3 grid gap-2 sm:grid-cols-2"><PackageCheck label="Primary ZIP attached" ok={Boolean(form.digital_file_path)} detail={form.digital_file_name || undefined} /><PackageCheck label={`${form.image_urls.length} Store image${form.image_urls.length === 1 ? "" : "s"} attached`} ok={form.image_urls.length > 0} /><PackageCheck label="Course PDF attached" ok={packageSignals.hasCoursePdf} optional /><PackageCheck label="START HERE attached" ok={packageSignals.hasStartHere} optional /><PackageCheck label="Workbook attached" ok={packageSignals.hasWorkbook} optional /><PackageCheck label={`${packageSignals.visibleFiles} customer-visible extra file${packageSignals.visibleFiles === 1 ? "" : "s"}`} ok={packageSignals.visibleFiles > 0} optional /></div></div></div> : null}
+          {form.product_type === "digital" ? <div className="mt-7 border-t border-border/60 pt-6"><div><h3 className="font-semibold">Digital customer package</h3><p className="mt-1 text-xs text-muted-foreground">Manage the primary ZIP and all extra customer PDFs/resources here. No need to leave Product Manager.</p></div><div className="mt-4 rounded-2xl border border-primary/20 bg-primary/5 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold">Primary secure ZIP / package</p><p className="mt-1 text-xs text-muted-foreground">Required for backward-compatible one-click delivery.</p></div><label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-primary/30 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/5"><Upload className="mr-1.5 h-4 w-4" />{uploadingDigital ? "Uploading…" : form.digital_file_path ? "Replace primary file" : "Upload primary file"}<input type="file" className="hidden" disabled={uploadingDigital} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadDigitalFile(file); event.currentTarget.value = ""; }} /></label></div>{form.digital_file_path ? <div className="mt-3 flex items-center gap-3 rounded-xl border border-primary/20 bg-background/60 p-3"><FileDown className="h-5 w-5 text-primary" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{form.digital_file_name || "Digital file"}</p><p className="truncate text-[11px] text-muted-foreground">Private storage: {form.digital_file_path}</p></div></div> : null}</div><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Download limit"><input className={inputClass} inputMode="numeric" value={form.digital_download_limit} onChange={(event) => update("digital_download_limit", event.target.value)} placeholder="5" /></Field><Field label="Access period (days)"><input className={inputClass} inputMode="numeric" value={form.digital_access_days} onChange={(event) => update("digital_access_days", event.target.value)} placeholder="30" /></Field></div><div className="mt-5 rounded-2xl border border-border/70 p-4"><div className="flex items-start gap-3"><FileText className="mt-0.5 h-5 w-5 text-primary" /><div><p className="text-sm font-semibold">Extra customer files</p><p className="mt-1 text-xs text-muted-foreground">Rename or drag files into the exact customer download order. Position #1 appears first.</p></div></div>{!form.id ? <div className="mt-4 rounded-xl border border-dashed border-warning/50 bg-warning/5 p-4 text-xs text-muted-foreground">Save this product as a draft once. Extra file upload will unlock here on the same screen.</div> : <><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Optional label" className="sm:col-span-2"><input className={inputClass} value={deliverableLabel} onChange={(event) => setDeliverableLabel(event.target.value)} placeholder="e.g. Complete Course PDF" /></Field><Toggle label="Mark first upload as primary deliverable" checked={makeDeliverablePrimary} onChange={setMakeDeliverablePrimary} /><Toggle label="Show to customer after confirmed payment" checked={customerVisible} onChange={setCustomerVisible} /></div><label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-primary/40 px-4 py-5 text-sm font-medium text-primary hover:bg-primary/5"><Upload className="mr-2 h-5 w-5" />{uploadingDeliverables ? "Uploading customer files…" : "Upload one or multiple customer files"}<input type="file" multiple className="hidden" disabled={uploadingDeliverables} accept=".zip,.pdf,.doc,.docx,.xlsx,.xls,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,application/zip,application/pdf" onChange={(event) => { const files = event.target.files ? Array.from(event.target.files) : []; event.currentTarget.value = ""; if (files.length) void uploadCustomerFiles(files); }} /></label>{deliverableUploadError ? <div className="mt-3 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">Upload failed: {deliverableUploadError}</div> : null}</>}
+            <div className="mt-5 space-y-2">{loadingDeliverables ? <div className="rounded-xl border border-border/60 p-4 text-sm text-muted-foreground">Loading customer files…</div> : deliverables.length === 0 ? <div className="rounded-xl border border-dashed border-border p-5 text-center text-xs text-muted-foreground">No extra customer files attached yet.</div> : deliverables.map((item, index) => <article key={item.id} draggable={!reorderingDeliverables && editingDeliverableId !== item.id} onDragStart={() => setDraggingDeliverableId(item.id)} onDragEnd={() => setDraggingDeliverableId(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const from = deliverables.findIndex((candidate) => candidate.id === draggingDeliverableId); setDraggingDeliverableId(null); if (from >= 0 && from !== index) void moveDeliverable(from, index); }} className={`rounded-xl border bg-card/40 p-3 ${draggingDeliverableId === item.id ? "border-primary/70 opacity-70" : "border-border/60"}`}><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 gap-3"><div className="flex shrink-0 items-start gap-1 pt-0.5"><GripVertical className="h-5 w-5 cursor-grab text-muted-foreground" /><span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold">#{index + 1}</span></div><FileDown className="mt-0.5 h-5 w-5 shrink-0 text-primary" /><div className="min-w-0 flex-1">{editingDeliverableId === item.id ? <div className="flex flex-col gap-2 sm:flex-row"><input autoFocus className={`${inputClass} py-1.5`} value={editingDeliverableLabel} onChange={(event) => setEditingDeliverableLabel(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveDeliverableLabel(item); } if (event.key === "Escape") { setEditingDeliverableId(null); setEditingDeliverableLabel(""); } }} /><div className="flex gap-1"><Button size="sm" type="button" onClick={() => void saveDeliverableLabel(item)}><Check className="mr-1 h-3.5 w-3.5" /> Save</Button><Button size="sm" type="button" variant="outline" onClick={() => { setEditingDeliverableId(null); setEditingDeliverableLabel(""); }}><X className="mr-1 h-3.5 w-3.5" /> Cancel</Button></div></div> : <><div className="flex flex-wrap items-center gap-2"><p className="truncate text-sm font-semibold">{item.label}</p>{item.is_primary ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">Primary</span> : null}{item.is_customer_visible ? <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">Customer visible</span> : <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">Hidden</span>}</div><p className="mt-1 truncate text-xs text-muted-foreground">{item.file_name} · {formatBytes(item.file_size_bytes)}</p></>}</div></div><div className="flex flex-wrap gap-1.5">{editingDeliverableId !== item.id ? <Button size="sm" variant="outline" onClick={() => beginRenameDeliverable(item)}><Pencil className="mr-1 h-3.5 w-3.5" /> Rename</Button> : null}<Button size="sm" variant="outline" disabled={index === 0 || reorderingDeliverables} onClick={() => void moveDeliverable(index, index - 1)} aria-label="Move file earlier"><ArrowUp className="h-3.5 w-3.5" /></Button><Button size="sm" variant="outline" disabled={index === deliverables.length - 1 || reorderingDeliverables} onClick={() => void moveDeliverable(index, index + 1)} aria-label="Move file later"><ArrowDown className="h-3.5 w-3.5" /></Button>{!item.is_primary ? <Button size="sm" variant="outline" onClick={() => void setPrimaryDeliverable(item)}><Star className="mr-1 h-3.5 w-3.5" /> Primary</Button> : null}<Button size="sm" variant="outline" onClick={() => void toggleDeliverableVisibility(item)}>{item.is_customer_visible ? <EyeOff className="mr-1 h-3.5 w-3.5" /> : <Eye className="mr-1 h-3.5 w-3.5" />}{item.is_customer_visible ? "Hide" : "Show"}</Button><Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => void removeDeliverable(item)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Remove</Button></div></div></article>)}</div>
+            </div><div className="mt-5 rounded-2xl border border-border/70 bg-muted/10 p-4"><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /><h4 className="font-semibold">Customer package intelligence</h4></div><div className="mt-3 grid gap-2 sm:grid-cols-2"><PackageCheck label="Primary ZIP attached" ok={Boolean(form.digital_file_path)} detail={form.digital_file_name || undefined} /><PackageCheck label={`${form.image_urls.length} Store image${form.image_urls.length === 1 ? "" : "s"} attached`} ok={form.image_urls.length > 0} /><PackageCheck label="Course PDF attached" ok={packageSignals.hasCoursePdf} optional /><PackageCheck label="START HERE attached" ok={packageSignals.hasStartHere} optional /><PackageCheck label="Workbook attached" ok={packageSignals.hasWorkbook} optional /><PackageCheck label={`${packageSignals.visibleFiles} customer-visible extra file${packageSignals.visibleFiles === 1 ? "" : "s"}`} ok={packageSignals.visibleFiles > 0} optional /></div></div></div> : null}
 
           {(form.product_type === "affiliate" || form.product_type === "dropshipping" || form.product_type === "pod") ? <div className="mt-7 border-t border-border/60 pt-6"><h3 className="font-semibold">Supplier / partner information</h3><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Supplier / partner name"><input className={inputClass} value={form.supplier_name} onChange={(event) => update("supplier_name", event.target.value)} /></Field><Field label="Supplier product reference"><input className={inputClass} value={form.supplier_product_ref} onChange={(event) => update("supplier_product_ref", event.target.value)} /></Field><Field label="Supplier URL" className="sm:col-span-2"><input className={inputClass} type="url" value={form.supplier_url} onChange={(event) => update("supplier_url", event.target.value)} placeholder="https://" /></Field>{form.product_type === "affiliate" ? <Field label="Affiliate tracking URL" className="sm:col-span-2"><input className={inputClass} type="url" value={form.affiliate_url} onChange={(event) => update("affiliate_url", event.target.value)} placeholder="https://" /></Field> : null}</div></div> : null}
 
