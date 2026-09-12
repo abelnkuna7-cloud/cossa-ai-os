@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import {
   appendCossaProviderObservabilityHeaders,
   buildCossaProviderObservability,
@@ -19,8 +20,8 @@ describe("Cossa provider observability", () => {
         reason: "healthy",
       },
     });
-    expect(snapshot.providerOrder).toBe("groq>openai>gemini");
-    expect(snapshot.capacityMode).toBe("normal");
+    assert.equal(snapshot.providerOrder, "groq>openai>gemini");
+    assert.equal(snapshot.capacityMode, "normal");
   });
 
   it("exposes only bounded operational headers", () => {
@@ -35,8 +36,8 @@ describe("Cossa provider observability", () => {
         retryAfterMs: 120000,
       },
     );
-    expect(headers.get("X-Cossa-AI-Fallback")).toBe("true");
-    expect(headers.get("X-Cossa-AI-Retry-After-Ms")).toBe("60000");
-    expect(headers.get("Authorization")).toBeNull();
+    assert.equal(headers.get("X-Cossa-AI-Fallback"), "true");
+    assert.equal(headers.get("X-Cossa-AI-Retry-After-Ms"), "60000");
+    assert.equal(headers.get("Authorization"), null);
   });
 });
