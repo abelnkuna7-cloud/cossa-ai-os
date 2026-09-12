@@ -108,12 +108,30 @@ function hunt(): LeadHunterSearchResponse {
   };
 }
 
-test("runtime facts preserve full records and keep model input compact", () => {
+test("runtime facts preserve full records and keep verified model input compact", () => {
   const source = hunt();
   const facts = buildLeadHunterRuntimeResearchFacts(source);
   assert.equal(facts.fullProspects[0], source.prospects[0]);
   assert.equal(facts.modelBriefs.length, 1);
   assert.equal(facts.modelBriefs[0]?.organisation_name, "Verified Buyer");
   assert.equal("evidence" in (facts.modelBriefs[0] as object), false);
+  assert.deepEqual(facts.verifiedForAutomatedUseIds, ["p-1"]);
+});
+
+test("partial records stay available for review but cannot enter model outreach stages", () => {
+  const source = hunt();
+  source.prospects.push({
+    ...prospect,
+    id: "p-2",
+    organisation_name: "Partially Verified Buyer",
+    verification_status: "partially_verified",
+    sales_priority: "warm",
+  } as LeadHunterSearchResponse["prospects"][number]);
+
+  const facts = buildLeadHunterRuntimeResearchFacts(source);
+  assert.equal(facts.fullProspects.length, 2);
+  assert.equal(facts.fullProspects[1]?.verification_status, "partially_verified");
+  assert.equal(facts.modelBriefs.length, 1);
+  assert.equal(facts.modelBriefs.some((brief) => brief.id === "p-2"), false);
   assert.deepEqual(facts.verifiedForAutomatedUseIds, ["p-1"]);
 });
