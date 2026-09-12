@@ -1,4 +1,4 @@
-import type { CossaRuntimePolicy } from "./cossa-ai-provider-capacity";
+import type { CossaRuntimePolicy } from "./cossa-ai-provider-capacity.ts";
 
 export type CossaObservedProvider = "groq" | "openai" | "gemini";
 
