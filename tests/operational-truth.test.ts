@@ -13,6 +13,7 @@ import {
   leadConversionMayCreateOpportunity,
   readLegacyCrmField,
   resolveLeadHuntOutcome,
+  resolveLeadHunterProviderTruthStatus,
   resolveStorePublicationStatus,
   revenueTruth,
   sanitiseMarketingOutput,
@@ -58,6 +59,72 @@ test("lead-hunt outcomes preserve no-result, partial-provider and explicit seman
     "SUCCESS_WITH_PROVIDER_WARNINGS",
   );
   assert.equal(resolveLeadHuntOutcome({ outcome: "FAILED", verifiedResultCount: 0 }), "FAILED");
+});
+
+test("Lead Hunter provider truth distinguishes zero-results, filtering and provider failures", () => {
+  assert.equal(
+    resolveLeadHunterProviderTruthStatus({
+      attempted: true,
+      configured: true,
+      succeeded: true,
+      failed: false,
+      resultCount: 0,
+    }),
+    "NO_RESULTS",
+  );
+  assert.equal(
+    resolveLeadHunterProviderTruthStatus({
+      attempted: true,
+      configured: true,
+      succeeded: true,
+      failed: false,
+      resultCount: 4,
+      rawCandidateCount: 4,
+      finalCount: 0,
+    }),
+    "FILTERED_TO_ZERO",
+  );
+  assert.equal(
+    resolveLeadHunterProviderTruthStatus({
+      attempted: true,
+      configured: true,
+      succeeded: false,
+      failed: true,
+      httpStatus: 401,
+      errorReason: "invalid api key",
+    }),
+    "AUTH_ERROR",
+  );
+  assert.equal(
+    resolveLeadHunterProviderTruthStatus({
+      attempted: true,
+      configured: true,
+      succeeded: false,
+      failed: true,
+      httpStatus: 429,
+      errorReason: "rate limit exceeded",
+    }),
+    "RATE_LIMITED",
+  );
+  assert.equal(
+    resolveLeadHunterProviderTruthStatus({
+      attempted: true,
+      configured: true,
+      succeeded: false,
+      failed: true,
+      errorReason: "request timed out",
+    }),
+    "TIMEOUT",
+  );
+  assert.equal(
+    resolveLeadHunterProviderTruthStatus({
+      attempted: false,
+      configured: false,
+      succeeded: false,
+      failed: false,
+    }),
+    "NOT_CONFIGURED",
+  );
 });
 
 test("approval and configuration failures cannot create retry storms", () => {
