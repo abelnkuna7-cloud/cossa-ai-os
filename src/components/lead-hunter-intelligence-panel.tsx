@@ -7,6 +7,25 @@ import type { LeadHunterHistoryDashboard, LeadHunterHistoryWindow } from "@/lib/
 import { leadHunterDiagnosticsForResponse } from "@/lib/lead-hunter-ui-truth";
 import { cn } from "@/lib/utils";
 
+type ProviderConfigState = "CONFIGURED" | "NOT_CONFIGURED";
+
+type LeadHunterProviderConfigurationHealth = {
+  checked_at: string;
+  environment: string;
+  search_providers: {
+    tavily: ProviderConfigState;
+    serpapi: ProviderConfigState;
+    newsapi: ProviderConfigState;
+  };
+  lead_hunter_search_available: boolean;
+  protected_runtime: {
+    supabase: ProviderConfigState;
+    runtime_worker: ProviderConfigState;
+    history_writer: ProviderConfigState;
+  };
+  note: string;
+};
+
 const loadLeadHunterHistory = createClientOnlyFn(
   async (signal?: AbortSignal): Promise<LeadHunterHistoryDashboard> => {
     const { fetchLeadHunterHistoryDashboard } = await import("@/lib/lead-hunter-history.client");
@@ -14,9 +33,23 @@ const loadLeadHunterHistory = createClientOnlyFn(
   },
 );
 
+const loadLeadHunterProviderHealth = createClientOnlyFn(
+  async (signal?: AbortSignal): Promise<LeadHunterProviderConfigurationHealth> => {
+    const { fetchLeadHunterProviderConfigurationHealth } = await import(
+      "@/lib/lead-hunter-history.client"
+    );
+    return fetchLeadHunterProviderConfigurationHealth(signal);
+  },
+);
+
 type LoadState =
   | { status: "loading"; data: null; error: null }
   | { status: "ready"; data: LeadHunterHistoryDashboard; error: null }
+  | { status: "unavailable"; data: null; error: string };
+
+type ProviderLoadState =
+  | { status: "loading"; data: null; error: null }
+  | { status: "ready"; data: LeadHunterProviderConfigurationHealth; error: null }
   | { status: "unavailable"; data: null; error: string };
 
 export function LeadHunterIntelligencePanel({
@@ -27,6 +60,11 @@ export function LeadHunterIntelligencePanel({
   refreshKey?: number;
 }) {
   const [state, setState] = useState<LoadState>({ status: "loading", data: null, error: null });
+  const [providerState, setProviderState] = useState<ProviderLoadState>({
+    status: "loading",
+    data: null,
+    error: null,
+  });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -41,6 +79,28 @@ export function LeadHunterIntelligencePanel({
             status: "unavailable",
             data: null,
             error: error instanceof Error ? error.message : "Lead Hunter history is unavailable.",
+          });
+        }
+      });
+    return () => controller.abort();
+  }, [refreshKey]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setProviderState({ status: "loading", data: null, error: null });
+    loadLeadHunterProviderHealth(controller.signal)
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setProviderState({ status: "ready", data, error: null });
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setProviderState({
+            status: "unavailable",
+            data: null,
+            error:
+              error instanceof Error ? error.message : "Lead Hunter provider health is unavailable.",
           });
         }
       });
@@ -91,6 +151,43 @@ export function LeadHunterIntelligencePanel({
             <WindowCard label="Last 7 days" window={state.data.last_7_days} />
             <WindowCard label="Last 30 days" window={state.data.last_30_days} />
           </div>
+        )}
+      </div>
+
+      <div className="glass-card p-5">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Search provider configuration
+          </div>
+          <h2 className="mt-1 text-sm font-semibold">Lead Hunter provider readiness</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Configuration truth only. A configured provider is not called healthy until a real hunt proves authentication and returns provider diagnostics.
+          </p>
+        </div>
+
+        {providerState.status === "loading" ? (
+          <div className="mt-4 rounded-xl border border-border/60 p-4 text-xs text-muted-foreground">
+            Checking provider configuration…
+          </div>
+        ) : providerState.status === "unavailable" ? (
+          <div className="mt-4 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <div>
+              <div className="text-xs font-semibold text-warning">Provider truth unavailable</div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{providerState.error}</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <ConfigurationCard label="Tavily" status={providerState.data.search_providers.tavily} />
+              <ConfigurationCard label="SerpAPI" status={providerState.data.search_providers.serpapi} />
+              <ConfigurationCard label="NewsAPI" status={providerState.data.search_providers.newsapi} />
+            </div>
+            <div className="mt-3 text-[10px] leading-4 text-muted-foreground">
+              Search available: {providerState.data.lead_hunter_search_available ? "Yes" : "No"} · checked {formatDateTime(providerState.data.checked_at)}
+            </div>
+          </>
         )}
       </div>
 
@@ -155,6 +252,29 @@ function WindowCard({ label, window }: { label: string; window: LeadHunterHistor
         <div className="mt-1">
           Last success: {window.last_successful_hunt_at ? formatDateTime(window.last_successful_hunt_at) : "No recorded success"}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfigurationCard({ label, status }: { label: string; status: ProviderConfigState }) {
+  const configured = status === "CONFIGURED";
+  const Icon = configured ? CheckCircle2 : AlertCircle;
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/30 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold">{label}</span>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-widest",
+            configured
+              ? "border-success/30 bg-success/10 text-success"
+              : "border-warning/30 bg-warning/10 text-warning",
+          )}
+        >
+          <Icon className="h-3 w-3" />
+          {status.replaceAll("_", " ")}
+        </span>
       </div>
     </div>
   );
