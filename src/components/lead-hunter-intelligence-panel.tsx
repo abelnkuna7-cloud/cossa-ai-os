@@ -2,11 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock3, Radar, RefreshCcw } from "lucide-react";
 
 import type { LeadHunterSearchResponse } from "@/lib/lead-hunter-data";
+import { fetchLeadHunterHistoryDashboard } from "@/lib/lead-hunter-history.client";
 import type { LeadHunterHistoryDashboard, LeadHunterHistoryWindow } from "@/lib/lead-hunter-history-dashboard";
-import {
-  fetchLeadHunterHistoryDashboard,
-  leadHunterDiagnosticsForResponse,
-} from "@/lib/lead-hunter-ui-truth";
+import { leadHunterDiagnosticsForResponse } from "@/lib/lead-hunter-ui-truth";
 import { cn } from "@/lib/utils";
 
 type LoadState =
