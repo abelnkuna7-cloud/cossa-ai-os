@@ -1,19 +1,36 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { LeadHunterHistoryDashboard } from "./lead-hunter-history-dashboard";
 
+export type ProviderConfigState = "CONFIGURED" | "NOT_CONFIGURED";
+
 export type LeadHunterProviderConfigurationHealth = {
   checked_at: string;
   environment: string;
   search_providers: {
-    tavily: "CONFIGURED" | "NOT_CONFIGURED";
-    serpapi: "CONFIGURED" | "NOT_CONFIGURED";
-    newsapi: "CONFIGURED" | "NOT_CONFIGURED";
+    tavily: ProviderConfigState;
+    serpapi: ProviderConfigState;
+    newsapi: ProviderConfigState;
+  };
+  model_providers: {
+    groq: {
+      configuration: ProviderConfigState;
+      model: string;
+    };
+    openai: {
+      configuration: ProviderConfigState;
+      model: string;
+    };
+    gemini: {
+      configuration: ProviderConfigState;
+      model: string;
+    };
   };
   lead_hunter_search_available: boolean;
+  model_reasoning_available: boolean;
   protected_runtime: {
-    supabase: "CONFIGURED" | "NOT_CONFIGURED";
-    runtime_worker: "CONFIGURED" | "NOT_CONFIGURED";
-    history_writer: "CONFIGURED" | "NOT_CONFIGURED";
+    supabase: ProviderConfigState;
+    runtime_worker: ProviderConfigState;
+    history_writer: ProviderConfigState;
   };
   note: string;
 };
@@ -78,6 +95,7 @@ export async function fetchLeadHunterProviderConfigurationHealth(
     !body ||
     typeof body !== "object" ||
     !("search_providers" in body) ||
+    !("model_providers" in body) ||
     !("lead_hunter_search_available" in body)
   ) {
     throw new Error("Lead Hunter provider health returned an invalid response.");
