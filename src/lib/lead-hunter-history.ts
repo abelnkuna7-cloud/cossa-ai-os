@@ -77,6 +77,10 @@ function countWhere(prospects: ProspectLike[], predicate: (prospect: ProspectLik
   return prospects.reduce((count, prospect) => count + (predicate(prospect) ? 1 : 0), 0);
 }
 
+function isVerified(prospect: ProspectLike): boolean {
+  return readString(prospect.verification_status) === "verified";
+}
+
 export function buildLeadHunterHuntHistoryRecord(input: {
   organisationId: string;
   executionSource: LeadHunterHistoryExecutionSource;
@@ -124,20 +128,27 @@ export function buildLeadHunterHuntHistoryRecord(input: {
     source_count: readCount(hunt.source_count),
     accepted_count: readCount(hunt.accepted_count),
     rejected_count: readCount(hunt.rejected_count),
-    verified_count: countWhere(prospects, (prospect) => readString(prospect.verification_status) === "verified"),
+    verified_count: countWhere(prospects, isVerified),
     partially_verified_count: countWhere(
       prospects,
       (prospect) => readString(prospect.verification_status) === "partially_verified",
     ),
-    hot_count: countWhere(prospects, (prospect) => readString(prospect.sales_priority) === "hot"),
+    hot_count: countWhere(
+      prospects,
+      (prospect) => isVerified(prospect) && readString(prospect.sales_priority) === "hot",
+    ),
     warm_count: countWhere(prospects, (prospect) => readString(prospect.sales_priority) === "warm"),
     cold_count: countWhere(prospects, (prospect) => readString(prospect.sales_priority) === "cold"),
     research_count: countWhere(prospects, (prospect) => readString(prospect.sales_priority) === "research"),
     duplicate_count: countWhere(prospects, (prospect) => duplicateStates.has(readString(prospect.duplicate_status))),
-    tender_count: countWhere(prospects, (prospect) => readString(prospect.classification) === "tender"),
+    tender_count: countWhere(
+      prospects,
+      (prospect) => isVerified(prospect) && readString(prospect.classification) === "tender",
+    ),
     supplier_opportunity_count: countWhere(
       prospects,
-      (prospect) => readString(prospect.classification) === "supplier_opportunity",
+      (prospect) =>
+        isVerified(prospect) && readString(prospect.classification) === "supplier_opportunity",
     ),
     rejection_reason_counts: Object.fromEntries(
       Object.entries(input.rejectionReasonCounts ?? {}).filter(
