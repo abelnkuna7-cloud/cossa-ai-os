@@ -51,8 +51,13 @@ export function appendCossaProviderObservabilityHeaders(
   output.set("X-Cossa-AI-Runtime-Action", snapshot.runtimeAction);
   output.set("X-Cossa-AI-Provider-Order", snapshot.providerOrder);
   output.set("X-Cossa-AI-Fallback", snapshot.fallbackUsed ? "true" : "false");
-  if (snapshot.retryAfterMs !== null) {
-    output.set("X-Cossa-AI-Retry-After-Ms", String(snapshot.retryAfterMs));
+
+  // Clamp again at the final exposure boundary. This keeps the header safe even
+  // if a caller supplies a hand-built snapshot instead of one returned by
+  // buildCossaProviderObservability().
+  const retryAfterMs = safeRetryAfterMs(snapshot.retryAfterMs);
+  if (retryAfterMs !== null) {
+    output.set("X-Cossa-AI-Retry-After-Ms", String(retryAfterMs));
   }
 
   const exposed = new Set(
