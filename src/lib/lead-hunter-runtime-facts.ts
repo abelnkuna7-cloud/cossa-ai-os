@@ -10,18 +10,22 @@ export type LeadHunterRuntimeResearchFacts = {
 /**
  * Keeps the complete structured Lead Hunter records for operational use while
  * producing a separate compact factual projection for model stages.
+ *
+ * Only prospects that passed the final evidence guard are exposed to model
+ * qualification/outreach stages. Partially verified records remain available in
+ * fullProspects for human review, diagnostics and history, but cannot silently
+ * enter automated commercial messaging.
  */
 export function buildLeadHunterRuntimeResearchFacts(
   hunt: LeadHunterSearchResponse,
 ): LeadHunterRuntimeResearchFacts {
   const fullProspects = hunt.prospects;
   const bundles = buildLeadHunterFactBundles(fullProspects);
+  const verifiedBundles = bundles.filter((bundle) => bundle.verified_for_automated_use);
 
   return {
     fullProspects,
-    modelBriefs: leadHunterModelBriefs(bundles),
-    verifiedForAutomatedUseIds: bundles
-      .filter((bundle) => bundle.verified_for_automated_use)
-      .map((bundle) => bundle.full_record.id),
+    modelBriefs: leadHunterModelBriefs(verifiedBundles),
+    verifiedForAutomatedUseIds: verifiedBundles.map((bundle) => bundle.full_record.id),
   };
 }
