@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import {
   resolveAgentRuntimeTruth,
   type AgentRuntimeDashboard,
-} from "../src/lib/agent-runtime";
+} from "../src/lib/agent-runtime.ts";
 
 function dashboard(overrides: Partial<AgentRuntimeDashboard> = {}): AgentRuntimeDashboard {
   return {
