@@ -32,7 +32,9 @@ test("buildConversationMemoryUpsertRow sanitises and de-duplicates memory", () =
 });
 
 test("writeback remains disabled unless explicitly enabled", async () => {
-  const previous = process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+  const previousRead = process.env.COSSA_AI_MEMORY_ENABLED;
+  const previousWrite = process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+  delete process.env.COSSA_AI_MEMORY_ENABLED;
   delete process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
 
   try {
@@ -45,13 +47,40 @@ test("writeback remains disabled unless explicitly enabled", async () => {
 
     assert.deepEqual(result, { written: false, reason: "disabled" });
   } finally {
-    if (previous === undefined) delete process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
-    else process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = previous;
+    if (previousRead === undefined) delete process.env.COSSA_AI_MEMORY_ENABLED;
+    else process.env.COSSA_AI_MEMORY_ENABLED = previousRead;
+    if (previousWrite === undefined) delete process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+    else process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = previousWrite;
   }
 });
 
-test("enabled writeback still refuses missing authentication", async () => {
-  const previous = process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+test("writeback flag alone cannot bypass staged memory read activation", async () => {
+  const previousRead = process.env.COSSA_AI_MEMORY_ENABLED;
+  const previousWrite = process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+  delete process.env.COSSA_AI_MEMORY_ENABLED;
+  process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = "true";
+
+  try {
+    const result = await writeConversationMemorySnapshot({
+      bearerToken: null,
+      conversationId: "conversation-1",
+      memory: sampleMemory,
+      messageCount: 4,
+    });
+
+    assert.deepEqual(result, { written: false, reason: "disabled" });
+  } finally {
+    if (previousRead === undefined) delete process.env.COSSA_AI_MEMORY_ENABLED;
+    else process.env.COSSA_AI_MEMORY_ENABLED = previousRead;
+    if (previousWrite === undefined) delete process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+    else process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = previousWrite;
+  }
+});
+
+test("enabled read-write memory still refuses missing authentication", async () => {
+  const previousRead = process.env.COSSA_AI_MEMORY_ENABLED;
+  const previousWrite = process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+  process.env.COSSA_AI_MEMORY_ENABLED = "true";
   process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = "true";
 
   try {
@@ -64,13 +93,17 @@ test("enabled writeback still refuses missing authentication", async () => {
 
     assert.deepEqual(result, { written: false, reason: "missing-auth" });
   } finally {
-    if (previous === undefined) delete process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
-    else process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = previous;
+    if (previousRead === undefined) delete process.env.COSSA_AI_MEMORY_ENABLED;
+    else process.env.COSSA_AI_MEMORY_ENABLED = previousRead;
+    if (previousWrite === undefined) delete process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+    else process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = previousWrite;
   }
 });
 
-test("enabled writeback refuses compatibility or arbitrary conversation IDs", async () => {
-  const previous = process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+test("enabled read-write memory refuses compatibility or arbitrary conversation IDs", async () => {
+  const previousRead = process.env.COSSA_AI_MEMORY_ENABLED;
+  const previousWrite = process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+  process.env.COSSA_AI_MEMORY_ENABLED = "true";
   process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = "true";
 
   try {
@@ -83,7 +116,9 @@ test("enabled writeback refuses compatibility or arbitrary conversation IDs", as
 
     assert.deepEqual(result, { written: false, reason: "invalid-conversation" });
   } finally {
-    if (previous === undefined) delete process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
-    else process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = previous;
+    if (previousRead === undefined) delete process.env.COSSA_AI_MEMORY_ENABLED;
+    else process.env.COSSA_AI_MEMORY_ENABLED = previousRead;
+    if (previousWrite === undefined) delete process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED;
+    else process.env.COSSA_AI_MEMORY_WRITEBACK_ENABLED = previousWrite;
   }
 });

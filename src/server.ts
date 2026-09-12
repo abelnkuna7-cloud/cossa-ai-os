@@ -1,6 +1,10 @@
 import "./lib/error-capture";
 
 import {
+  formatCossaAnswerContract,
+  planCossaAnswerContract,
+} from "./lib/cossa-ai-answer-contract.ts";
+import {
   buildLegacyGatewayWindow,
   validateConversationMessages,
   type ChatWindowValidationResult,
@@ -10,8 +14,19 @@ import {
   planCossaCapabilities,
 } from "./lib/cossa-ai-capability-router.ts";
 import { deriveConversationIdentity } from "./lib/cossa-ai-conversation-identity.ts";
+import {
+  capacityFailedProvidersFromGatewayText,
+  successfulProviderFromGatewayResponse,
+} from "./lib/cossa-ai-gateway-outcome.ts";
+import { resolveCossaMemoryActivation } from "./lib/cossa-ai-memory-activation.ts";
 import { loadServerMemoryGrounding } from "./lib/cossa-ai-memory.server.ts";
 import type { CossaConversationMessage } from "./lib/cossa-ai-memory.ts";
+import { createCossaProviderGatewayController } from "./lib/cossa-ai-provider-gateway-controller.ts";
+import {
+  observeProviderCapacityFailure,
+  observeProviderResponse,
+  type CossaRuntimeProvider,
+} from "./lib/cossa-ai-provider-runtime.ts";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
@@ -23,12 +38,14 @@ type ChatRequestPayload = {
   messages?: CossaConversationMessage[];
   system?: unknown;
   conversationId?: unknown;
+  provider?: unknown;
   [key: string]: unknown;
 };
 
 const MAX_INGRESS_SYSTEM_CHARACTERS = 2_500;
 const MAX_EXISTING_SYSTEM_WITH_MEMORY = 1_250;
-const MAX_CAPABILITY_PLAN_CHARACTERS = 900;
+const MAX_CAPABILITY_PLAN_CHARACTERS = 800;
+const MAX_ANSWER_CONTRACT_CHARACTERS = 700;
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
@@ -85,6 +102,7 @@ function addChatExecutionHeaders(request: Request, response: Response): Response
   if (new URL(request.url).pathname !== "/api/chat") return response;
 
   const forwardedHeaders = [
+    ["x-cossa-ai-memory-mode", "X-Cossa-AI-Memory-Mode"],
     ["x-cossa-ai-memory-grounded", "X-Cossa-AI-Memory-Grounded"],
     ["x-cossa-ai-conversation-windowed", "X-Cossa-AI-Conversation-Windowed"],
     ["x-cossa-ai-conversation-identity", "X-Cossa-AI-Conversation-Identity"],
@@ -92,6 +110,13 @@ function addChatExecutionHeaders(request: Request, response: Response): Response
     ["x-cossa-ai-reasoning-depth", "X-Cossa-AI-Reasoning-Depth"],
     ["x-cossa-ai-intelligence-priority", "X-Cossa-AI-Intelligence-Priority"],
     ["x-cossa-ai-external-research", "X-Cossa-AI-External-Research"],
+    ["x-cossa-ai-answer-mode", "X-Cossa-AI-Answer-Mode"],
+    ["x-cossa-ai-evidence-standard", "X-Cossa-AI-Evidence-Standard"],
+    ["x-cossa-ai-uncertainty-policy", "X-Cossa-AI-Uncertainty-Policy"],
+    ["x-cossa-ai-conversation-continuity", "X-Cossa-AI-Conversation-Continuity"],
+    ["x-cossa-ai-provider-candidate-order", "X-Cossa-AI-Provider-Candidate-Order"],
+    ["x-cossa-ai-capacity-mode", "X-Cossa-AI-Capacity-Mode"],
+    ["x-cossa-ai-runtime-action", "X-Cossa-AI-Runtime-Action"],
   ] as const;
 
   const headers = new Headers(response.headers);
@@ -106,7 +131,7 @@ function addChatExecutionHeaders(request: Request, response: Response): Response
   for (const [requestHeader, responseHeader] of forwardedHeaders) {
     const value = request.headers.get(requestHeader);
     if (!value) continue;
-    headers.set(responseHeader, value);
+    if (!headers.has(responseHeader)) headers.set(responseHeader, value);
     exposed.add(responseHeader);
     annotated = true;
   }
@@ -120,6 +145,34 @@ function addChatExecutionHeaders(request: Request, response: Response): Response
     statusText: response.statusText,
     headers,
   });
+}
+
+async function observeChatGatewayOutcome(request: Request, response: Response): Promise<void> {
+  const url = new URL(request.url);
+  if (request.method !== "POST" || url.pathname !== "/api/chat") return;
+
+  const successfulProvider = successfulProviderFromGatewayResponse(response);
+  if (successfulProvider) {
+    observeProviderResponse(successfulProvider, response);
+    return;
+  }
+
+  if (response.status !== 429) return;
+
+  let safeGatewayText = "";
+  try {
+    safeGatewayText = await response.clone().text();
+  } catch {
+    return;
+  }
+
+  for (const provider of capacityFailedProvidersFromGatewayText(safeGatewayText)) {
+    // The inner gateway has already converted raw provider errors into a safe,
+    // provider-specific capacity message. Record only that classified signal.
+    // Until raw retry/reset headers are surfaced by each adapter this uses the
+    // runtime's short bounded fallback cooldown rather than inventing timing.
+    observeProviderCapacityFailure(provider, response);
+  }
 }
 
 function isH3SwallowedErrorBody(body: string): boolean {
@@ -153,10 +206,6 @@ function getBearerToken(request: Request): string | null {
   return authorization.slice(7).trim() || null;
 }
 
-function memoryFeatureEnabled(): boolean {
-  return process.env.COSSA_AI_MEMORY_ENABLED?.trim().toLowerCase() === "true";
-}
-
 function cleanConversationId(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const cleaned = value.trim();
@@ -164,16 +213,33 @@ function cleanConversationId(value: unknown): string | null {
   return cleaned.slice(0, 160);
 }
 
-function mergeCapabilityIntoSystem(existingSystem: unknown, capabilityPlan: string): string {
+function configuredCossaRuntimeProviders(): CossaRuntimeProvider[] {
+  const env = typeof process !== "undefined" ? process.env : {};
+  const providers: CossaRuntimeProvider[] = [];
+
+  if (env.OPENAI_API_KEY && env.OPENAI_MODEL) providers.push("openai");
+  if (env.GEMINI_API_KEY || env.GOOGLE_AI_API_KEY) providers.push("gemini");
+  if (env.GROQ_API_KEY) providers.push("groq");
+
+  return providers;
+}
+
+function mergeReasoningPlansIntoSystem(
+  existingSystem: unknown,
+  capabilityPlan: string,
+  answerContract: string,
+): string {
   const existing = typeof existingSystem === "string" ? existingSystem.trim() : "";
-  const boundedPlan = capabilityPlan.slice(0, MAX_CAPABILITY_PLAN_CHARACTERS);
+  const boundedCapability = capabilityPlan.slice(0, MAX_CAPABILITY_PLAN_CHARACTERS);
+  const boundedAnswer = answerContract.slice(0, MAX_ANSWER_CONTRACT_CHARACTERS);
+  const planning = [boundedCapability, boundedAnswer].filter(Boolean).join("\n\n");
   const availableForExisting = Math.max(
     0,
-    MAX_INGRESS_SYSTEM_CHARACTERS - boundedPlan.length - (boundedPlan ? 2 : 0),
+    MAX_INGRESS_SYSTEM_CHARACTERS - planning.length - (planning ? 2 : 0),
   );
   const boundedExisting = existing.slice(0, availableForExisting);
 
-  return [boundedPlan, boundedExisting].filter(Boolean).join("\n\n");
+  return [planning, boundedExisting].filter(Boolean).join("\n\n");
 }
 
 function mergeMemoryIntoSystem(existingSystem: unknown, memoryGrounding: string): string {
@@ -196,12 +262,13 @@ function mergeMemoryIntoSystem(existingSystem: unknown, memoryGrounding: string)
  * - prevent legacy per-request limits from ending a conversation;
  * - establish a stable conversation identity, preferring an explicit persisted ID;
  * - deterministically route each request to the relevant Cossa capabilities and reasoning depth;
+ * - apply a deterministic answer-quality/evidence contract before provider reasoning;
+ * - prepare a capacity-aware provider candidate order without another AI call;
  * - optionally ground requests in RLS-protected durable/conversation memory;
- * - fail open while the additive memory feature is not yet enabled.
+ * - keep memory activation fail-closed until read mode is explicitly enabled.
  *
- * Memory is activated only when COSSA_AI_MEMORY_ENABLED=true in the protected
- * server environment. Capability routing is deterministic and does not spend a
- * second provider call.
+ * Capability, answer-quality and provider-capacity planning are deterministic and
+ * do not spend a second provider call.
  */
 async function prepareChatRequest(request: Request): Promise<Request | Response> {
   const url = new URL(request.url);
@@ -247,9 +314,12 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
   const latestUserMessage =
     [...payload.messages].reverse().find((message) => message.role === "user")?.content ?? "";
   const capabilityPlan = planCossaCapabilities(latestUserMessage);
+  const answerContract = planCossaAnswerContract(latestUserMessage);
+  const memoryActivation = resolveCossaMemoryActivation();
 
   const headers = new Headers(request.headers);
   headers.set("content-type", "application/json");
+  headers.set("x-cossa-ai-memory-mode", memoryActivation.mode);
   headers.set(
     "x-cossa-ai-conversation-identity",
     explicitConversationId ? "explicit" : "derived",
@@ -261,14 +331,48 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     "x-cossa-ai-external-research",
     capabilityPlan.needsExternalResearch ? "required" : "not-required",
   );
+  headers.set("x-cossa-ai-answer-mode", answerContract.answerMode);
+  headers.set("x-cossa-ai-evidence-standard", answerContract.evidenceStandard);
+  headers.set("x-cossa-ai-uncertainty-policy", answerContract.uncertaintyPolicy);
+  headers.set(
+    "x-cossa-ai-conversation-continuity",
+    answerContract.preserveConversationContinuity ? "preserve" : "normal",
+  );
   if (shouldWindow) headers.set("x-cossa-ai-conversation-windowed", "true");
 
-  let system = mergeCapabilityIntoSystem(
+  let provider = payload.provider;
+  const configuredProviders = configuredCossaRuntimeProviders();
+  if (configuredProviders.length > 0) {
+    const controller = createCossaProviderGatewayController({
+      configuredProviders,
+      headers,
+    });
+    const candidateOrder = controller.executionPlan.providers;
+    const selectedCandidate = candidateOrder[0];
+
+    if (candidateOrder.length > 0) {
+      headers.set("x-cossa-ai-provider-candidate-order", candidateOrder.join(">"));
+    }
+
+    if (selectedCandidate) {
+      const decision = controller.decisionFor(selectedCandidate);
+      headers.set("x-cossa-ai-capacity-mode", decision.policy.capacityMode);
+      headers.set("x-cossa-ai-runtime-action", decision.policy.action);
+
+      const currentPreference = typeof payload.provider === "string" ? payload.provider : "auto";
+      if (currentPreference === "auto" && selectedCandidate !== configuredProviders[0]) {
+        provider = selectedCandidate;
+      }
+    }
+  }
+
+  let system = mergeReasoningPlansIntoSystem(
     payload.system,
     formatCossaCapabilityPlan(capabilityPlan),
+    formatCossaAnswerContract(answerContract),
   );
 
-  if (memoryFeatureEnabled()) {
+  if (memoryActivation.readEnabled) {
     const memory = await loadServerMemoryGrounding({
       latestUserMessage,
       bearerToken: getBearerToken(request),
@@ -286,6 +390,8 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
     } else {
       headers.set("x-cossa-ai-memory-grounded", "false");
     }
+  } else {
+    headers.set("x-cossa-ai-memory-grounded", "false");
   }
 
   return new Request(request.url, {
@@ -296,6 +402,7 @@ async function prepareChatRequest(request: Request): Promise<Request | Response>
       conversationId,
       system,
       messages: forwardedMessages,
+      ...(provider !== undefined ? { provider } : {}),
     }),
     signal: request.signal,
   });
@@ -310,6 +417,7 @@ export default {
       const handler = await getServerEntry();
       const rawResponse = await handler.fetch(prepared, env, ctx);
       const normalizedResponse = await normalizeCatastrophicSsrResponse(rawResponse);
+      await observeChatGatewayOutcome(prepared, normalizedResponse);
       const annotatedResponse = addChatExecutionHeaders(prepared, normalizedResponse);
       return addSearchProtection(prepared, annotatedResponse);
     } catch (error) {
