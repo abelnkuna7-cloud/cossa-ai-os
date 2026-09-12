@@ -14,6 +14,7 @@ import appCss from "../styles.css?url";
 import { AppShell } from "@/components/app-shell";
 import { AuthGate } from "@/components/auth-gate";
 import { LeadHunterIntelligencePanel } from "@/components/lead-hunter-intelligence-panel";
+import { LeadHunterQuickCommand } from "@/components/lead-hunter-quick-command";
 import { GROWTH_BRAND } from "@/lib/brand";
 import {
   GROWTH_MEASUREMENT_CHANGE_EVENT,
@@ -281,6 +282,7 @@ function RootComponent() {
           <AppShell>
             {leadHunterRoute ? (
               <div className="space-y-6">
+                <LeadHunterQuickCommand />
                 <LeadHunterIntelligencePanel result={null} />
                 <Outlet />
               </div>
