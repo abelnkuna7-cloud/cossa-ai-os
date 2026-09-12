@@ -60,6 +60,37 @@ test("builds durable Lead Hunter counters from a completed hunt", () => {
   assert.deepEqual(record.rejection_reason_counts, { directory: 5, competitor: 3 });
 });
 
+test("does not inflate hot or procurement counters from partially verified records", () => {
+  const record = buildLeadHunterHuntHistoryRecord({
+    organisationId: "00000000-0000-4000-8000-000000000001",
+    executionSource: "workforce",
+    hunt: {
+      hunt_id: "22222222-2222-4222-8222-222222222222",
+      status: "SUCCESS_WITH_RESULTS",
+      searched_at: "2026-09-12T19:00:00.000Z",
+      prospects: [
+        {
+          verification_status: "partially_verified",
+          sales_priority: "hot",
+          classification: "tender",
+          duplicate_status: "clear",
+        },
+        {
+          verification_status: "partially_verified",
+          sales_priority: "hot",
+          classification: "supplier_opportunity",
+          duplicate_status: "clear",
+        },
+      ],
+    },
+  });
+
+  assert.equal(record.partially_verified_count, 2);
+  assert.equal(record.hot_count, 0);
+  assert.equal(record.tender_count, 0);
+  assert.equal(record.supplier_opportunity_count, 0);
+});
+
 test("rejects incomplete or invented history identity", () => {
   assert.throws(
     () =>
