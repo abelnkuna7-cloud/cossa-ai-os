@@ -10,6 +10,19 @@ export type LeadHuntOutcome =
   | "PARTIAL_PROVIDER_FAILURE"
   | "FAILED";
 
+export type LeadHunterProviderTruthStatus =
+  | "SUCCESS"
+  | "NO_RESULTS"
+  | "AUTH_ERROR"
+  | "RATE_LIMITED"
+  | "PROVIDER_DOWN"
+  | "TIMEOUT"
+  | "FILTERED_TO_ZERO"
+  | "FALLBACK_USED"
+  | "NOT_CONFIGURED"
+  | "NOT_ATTEMPTED"
+  | "FAILED";
+
 const LEAD_HUNT_OUTCOMES = new Set<LeadHuntOutcome>([
   "SUCCESS_WITH_RESULTS",
   "SUCCESS_NO_VERIFIED_RESULTS",
@@ -37,6 +50,65 @@ export function resolveLeadHuntOutcome(input: {
   if (failed > 0 && failed < attempted) return "PARTIAL_PROVIDER_FAILURE";
   if (attempted > 0 && failed === attempted && input.verifiedResultCount === 0) return "FAILED";
   return input.verifiedResultCount > 0 ? "SUCCESS_WITH_RESULTS" : "SUCCESS_NO_VERIFIED_RESULTS";
+}
+
+function errorText(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Converts raw provider execution facts into one owner-facing state. This is
+ * deliberately deterministic: configuration, authentication, rate limiting,
+ * upstream downtime, timeouts and legitimate zero-result responses must not
+ * all collapse into a generic "failed" label.
+ */
+export function resolveLeadHunterProviderTruthStatus(input: {
+  attempted: boolean;
+  configured: boolean;
+  succeeded: boolean;
+  failed: boolean;
+  httpStatus?: number | null;
+  errorReason?: string | null;
+  resultCount?: number;
+  rawCandidateCount?: number | null;
+  finalCount?: number | null;
+  fallbackUsed?: boolean;
+}): LeadHunterProviderTruthStatus {
+  if (!input.configured) return "NOT_CONFIGURED";
+  if (!input.attempted) return "NOT_ATTEMPTED";
+
+  const status = Number(input.httpStatus ?? 0);
+  const reason = errorText(input.errorReason);
+
+  if (status === 401 || status === 403 || /auth|credential|api key|permission/.test(reason)) {
+    return "AUTH_ERROR";
+  }
+  if (status === 429 || /rate.?limit|quota|too many requests/.test(reason)) {
+    return "RATE_LIMITED";
+  }
+  if (/timeout|timed out|aborterror|aborted/.test(reason) || status === 408 || status === 504) {
+    return "TIMEOUT";
+  }
+  if (
+    status === 502 ||
+    status === 503 ||
+    /provider unavailable|service unavailable|upstream|temporarily unavailable/.test(reason)
+  ) {
+    return "PROVIDER_DOWN";
+  }
+
+  if (input.succeeded) {
+    const raw = Math.max(0, Number(input.rawCandidateCount ?? input.resultCount ?? 0));
+    const finalCount = Math.max(0, Number(input.finalCount ?? input.resultCount ?? 0));
+    if (raw > 0 && finalCount === 0) return "FILTERED_TO_ZERO";
+    if (finalCount === 0) return "NO_RESULTS";
+    if (input.fallbackUsed) return "FALLBACK_USED";
+    return "SUCCESS";
+  }
+
+  return input.failed ? "FAILED" : "NO_RESULTS";
 }
 
 const NON_RETRYABLE_AGENT_FAILURE_CODES = new Set([
