@@ -17,7 +17,13 @@ type LeadHunterProviderConfigurationHealth = {
     serpapi: ProviderConfigState;
     newsapi: ProviderConfigState;
   };
+  model_providers: {
+    groq: { configuration: ProviderConfigState; model: string };
+    openai: { configuration: ProviderConfigState; model: string };
+    gemini: { configuration: ProviderConfigState; model: string };
+  };
   lead_hunter_search_available: boolean;
+  model_reasoning_available: boolean;
   protected_runtime: {
     supabase: ProviderConfigState;
     runtime_worker: ProviderConfigState;
@@ -157,11 +163,11 @@ export function LeadHunterIntelligencePanel({
       <div className="glass-card p-5">
         <div>
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            Search provider configuration
+            Provider configuration
           </div>
           <h2 className="mt-1 text-sm font-semibold">Lead Hunter provider readiness</h2>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Configuration truth only. A configured provider is not called healthy until a real hunt proves authentication and returns provider diagnostics.
+            Configuration truth only. A configured provider is not called healthy until a real execution proves authentication, quota and model access.
           </p>
         </div>
 
@@ -179,13 +185,38 @@ export function LeadHunterIntelligencePanel({
           </div>
         ) : (
           <>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="mt-4 text-[10px] uppercase tracking-widest text-muted-foreground">
+              Search providers
+            </div>
+            <div className="mt-2 grid gap-3 sm:grid-cols-3">
               <ConfigurationCard label="Tavily" status={providerState.data.search_providers.tavily} />
               <ConfigurationCard label="SerpAPI" status={providerState.data.search_providers.serpapi} />
               <ConfigurationCard label="NewsAPI" status={providerState.data.search_providers.newsapi} />
             </div>
+
+            <div className="mt-4 text-[10px] uppercase tracking-widest text-muted-foreground">
+              Model providers
+            </div>
+            <div className="mt-2 grid gap-3 sm:grid-cols-3">
+              <ModelConfigurationCard
+                label="Groq"
+                status={providerState.data.model_providers.groq.configuration}
+                model={providerState.data.model_providers.groq.model}
+              />
+              <ModelConfigurationCard
+                label="OpenAI"
+                status={providerState.data.model_providers.openai.configuration}
+                model={providerState.data.model_providers.openai.model}
+              />
+              <ModelConfigurationCard
+                label="Gemini"
+                status={providerState.data.model_providers.gemini.configuration}
+                model={providerState.data.model_providers.gemini.model}
+              />
+            </div>
+
             <div className="mt-3 text-[10px] leading-4 text-muted-foreground">
-              Search available: {providerState.data.lead_hunter_search_available ? "Yes" : "No"} · checked {formatDateTime(providerState.data.checked_at)}
+              Search available: {providerState.data.lead_hunter_search_available ? "Yes" : "No"} · model reasoning configured: {providerState.data.model_reasoning_available ? "Yes" : "No"} · checked {formatDateTime(providerState.data.checked_at)}
             </div>
           </>
         )}
@@ -276,6 +307,23 @@ function ConfigurationCard({ label, status }: { label: string; status: ProviderC
           {status.replaceAll("_", " ")}
         </span>
       </div>
+    </div>
+  );
+}
+
+function ModelConfigurationCard({
+  label,
+  status,
+  model,
+}: {
+  label: string;
+  status: ProviderConfigState;
+  model: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/30 p-3">
+      <ConfigurationCard label={label} status={status} />
+      <div className="mt-2 break-all text-[10px] leading-4 text-muted-foreground">{model}</div>
     </div>
   );
 }
