@@ -1,9 +1,14 @@
-import { useMemo, useState } from "react";
-import { Loader2, Play, Radar, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Loader2, Play, Radar, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { queueLeadHunterRuntimeProof, type LeadHunterRuntimeInput } from "@/lib/agent-runtime";
+import {
+  getAgentRuntimeDashboard,
+  queueLeadHunterRuntimeProof,
+  type AgentRuntimeDashboard,
+  type LeadHunterRuntimeInput,
+} from "@/lib/agent-runtime";
 
 const DEFAULT_COMMAND =
   "Find verified revenue opportunities for Cossa in Gauteng. Prioritise active buying evidence, current RFQs or tenders, supplier or subcontracting routes, and public contact details. Reject weak evidence, directories, competitors and expired opportunities.";
@@ -82,12 +87,102 @@ function inferRuntimeTarget(command: string): Omit<LeadHunterRuntimeInput, "obje
   return { targetCompany, targetService, targetLocation };
 }
 
+type MissionProgress = {
+  total: number;
+  queued: number;
+  running: number;
+  completed: number;
+  failed: number;
+  awaitingApproval: number;
+  researchResult: Record<string, unknown> | null;
+};
+
+function missionProgress(
+  dashboard: AgentRuntimeDashboard | null,
+  missionId: string | null,
+): MissionProgress | null {
+  if (!dashboard || !missionId) return null;
+
+  const tasks = dashboard.tasks.filter((task) => task.mission_id === missionId);
+  if (tasks.length === 0) return null;
+
+  const countStatus = (status: string) => tasks.filter((task) => task.status === status).length;
+  const researchTask = tasks.find((task) => task.task_type === "lead_research");
+  const researchResult =
+    researchTask?.result && typeof researchTask.result === "object" && !Array.isArray(researchTask.result)
+      ? (researchTask.result as Record<string, unknown>)
+      : null;
+
+  return {
+    total: tasks.length,
+    queued: countStatus("queued"),
+    running: countStatus("running"),
+    completed: countStatus("completed"),
+    failed: countStatus("failed"),
+    awaitingApproval: dashboard.approvals.filter(
+      (approval) => approval.mission_id === missionId && approval.status === "pending",
+    ).length,
+    researchResult,
+  };
+}
+
+function readCount(record: Record<string, unknown> | null, key: string): number {
+  const value = record?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 export function LeadHunterQuickCommand() {
   const [command, setCommand] = useState(DEFAULT_COMMAND);
   const [working, setWorking] = useState(false);
   const [lastMission, setLastMission] = useState<{ missionId: string; queuedTasks: number } | null>(null);
+  const [dashboard, setDashboard] = useState<AgentRuntimeDashboard | null>(null);
+  const [progressError, setProgressError] = useState<string | null>(null);
 
   const inferredTarget = useMemo(() => inferRuntimeTarget(command), [command]);
+  const progress = useMemo(
+    () => missionProgress(dashboard, lastMission?.missionId ?? null),
+    [dashboard, lastMission?.missionId],
+  );
+
+  useEffect(() => {
+    if (!lastMission?.missionId) return;
+
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const refresh = async () => {
+      try {
+        const next = await getAgentRuntimeDashboard();
+        if (cancelled) return;
+        setDashboard(next);
+        setProgressError(null);
+
+        const nextProgress = missionProgress(next, lastMission.missionId);
+        const terminal =
+          nextProgress &&
+          nextProgress.running === 0 &&
+          nextProgress.queued === 0 &&
+          nextProgress.completed + nextProgress.failed === nextProgress.total;
+
+        if (!terminal) {
+          timer = window.setTimeout(() => void refresh(), 2500);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setProgressError(
+          error instanceof Error ? error.message : "Mission progress is temporarily unavailable.",
+        );
+        timer = window.setTimeout(() => void refresh(), 5000);
+      }
+    };
+
+    void refresh();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [lastMission?.missionId]);
 
   async function startLeadHunter() {
     if (working) return;
@@ -99,6 +194,8 @@ export function LeadHunterQuickCommand() {
     }
 
     setWorking(true);
+    setDashboard(null);
+    setProgressError(null);
     try {
       const mission = await queueLeadHunterRuntimeProof({
         objective,
@@ -117,6 +214,10 @@ export function LeadHunterQuickCommand() {
       setWorking(false);
     }
   }
+
+  const accepted = readCount(progress?.researchResult ?? null, "accepted_count");
+  const rejected = readCount(progress?.researchResult ?? null, "rejected_count");
+  const sources = readCount(progress?.researchResult ?? null, "source_count");
 
   return (
     <section className="glass-card border border-primary/30 bg-primary/5 p-5">
@@ -157,6 +258,66 @@ export function LeadHunterQuickCommand() {
             <span>Location: {inferredTarget.targetLocation}</span>
             <span>Ctrl/⌘ + Enter also starts</span>
           </div>
+
+          {lastMission ? (
+            <div className="mt-4 rounded-xl border border-border/60 bg-background/50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    Current mission
+                  </div>
+                  <div className="mt-1 text-xs font-semibold">{lastMission.missionId}</div>
+                </div>
+                {progress ? (
+                  progress.failed > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-destructive">
+                      <XCircle className="h-3.5 w-3.5" />
+                      {progress.failed} failed
+                    </span>
+                  ) : progress.completed === progress.total && progress.total > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-success">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Workflow completed
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs text-primary">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Working
+                    </span>
+                  )
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs text-primary">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Waiting for worker
+                  </span>
+                )}
+              </div>
+
+              {progress ? (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                    <MissionStat label="Queued" value={progress.queued} />
+                    <MissionStat label="Running" value={progress.running} />
+                    <MissionStat label="Completed" value={progress.completed} />
+                    <MissionStat label="Failed" value={progress.failed} />
+                    <MissionStat label="Review" value={progress.awaitingApproval} />
+                  </div>
+
+                  {progress.researchResult ? (
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <MissionStat label="Accepted" value={accepted} />
+                      <MissionStat label="Rejected" value={rejected} />
+                      <MissionStat label="Sources" value={sources} />
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              {progressError ? (
+                <p className="mt-3 text-[10px] leading-4 text-warning">{progressError}</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex w-full shrink-0 flex-col gap-2 lg:w-52">
@@ -197,5 +358,14 @@ export function LeadHunterQuickCommand() {
         </div>
       </div>
     </section>
+  );
+}
+
+function MissionStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-card/30 px-2 py-2 text-center">
+      <div className="text-[9px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-primary">{value}</div>
+    </div>
   );
 }
