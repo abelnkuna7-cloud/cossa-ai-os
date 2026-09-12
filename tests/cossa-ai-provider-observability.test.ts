@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import {
   appendCossaProviderObservabilityHeaders,
   buildCossaProviderObservability,
-} from "../src/lib/cossa-ai-provider-observability";
+} from "../src/lib/cossa-ai-provider-observability.ts";
 
 describe("Cossa provider observability", () => {
   it("builds a non-secret runtime snapshot", () => {
