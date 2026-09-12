@@ -3,6 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Building2,
   Code2,
+  FileDown,
   FileStack,
   HardHat,
   LayoutDashboard,
@@ -81,6 +82,20 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
         to: "/businesses/store",
         icon: Store,
         matchPrefixes: ["/businesses/store"],
+      },
+      {
+        title: "Product Manager",
+        description: "Add, price, review, publish, archive and manage real Cossa Store products.",
+        to: "/businesses/store-products",
+        icon: PackageSearch,
+        matchPrefixes: ["/businesses/store-products"],
+      },
+      {
+        title: "Digital Deliverables",
+        description: "Manage multiple secure customer files, PDFs, workbooks and resources for digital products.",
+        to: "/businesses/store-product-files",
+        icon: FileDown,
+        matchPrefixes: ["/businesses/store-product-files"],
       },
       {
         title: "Store Smart Intake",
