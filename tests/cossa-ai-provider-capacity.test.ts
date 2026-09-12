@@ -6,7 +6,7 @@ import {
   parseRateLimitDurationMs,
   readProviderRateLimitSnapshot,
   shouldRetryProviderStatus,
-} from "../src/lib/cossa-ai-provider-capacity";
+} from "../src/lib/cossa-ai-provider-capacity.ts";
 
 describe("Cossa provider capacity policy", () => {
   it("parses provider reset durations", () => {
