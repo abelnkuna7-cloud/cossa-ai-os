@@ -1,0 +1,201 @@
+import { useMemo, useState } from "react";
+import { Loader2, Play, Radar, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { queueLeadHunterRuntimeProof, type LeadHunterRuntimeInput } from "@/lib/agent-runtime";
+
+const DEFAULT_COMMAND =
+  "Find verified revenue opportunities for Cossa in Gauteng. Prioritise active buying evidence, current RFQs or tenders, supplier or subcontracting routes, and public contact details. Reject weak evidence, directories, competitors and expired opportunities.";
+
+function inferRuntimeTarget(command: string): Omit<LeadHunterRuntimeInput, "objective" | "resultCount"> {
+  const text = command.toLowerCase();
+
+  let targetCompany = "cossa_nexus_holdings";
+  let targetService = "general";
+
+  if (/clean|facility|hygiene|landscap|waste/.test(text)) {
+    targetCompany = "cossa_facility_services";
+    targetService = /clean|hygiene/.test(text) ? "commercial_cleaning" : "facility_management";
+  } else if (/construct|renovat|paint|til|ceiling|roof|plumb|maintenance/.test(text)) {
+    targetCompany = "cossa_nexus_construction";
+    targetService = /renovat/.test(text)
+      ? "renovation"
+      : /paint/.test(text)
+        ? "painting"
+        : /til/.test(text)
+          ? "tiling"
+          : /roof/.test(text)
+            ? "roofing"
+            : /plumb/.test(text)
+              ? "plumbing"
+              : /maintenance/.test(text)
+                ? "property_maintenance"
+                : "construction";
+  } else if (/website|seo|marketing|brand|logo|crm|automation|social media|google business/.test(text)) {
+    targetCompany = "cossa_tech";
+    targetService = /website/.test(text)
+      ? "website_design"
+      : /seo/.test(text)
+        ? "seo"
+        : /brand|logo/.test(text)
+          ? "branding"
+          : /crm/.test(text)
+            ? "crm"
+            : /automation/.test(text)
+              ? "ai_automation"
+              : "digital_marketing";
+  } else if (/nexdocs|document|quotation|proposal|contract/.test(text)) {
+    targetCompany = "nexdocs";
+    targetService = /quotation/.test(text)
+      ? "quotations"
+      : /proposal/.test(text)
+        ? "proposals"
+        : /contract/.test(text)
+          ? "contracts"
+          : "business_documents";
+  } else if (/store|supplier|ecommerce|e-commerce|product/.test(text)) {
+    targetCompany = "cossa_store";
+    targetService = "ecommerce";
+  }
+
+  const locations = [
+    "Pretoria",
+    "Centurion",
+    "Midrand",
+    "Johannesburg",
+    "Gauteng",
+    "Limpopo",
+    "Mpumalanga",
+    "North West",
+    "Free State",
+    "KwaZulu-Natal",
+    "Eastern Cape",
+    "Western Cape",
+    "Northern Cape",
+    "South Africa",
+  ];
+
+  const targetLocation =
+    locations.find((location) => text.includes(location.toLowerCase())) ?? "South Africa";
+
+  return { targetCompany, targetService, targetLocation };
+}
+
+export function LeadHunterQuickCommand() {
+  const [command, setCommand] = useState(DEFAULT_COMMAND);
+  const [working, setWorking] = useState(false);
+  const [lastMission, setLastMission] = useState<{ missionId: string; queuedTasks: number } | null>(null);
+
+  const inferredTarget = useMemo(() => inferRuntimeTarget(command), [command]);
+
+  async function startLeadHunter() {
+    if (working) return;
+
+    const objective = command.trim();
+    if (!objective) {
+      toast.error("Tell Lead Hunter what you want it to find.");
+      return;
+    }
+
+    setWorking(true);
+    try {
+      const mission = await queueLeadHunterRuntimeProof({
+        objective,
+        ...inferredTarget,
+        resultCount: 10,
+      });
+      setLastMission(mission);
+      toast.success("Lead Hunter started working", {
+        description: `${mission.queuedTasks} protected workflow tasks were queued. No outreach was sent.`,
+      });
+    } catch (error) {
+      toast.error("Lead Hunter could not start", {
+        description: error instanceof Error ? error.message : "The mission could not be queued.",
+      });
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <section className="glass-card border border-primary/30 bg-primary/5 p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
+              <Radar className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold">Use Lead Hunter</h2>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Write a mission, then press Start Lead Hunter
+              </p>
+            </div>
+          </div>
+
+          <textarea
+            value={command}
+            onChange={(event) => setCommand(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                event.preventDefault();
+                void startLeadHunter();
+              }
+            }}
+            rows={3}
+            maxLength={2500}
+            disabled={working}
+            aria-label="Lead Hunter command"
+            className="mt-4 w-full resize-y rounded-xl border border-input bg-background/80 px-4 py-3 text-sm leading-6 outline-none placeholder:text-muted-foreground focus:border-primary/50 disabled:opacity-60"
+            placeholder="Example: Find verified commercial cleaning opportunities in Centurion with public procurement or buyer evidence."
+          />
+
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
+            <span>Company: {inferredTarget.targetCompany.replaceAll("_", " ")}</span>
+            <span>Service: {inferredTarget.targetService.replaceAll("_", " ")}</span>
+            <span>Location: {inferredTarget.targetLocation}</span>
+            <span>Ctrl/⌘ + Enter also starts</span>
+          </div>
+        </div>
+
+        <div className="flex w-full shrink-0 flex-col gap-2 lg:w-52">
+          <Button
+            type="button"
+            onClick={() => void startLeadHunter()}
+            disabled={working || !command.trim()}
+            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"
+          >
+            {working ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Starting…
+              </>
+            ) : (
+              <>
+                <Play className="mr-2 h-4 w-4" />
+                Start Lead Hunter
+              </>
+            )}
+          </Button>
+
+          <div className="rounded-lg border border-border/60 bg-background/50 p-3 text-[10px] leading-4 text-muted-foreground">
+            <div className="flex items-center gap-1.5 font-semibold text-foreground">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+              Safe agent mode
+            </div>
+            <p className="mt-1">
+              Research → verify → qualify → duplicate-protected CRM save → draft for review. External sending stays off.
+            </p>
+          </div>
+
+          {lastMission ? (
+            <div className="rounded-lg border border-success/30 bg-success/10 p-3 text-[10px] leading-4 text-success">
+              Mission queued · {lastMission.queuedTasks} tasks
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
