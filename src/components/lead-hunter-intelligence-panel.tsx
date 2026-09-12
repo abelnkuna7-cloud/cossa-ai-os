@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
+import { createClientOnlyFn } from "@tanstack/react-start";
 import { AlertCircle, CheckCircle2, Clock3, Radar, RefreshCcw } from "lucide-react";
 
 import type { LeadHunterSearchResponse } from "@/lib/lead-hunter-data";
-import { fetchLeadHunterHistoryDashboard } from "@/lib/lead-hunter-history.client";
 import type { LeadHunterHistoryDashboard, LeadHunterHistoryWindow } from "@/lib/lead-hunter-history-dashboard";
 import { leadHunterDiagnosticsForResponse } from "@/lib/lead-hunter-ui-truth";
 import { cn } from "@/lib/utils";
+
+const loadLeadHunterHistory = createClientOnlyFn(
+  async (signal?: AbortSignal): Promise<LeadHunterHistoryDashboard> => {
+    const { fetchLeadHunterHistoryDashboard } = await import("@/lib/lead-hunter-history.client");
+    return fetchLeadHunterHistoryDashboard(signal);
+  },
+);
 
 type LoadState =
   | { status: "loading"; data: null; error: null }
@@ -24,7 +31,7 @@ export function LeadHunterIntelligencePanel({
   useEffect(() => {
     const controller = new AbortController();
     setState({ status: "loading", data: null, error: null });
-    fetchLeadHunterHistoryDashboard(controller.signal)
+    loadLeadHunterHistory(controller.signal)
       .then((data) => {
         if (!controller.signal.aborted) setState({ status: "ready", data, error: null });
       })
