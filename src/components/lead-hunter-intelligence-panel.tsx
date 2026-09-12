@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, Clock3, Radar, RefreshCcw, ShieldCheck, Target, Zap } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, Radar, RefreshCcw } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import type { LeadHunterSearchResponse } from "@/lib/lead-hunter-data";
 import type { LeadHunterHistoryDashboard, LeadHunterHistoryWindow } from "@/lib/lead-hunter-history-dashboard";
 import {
@@ -168,8 +167,7 @@ function MiniStat({ label, value }: { label: string; value: number }) {
 function ProviderStatus({ status }: { status: string }) {
   const good = status === "SUCCESS" || status === "FALLBACK_USED" || status === "NO_RESULTS";
   const waiting = status === "NOT_ATTEMPTED";
-  const icon = good ? CheckCircle2 : waiting ? RefreshCcw : AlertCircle;
-  const Icon = icon;
+  const Icon = good ? CheckCircle2 : waiting ? RefreshCcw : AlertCircle;
   return (
     <span
       className={cn(
