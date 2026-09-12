@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import {
   buildCossaRuntimePolicy,
   determineCapacityMode,
@@ -9,9 +10,9 @@ import {
 
 describe("Cossa provider capacity policy", () => {
   it("parses provider reset durations", () => {
-    expect(parseRateLimitDurationMs("2m59.56s")).toBe(179560);
-    expect(parseRateLimitDurationMs("7.66s")).toBe(7660);
-    expect(parseRateLimitDurationMs("500ms")).toBe(500);
+    assert.equal(parseRateLimitDurationMs("2m59.56s"), 179560);
+    assert.equal(parseRateLimitDurationMs("7.66s"), 7660);
+    assert.equal(parseRateLimitDurationMs("500ms"), 500);
   });
 
   it("reads rate-limit headers without exposing credentials", () => {
@@ -23,9 +24,9 @@ describe("Cossa provider capacity policy", () => {
       "x-ratelimit-reset-tokens": "30s",
     });
     const snapshot = readProviderRateLimitSnapshot(headers, "2026-09-12T17:00:00.000Z");
-    expect(snapshot.remainingTokens).toBe(2000);
-    expect(snapshot.resetTokensMs).toBe(30000);
-    expect(determineCapacityMode({ snapshot })).toBe("conserve");
+    assert.equal(snapshot.remainingTokens, 2000);
+    assert.equal(snapshot.resetTokensMs, 30000);
+    assert.equal(determineCapacityMode({ snapshot }), "conserve");
   });
 
   it("protects free capacity by deferring background work", () => {
@@ -34,9 +35,9 @@ describe("Cossa provider capacity policy", () => {
       reasoningDepth: "deep",
       httpStatus: 429,
     });
-    expect(policy.capacityMode).toBe("protect");
-    expect(policy.action).toBe("defer");
-    expect(policy.maxCompletionTokens).toBe(0);
+    assert.equal(policy.capacityMode, "protect");
+    assert.equal(policy.action, "defer");
+    assert.equal(policy.maxCompletionTokens, 0);
   });
 
   it("keeps high-priority work available under constrained capacity", () => {
@@ -45,13 +46,13 @@ describe("Cossa provider capacity policy", () => {
       reasoningDepth: "deep",
       httpStatus: 429,
     });
-    expect(policy.action).toBe("conserve");
-    expect(policy.maxCompletionTokens).toBeGreaterThan(0);
+    assert.equal(policy.action, "conserve");
+    assert.ok(policy.maxCompletionTokens > 0);
   });
 
   it("only retries transient provider statuses", () => {
-    expect(shouldRetryProviderStatus(429)).toBe(true);
-    expect(shouldRetryProviderStatus(503)).toBe(true);
-    expect(shouldRetryProviderStatus(401)).toBe(false);
+    assert.equal(shouldRetryProviderStatus(429), true);
+    assert.equal(shouldRetryProviderStatus(503), true);
+    assert.equal(shouldRetryProviderStatus(401), false);
   });
 });
