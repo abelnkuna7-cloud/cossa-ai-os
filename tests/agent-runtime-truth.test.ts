@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import {
   resolveAgentRuntimeTruth,
   type AgentRuntimeDashboard,
@@ -60,16 +61,16 @@ function dashboard(overrides: Partial<AgentRuntimeDashboard> = {}): AgentRuntime
 describe("agent runtime operational truth", () => {
   it("does not claim a configured worker is deployed without a recent heartbeat", () => {
     const truth = resolveAgentRuntimeTruth(dashboard());
-    expect(truth.worker.state).toBe("NOT_VERIFIED");
-    expect(truth.worker.configured).toBe(true);
-    expect(truth.worker.deploymentVerified).toBe(false);
+    assert.equal(truth.worker.state, "NOT_VERIFIED");
+    assert.equal(truth.worker.configured, true);
+    assert.equal(truth.worker.deploymentVerified, false);
   });
 
   it("maps provider and tool states into owner-facing health", () => {
     const truth = resolveAgentRuntimeTruth(dashboard());
-    expect(truth.providers[0].state).toBe("HEALTHY");
-    expect(truth.providers[1].state).toBe("RATE_LIMITED");
-    expect(truth.tools[0].state).toBe("DEGRADED");
+    assert.equal(truth.providers[0].state, "HEALTHY");
+    assert.equal(truth.providers[1].state, "RATE_LIMITED");
+    assert.equal(truth.tools[0].state, "DEGRADED");
   });
 
   it("marks a recent verified worker as healthy", () => {
@@ -77,6 +78,6 @@ describe("agent runtime operational truth", () => {
     input.runtime.worker_deployment_verified = true;
     input.runtime.worker_last_seen_at = "2026-09-12T18:59:00.000Z";
     const truth = resolveAgentRuntimeTruth(input);
-    expect(truth.worker.state).toBe("HEALTHY");
+    assert.equal(truth.worker.state, "HEALTHY");
   });
 });
