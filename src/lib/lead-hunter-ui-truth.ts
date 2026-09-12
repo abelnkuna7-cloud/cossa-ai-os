@@ -1,3 +1,4 @@
+import { supabase } from "@/integrations/supabase/client";
 import type { LeadHunterSearchResponse } from "./lead-hunter-data.ts";
 import { buildLeadHunterDiagnosticsTruth } from "./lead-hunter-diagnostics.ts";
 import type { LeadHunterHistoryDashboard } from "./lead-hunter-history-dashboard.ts";
@@ -47,10 +48,18 @@ export function leadHunterToastForResponse(response: LeadHunterSearchResponse): 
 export async function fetchLeadHunterHistoryDashboard(
   signal?: AbortSignal,
 ): Promise<LeadHunterHistoryDashboard> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw new Error(error.message || "Your session could not be verified.");
+  const accessToken = data.session?.access_token;
+  if (!accessToken) throw new Error("Sign in to view Lead Hunter history.");
+
   const response = await fetch("/api/lead-hunter/history", {
     method: "GET",
     credentials: "same-origin",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
     signal,
   });
   const body = (await response.json().catch(() => null)) as
