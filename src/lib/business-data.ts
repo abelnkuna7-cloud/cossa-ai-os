@@ -116,7 +116,11 @@ export interface SalesAppointment {
 export interface SalesFollowUp {
   id: string;
   subject: string;
+  business_unit_id: string | null;
+  lead_id: string | null;
   customer_id: string | null;
+  opportunity_id: string | null;
+  channel: "phone" | "email" | "whatsapp" | "sms" | "meeting" | "other" | null;
   due_at: string;
   status: string;
   notes: string | null;
@@ -1113,7 +1117,51 @@ export const salesAppointments = adaptedCrud<SalesAppointment>({
 /* FOLLOW UPS                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export const salesFollowUps = plainCrud<SalesFollowUp>("sales_follow_ups", "due_at", true, true);
+export const salesFollowUps = adaptedCrud<SalesFollowUp>({
+  table: "sales_follow_ups",
+
+  organisationScoped: true,
+
+  orderBy: "due_at",
+
+  ascending: true,
+
+  fromRow: (row) => ({
+    id: row.id,
+    subject: row.subject ?? "Untitled follow-up",
+    business_unit_id: row.business_unit_id ?? null,
+    lead_id: row.lead_id ?? null,
+    customer_id: row.customer_id ?? null,
+    opportunity_id: row.opportunity_id ?? null,
+    channel: row.channel ?? null,
+    due_at: row.due_at,
+    status: lower(row.status, "pending"),
+    notes: row.notes ?? null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }),
+
+  toRow: (value) => ({
+    ...(value.subject !== undefined && {
+      subject: requiredText(value.subject, "Follow-up subject"),
+    }),
+    ...(value.business_unit_id !== undefined && {
+      business_unit_id: value.business_unit_id || null,
+    }),
+    ...(value.lead_id !== undefined && { lead_id: value.lead_id || null }),
+    ...(value.customer_id !== undefined && { customer_id: value.customer_id || null }),
+    ...(value.opportunity_id !== undefined && {
+      opportunity_id: value.opportunity_id || null,
+    }),
+    ...(value.channel !== undefined && { channel: value.channel || null }),
+    ...(value.due_at !== undefined && {
+      due_at: requiredText(value.due_at, "Follow-up due time"),
+    }),
+    ...(value.status !== undefined && { status: lower(value.status, "pending") }),
+    ...(value.notes !== undefined && { notes: optionalText(value.notes) }),
+    updated_at: new Date().toISOString(),
+  }),
+});
 
 /* -------------------------------------------------------------------------- */
 /* PROJECTS                                                                   */

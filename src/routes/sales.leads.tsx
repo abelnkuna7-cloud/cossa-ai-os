@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, BadgeCheck, UserPlus } from "lucide-react";
+import { ArrowRight, BadgeCheck, Bell, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { CrudWorkspace, fmtDate } from "@/components/crud-workspace";
 import { Button } from "@/components/ui/button";
-import { salesLeads, type SalesLead } from "@/lib/business-data";
+import { salesFollowUps, salesLeads, type SalesLead } from "@/lib/business-data";
 import { salesJourney } from "@/lib/sales-journey";
 
 export const Route = createFileRoute("/sales/leads")({
@@ -94,6 +94,29 @@ function LeadsPage() {
     },
   });
 
+  const followUpMutation = useMutation({
+    mutationFn: async (lead: SalesLead) => {
+      const dueAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      return salesFollowUps.create({
+        subject: `Follow up with ${lead.name}`,
+        lead_id: lead.id,
+        due_at: dueAt,
+        status: "pending",
+        notes: "Created from the canonical lead record. No outreach has been sent.",
+      });
+    },
+    onSuccess: () => {
+      toast.success("Follow-up scheduled", {
+        description: "Due in 24 hours. This did not send any outreach.",
+      });
+    },
+    onError: (error) => {
+      toast.error("Follow-up could not be scheduled", {
+        description: error instanceof Error ? error.message : "No follow-up was created.",
+      });
+    },
+  });
+
   return (
     <CrudWorkspace<SalesLead>
       title="Leads"
@@ -172,6 +195,19 @@ function LeadsPage() {
         )?.[1];
         return (
           <>
+            {status !== "lost" && status !== "converted" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 text-xs text-primary"
+                disabled={followUpMutation.isPending}
+                onClick={() => followUpMutation.mutate(lead)}
+              >
+                <Bell className="mr-1 h-3.5 w-3.5" />
+                Follow up
+              </Button>
+            ) : null}
             {status !== "qualified" && status !== "converted" && status !== "lost" ? (
               <Button
                 type="button"
