@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Bot, CheckCircle2, ClipboardList, Workflow } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { AlertTriangle, ArrowLeft, Bot, CheckCircle2, ClipboardList, Send, Workflow } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { buildAgentWorkspaceModel } from "@/lib/agent-workspace-model";
 import {
@@ -74,9 +75,16 @@ function AgentWorkspacePage() {
             <h1 className="mt-3 font-display text-3xl font-semibold">{employee?.name ?? "Agent workspace"}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{employee ? `${employee.title} · ${employee.department ?? "Department not recorded"}` : `Employee ${employeeId}`}</p>
             <p className="mt-3 max-w-3xl text-sm text-muted-foreground">
-              One employee's evidence-backed workspace. Missions, runs, handoffs, approvals and recorded results are shown from workforce records only. No external action is executed from this view.
+              One employee's evidence-backed workspace. Missions, runs, handoffs, approvals and recorded results are shown from workforce records only. External actions remain owner-controlled.
             </p>
           </div>
+          {employee ? (
+            <Button asChild>
+              <Link to="/ai/employee/$employeeId/command" params={{ employeeId }}>
+                <Send className="mr-2 h-4 w-4" /> Give task
+              </Link>
+            </Button>
+          ) : null}
         </div>
       </section>
 
