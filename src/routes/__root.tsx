@@ -13,6 +13,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { AppShell } from "@/components/app-shell";
 import { AuthGate } from "@/components/auth-gate";
+import { LeadHunterIntelligencePanel } from "@/components/lead-hunter-intelligence-panel";
+import { LeadHunterQuickCommand } from "@/components/lead-hunter-quick-command";
 import { GROWTH_BRAND } from "@/lib/brand";
 import {
   GROWTH_MEASUREMENT_CHANGE_EVENT,
@@ -265,7 +267,9 @@ function RootComponent() {
     select: (state) => state.location.pathname,
   });
 
+  const normalizedPathname = normalizePathname(pathname);
   const publicRoute = isPublicRoute(pathname);
+  const leadHunterRoute = normalizedPathname === "/sales/lead-finder";
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -276,7 +280,15 @@ function RootComponent() {
       ) : (
         <AuthGate>
           <AppShell>
-            <Outlet />
+            {leadHunterRoute ? (
+              <div className="space-y-6">
+                <LeadHunterQuickCommand />
+                <LeadHunterIntelligencePanel result={null} />
+                <Outlet />
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </AppShell>
         </AuthGate>
       )}

@@ -1,4 +1,15 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { AgentRuntimeDashboard } from "./agent-runtime-truth";
+
+export {
+  resolveAgentRuntimeTruth,
+  type AgentRuntimeAdapter,
+  type AgentRuntimeDashboard,
+  type AgentRuntimeProvider,
+  type AgentRuntimeTruth,
+  type RuntimeHealthState,
+  type RuntimeProviderStatus,
+} from "./agent-runtime-truth";
 
 export type LeadHunterRuntimeInput = {
   objective: string;
@@ -6,25 +17,6 @@ export type LeadHunterRuntimeInput = {
   targetService: string;
   targetLocation: string;
   resultCount: number;
-};
-
-export type AgentRuntimeDashboard = {
-  runtime: {
-    server_execution: string;
-    device_independence: string;
-    provider_order: string[];
-    worker_trigger_configuration_present: boolean;
-    worker_deployment_verified: boolean;
-    external_sending_enabled: boolean;
-  };
-  providers: Array<Record<string, unknown>>;
-  agents: Array<Record<string, unknown>>;
-  adapters: Array<Record<string, unknown>>;
-  tasks: Array<Record<string, unknown>>;
-  approvals: Array<Record<string, unknown>>;
-  circuits: Array<Record<string, unknown>>;
-  triggers: Array<Record<string, unknown>>;
-  missions: Array<Record<string, unknown>>;
 };
 
 export class AgentRuntimeUnavailableError extends Error {
@@ -60,7 +52,13 @@ async function runtimeRequest<T>(init?: RequestInit): Promise<T> {
         : `Cossa Orchestrator request failed (${response.status}).`;
 
     if (response.status === 503) {
-      throw new AgentRuntimeUnavailableError(message, response.status);
+      // A protected runtime can legitimately be unavailable in a preview scope.
+      // Do not expose server configuration or credential requirements to the browser,
+      // and do not substitute configuration status for verified execution health.
+      throw new AgentRuntimeUnavailableError(
+        "Protected runtime truth is unavailable in this deployment. Configuration is not treated as execution health.",
+        response.status,
+      );
     }
 
     throw new Error(message);

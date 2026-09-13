@@ -10,6 +10,7 @@ import {
   Megaphone,
   PackageSearch,
   Presentation,
+  Radar,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -137,6 +138,13 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
   {
     label: "Revenue",
     items: [
+      {
+        title: "Lead Hunter",
+        description: "Find and verify real leads, RFQs, tenders, supplier opportunities and buying signals for every Cossa business.",
+        to: "/sales/lead-finder",
+        icon: Radar,
+        matchPrefixes: ["/sales/lead-finder"],
+      },
       {
         title: "Marketing & Growth",
         description: "Group marketing strategy, SEO, campaigns, content, social media, advertising and growth intelligence.",
