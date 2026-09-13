@@ -1,27 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sortNotificationEvents, type NotificationEvent } from "../src/lib/notification-events";
+import {
+  sortNotificationEvents,
+  type NotificationEventSeverity,
+} from "../src/lib/notification-event-ordering.ts";
 
-function event(
-  id: string,
-  severity: NotificationEvent["severity"],
-  occurredAt: string,
-): NotificationEvent {
+interface EventRecord {
+  id: string;
+  severity: NotificationEventSeverity;
+  occurred_at: string;
+}
+
+function event(id: string, severity: NotificationEventSeverity, occurredAt: string): EventRecord {
   return {
     id,
-    organisation_id: "00000000-0000-0000-0000-000000000001",
-    event_key: id,
-    category: "system",
     severity,
-    source_type: "test",
-    source_id: id,
-    title: id,
-    summary: id,
-    evidence: {},
-    action_href: null,
     occurred_at: occurredAt,
-    recorded_at: occurredAt,
-    metadata: {},
   };
 }
 
