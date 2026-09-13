@@ -13,12 +13,51 @@ function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
 }
 
-async function readHistoryRows(organisationId: string): Promise<LeadHunterHistoryRow[]> {
+function supabaseServerConfiguration(): {
+  supabaseUrl: string;
+  publishableKey: string | null;
+  serviceRoleKey: string | null;
+} {
   const supabaseUrl =
     environmentValue(process.env.SUPABASE_URL) ?? environmentValue(process.env.VITE_SUPABASE_URL);
-  const serviceRoleKey = environmentValue(process.env.SUPABASE_SERVICE_ROLE_KEY);
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Lead Hunter history dashboard requires protected Supabase server configuration.");
+
+  if (!supabaseUrl) {
+    throw new Error("Lead Hunter history dashboard requires Supabase URL configuration.");
+  }
+
+  return {
+    supabaseUrl: supabaseUrl.replace(/\/+$/, ""),
+    publishableKey:
+      environmentValue(process.env.SUPABASE_PUBLISHABLE_KEY) ??
+      environmentValue(process.env.VITE_SUPABASE_PUBLISHABLE_KEY) ??
+      environmentValue(process.env.SUPABASE_ANON_KEY) ??
+      environmentValue(process.env.VITE_SUPABASE_ANON_KEY),
+    serviceRoleKey: environmentValue(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  };
+}
+
+async function readHistoryRows(
+  organisationId: string,
+  accessToken?: string | null,
+): Promise<LeadHunterHistoryRow[]> {
+  const { supabaseUrl, publishableKey, serviceRoleKey } = supabaseServerConfiguration();
+
+  /*
+   * Browser/API reads should use the authenticated user's bearer token so the
+   * existing lead_hunter_hunt_history RLS policy remains the authority.
+   *
+   * The service-role path is retained only for trusted server-side callers
+   * that do not have a user token. It is never exposed to the browser.
+   */
+  const userToken = accessToken?.trim() || null;
+  const apiKey = userToken ? publishableKey : serviceRoleKey;
+
+  if (!apiKey) {
+    throw new Error(
+      userToken
+        ? "Lead Hunter history dashboard requires the Supabase publishable server configuration."
+        : "Lead Hunter history dashboard requires protected Supabase server configuration.",
+    );
   }
 
   const cutoff = new Date(Date.now() - 31 * 86_400_000).toISOString();
@@ -30,26 +69,33 @@ async function readHistoryRows(organisationId: string): Promise<LeadHunterHistor
     order: "searched_at.desc",
     limit: "500",
   });
+
   const headers = new Headers({
-    apikey: serviceRoleKey,
+    apikey: apiKey,
     Accept: "application/json",
   });
-  if (!isNewSupabaseApiKey(serviceRoleKey)) {
-    headers.set("Authorization", `Bearer ${serviceRoleKey}`);
+
+  if (userToken) {
+    headers.set("Authorization", `Bearer ${userToken}`);
+  } else if (!isNewSupabaseApiKey(apiKey)) {
+    headers.set("Authorization", `Bearer ${apiKey}`);
   }
 
   const response = await fetch(
-    `${supabaseUrl.replace(/\/+$/, "")}/rest/v1/lead_hunter_hunt_history?${query.toString()}`,
+    `${supabaseUrl}/rest/v1/lead_hunter_hunt_history?${query.toString()}`,
     { headers },
   );
+
   if (!response.ok) {
     throw new Error(`Lead Hunter history dashboard query failed (${response.status}).`);
   }
+
   return (await response.json()) as LeadHunterHistoryRow[];
 }
 
 export async function getLeadHunterHistoryDashboard(
   organisationId: string,
+  accessToken?: string | null,
 ): Promise<LeadHunterHistoryDashboard> {
-  return buildLeadHunterHistoryDashboard(await readHistoryRows(organisationId));
+  return buildLeadHunterHistoryDashboard(await readHistoryRows(organisationId, accessToken));
 }
