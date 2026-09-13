@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Bot, CheckCircle2, ClipboardList, Send, Workflow } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, Bot, CheckCircle2, ClipboardList, Send, Workflow } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
+import { buildAgentMissionWatch } from "@/lib/agent-mission-watch";
 import { buildAgentWorkspaceModel } from "@/lib/agent-workspace-model";
 import {
   listEmployeeHandoffs,
@@ -39,10 +40,10 @@ function outputText(output: unknown): string | null {
 function AgentWorkspacePage() {
   const { employeeId } = Route.useParams();
   const employeesQuery = useQuery({ queryKey: ["agent-workspace", employeeId, "employees"], queryFn: listEmployees, retry: false, staleTime: 30_000 });
-  const missionsQuery = useQuery({ queryKey: ["agent-workspace", employeeId, "missions"], queryFn: listMissions, retry: false, staleTime: 15_000, refetchInterval: 30_000 });
-  const runsQuery = useQuery({ queryKey: ["agent-workspace", employeeId, "runs"], queryFn: listWorkforceRuns, retry: false, staleTime: 15_000, refetchInterval: 30_000 });
-  const handoffsQuery = useQuery({ queryKey: ["agent-workspace", employeeId, "handoffs"], queryFn: listEmployeeHandoffs, retry: false, staleTime: 15_000, refetchInterval: 30_000 });
-  const approvalsQuery = useQuery({ queryKey: ["agent-workspace", employeeId, "approvals"], queryFn: listPendingApprovals, retry: false, staleTime: 15_000, refetchInterval: 30_000 });
+  const missionsQuery = useQuery({ queryKey: ["agent-workspace", employeeId, "missions"], queryFn: listMissions, retry: false, staleTime: 5_000, refetchInterval: 10_000 });
+  const runsQuery = useQuery({ queryKey: ["agent-workspace", employeeId, "runs"], queryFn: listWorkforceRuns, retry: false, staleTime: 5_000, refetchInterval: 10_000 });
+  const handoffsQuery = useQuery({ queryKey: ["agent-workspace", employeeId, "handoffs"], queryFn: listEmployeeHandoffs, retry: false, staleTime: 10_000, refetchInterval: 15_000 });
+  const approvalsQuery = useQuery({ queryKey: ["agent-workspace", employeeId, "approvals"], queryFn: listPendingApprovals, retry: false, staleTime: 5_000, refetchInterval: 10_000 });
 
   const employee = (employeesQuery.data ?? []).find((item) => item.id === employeeId) ?? null;
   const model = useMemo(
@@ -55,6 +56,16 @@ function AgentWorkspacePage() {
         approvals: approvalsQuery.data ?? [],
       }),
     [employeeId, missionsQuery.data, runsQuery.data, handoffsQuery.data, approvalsQuery.data],
+  );
+  const watch = useMemo(
+    () =>
+      buildAgentMissionWatch({
+        employeeId,
+        missions: missionsQuery.data ?? [],
+        runs: runsQuery.data ?? [],
+        approvals: approvalsQuery.data ?? [],
+      }),
+    [employeeId, missionsQuery.data, runsQuery.data, approvalsQuery.data],
   );
 
   const loading = employeesQuery.isLoading || missionsQuery.isLoading || runsQuery.isLoading || handoffsQuery.isLoading || approvalsQuery.isLoading;
@@ -101,6 +112,27 @@ function AgentWorkspacePage() {
         <Metric label="Approvals" value={model.counts.pendingApprovals} warning={model.counts.pendingApprovals > 0} />
         <Metric label="Incoming" value={model.counts.incomingHandoffs} />
         <Metric label="Outgoing" value={model.counts.outgoingHandoffs} />
+      </section>
+
+      <section className="glass-card p-5 md:p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex items-center gap-2"><Activity className="h-4 w-4 text-primary" /><h2 className="font-display text-lg font-semibold">Live task watch</h2></div>
+            <p className="mt-1 text-xs text-muted-foreground">Refreshes recorded mission, run and approval state every 10 seconds. It reports only database facts and does not claim execution before a run exists.</p>
+          </div>
+          <span className="rounded-full border border-border/60 px-3 py-1 text-xs font-semibold uppercase tracking-widest">{watch.phase}</span>
+        </div>
+        {watch.mission ? (
+          <div className="mt-4 grid gap-3 rounded-xl border border-border/60 bg-card/30 p-4 md:grid-cols-2">
+            <div><p className="text-[10px] uppercase tracking-widest text-muted-foreground">Latest mission</p><p className="mt-1 text-sm font-semibold">{watch.mission.title}</p><p className="mt-1 text-xs text-muted-foreground">{watch.mission.objective}</p></div>
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <p><strong className="text-foreground">Mission status:</strong> {watch.mission.status}</p>
+              <p><strong className="text-foreground">Run:</strong> {watch.latestRun ? `${watch.latestRun.status}${watch.latestRun.model_provider ? ` · ${watch.latestRun.model_provider}` : ""}` : "No run recorded yet"}</p>
+              <p><strong className="text-foreground">Pending approvals:</strong> {watch.pendingApprovals.length}</p>
+              <p><strong className="text-foreground">Last recorded change:</strong> {fmt(watch.latestRun?.completed_at ?? watch.latestRun?.started_at ?? watch.mission.updated_at ?? watch.mission.created_at)}</p>
+            </div>
+          </div>
+        ) : <Empty text="No recorded mission is available to watch for this employee." />}
       </section>
 
       <div className="grid gap-5 lg:grid-cols-2">
