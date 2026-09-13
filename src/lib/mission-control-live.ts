@@ -42,8 +42,18 @@ export function buildLiveMissionControlModels(input: {
       .filter((run) => run.mission_id === mission.id)
       .slice()
       .sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0));
+
+    const approvalMissionIds = new Set([
+      mission.id,
+      ...input.missions
+        .filter((candidate) => candidate.parent_mission_id === mission.id)
+        .map((candidate) => candidate.id),
+    ]);
     const pendingApprovalCount = input.approvals.filter(
-      (approval) => approval.mission_id === mission.id && approval.status === "pending",
+      (approval) =>
+        approval.mission_id !== null &&
+        approvalMissionIds.has(approval.mission_id) &&
+        approval.status === "pending",
     ).length;
 
     const completed = plan.steps.filter((step) => step.status === "completed").length;
@@ -53,7 +63,8 @@ export function buildLiveMissionControlModels(input: {
     const blocked = plan.steps.filter(
       (step) =>
         step.status === "blocked" ||
-        (step.status === "planned" && !missionStepIsReady(step, plan.steps)),
+        ((step.status === "planned" || step.status === "ready") &&
+          !missionStepIsReady(step, plan.steps)),
     ).length;
     const total = plan.steps.length;
 
