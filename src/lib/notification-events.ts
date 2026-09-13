@@ -1,6 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
 import { COSSA_ORGANISATION_ID } from "@/lib/workforce-data";
+export {
+  notificationEventRank,
+  sortNotificationEvents,
+  type NotificationEventSeverity,
+} from "./notification-event-ordering";
+import type { NotificationEventSeverity } from "./notification-event-ordering";
 
 const db = asDynamicSupabaseClient(supabase);
 
@@ -16,8 +22,6 @@ export type NotificationEventCategory =
   | "compliance"
   | "security"
   | "system";
-
-export type NotificationEventSeverity = "critical" | "high" | "normal" | "info";
 
 export interface NotificationEvent {
   id: string;
@@ -49,27 +53,4 @@ export async function listNotificationEvents(limit = 250): Promise<NotificationE
 
   if (error) throw new Error(`Notification event stream is unavailable: ${error.message}`);
   return (data ?? []) as NotificationEvent[];
-}
-
-export function notificationEventRank(event: Pick<NotificationEvent, "severity" | "occurred_at">) {
-  const severityRank: Record<NotificationEventSeverity, number> = {
-    critical: 0,
-    high: 1,
-    normal: 2,
-    info: 3,
-  };
-
-  return {
-    severity: severityRank[event.severity],
-    occurredAt: Date.parse(event.occurred_at) || 0,
-  };
-}
-
-export function sortNotificationEvents(events: readonly NotificationEvent[]): NotificationEvent[] {
-  return [...events].sort((left, right) => {
-    const a = notificationEventRank(left);
-    const b = notificationEventRank(right);
-    if (a.severity !== b.severity) return a.severity - b.severity;
-    return b.occurredAt - a.occurredAt;
-  });
 }
