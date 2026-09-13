@@ -7,8 +7,16 @@ import {
   CheckCircle2,
   ShieldAlert,
 } from "lucide-react";
-import { listNotificationEvents, sortNotificationEvents } from "@/lib/notification-events";
+import { inspectAllMissionContextIntegrity } from "@/lib/agent-context-integrity";
+import { contextIntegrityNotificationEvents } from "@/lib/context-integrity-notification-events";
+import { listNotificationEvents } from "@/lib/notification-events";
+import { mergeNotificationEventsForPresentation } from "@/lib/notification-event-presentation";
 import { notificationEventsToWorkspaceItems } from "@/lib/notification-event-items";
+import {
+  COSSA_ORGANISATION_ID,
+  listEmployeeHandoffs,
+  listWorkforceRuns,
+} from "@/lib/workforce-data";
 import { StatusBadge } from "@/components/status-badge";
 
 export const Route = createFileRoute("/notifications/events")({
@@ -43,14 +51,41 @@ function CanonicalNotificationEventsPage() {
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
+  const handoffsQuery = useQuery({
+    queryKey: ["notifications", "context-integrity", "handoffs"],
+    queryFn: listEmployeeHandoffs,
+    retry: false,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+  const runsQuery = useQuery({
+    queryKey: ["notifications", "context-integrity", "runs"],
+    queryFn: listWorkforceRuns,
+    retry: false,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
 
-  const events = sortNotificationEvents(eventsQuery.data ?? []);
+  const integrityReports = inspectAllMissionContextIntegrity({
+    handoffs: handoffsQuery.data ?? [],
+    runs: runsQuery.data ?? [],
+  });
+  const projectedIntegrityEvents = contextIntegrityNotificationEvents({
+    organisationId: COSSA_ORGANISATION_ID,
+    reports: integrityReports,
+  });
+  const events = mergeNotificationEventsForPresentation({
+    persisted: eventsQuery.data ?? [],
+    projected: projectedIntegrityEvents,
+  });
   const items = notificationEventsToWorkspaceItems(events);
   const counts = {
     urgent: items.filter((item) => item.priority === "urgent").length,
     high: items.filter((item) => item.priority === "high").length,
     normal: items.filter((item) => item.priority === "normal").length,
   };
+  const loading = eventsQuery.isLoading || handoffsQuery.isLoading || runsQuery.isLoading;
+  const unavailable = eventsQuery.isError && handoffsQuery.isError && runsQuery.isError;
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
@@ -60,12 +95,14 @@ function CanonicalNotificationEventsPage() {
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow">
             <Bell className="h-5 w-5" />
           </div>
-          <StatusBadge status={eventsQuery.isSuccess ? "Live" : "Unavailable"} />
+          <StatusBadge status={unavailable ? "Unavailable" : loading ? "Checking" : "Live"} />
         </div>
         <h1 className="mt-4 font-display text-3xl font-semibold">Canonical notification events</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
-          Trusted, evidence-backed events recorded by protected Cossa backend sources. This workspace
-          is read-only and does not send messages or execute external actions.
+          Trusted, evidence-backed events recorded by protected Cossa backend sources, plus safe live
+          context-integrity projections. Duplicate event keys are collapsed so the same issue is not
+          counted twice before and after persistence. This workspace is read-only and does not send
+          messages or execute external actions.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Stat label="Urgent" value={counts.urgent} tone="urgent" />
@@ -75,11 +112,11 @@ function CanonicalNotificationEventsPage() {
       </section>
 
       <section className="glass-card p-6">
-        {eventsQuery.isLoading ? (
+        {loading ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            Loading canonical events…
+            Loading operational events…
           </p>
-        ) : eventsQuery.isError ? (
+        ) : unavailable ? (
           <div
             role="alert"
             className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm"
@@ -87,10 +124,9 @@ function CanonicalNotificationEventsPage() {
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
               <div>
-                <div className="font-medium">Canonical event stream unavailable</div>
+                <div className="font-medium">Operational event sources unavailable</div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Existing operational records have not been changed. The event-stream migration or
-                  authenticated organisation access may not yet be available in this deployment.
+                  Existing operational records have not been changed and no healthy state is being inferred.
                 </p>
               </div>
             </div>
@@ -98,10 +134,10 @@ function CanonicalNotificationEventsPage() {
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-center">
             <CheckCircle2 className="h-8 w-8 text-primary" />
-            <div className="font-display text-lg font-semibold">No canonical events recorded</div>
+            <div className="font-display text-lg font-semibold">No operational events recorded</div>
             <p className="max-w-md text-sm text-muted-foreground">
-              This means no trusted backend event currently exists in the event stream. It does not
-              mean every business system is healthy.
+              This means no trusted canonical event or live context-integrity failure is currently visible.
+              It does not mean every business system is healthy.
             </p>
           </div>
         ) : (
