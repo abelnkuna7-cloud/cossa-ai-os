@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckCircle2, CircleDashed, ShieldCheck, Sparkles, Workflow } from "lucide-react";
 
 import {
@@ -44,22 +44,30 @@ function AgentUpgradesPage() {
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
       <section className="glass-card relative overflow-hidden p-6 md:p-8">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-        <div className="relative flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow">
-            <Sparkles className="h-5 w-5" />
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary gold-glow">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+                Cossa AI capability upgrade
+              </p>
+              <h1 className="mt-1 font-display text-3xl font-semibold md:text-4xl">Agent Upgrades</h1>
+              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                Additive upgrades for stronger multi-step task execution, durable context, visible
+                progress, handoffs, reusable playbooks and owner-controlled execution. This workspace
+                is a Cossa-owned implementation plan; it does not copy another product's UI or source
+                code.
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-primary">
-              Cossa AI capability upgrade
-            </p>
-            <h1 className="mt-1 font-display text-3xl font-semibold md:text-4xl">Agent Upgrades</h1>
-            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              Additive upgrades for stronger multi-step task execution, durable context, visible
-              progress, handoffs, reusable playbooks and owner-controlled execution. This workspace
-              is a Cossa-owned implementation plan; it does not copy another product's UI or source
-              code.
-            </p>
-          </div>
+          <Link
+            to="/mission-control/live"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground gold-glow transition-colors hover:bg-primary/90"
+          >
+            Open Live Mission Control
+          </Link>
         </div>
       </section>
 
