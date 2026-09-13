@@ -11,4 +11,7 @@ head_sampling_rate = 1
 AGENT_RUNTIME_URL = "https://growth.cossanexusholdings.co.za/api/agent-runtime/execute"
 
 [triggers]
-crons = ["* * * * *"]
+# Keep the hosted workforce online while reducing idle Supabase RPC/event churn
+# during the Fair Use egress incident. Four minutes stays inside the existing
+# five-minute runtime-verification heartbeat window.
+crons = ["*/4 * * * *"]
