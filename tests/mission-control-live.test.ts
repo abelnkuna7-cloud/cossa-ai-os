@@ -48,20 +48,50 @@ test("builds progress only from persisted child mission facts", () => {
   assert.equal(models[0].progress.total, 2);
   assert.equal(models[0].progress.completed, 1);
   assert.equal(models[0].progress.ready, 1);
+  assert.equal(models[0].progress.blocked, 0);
   assert.equal(models[0].progress.percent, 50);
   assert.equal(models[0].valid, true);
 });
 
-test("approval-gated child mission remains blocked", () => {
+test("queued child with an unmet dependency is counted as blocked rather than ready", () => {
+  const models = buildLiveMissionControlModels({
+    missions: [
+      root,
+      child("research", "queued", "2026-09-13T08:01:00Z"),
+      child("qualify", "queued", "2026-09-13T08:02:00Z"),
+    ],
+    runs: [],
+    approvals: [],
+  } as never);
+
+  assert.equal(models[0].progress.ready, 1);
+  assert.equal(models[0].progress.blocked, 1);
+});
+
+test("approval-gated child mission remains blocked and its approval counts under the root", () => {
   const models = buildLiveMissionControlModels({
     missions: [root, child("approval", "awaiting_approval", "2026-09-13T08:01:00Z")],
     runs: [],
-    approvals: [{ id: "approval-1", mission_id: "root", status: "pending" }],
+    approvals: [{ id: "approval-1", mission_id: "approval", status: "pending" }],
   } as never);
 
   assert.equal(models[0].progress.blocked, 1);
   assert.equal(models[0].progress.ready, 0);
   assert.equal(models[0].pendingApprovalCount, 1);
+});
+
+test("root and child pending approvals are counted without unrelated missions", () => {
+  const models = buildLiveMissionControlModels({
+    missions: [root, child("research", "queued", "2026-09-13T08:01:00Z")],
+    runs: [],
+    approvals: [
+      { id: "root-approval", mission_id: "root", status: "pending" },
+      { id: "child-approval", mission_id: "research", status: "pending" },
+      { id: "other-approval", mission_id: "other", status: "pending" },
+    ],
+  } as never);
+
+  assert.equal(models[0].pendingApprovalCount, 2);
 });
 
 test("does not invent progress when a mission has no persisted child steps", () => {
