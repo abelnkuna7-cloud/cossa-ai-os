@@ -1,10 +1,10 @@
-import type { Approval, Mission, MissionRun } from "@/lib/workforce-data";
+import type { Approval, Mission, MissionRun } from "./workforce-data.ts";
 import {
   missionStepIsReady,
   missionTaskPlanFromChildren,
   validateMissionTaskPlanSteps,
   type MissionTaskPlan,
-} from "@/lib/mission-task-plan";
+} from "./mission-task-plan.ts";
 
 export interface LiveMissionControlModel {
   mission: Mission;
@@ -51,7 +51,9 @@ export function buildLiveMissionControlModels(input: {
     const failed = plan.steps.filter((step) => step.status === "failed").length;
     const ready = plan.steps.filter((step) => missionStepIsReady(step, plan.steps)).length;
     const blocked = plan.steps.filter(
-      (step) => step.status === "blocked" || (step.status === "planned" && !missionStepIsReady(step, plan.steps)),
+      (step) =>
+        step.status === "blocked" ||
+        (step.status === "planned" && !missionStepIsReady(step, plan.steps)),
     ).length;
     const total = plan.steps.length;
 
