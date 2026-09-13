@@ -62,12 +62,20 @@ function AgentUpgradesPage() {
               </p>
             </div>
           </div>
-          <Link
-            to="/mission-control/live"
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground gold-glow transition-colors hover:bg-primary/90"
-          >
-            Open Live Mission Control
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/mission-control/live"
+              className="inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground gold-glow transition-colors hover:bg-primary/90"
+            >
+              Open Live Mission Control
+            </Link>
+            <Link
+              to="/ai/activity"
+              className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-border/70 bg-card px-4 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              Open Agent Activity
+            </Link>
+          </div>
         </div>
       </section>
 
