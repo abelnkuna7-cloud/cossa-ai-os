@@ -142,7 +142,19 @@ function AgentActivityPage() {
                   <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
                     <div>
                       <dt className="uppercase tracking-widest text-muted-foreground">Agent</dt>
-                      <dd className="mt-1 font-medium">{employee?.name ?? item.employeeId ?? "No employee recorded"}</dd>
+                      <dd className="mt-1 font-medium">
+                        {item.employeeId ? (
+                          <Link
+                            to="/ai/employee/$employeeId"
+                            params={{ employeeId: item.employeeId }}
+                            className="text-primary underline-offset-4 hover:underline"
+                          >
+                            {employee?.name ?? item.employeeId}
+                          </Link>
+                        ) : (
+                          "No employee recorded"
+                        )}
+                      </dd>
                     </div>
                     <div>
                       <dt className="uppercase tracking-widest text-muted-foreground">Mission</dt>
