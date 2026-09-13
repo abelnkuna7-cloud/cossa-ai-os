@@ -52,7 +52,13 @@ async function runtimeRequest<T>(init?: RequestInit): Promise<T> {
         : `Cossa Orchestrator request failed (${response.status}).`;
 
     if (response.status === 503) {
-      throw new AgentRuntimeUnavailableError(message, response.status);
+      // A protected runtime can legitimately be unavailable in a preview scope.
+      // Do not expose server configuration or credential requirements to the browser,
+      // and do not substitute configuration status for verified execution health.
+      throw new AgentRuntimeUnavailableError(
+        "Protected runtime truth is unavailable in this deployment. Configuration is not treated as execution health.",
+        response.status,
+      );
     }
 
     throw new Error(message);
