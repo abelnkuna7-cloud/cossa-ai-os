@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { inspectAllMissionContextIntegrity } from "@/lib/agent-context-integrity";
 import { contextIntegrityNotificationEvents } from "@/lib/context-integrity-notification-events";
-import { listNotificationEvents } from "@/lib/notification-events";
+import { listNotificationEvents, sortNotificationEvents } from "@/lib/notification-events";
 import { mergeNotificationEventsForPresentation } from "@/lib/notification-event-presentation";
 import { notificationEventsToWorkspaceItems } from "@/lib/notification-event-items";
 import {
@@ -74,10 +74,12 @@ function CanonicalNotificationEventsPage() {
     organisationId: COSSA_ORGANISATION_ID,
     reports: integrityReports,
   });
-  const events = mergeNotificationEventsForPresentation({
-    persisted: eventsQuery.data ?? [],
-    projected: projectedIntegrityEvents,
-  });
+  const events = sortNotificationEvents(
+    mergeNotificationEventsForPresentation({
+      persisted: eventsQuery.data ?? [],
+      projected: projectedIntegrityEvents,
+    }),
+  );
   const items = notificationEventsToWorkspaceItems(events);
   const counts = {
     urgent: items.filter((item) => item.priority === "urgent").length,
@@ -101,8 +103,7 @@ function CanonicalNotificationEventsPage() {
         <p className="mt-2 max-w-2xl text-muted-foreground">
           Trusted, evidence-backed events recorded by protected Cossa backend sources, plus safe live
           context-integrity projections. Duplicate event keys are collapsed so the same issue is not
-          counted twice before and after persistence. This workspace is read-only and does not send
-          messages or execute external actions.
+          counted twice before and after persistence. This workspace is read-only and does not send messages or execute external actions.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Stat label="Urgent" value={counts.urgent} tone="urgent" />
@@ -124,9 +125,9 @@ function CanonicalNotificationEventsPage() {
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
               <div>
-                <div className="font-medium">Operational event sources unavailable</div>
+                <div className="font-medium">Canonical event stream unavailable</div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Existing operational records have not been changed and no healthy state is being inferred.
+                  Operational event sources are unavailable. Existing operational records have not been changed and no healthy state is being inferred.
                 </p>
               </div>
             </div>
