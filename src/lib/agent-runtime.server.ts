@@ -1,6 +1,9 @@
 import { canScheduleAgentRetry } from "./operational-truth";
 import { retrySupabaseIssuedAtFuture } from "./supabase-jwt-retry";
 import { resolveDeliveryEnrichmentMode } from "./store-delivery-evidence";
+import type { LeadHunterSearchResponse } from "./lead-hunter-data";
+import { buildLeadHunterRuntimeResearchFacts } from "./lead-hunter-runtime-facts";
+import { persistLeadHunterHuntHistory } from "./lead-hunter-history.server";
 
 const DEFAULT_COSSA_ORGANISATION_ID = "00000000-0000-4000-8000-000000000001";
 const MAX_TASKS_PER_TICK = 6;
@@ -406,7 +409,6 @@ async function databaseRequest<T>(
 ): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("apikey", environment.supabaseServiceRoleKey);
-  // New Supabase API keys are opaque credentials, not JWT bearer tokens.
   if (isNewSupabaseApiKey(environment.supabaseServiceRoleKey)) {
     headers.delete("Authorization");
   } else {
@@ -448,12 +450,7 @@ async function databaseRpc<T>(
   });
 }
 
-async function bridgeStoreDeliveryEnrichment(
-  environment: RuntimeEnvironment,
-): Promise<number> {
-  // HOLD is the fail-closed production default. CONTROLLED is an owner-only
-  // server configuration used for an explicit versioned allowlist; ACTIVE is not
-  // enabled by default and must never be inferred from queue contents.
+async function bridgeStoreDeliveryEnrichment(environment: RuntimeEnvironment): Promise<number> {
   const mode = resolveDeliveryEnrichmentMode(process.env.STORE_DELIVERY_ENRICHMENT_MODE);
   if (mode === "HOLD") return 0;
   const controlledAllowlistVersion = process.env.STORE_DELIVERY_ENRICHMENT_V3_IDS !== undefined ? "v3" : "v2";
@@ -532,9 +529,7 @@ async function bridgeStoreDeliveryEnrichment(
       `agent_tasks?on_conflict=${encodeURIComponent("organisation_id,idempotency_key")}`,
       {
         method: "POST",
-        headers: {
-          Prefer: "resolution=ignore-duplicates,return=representation",
-        },
+        headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
         body: JSON.stringify({
           organisation_id: environment.organisationId,
           agent_id: agentId,
@@ -552,13 +547,9 @@ async function bridgeStoreDeliveryEnrichment(
   return created;
 }
 
-async function protectedUser(
-  request: Request,
-  environment: RuntimeEnvironment,
-): Promise<{ id: string }> {
+async function protectedUser(request: Request, environment: RuntimeEnvironment): Promise<{ id: string }> {
   const token = bearerToken(request);
-  if (!token)
-    throw new AgentRuntimeError("unauthorized", "Sign in to use Cossa Orchestrator.", 401);
+  if (!token) throw new AgentRuntimeError("unauthorized", "Sign in to use Cossa Orchestrator.", 401);
 
   const response = await fetch(`${environment.supabaseUrl}/auth/v1/user`, {
     headers: {
@@ -568,20 +559,12 @@ async function protectedUser(
   });
 
   if (!response.ok)
-    throw new AgentRuntimeError(
-      "unauthorized",
-      "Your session could not be verified. Sign in again.",
-      401,
-    );
+    throw new AgentRuntimeError("unauthorized", "Your session could not be verified. Sign in again.", 401);
 
   const user = asRecord(await response.json());
   const id = readString(user.id);
   if (!id)
-    throw new AgentRuntimeError(
-      "unauthorized",
-      "Your session could not be verified. Sign in again.",
-      401,
-    );
+    throw new AgentRuntimeError("unauthorized", "Your session could not be verified. Sign in again.", 401);
   return { id };
 }
 
@@ -641,17 +624,11 @@ function validateLeadHunterInput(input: unknown): LeadHunterInput {
   }
 
   if (!LEAD_HUNTER_COMPANIES.includes(targetCompany as (typeof LEAD_HUNTER_COMPANIES)[number])) {
-    throw new AgentRuntimeError(
-      "invalid_lead_hunter_company",
-      "Select a valid Cossa business for Lead Hunter.",
-    );
+    throw new AgentRuntimeError("invalid_lead_hunter_company", "Select a valid Cossa business for Lead Hunter.");
   }
 
   if (!LEAD_HUNTER_SERVICES.includes(targetService as (typeof LEAD_HUNTER_SERVICES)[number])) {
-    throw new AgentRuntimeError(
-      "invalid_lead_hunter_service",
-      "Select a valid Cossa service for Lead Hunter.",
-    );
+    throw new AgentRuntimeError("invalid_lead_hunter_service", "Select a valid Cossa service for Lead Hunter.");
   }
 
   return {
@@ -700,10 +677,7 @@ async function logExecutionEvent(
   }
 }
 
-function capabilityForComponent(
-  componentType: "provider" | "tool",
-  componentKey: string,
-): string | null {
+function capabilityForComponent(componentType: "provider" | "tool", componentKey: string): string | null {
   if (componentType !== "tool") return null;
   if (componentKey === "cossa-lead-hunter") return "lead-hunter";
   if (componentKey === "cossa-crm") return "growth-crm";
@@ -779,14 +753,12 @@ async function createLeadHunterMission(
   environment: RuntimeEnvironment,
   input: LeadHunterInput,
   createdBy: string | null,
+  executionSource: "workforce" | "scheduled" = "workforce",
 ): Promise<{ missionId: string; taskIds: string[] }> {
   await databaseRpc<number>(environment, "install_cossa_agent_runtime_profiles", {
     p_organisation_id: environment.organisationId,
   });
-  const { employees, agents } = await activeEmployeesAndAgents(
-    environment,
-    environment.organisationId,
-  );
+  const { employees, agents } = await activeEmployeesAndAgents(environment, environment.organisationId);
   const employeeByKey = new Map(employees.map((employee) => [employee.employee_key, employee]));
   const agentByKey = new Map(agents.map((agent) => [agent.agent_key, agent]));
   const requiredEmployees = [
@@ -804,9 +776,7 @@ async function createLeadHunterMission(
     "outreach-draft-agent",
   ];
 
-  const missingEmployee = requiredEmployees.find(
-    (key) => employeeByKey.get(key)?.status !== "active",
-  );
+  const missingEmployee = requiredEmployees.find((key) => employeeByKey.get(key)?.status !== "active");
   const missingAgent = requiredAgents.find((key) => agentByKey.get(key)?.status !== "active");
   if (missingEmployee || missingAgent) {
     throw new AgentRuntimeError(
@@ -879,7 +849,12 @@ async function createLeadHunterMission(
     task_type: taskType,
     action_key: actionKey,
     priority: 80 - index,
-    payload: { ...input, workflow: "lead_hunter_proof_v1", stage: index + 1 },
+    payload: {
+      ...input,
+      workflow: "lead_hunter_proof_v1",
+      stage: index + 1,
+      history_execution_source: executionSource,
+    },
     idempotency_key: `mission:${missionId}:${taskType}`,
   }));
 
@@ -899,6 +874,7 @@ async function createLeadHunterMission(
       result_count: input.resultCount,
       target_company: input.targetCompany,
       target_service: input.targetService,
+      execution_source: executionSource,
     },
   });
 
@@ -921,6 +897,7 @@ export async function queueLeadHunterProof(
     environment,
     validateLeadHunterInput(input),
     actor.userId,
+    "workforce",
   );
   return { missionId: mission.missionId, queuedTasks: mission.taskIds.length };
 }
@@ -973,8 +950,7 @@ async function recordCircuitResult(
   const openUntil = open
     ? new Date(
         now.getTime() +
-          (configurationFailure ? CONFIGURATION_CIRCUIT_OPEN_SECONDS : CIRCUIT_OPEN_SECONDS) *
-            1_000,
+          (configurationFailure ? CONFIGURATION_CIRCUIT_OPEN_SECONDS : CIRCUIT_OPEN_SECONDS) * 1_000,
       ).toISOString()
     : null;
 
@@ -1041,24 +1017,13 @@ async function requireSafeToolRoute(
     limit: "1",
   });
   const adapter = (
-    await databaseRequest<RuntimeToolAdapter[]>(
-      environment,
-      `agent_tool_adapters?${query.toString()}`,
-    )
+    await databaseRequest<RuntimeToolAdapter[]>(environment, `agent_tool_adapters?${query.toString()}`)
   )[0];
   if (!adapter) {
-    throw new AgentRuntimeError(
-      "tool_route_missing",
-      `The ${toolKey} tool route has not been installed.`,
-      409,
-    );
+    throw new AgentRuntimeError("tool_route_missing", `The ${toolKey} tool route has not been installed.`, 409);
   }
   if (adapter.connection_state === "disabled") {
-    throw new AgentRuntimeError(
-      "tool_route_disabled",
-      `The ${toolKey} tool route is disabled by policy.`,
-      403,
-    );
+    throw new AgentRuntimeError("tool_route_disabled", `The ${toolKey} tool route is disabled by policy.`, 403);
   }
   if (adapter.requires_approval) {
     throw new AgentRuntimeError(
@@ -1106,9 +1071,7 @@ function providerDefinition(provider: ModelProvider): ProviderDefinition {
 
 function providerModel(provider: ModelProvider): string {
   const definition = providerDefinition(provider);
-  return (
-    optionalEnvironmentValue(process.env[definition.modelEnvironmentKey]) ?? definition.defaultModel
-  );
+  return optionalEnvironmentValue(process.env[definition.modelEnvironmentKey]) ?? definition.defaultModel;
 }
 
 function providerErrorDetail(body: JsonObject): string {
@@ -1346,9 +1309,7 @@ async function modelWithFallback(
 
   await recordCapabilityOutcome(environment, "provider-router", {
     status: "degraded",
-    error: new Error(
-      `No configured model provider could complete the task. ${failures.join(" | ")}`,
-    ),
+    error: new Error(`No configured model provider could complete the task. ${failures.join(" | ")}`),
   });
   throw new AgentRuntimeError(
     "all_model_providers_failed",
@@ -1450,26 +1411,6 @@ async function existingLeadHunterSearch(
   }
 }
 
-function prospectSummary(prospect: JsonObject): JsonObject {
-  return {
-    id: readString(prospect.id),
-    organisation_name: readString(prospect.organisation_name),
-    website: readString(prospect.website),
-    public_email: readString(prospect.public_email),
-    public_phone: readString(prospect.public_phone),
-    contact_page_url: readString(prospect.contact_page_url),
-    city: readString(prospect.city),
-    province: readString(prospect.province),
-    recommended_service: readString(prospect.recommended_service),
-    recommended_company: readString(prospect.recommended_company),
-    classification: readString(prospect.classification),
-    verification_status: readString(prospect.verification_status),
-    total_score: readNumber(prospect.total_score),
-    opportunity_summary: clip(readString(prospect.opportunity_summary), 800),
-    primary_source_url: readString(prospect.primary_source_url),
-  };
-}
-
 async function enrichProspects(
   environment: RuntimeEnvironment,
   prospects: JsonObject[],
@@ -1484,7 +1425,7 @@ async function enrichProspects(
     const publicEmail = readString(prospect.public_email);
     const website = readString(prospect.website);
     const record: JsonObject = {
-      ...prospectSummary(prospect),
+      ...prospect,
       enrichment_source: publicEmail ? "lead_hunter_public_evidence" : "not_available",
     };
 
@@ -1549,7 +1490,7 @@ async function saveVerifiedProspects(
     const verificationStatus = readString(prospect.verification_status);
     const organisationName = readString(prospect.organisation_name);
     const sourceUrl = readString(prospect.primary_source_url);
-    if (verificationStatus === "rejected" || !organisationName || !sourceUrl) {
+    if (verificationStatus !== "verified" || !organisationName || !sourceUrl) {
       rejectedCount += 1;
       continue;
     }
@@ -1577,7 +1518,7 @@ async function saveVerifiedProspects(
       "Cossa Orchestrator Lead Hunter proof",
       `Organisation: ${organisationName}`,
       `Classification: ${readString(prospect.classification, "research_prospect")}`,
-      `Verification: ${verificationStatus || "unverified"}`,
+      `Verification: ${verificationStatus}`,
       `Score: ${Math.max(0, Math.min(100, Math.floor(readNumber(prospect.total_score))))}/100`,
       `Service: ${readString(prospect.recommended_service)}`,
       `Source: ${sourceUrl}`,
@@ -1792,7 +1733,6 @@ async function assertTaskPermission(
     policies.find((candidate) => !candidate.agent_id);
   const requiredPermissionClass = permissionClassForAction(task.action_key);
 
-  // New capabilities remain denied until an explicit agent or organisation policy allows them.
   if (!policy) {
     throw new AgentRuntimeError(
       "agent_permission_missing",
@@ -1825,7 +1765,6 @@ async function assertTaskPermission(
 
 function taskInput(task: RuntimeTask): LeadHunterInput {
   const payload = asRecord(task.payload);
-  // Scheduled trigger tasks deliberately wrap mission fields in configuration.
   return validateLeadHunterInput(
     task.task_type === "scheduled_lead_hunter_trigger" ? asRecord(payload.configuration) : payload,
   );
@@ -1944,8 +1883,6 @@ async function executeStoreDeliveryEnrichment(
   }
   const sourceHtml = await response.text();
   let evidenceText = htmlToEvidenceText(sourceHtml);
-  // Shopify's official product JSON is a source-adjacent structured record. It
-  // is parsed as data only; scripts and analytics blobs are never executed.
   try {
     const structuredResponse = await fetchWithTimeout(`${input.sourceUrl.replace(/\/$/, "")}.js`, {
       headers: { Accept: "application/json", "User-Agent": "CossaDeliveryEvidence/1.0" },
@@ -1955,7 +1892,7 @@ async function executeStoreDeliveryEnrichment(
       evidenceText = `${evidenceText} ${htmlToEvidenceText(readString(structured.body_html) || readString(structured.description) || "")} ${readString(structured.title)}`.trim();
     }
   } catch {
-    // The authoritative HTML remains sufficient; structured data is optional.
+    // Authoritative HTML remains sufficient.
   }
   const parsed = parseStoreDeliveryEvidence(evidenceText);
   const now = new Date().toISOString();
@@ -2047,13 +1984,29 @@ async function executeAgentTask(
 
   if (task.task_type === "lead_research") {
     const hunt = await existingLeadHunterSearch(environment, input);
-    const prospects = asArray(hunt.prospects).map(asRecord).map(prospectSummary);
+    const typedHunt = hunt as unknown as LeadHunterSearchResponse;
+    const facts = buildLeadHunterRuntimeResearchFacts(typedHunt);
+    const executionSource =
+      readString(asRecord(task.payload).history_execution_source) === "scheduled"
+        ? "scheduled"
+        : "workforce";
+    const historyPersisted = await persistLeadHunterHuntHistory({
+      environment: {
+        supabaseUrl: environment.supabaseUrl,
+        supabaseServiceRoleKey: environment.supabaseServiceRoleKey,
+        organisationId: environment.organisationId,
+      },
+      executionSource,
+      hunt: typedHunt,
+    });
+
     return {
       provider: "cossa_lead_hunter",
       model: "evidence-engine-v1",
       result: {
         hunt_id: readString(hunt.hunt_id),
         searched_at: readString(hunt.searched_at),
+        completed_at: readString(hunt.completed_at) || null,
         providers_used: asArray(hunt.providers_used)
           .map((value) => readString(value))
           .filter(Boolean),
@@ -2066,7 +2019,11 @@ async function executeAgentTask(
           .map((value) => clip(readString(value), 300))
           .filter(Boolean)
           .slice(0, 12),
-        prospects,
+        prospects: facts.fullProspects,
+        model_briefs: facts.modelBriefs,
+        verified_for_automated_use_ids: facts.verifiedForAutomatedUseIds,
+        history_persisted: historyPersisted,
+        history_execution_source: executionSource,
         external_actions_enabled: false,
       },
     };
@@ -2087,19 +2044,19 @@ async function executeAgentTask(
   }
 
   if (task.task_type === "lead_qualify") {
-    const enrichment = await completedTaskResult(environment, task, "lead_enrich");
-    const prospects = asArray(enrichment.prospects).map(asRecord).slice(0, MAX_LEAD_HUNTER_RESULTS);
+    const research = await completedTaskResult(environment, task, "lead_research");
+    const prospects = asArray(research.model_briefs).map(asRecord).slice(0, MAX_LEAD_HUNTER_RESULTS);
     const model = await modelWithFallback(
       environment,
       [
         "You are Cossa's Lead Qualification Agent.",
-        "Produce an internal qualification brief using only the supplied evidence.",
+        "Produce a short internal qualification brief using only the supplied structured facts.",
         "Do not invent buyer intent, budgets, contacts, consent, tender status, conversations or outcomes.",
-        "Every lead remains a research prospect until a human-approved outreach process produces real engagement.",
+        "Do not add storytelling. State only facts, uncertainty and the next review action.",
         `Mission: ${input.objective}`,
         `Target: ${input.targetCompany} / ${input.targetService} / ${input.targetLocation}`,
-        "Prospects:",
-        clip(JSON.stringify(prospects), 18_000),
+        "Compact verified prospect facts:",
+        clip(JSON.stringify(prospects), 12_000),
       ].join("\n\n"),
     );
     return {
@@ -2108,6 +2065,7 @@ async function executeAgentTask(
       result: {
         qualification_brief: model.content,
         prospect_count: prospects.length,
+        factual_input: "lead_hunter_model_briefs",
         external_actions_enabled: false,
       },
     };
@@ -2140,19 +2098,19 @@ async function executeAgentTask(
   }
 
   if (task.task_type === "lead_outreach_draft") {
-    const enrichment = await completedTaskResult(environment, task, "lead_enrich");
+    const research = await completedTaskResult(environment, task, "lead_research");
     const qualification = await completedTaskResult(environment, task, "lead_qualify");
     const saved = await completedTaskResult(environment, task, "lead_crm_save");
-    const prospects = asArray(enrichment.prospects).map(asRecord).slice(0, 10);
+    const prospects = asArray(research.model_briefs).map(asRecord).slice(0, 10);
     const model = await modelWithFallback(
       environment,
       [
         "You are Cossa's Outreach Drafting Agent.",
-        "Write concise, personalised, reviewable outreach drafts only for the supplied evidence-backed prospects.",
-        "Do not say a message has been sent. Do not promise price, timelines, results, availability or legal terms.",
+        "Write concise, personalised, reviewable outreach drafts only for the supplied verified factual prospect briefs.",
+        "Do not invent facts. Do not say a message has been sent. Do not promise price, timelines, results, availability or legal terms.",
         "Use this exact structure for each draft: Prospect; Evidence used; Subject; Draft message; Human review notes.",
         `Mission: ${input.objective}`,
-        `Qualification brief: ${clip(readString(qualification.qualification_brief), 6_000)}`,
+        `Qualification brief: ${clip(readString(qualification.qualification_brief), 4_000)}`,
         `CRM lead IDs already created or retained: ${
           asArray(saved.createdLeadIds)
             .concat(asArray(saved.duplicateLeadIds))
@@ -2160,17 +2118,13 @@ async function executeAgentTask(
             .filter(Boolean)
             .join(", ") || "None"
         }`,
-        `Prospects: ${clip(JSON.stringify(prospects), 18_000)}`,
+        `Compact verified prospect facts: ${clip(JSON.stringify(prospects), 12_000)}`,
       ].join("\n\n"),
     );
 
     const runId = task.run_id;
     if (!task.mission_id || !runId)
-      throw new AgentRuntimeError(
-        "missing_mission_run",
-        "The outreach draft is missing its mission run.",
-        409,
-      );
+      throw new AgentRuntimeError("missing_mission_run", "The outreach draft is missing its mission run.", 409);
     const approvalRows = await databaseRequest<RuntimeApproval[]>(
       environment,
       "approvals?select=id,mission_id,run_id,action_type,action_payload,risk_level,justification,status,requested_at,decided_at",
@@ -2225,6 +2179,7 @@ async function executeAgentTask(
       environment,
       validateLeadHunterInput(configuration),
       null,
+      "scheduled",
     );
     return {
       provider: "cossa_orchestrator",
@@ -2246,17 +2201,6 @@ async function executeAgentTask(
 
 function retryDelaySeconds(attempt: number): number {
   return Math.min(15 * 60, 30 * 2 ** Math.max(0, attempt - 1));
-}
-
-function taskFailureIsRetryable(error: Error): boolean {
-  if (error instanceof AgentRuntimeError) {
-    return canScheduleAgentRetry({
-      errorCode: error.code,
-      attemptCount: 0,
-      maxAttempts: 1,
-    });
-  }
-  return true;
 }
 
 async function finishTask(
@@ -2391,8 +2335,7 @@ async function processOneTask(
     }
     return "completed";
   } catch (unknownError) {
-    const error =
-      unknownError instanceof Error ? unknownError : new Error("Unknown agent task failure.");
+    const error = unknownError instanceof Error ? unknownError : new Error("Unknown agent task failure.");
     await failMissionRun(environment, runId, error).catch((failure) =>
       console.error("[agent-runtime] unable to fail run", failure),
     );
@@ -2483,8 +2426,6 @@ export async function runAgentRuntimeTick(): Promise<{
     if (outcome === "failed") failed += 1;
   }
 
-  // Only the shared-secret hosted worker can reach this path. Persisting its
-  // completed tick gives the dashboard a real, recent deployment health signal.
   await logExecutionEvent(environment, {
     organisationId: environment.organisationId,
     eventType: "runtime_worker_heartbeat",
@@ -2720,10 +2661,7 @@ export async function setLeadHunterSchedule(
     name: "eq.Lead Hunter scheduled research",
     limit: "1",
   });
-  const rows = await databaseRequest<JsonObject[]>(
-    environment,
-    `agent_triggers?${query.toString()}`,
-  );
+  const rows = await databaseRequest<JsonObject[]>(environment, `agent_triggers?${query.toString()}`);
   const triggerId = readString(rows[0]?.id);
   if (!triggerId)
     throw new AgentRuntimeError(
