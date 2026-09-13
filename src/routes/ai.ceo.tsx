@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SpecialistChat } from "@/components/specialist-chat";
+import { CeoOperationalAlerts } from "@/components/ceo-operational-alerts";
 import { getModule } from "@/lib/modules";
 
 const TO = "/ai/ceo";
 const mod = getModule(TO)!;
 
 export const Route = createFileRoute("/ai/ceo")({
-  component: () => <SpecialistChat to={TO} />,
+  component: AiCeoPage,
   head: () => ({
     meta: [
       { title: `${mod.title} — Cossa AI` },
@@ -16,3 +17,12 @@ export const Route = createFileRoute("/ai/ceo")({
     ],
   }),
 });
+
+function AiCeoPage() {
+  return (
+    <div className="flex flex-col gap-5">
+      <CeoOperationalAlerts />
+      <SpecialistChat to={TO} />
+    </div>
+  );
+}
