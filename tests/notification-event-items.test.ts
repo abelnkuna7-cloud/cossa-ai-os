@@ -3,8 +3,8 @@ import test from "node:test";
 import {
   notificationEventToWorkspaceItem,
   notificationEventsToWorkspaceItems,
-} from "../src/lib/notification-event-items";
-import type { NotificationEvent } from "../src/lib/notification-events";
+} from "../src/lib/notification-event-items.ts";
+import type { NotificationEvent } from "../src/lib/notification-events.ts";
 
 function event(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return {
