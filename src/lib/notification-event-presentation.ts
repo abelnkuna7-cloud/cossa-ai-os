@@ -1,5 +1,5 @@
-import type { NotificationEvent } from "./notification-events";
-import { sortNotificationEvents } from "./notification-event-ordering";
+import type { NotificationEvent } from "./notification-events.ts";
+import { sortNotificationEvents } from "./notification-event-ordering.ts";
 
 /**
  * Merge canonical persisted events with safe live projections for presentation.
