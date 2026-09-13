@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Bell } from "lucide-react";
+import { Bell, Link2 } from "lucide-react";
 import { CrudWorkspace, fmtDateTime } from "@/components/crud-workspace";
 import { salesFollowUps, type SalesFollowUp } from "@/lib/business-data";
 
@@ -16,6 +16,7 @@ export const Route = createFileRoute("/sales/follow-ups")({
 });
 
 const STATUSES = ["pending", "in-progress", "done", "skipped"];
+const CHANNELS = ["phone", "email", "whatsapp", "sms", "meeting", "other"];
 
 function Stats({ rows }: { rows: SalesFollowUp[] }) {
   const now = Date.now();
@@ -68,6 +69,12 @@ function FollowUpsPage() {
           options: STATUSES,
           defaultValue: "pending",
         },
+        {
+          key: "channel",
+          label: "Channel",
+          type: "select",
+          options: CHANNELS,
+        },
         { key: "notes", label: "Notes", type: "textarea" },
       ]}
       columns={[
@@ -97,8 +104,34 @@ function FollowUpsPage() {
             </span>
           ),
         },
+        {
+          key: "channel",
+          label: "Channel",
+          render: (r) => r.channel ?? "—",
+        },
+        {
+          key: "linked_record",
+          label: "Linked record",
+          render: (r) => {
+            const linked = r.lead_id
+              ? `Lead ${r.lead_id.slice(0, 8)}`
+              : r.opportunity_id
+                ? `Opportunity ${r.opportunity_id.slice(0, 8)}`
+                : r.customer_id
+                  ? `Customer ${r.customer_id.slice(0, 8)}`
+                  : null;
+            return linked ? (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Link2 className="h-3 w-3" />
+                {linked}
+              </span>
+            ) : (
+              "—"
+            );
+          },
+        },
       ]}
-      searchKeys={["subject", "status", "notes"]}
+      searchKeys={["subject", "status", "channel", "notes"]}
     />
   );
 }
