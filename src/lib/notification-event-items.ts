@@ -1,4 +1,5 @@
-import type { NotificationEvent, NotificationEventSeverity } from "@/lib/notification-events";
+import type { NotificationEvent } from "./notification-events";
+import type { NotificationEventSeverity } from "./notification-event-ordering";
 
 export type NotificationWorkspacePriority = "urgent" | "high" | "normal";
 
