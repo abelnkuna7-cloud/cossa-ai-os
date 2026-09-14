@@ -1,0 +1,1 @@
+Approved-link safety rule: the model never supplies the final URL. It returns only a destination key, and Growth resolves the URL from configured `app_settings`. If the requested key is unavailable, Growth falls back to the configured default destination.
