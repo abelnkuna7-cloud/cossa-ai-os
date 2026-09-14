@@ -260,6 +260,43 @@ function GoogleTagManager() {
   return null;
 }
 
+function WorkforceViewFocus() {
+  const location = useRouterState({
+    select: (state) => ({
+      pathname: state.location.pathname,
+      search: state.location.search as Record<string, unknown>,
+    }),
+  });
+
+  const view = typeof location.search.view === "string" ? location.search.view : "command";
+
+  useEffect(() => {
+    if (normalizePathname(location.pathname) !== "/ai/workforce" || view === "command") {
+      return;
+    }
+
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const ownerHeading = Array.from(document.querySelectorAll("h2")).find(
+          (heading) => heading.textContent?.trim() === "Owner briefing",
+        );
+        const ownerSection = ownerHeading?.closest("section");
+        const selectedView = ownerSection?.nextElementSibling;
+
+        selectedView?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [location.pathname, view]);
+
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -274,6 +311,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <GoogleTagManager />
+      <WorkforceViewFocus />
 
       {publicRoute ? (
         <Outlet />
