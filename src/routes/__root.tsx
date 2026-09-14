@@ -263,26 +263,13 @@ function GoogleTagManager() {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
-  const location = useRouterState({
-    select: (state) => ({
-      pathname: state.location.pathname,
-      search: state.location.search as Record<string, unknown>,
-    }),
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
   });
 
-  const normalizedPathname = normalizePathname(location.pathname);
-  const publicRoute = isPublicRoute(location.pathname);
+  const normalizedPathname = normalizePathname(pathname);
+  const publicRoute = isPublicRoute(pathname);
   const leadHunterRoute = normalizedPathname === "/sales/lead-finder";
-  const workforceView = typeof location.search.view === "string" ? location.search.view : "command";
-  const focusedWorkforceView = normalizedPathname === "/ai/workforce" && workforceView !== "command";
-
-  const regularOutlet = focusedWorkforceView ? (
-    <div className="[&>div>section:nth-of-type(3)]:hidden [&>div>section:nth-of-type(4)]:hidden">
-      <Outlet />
-    </div>
-  ) : (
-    <Outlet />
-  );
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -300,7 +287,7 @@ function RootComponent() {
                 <Outlet />
               </div>
             ) : (
-              regularOutlet
+              <Outlet />
             )}
           </AppShell>
         </AuthGate>
