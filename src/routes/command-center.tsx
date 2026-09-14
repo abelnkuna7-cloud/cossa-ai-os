@@ -15,6 +15,7 @@ import {
   Handshake,
   LineChart,
   Loader2,
+  Mail,
   Rocket,
   Sparkles,
   ShieldCheck,
@@ -33,6 +34,7 @@ import { fmtCurrency, fmtDateTime } from "@/components/crud-workspace";
 import { GrowthEagleArtwork, ParentBrandEndorsement } from "@/components/brand/growth-brand";
 import { GROWTH_BRAND } from "@/lib/brand";
 import { workspaceRuntimeStatus } from "@/lib/workspace-runtime";
+import { crmCommunications } from "@/lib/crm-communications";
 import {
   listEmployeeHandoffs,
   listEmployees,
@@ -218,6 +220,13 @@ function Dashboard() {
     staleTime: 30_000,
   });
 
+  const communicationsQuery = useQuery({
+    queryKey: ["crm-communications"],
+    queryFn: crmCommunications.list,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
   const workforceEmployeesQuery = useQuery({
     queryKey: ["dashboard-ai-workforce-employees"],
     queryFn: () => listEmployees(),
@@ -252,6 +261,11 @@ function Dashboard() {
   const connectedBusiness = connectedBusinessQuery.isSuccess
     ? connectedBusinessQuery.data
     : undefined;
+  const communicationActionCount = communicationsQuery.isSuccess
+    ? (communicationsQuery.data ?? []).filter(
+        (communication) => communication.requires_action && communication.status !== "resolved",
+      ).length
+    : undefined;
 
   const kpis = [
     {
@@ -285,6 +299,14 @@ function Dashboard() {
       tone: "text-chart-5",
       to: "/operations/projects" as const,
       description: "Projects not marked done or archived",
+    },
+    {
+      label: "Communication actions",
+      value: communicationActionCount === undefined ? "Unavailable" : String(communicationActionCount),
+      icon: Mail,
+      tone: communicationActionCount && communicationActionCount > 0 ? "text-warning" : "text-primary",
+      to: "/sales/communications" as const,
+      description: "Important tracked conversations currently requiring action",
     },
   ];
 
@@ -321,6 +343,7 @@ function Dashboard() {
     appointmentsQuery.isError ||
     storeQuotesQuery.isError ||
     connectedBusinessQuery.isError ||
+    communicationsQuery.isError ||
     workforceEmployeesQuery.isError ||
     workforceMissionsQuery.isError ||
     workforceHandoffsQuery.isError ||
@@ -400,6 +423,7 @@ function Dashboard() {
                 void appointmentsQuery.refetch();
                 void storeQuotesQuery.refetch();
                 void connectedBusinessQuery.refetch();
+                void communicationsQuery.refetch();
                 void workforceEmployeesQuery.refetch();
                 void workforceMissionsQuery.refetch();
                 void workforceHandoffsQuery.refetch();
@@ -413,7 +437,7 @@ function Dashboard() {
         </section>
       )}
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
 
@@ -432,7 +456,7 @@ function Dashboard() {
               </div>
 
               <div className="mt-2 font-display text-2xl font-semibold">
-                {statsQuery.isLoading ? (
+                {(kpi.label === "Communication actions" ? communicationsQuery.isLoading : statsQuery.isLoading) ? (
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 ) : (
                   kpi.value
@@ -442,7 +466,11 @@ function Dashboard() {
               <p className="mt-1 text-[11px] text-muted-foreground">{kpi.description}</p>
 
               <div className="mt-3 inline-flex items-center gap-1 text-xs text-primary">
-                {statsQuery.isSuccess ? "Open live records" : "Open records"}
+                {kpi.label === "Communication actions"
+                  ? "Open important communications"
+                  : statsQuery.isSuccess
+                    ? "Open live records"
+                    : "Open records"}
 
                 <ArrowUpRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </div>
@@ -893,7 +921,7 @@ function Dashboard() {
         {workforceLoading ? (
           <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading workforce recordsâ€¦
+            Loading workforce records…
           </div>
         ) : (
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
