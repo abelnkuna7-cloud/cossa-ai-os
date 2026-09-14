@@ -30,10 +30,21 @@ create policy "members read crm options" on public.crm_option_values
   using (public.is_organisation_member(organisation_id));
 
 drop policy if exists "members manage crm options" on public.crm_option_values;
-create policy "members manage crm options" on public.crm_option_values
-  for all to authenticated
+drop policy if exists "members insert crm options" on public.crm_option_values;
+create policy "members insert crm options" on public.crm_option_values
+  for insert to authenticated
+  with check (public.has_organisation_role(organisation_id, array['owner','admin','manager','member']));
+
+drop policy if exists "members update crm options" on public.crm_option_values;
+create policy "members update crm options" on public.crm_option_values
+  for update to authenticated
   using (public.has_organisation_role(organisation_id, array['owner','admin','manager','member']))
   with check (public.has_organisation_role(organisation_id, array['owner','admin','manager','member']));
+
+drop policy if exists "members delete crm options" on public.crm_option_values;
+create policy "members delete crm options" on public.crm_option_values
+  for delete to authenticated
+  using (public.has_organisation_role(organisation_id, array['owner','admin','manager','member']));
 
 -- Opportunity types are business configuration now, not a schema enum.
 alter table public.opportunities drop constraint if exists opportunities_opportunity_type_check;
