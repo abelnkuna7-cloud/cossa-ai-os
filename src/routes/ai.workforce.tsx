@@ -3273,6 +3273,8 @@ function AiWorkforce() {
 
       {/* COMPANY METRICS */}
 
+      {view === "command" ? (
+        <>
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Metric label="Employees" value={String(workforceIntelligence.totalEmployees)} />
 
@@ -3372,6 +3374,9 @@ function AiWorkforce() {
           </ol>
         </div>
       </section>
+
+        </>
+      ) : null}
 
       {/* COMMAND CENTRE */}
 
