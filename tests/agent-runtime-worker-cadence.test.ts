@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 
 const wranglerConfig = readFileSync(
   "workers/cossa-agent-runtime/wrangler.toml",
@@ -8,7 +9,7 @@ const wranglerConfig = readFileSync(
 
 describe("agent runtime worker cadence", () => {
   it("runs often enough for the five-minute heartbeat truth window without polling every minute", () => {
-    expect(wranglerConfig).toContain('crons = ["*/4 * * * *"]');
-    expect(wranglerConfig).not.toContain('crons = ["* * * * *"]');
+    assert.ok(wranglerConfig.includes('crons = ["*/4 * * * *"]'));
+    assert.ok(!wranglerConfig.includes('crons = ["* * * * *"]'));
   });
 });
