@@ -260,7 +260,9 @@ function GoogleTagManager() {
   return null;
 }
 
-function WorkforceViewFocus() {
+function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
+
   const location = useRouterState({
     select: (state) => ({
       pathname: state.location.pathname,
@@ -268,50 +270,23 @@ function WorkforceViewFocus() {
     }),
   });
 
-  const view = typeof location.search.view === "string" ? location.search.view : "command";
-
-  useEffect(() => {
-    if (normalizePathname(location.pathname) !== "/ai/workforce" || view === "command") {
-      return;
-    }
-
-    let secondFrame = 0;
-    const firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        const ownerHeading = Array.from(document.querySelectorAll("h2")).find(
-          (heading) => heading.textContent?.trim() === "Owner briefing",
-        );
-        const ownerSection = ownerHeading?.closest("section");
-        const selectedView = ownerSection?.nextElementSibling;
-
-        selectedView?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
-
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      if (secondFrame) window.cancelAnimationFrame(secondFrame);
-    };
-  }, [location.pathname, view]);
-
-  return null;
-}
-
-function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-
-  const normalizedPathname = normalizePathname(pathname);
-  const publicRoute = isPublicRoute(pathname);
+  const normalizedPathname = normalizePathname(location.pathname);
+  const publicRoute = isPublicRoute(location.pathname);
   const leadHunterRoute = normalizedPathname === "/sales/lead-finder";
+  const workforceView = typeof location.search.view === "string" ? location.search.view : "command";
+  const focusedWorkforceView = normalizedPathname === "/ai/workforce" && workforceView !== "command";
+
+  const regularOutlet = focusedWorkforceView ? (
+    <div className="[&>div>section:nth-of-type(3)]:hidden [&>div>section:nth-of-type(4)]:hidden">
+      <Outlet />
+    </div>
+  ) : (
+    <Outlet />
+  );
 
   return (
     <QueryClientProvider client={queryClient}>
       <GoogleTagManager />
-      <WorkforceViewFocus />
 
       {publicRoute ? (
         <Outlet />
@@ -325,7 +300,7 @@ function RootComponent() {
                 <Outlet />
               </div>
             ) : (
-              <Outlet />
+              regularOutlet
             )}
           </AppShell>
         </AuthGate>
