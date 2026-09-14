@@ -72,6 +72,13 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
         icon: Building2,
         matchPrefixes: ["/ai/workforce", "/ai/ceo", "/ai/orchestrator"],
       },
+      {
+        title: "Agent Upgrades",
+        description: "Cossa-owned capability upgrades for multi-step tasks, durable context, handoffs, progress visibility, playbooks and owner-controlled execution.",
+        to: "/ai/agent-upgrades",
+        icon: Sparkles,
+        matchPrefixes: ["/ai/agent-upgrades"],
+      },
     ],
   },
   {
