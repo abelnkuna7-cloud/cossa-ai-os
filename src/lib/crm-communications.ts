@@ -37,10 +37,11 @@ const db = supabase as unknown as {
   from: (table: string) => any;
 };
 
-function optionalText(value: unknown): string | null {
+function optionalText(value: unknown, maxChars?: number): string | null {
   if (typeof value !== "string") return null;
   const clean = value.trim();
-  return clean || null;
+  if (!clean) return null;
+  return maxChars ? clean.slice(0, maxChars) : clean;
 }
 
 function requiredText(value: unknown, field: string): string {
@@ -81,6 +82,18 @@ export const crmCommunications = {
     return (data ?? []) as CrmCommunication[];
   },
 
+  actionCount: async (): Promise<number> => {
+    const { count, error } = await db
+      .from("crm_communications")
+      .select("id", { count: "exact", head: true })
+      .eq("organisation_id", COSSA_ORGANISATION_ID)
+      .eq("requires_action", true)
+      .neq("status", "resolved");
+
+    if (error) throw new Error(`Unable to count CRM communication actions: ${error.message}`);
+    return count ?? 0;
+  },
+
   create: async (payload: Partial<CrmCommunication>): Promise<CrmCommunication> => {
     const row = {
       organisation_id: COSSA_ORGANISATION_ID,
@@ -95,18 +108,18 @@ export const crmCommunications = {
       status: requiredText(payload.status ?? "open", "Status"),
       priority: payload.priority ?? "normal",
       requires_action: payload.requires_action ?? false,
-      contact_name: optionalText(payload.contact_name),
-      contact_email: optionalText(payload.contact_email),
-      contact_phone: optionalText(payload.contact_phone),
-      company_name: optionalText(payload.company_name),
-      subject: optionalText(payload.subject),
-      summary: optionalText(payload.summary),
-      external_message_id: optionalText(payload.external_message_id),
-      external_thread_id: optionalText(payload.external_thread_id),
-      external_url: optionalText(payload.external_url),
+      contact_name: optionalText(payload.contact_name, 160),
+      contact_email: optionalText(payload.contact_email, 254),
+      contact_phone: optionalText(payload.contact_phone, 64),
+      company_name: optionalText(payload.company_name, 180),
+      subject: optionalText(payload.subject, 240),
+      summary: optionalText(payload.summary, 500),
+      external_message_id: optionalText(payload.external_message_id, 250),
+      external_thread_id: optionalText(payload.external_thread_id, 250),
+      external_url: optionalText(payload.external_url, 2048),
       next_review_at: payload.next_review_at ?? null,
       occurred_at: payload.occurred_at ?? new Date().toISOString(),
-      notes: optionalText(payload.notes),
+      notes: optionalText(payload.notes, 1000),
       metadata: payload.metadata ?? {},
       updated_at: new Date().toISOString(),
     };
@@ -118,6 +131,18 @@ export const crmCommunications = {
 
   update: async (id: string, patch: Partial<CrmCommunication>): Promise<void> => {
     const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    const textFieldLimits: Partial<Record<keyof CrmCommunication, number>> = {
+      contact_name: 160,
+      contact_email: 254,
+      contact_phone: 64,
+      company_name: 180,
+      subject: 240,
+      summary: 500,
+      external_message_id: 250,
+      external_thread_id: 250,
+      external_url: 2048,
+      notes: 1000,
+    };
     const textFields: (keyof CrmCommunication)[] = [
       "channel",
       "provider",
@@ -136,7 +161,7 @@ export const crmCommunications = {
     ];
 
     for (const key of textFields) {
-      if (patch[key] !== undefined) row[key] = optionalText(patch[key]);
+      if (patch[key] !== undefined) row[key] = optionalText(patch[key], textFieldLimits[key]);
     }
 
     for (const key of ["lead_id", "opportunity_id", "customer_id", "company_id", "next_review_at"] as const) {
