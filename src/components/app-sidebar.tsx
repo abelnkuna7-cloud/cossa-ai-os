@@ -61,14 +61,22 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
     items: [
       {
         title: "Command Center",
-        description: "Group-wide overview, priorities, business health, opportunities and operating command.",
+        description:
+          "Group-wide overview, priorities, business health, opportunities and operating command.",
         to: "/command-center",
         icon: LayoutDashboard,
-        matchPrefixes: ["/command-center", "/mission-control", "/business-health", "/opportunity-radar", "/ai-recommendations"],
+        matchPrefixes: [
+          "/command-center",
+          "/mission-control",
+          "/business-health",
+          "/opportunity-radar",
+          "/ai-recommendations",
+        ],
       },
       {
         title: "AI Company",
-        description: "Group-wide AI departments, employees, workforce coordination and executive control.",
+        description:
+          "Group-wide AI departments, employees, workforce coordination and executive control.",
         to: "/ai/workforce",
         icon: Building2,
         matchPrefixes: ["/ai/workforce", "/ai/ceo", "/ai/orchestrator"],
@@ -80,7 +88,8 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
     items: [
       {
         title: "Cossa Store",
-        description: "Store command centre for products, catalogue, suppliers, merchandising, dropshipping, marketing and store AI employees.",
+        description:
+          "Store command centre for products, catalogue, suppliers, merchandising, dropshipping, marketing and store AI employees.",
         to: "/businesses/store",
         icon: Store,
         matchPrefixes: ["/businesses/store"],
@@ -94,42 +103,48 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
       },
       {
         title: "Digital Deliverables",
-        description: "Manage multiple secure customer files, PDFs, workbooks and resources for digital products.",
+        description:
+          "Manage multiple secure customer files, PDFs, workbooks and resources for digital products.",
         to: "/businesses/store-product-files",
         icon: FileDown,
         matchPrefixes: ["/businesses/store-product-files"],
       },
       {
         title: "Store Smart Intake",
-        description: "Permanent Store operations control room for Astrum Smart Intake V13 queue health, preparation results, holds and retries.",
+        description:
+          "Permanent Store operations control room for Astrum Smart Intake V13 queue health, preparation results, holds and retries.",
         to: "/businesses/store-smart-intake",
         icon: ShieldCheck,
         matchPrefixes: ["/businesses/store-smart-intake"],
       },
       {
         title: "Cossa Tech",
-        description: "Technology command centre for websites, software, automation, technical delivery and Cossa Tech AI employees.",
+        description:
+          "Technology command centre for websites, software, automation, technical delivery and Cossa Tech AI employees.",
         to: "/businesses/tech",
         icon: Code2,
         matchPrefixes: ["/businesses/tech"],
       },
       {
         title: "Cossa Construction",
-        description: "Construction command centre for leads, quotations, projects, tenders, documents, marketing and construction operations.",
+        description:
+          "Construction command centre for leads, quotations, projects, tenders, documents, marketing and construction operations.",
         to: "/businesses/construction",
         icon: HardHat,
         matchPrefixes: ["/businesses/construction"],
       },
       {
         title: "Facility Services",
-        description: "Facility Services command centre for customers, quotations, service work, leads, marketing and operational delivery.",
+        description:
+          "Facility Services command centre for customers, quotations, service work, leads, marketing and operational delivery.",
         to: "/businesses/facility-services",
         icon: Wrench,
         matchPrefixes: ["/businesses/facility-services"],
       },
       {
         title: "NexDocs",
-        description: "Document business command centre for proposals, quotations, contracts, document workflows and AI-assisted document production.",
+        description:
+          "Document business command centre for proposals, quotations, contracts, document workflows and AI-assisted document production.",
         to: "/businesses/nexdocs",
         icon: FileStack,
         matchPrefixes: ["/businesses/nexdocs"],
@@ -141,26 +156,40 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
     items: [
       {
         title: "Lead Hunter",
-        description: "Find and verify real leads, RFQs, tenders, supplier opportunities and buying signals for every Cossa business.",
+        description:
+          "Find and verify real leads, RFQs, tenders, supplier opportunities and buying signals for every Cossa business.",
         to: "/sales/lead-finder",
         icon: Radar,
         matchPrefixes: ["/sales/lead-finder"],
       },
       {
         title: "Marketing & Growth",
-        description: "Group marketing strategy, SEO, campaigns, content, social media, advertising and growth intelligence.",
+        description:
+          "Group marketing strategy, SEO, campaigns, content, social media, advertising and growth intelligence.",
         to: "/marketing/ai-director",
         icon: Megaphone,
         matchPrefixes: [
-          "/marketing/ai-director", "/marketing/brand", "/marketing/campaigns", "/marketing/competitors",
-          "/marketing/content-studio", "/marketing/email", "/marketing/google-ads", "/marketing/keywords",
-          "/marketing/landing-pages", "/marketing/meta-ads", "/marketing/monitoring", "/marketing/seo",
-          "/marketing/social", "/marketing/trends", "/marketing/whatsapp",
+          "/marketing/ai-director",
+          "/marketing/brand",
+          "/marketing/campaigns",
+          "/marketing/competitors",
+          "/marketing/content-studio",
+          "/marketing/email",
+          "/marketing/google-ads",
+          "/marketing/keywords",
+          "/marketing/landing-pages",
+          "/marketing/meta-ads",
+          "/marketing/monitoring",
+          "/marketing/seo",
+          "/marketing/social",
+          "/marketing/trends",
+          "/marketing/whatsapp",
         ],
       },
       {
         title: "Sales & Revenue",
-        description: "Group CRM, leads, customers, pipeline, opportunities, quotations and revenue intelligence.",
+        description:
+          "Group CRM, leads, customers, pipeline, opportunities, quotations and revenue intelligence.",
         to: "/sales/crm",
         icon: TrendingUp,
         matchPrefixes: [
@@ -169,6 +198,7 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
           "/sales/lead-pipeline",
           "/sales/customers",
           "/sales/companies",
+          "/sales/relationships",
           "/sales/pipeline",
           "/sales/opportunities",
           "/sales/quotations",
@@ -178,14 +208,16 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
       },
       {
         title: "Communications",
-        description: "Important customer, supplier, payment-provider, tender and partner conversations that require business tracking.",
+        description:
+          "Important customer, supplier, payment-provider, tender and partner conversations that require business tracking.",
         to: "/sales/communications",
         icon: Mail,
         matchPrefixes: ["/sales/communications"],
       },
       {
         title: "Showcase Library",
-        description: "Verified Cossa systems, authorised client work and clearly labelled capability samples for customer acquisition.",
+        description:
+          "Verified Cossa systems, authorised client work and clearly labelled capability samples for customer acquisition.",
         to: "/marketing/showcase-library",
         icon: Presentation,
         matchPrefixes: ["/marketing/showcase-library"],
@@ -204,7 +236,8 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
       },
       {
         title: "Operations",
-        description: "Projects, tasks, calendars, documents, reports and group-wide operational execution.",
+        description:
+          "Projects, tasks, calendars, documents, reports and group-wide operational execution.",
         to: "/operations/projects",
         icon: Sparkles,
         matchPrefixes: ["/operations"],
@@ -216,7 +249,8 @@ const COMPANY_SIDEBAR: SidebarNavigationGroup[] = [
     items: [
       {
         title: "Integrations",
-        description: "Connected accounts, external systems, publishing channels and authorised integrations.",
+        description:
+          "Connected accounts, external systems, publishing channels and authorised integrations.",
         to: "/integrations",
         icon: PackageSearch,
         matchPrefixes: ["/integrations"],
@@ -240,7 +274,9 @@ function normalisePathname(pathname: string): string {
 function pathMatchesPrefix(pathname: string, prefix: string): boolean {
   const normalisedPathname = normalisePathname(pathname);
   const normalisedPrefix = normalisePathname(prefix);
-  return normalisedPathname === normalisedPrefix || normalisedPathname.startsWith(`${normalisedPrefix}/`);
+  return (
+    normalisedPathname === normalisedPrefix || normalisedPathname.startsWith(`${normalisedPrefix}/`)
+  );
 }
 
 function isNavigationItemActive(pathname: string, item: SidebarNavigationItem): boolean {
@@ -287,19 +323,47 @@ export function AppSidebar() {
                           children: (
                             <div className="max-w-64">
                               <p className="font-medium">{item.title}</p>
-                              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
+                              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                {item.description}
+                              </p>
                             </div>
                           ),
                         }}
                         className={
                           active
-                            ? ["min-h-10", "rounded-lg", "border", "border-primary/20", "bg-primary/10", "font-medium", "text-primary", "hover:bg-primary/15", "hover:text-primary"].join(" ")
-                            : ["min-h-10", "rounded-lg", "border", "border-transparent", "text-sidebar-foreground/80", "transition-colors", "hover:border-sidebar-border", "hover:bg-sidebar-accent", "hover:text-sidebar-accent-foreground"].join(" ")
+                            ? [
+                                "min-h-10",
+                                "rounded-lg",
+                                "border",
+                                "border-primary/20",
+                                "bg-primary/10",
+                                "font-medium",
+                                "text-primary",
+                                "hover:bg-primary/15",
+                                "hover:text-primary",
+                              ].join(" ")
+                            : [
+                                "min-h-10",
+                                "rounded-lg",
+                                "border",
+                                "border-transparent",
+                                "text-sidebar-foreground/80",
+                                "transition-colors",
+                                "hover:border-sidebar-border",
+                                "hover:bg-sidebar-accent",
+                                "hover:text-sidebar-accent-foreground",
+                              ].join(" ")
                         }
                       >
                         <Link to={item.to} className="flex w-full items-center gap-2">
-                          <Icon className={active ? "h-4 w-4 shrink-0 text-primary" : "h-4 w-4 shrink-0"} />
-                          {!collapsed ? <span className="min-w-0 flex-1 truncate text-sm">{item.title}</span> : null}
+                          <Icon
+                            className={
+                              active ? "h-4 w-4 shrink-0 text-primary" : "h-4 w-4 shrink-0"
+                            }
+                          />
+                          {!collapsed ? (
+                            <span className="min-w-0 flex-1 truncate text-sm">{item.title}</span>
+                          ) : null}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
