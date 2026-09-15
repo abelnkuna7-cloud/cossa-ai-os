@@ -202,6 +202,14 @@ function CrmHub() {
       description: "Business accounts and decision-maker intelligence.",
     },
     {
+      title: "Business Relationships",
+      to: "/sales/relationships",
+      icon: Building2,
+      count: null,
+      description:
+        "Open one organisation and see contacts, roles, opportunities, communications, due diligence and follow-ups together.",
+    },
+    {
       title: "Opportunity Pipeline",
       to: "/sales/pipeline",
       icon: GitBranch,
