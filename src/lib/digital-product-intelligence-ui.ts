@@ -12,3 +12,6 @@ export function mergeDraftPreflightIssues(persistedIssues: string[], context: Di
   const assistant = buildDigitalProductAssistant(context);
   return persistedIssues.map((issue) => issue.toLowerCase().includes("selling price") && assistant.sellingPriceState === "entered_unsaved" ? "Selling price entered — save draft to persist it" : issue);
 }
+export function getDigitalSubtypeOptions() {
+  return Object.entries(DIGITAL_PRODUCT_SUBTYPE_LABELS).map(([value, label]) => ({ value: value as DigitalProductSubtype, label }));
+}
