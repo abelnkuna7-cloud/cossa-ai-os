@@ -6,6 +6,7 @@ import {
   agentRuntimeJson,
   requireRuntimeMember,
 } from "@/lib/agent-runtime.server";
+import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
 import { validateAstrumProductionPackage } from "@/lib/store-astrum-validated-package";
 
 function record(value: unknown): Record<string, unknown> {
@@ -23,9 +24,18 @@ export const Route = createFileRoute("/api/store-astrum-catalogue-import")({
           const body = record(await request.json().catch(() => null));
           const validated = validateAstrumProductionPackage(body.package);
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const adminDb = asDynamicSupabaseClient(supabaseAdmin);
 
-          const { data: supplier, error: supplierError } = await supabaseAdmin
-            .from("store_suppliers")
+          const { data: supplier, error: supplierError } = await adminDb
+            .from<{
+              id: string;
+              organisation_id: string;
+              name: string;
+              status: string;
+              registry_status: string;
+              verification_status: string;
+              source_url: string | null;
+            }>("store_suppliers")
             .select("id,organisation_id,name,status,registry_status,verification_status,source_url")
             .eq("organisation_id", actor.organisationId)
             .eq("name", "Astrum")
@@ -56,7 +66,7 @@ export const Route = createFileRoute("/api/store-astrum-catalogue-import")({
               409,
             );
 
-          const { data, error } = await supabaseAdmin.rpc("persist_supplier_catalogue_import", {
+          const { data, error } = await adminDb.rpc("persist_supplier_catalogue_import", {
             p_organisation_id: actor.organisationId,
             p_supplier_id: supplier.id,
             p_source_type: validated.sourceType,

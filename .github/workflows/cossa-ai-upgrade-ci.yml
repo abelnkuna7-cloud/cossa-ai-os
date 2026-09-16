@@ -34,5 +34,11 @@ jobs:
       - name: Run unit tests
         run: npm test
 
+      - name: Run digital product intelligence tests
+        run: npm run test:digital
+
+      - name: Run type checks
+        run: npm run typecheck
+
       - name: Build application
         run: npm run build

@@ -186,6 +186,14 @@ type StoreDeliveryEnrichmentInput = {
   sourceUrl: string;
 };
 
+type StoreDeliveryEnrichmentSourceRow = {
+  id: string;
+  publication_store_product_id: string | null;
+  name: string | null;
+  supplier_product_ref: string | null;
+  source_url: string | null;
+};
+
 type RuntimeApproval = {
   id: string;
   mission_id: string | null;
@@ -508,7 +516,7 @@ async function bridgeStoreDeliveryEnrichment(environment: RuntimeEnvironment): P
     ...(mode === "CONTROLLED" ? { id: `in.(${selectedIds.join(",")})` } : {}),
     limit: String(mode === "CONTROLLED" ? selectedIds.length : MAX_STORE_ENRICHMENT_BRIDGE_BATCH),
   });
-  const intakes = await databaseRequest<StoreDeliveryEnrichmentInput[]>(
+  const intakes = await databaseRequest<StoreDeliveryEnrichmentSourceRow[]>(
     environment,
     `store_inventory_intakes?${intakeQuery.toString()}`,
   );
@@ -1815,10 +1823,10 @@ export function parseStoreDeliveryEvidence(text: string): {
   const unit = dimensionMatch?.[6]?.toLowerCase() ?? dimensionMatch?.[2]?.toLowerCase();
   const factors = unit === "mm" ? 0.1 : 1;
   const label = dimensionMatch?.[0].slice(0, 80) ?? "";
-  const kind = /carton/i.test(label) ? "carton" : /package|packed|shipping/i.test(label) ? "package" : /product/i.test(label) ? "product" : "unknown";
+  const kind: "product" | "package" | "carton" | "unknown" = /carton/i.test(label) ? "carton" : /package|packed|shipping/i.test(label) ? "package" : /product/i.test(label) ? "product" : "unknown";
   const weightMatch = normalised.match(/(?:net\s+weight|gross\s+weight|shipping\s+weight|package\s+weight|packed\s+weight|product\s+weight|weight)\b[^.!?]{0,80}?([0-9]+(?:\.[0-9]+)?)\s*(kg|g)\b/i);
   const weightLabel = weightMatch?.[0].slice(0, Math.max(0, weightMatch[0].indexOf(weightMatch[1] ?? ""))) ?? "";
-  const weightKind = /shipping/i.test(weightLabel) ? "shipping" : /package|packed|gross/i.test(weightLabel) ? "package" : /product|net/i.test(weightLabel) ? "product" : "unknown";
+  const weightKind: "product" | "package" | "shipping" | "unknown" = /shipping/i.test(weightLabel) ? "shipping" : /package|packed|gross/i.test(weightLabel) ? "package" : /product|net/i.test(weightLabel) ? "product" : "unknown";
   const dimensions = dimensionMatch
     ? {
         length: Number(dimensionMatch![1]) * factors,

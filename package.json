@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:digital": "node --experimental-strip-types --test src/lib/digital-product-intelligence.test.ts src/lib/digital-product-intelligence-ui.test.ts src/lib/workforce-digital-product-capabilities.test.ts",
+    "typecheck": "tsc --noEmit",
     "format": "prettier --write ."
   },
   "dependencies": {

@@ -141,7 +141,7 @@ export function buildWorkforceIntelligence(input: {
     ).length +
     (input.runtime?.providers ?? []).filter((provider) =>
       /warning|failed|error|unavailable|misconfigured/.test(
-        lower(provider.status ?? provider.state),
+        lower(provider.status ?? provider.circuit_state),
       ),
     ).length;
   const available = activeEmployees.filter(
