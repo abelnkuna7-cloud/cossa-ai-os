@@ -27,3 +27,5 @@ Target acceptance product: the existing Cossa Store children's storybook/eBook s
 Rollback principle: application changes remain branch/commit reversible; database changes are additive and must not require destructive rollback of existing catalogue records.
 
 Current branch remains intentionally non-production until live Product Manager and Workforce wiring is complete.
+
+Next implementation target: existing `src/routes/businesses.store-products.tsx` and existing workforce runtime definitions; extend in place, do not replace.
