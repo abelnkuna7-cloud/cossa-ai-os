@@ -123,4 +123,3 @@ runs:
 
         echo "release-root=$RELEASE_ROOT" >> "$GITHUB_OUTPUT"
         echo "audit-root=$AUDIT_ROOT" >> "$GITHUB_OUTPUT"
-
