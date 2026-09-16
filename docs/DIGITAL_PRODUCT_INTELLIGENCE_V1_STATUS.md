@@ -25,3 +25,5 @@ CEO instruction: continue the implementation through the gates above and push on
 Target acceptance product: the existing Cossa Store children's storybook/eBook scenario, followed by representative course and software drafts.
 
 Rollback principle: application changes remain branch/commit reversible; database changes are additive and must not require destructive rollback of existing catalogue records.
+
+Current branch remains intentionally non-production until live Product Manager and Workforce wiring is complete.
