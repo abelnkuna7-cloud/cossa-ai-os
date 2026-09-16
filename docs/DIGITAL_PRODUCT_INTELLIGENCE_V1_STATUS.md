@@ -19,3 +19,5 @@ Still required before production:
 No production deployment should occur before these gates pass. This status file exists to prevent a helper-only implementation from being mistaken for a finished production feature.
 
 Safety invariant: no existing product type, product row, deliverable, worker, publication control or production data is removed by this upgrade.
+
+CEO instruction: continue the implementation through the gates above and push only after verification; do not bypass a failed gate merely to deploy faster.
