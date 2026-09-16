@@ -16,4 +16,4 @@ Still required before production:
 - run repository build/test CI
 - verify PR mergeability and migration path
 
-No production deployment should occur before these gates pass.
+No production deployment should occur before these gates pass. This status file exists to prevent a helper-only implementation from being mistaken for a finished production feature.
