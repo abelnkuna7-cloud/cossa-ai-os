@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDigitalProductAssistant } from "./digital-product-intelligence-ui";
+import { buildDigitalProductAssistant, mergeDraftPreflightIssues } from "./digital-product-intelligence-ui";
 
 describe("Product Manager digital assistant", () => {
   it("distinguishes an entered unsaved price from a missing price", () => {
@@ -16,5 +16,12 @@ describe("Product Manager digital assistant", () => {
   it("reports a truly missing price", () => {
     const result = buildDigitalProductAssistant({ name: "AI prompt pack", sellingPrice: 0, persistedSellingPrice: 0 });
     expect(result.sellingPriceState).toBe("missing");
+  });
+
+  it("rewrites stale database price blocker when the draft has a price", () => {
+    expect(mergeDraftPreflightIssues(["Missing selling price", "Missing product image"], {
+      sellingPrice: 199,
+      persistedSellingPrice: 0,
+    })).toEqual(["Selling price entered — save draft to persist it", "Missing product image"]);
   });
 });
