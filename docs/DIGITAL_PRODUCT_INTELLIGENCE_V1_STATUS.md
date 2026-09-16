@@ -23,3 +23,5 @@ Safety invariant: no existing product type, product row, deliverable, worker, pu
 CEO instruction: continue the implementation through the gates above and push only after verification; do not bypass a failed gate merely to deploy faster.
 
 Target acceptance product: the existing Cossa Store children's storybook/eBook scenario, followed by representative course and software drafts.
+
+Rollback principle: application changes remain branch/commit reversible; database changes are additive and must not require destructive rollback of existing catalogue records.
