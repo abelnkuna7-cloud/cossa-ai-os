@@ -1,6 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { KeyRound, Loader2, ShieldCheck } from "lucide-react";
 
 import {
   GrowthEagleArtwork,
@@ -17,29 +17,155 @@ export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ name: "robots", content: "noindex, nofollow" }] }),
 });
 
+type LoginStep = "credentials" | "enroll-mfa" | "challenge-mfa";
+
+type MfaEnrollment = {
+  factorId: string;
+  qrCode: string;
+  secret: string;
+};
+
+function normaliseOtp(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 6);
+}
+
 function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<LoginStep>("credentials");
+  const [enrollment, setEnrollment] = useState<MfaEnrollment | null>(null);
+  const [factorId, setFactorId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
 
-  async function submit(event: React.FormEvent) {
+  async function requireGrowthMembership(userId: string) {
+    const { data, error: membershipError } = await supabase
+      .from("organisation_members")
+      .select("role,status")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+
+    if (membershipError) {
+      throw new Error("Growth membership could not be verified.");
+    }
+
+    if (!data) {
+      await supabase.auth.signOut({ scope: "local" });
+      throw new Error("This account is not authorised to access the Growth workspace.");
+    }
+
+    return data;
+  }
+
+  async function prepareMfa(role: string) {
+    // The first enforcement target is privileged Growth access. Ordinary future
+    // members can be migrated to mandatory MFA separately after the two-admin
+    // recovery path has been independently tested.
+    const privileged = role === "owner" || role === "admin";
+    if (!privileged) {
+      setAuthenticated(true);
+      return;
+    }
+
+    const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalError) throw new Error("Unable to verify the session assurance level.");
+
+    if (aal.currentLevel === "aal2") {
+      setAuthenticated(true);
+      return;
+    }
+
+    const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
+    if (factorsError) throw new Error("Unable to read multi-factor authentication status.");
+
+    const verifiedTotp = factors.totp.find((factor) => factor.status === "verified");
+    if (verifiedTotp) {
+      setFactorId(verifiedTotp.id);
+      setStep("challenge-mfa");
+      return;
+    }
+
+    // Remove stale unverified TOTP enrollments before creating a fresh setup.
+    for (const staleFactor of factors.totp.filter((factor) => factor.status !== "verified")) {
+      await supabase.auth.mfa.unenroll({ factorId: staleFactor.id });
+    }
+
+    const { data: newFactor, error: enrollError } = await supabase.auth.mfa.enroll({
+      factorType: "totp",
+      friendlyName: "Cossa Growth",
+    });
+
+    if (enrollError || !newFactor?.totp) {
+      throw new Error("Unable to start authenticator setup.");
+    }
+
+    setFactorId(newFactor.id);
+    setEnrollment({
+      factorId: newFactor.id,
+      qrCode: newFactor.totp.qr_code,
+      secret: newFactor.totp.secret,
+    });
+    setStep("enroll-mfa");
+  }
+
+  async function submitCredentials(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
     setLoading(true);
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    setLoading(false);
+      if (signInError || !data.user) {
+        throw new Error("Sign-in failed. Check your email and password.");
+      }
 
-    if (signInError) {
-      setError("Sign-in failed. Check your email and password.");
-    } else {
+      const membership = await requireGrowthMembership(data.user.id);
+      await prepareMfa(membership.role);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to complete secure sign-in.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyMfa(event: React.FormEvent) {
+    event.preventDefault();
+    setError(null);
+
+    if (!factorId || otp.length !== 6) {
+      setError("Enter the 6-digit code from your authenticator app.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({
+        factorId,
+        code: otp,
+      });
+
+      if (verifyError) {
+        throw new Error("The authenticator code was not accepted. Check the current code and try again.");
+      }
+
+      const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aalError || aal.currentLevel !== "aal2") {
+        throw new Error("MFA was verified but the session did not reach AAL2. Sign in again before continuing.");
+      }
+
       setAuthenticated(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to verify MFA.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -70,49 +196,102 @@ function LoginPage() {
 
           <div className="mt-6 flex gap-2 rounded-xl border border-border/60 bg-muted/30 p-3 text-xs leading-5 text-muted-foreground">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            Only authorised Cossa Nexus users can access company data, AI conversations and
-            operational tools.
+            Growth access requires an active Cossa organisation membership. Privileged accounts use
+            authenticator-based MFA before entering the workspace.
           </div>
 
-          <form className="mt-6 space-y-4" onSubmit={submit}>
-            <label className="block text-sm font-medium">
-              Email
-              <input
-                className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                autoComplete="email"
-                required
-              />
-            </label>
+          {step === "credentials" && (
+            <form className="mt-6 space-y-4" onSubmit={submitCredentials}>
+              <label className="block text-sm font-medium">
+                Email
+                <input
+                  className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  autoComplete="email"
+                  required
+                />
+              </label>
 
-            <label className="block text-sm font-medium">
-              Password
-              <input
-                className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
-                required
-              />
-            </label>
+              <label className="block text-sm font-medium">
+                Password
+                <input
+                  className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
 
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
+              {error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
+                </p>
+              )}
 
-            <Button
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-              disabled={loading}
-            >
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {loading ? "Signing in..." : "Enter GROWTH"}
-            </Button>
-          </form>
+              <Button
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                disabled={loading}
+              >
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {loading ? "Checking access..." : "Continue securely"}
+              </Button>
+            </form>
+          )}
+
+          {step === "enroll-mfa" && enrollment && (
+            <form className="mt-6 space-y-4" onSubmit={verifyMfa}>
+              <div className="rounded-xl border border-primary/25 bg-muted/20 p-4">
+                <div className="flex items-start gap-3">
+                  <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                  <div>
+                    <h2 className="font-semibold">Set up authenticator MFA</h2>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      Scan this QR code with your authenticator app, then enter the current 6-digit
+                      code below. Keep the recovery account under Abel Nkuna's separate control.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex justify-center rounded-lg bg-white p-4">
+                  <img
+                    src={enrollment.qrCode}
+                    alt="Authenticator enrollment QR code"
+                    className="h-48 w-48"
+                  />
+                </div>
+
+                <details className="mt-3 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer font-medium text-foreground">
+                    Cannot scan the QR code?
+                  </summary>
+                  <p className="mt-2 break-all rounded-md border border-border/60 bg-background p-2 font-mono">
+                    {enrollment.secret}
+                  </p>
+                </details>
+              </div>
+
+              <OtpField otp={otp} setOtp={setOtp} />
+              <SecurityError error={error} />
+              <MfaButton loading={loading} label="Verify and activate MFA" />
+            </form>
+          )}
+
+          {step === "challenge-mfa" && (
+            <form className="mt-6 space-y-4" onSubmit={verifyMfa}>
+              <div className="rounded-xl border border-primary/25 bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
+                <span className="font-semibold text-foreground">MFA required.</span> Enter the current
+                6-digit code from the authenticator app linked to this Growth account.
+              </div>
+
+              <OtpField otp={otp} setOtp={setOtp} />
+              <SecurityError error={error} />
+              <MfaButton loading={loading} label="Verify MFA and enter Growth" />
+            </form>
+          )}
 
           <ParentBrandEndorsement className="mt-7 border-t border-border/60 pt-5" />
         </div>
@@ -140,5 +319,45 @@ function LoginPage() {
         </aside>
       </section>
     </main>
+  );
+}
+
+function OtpField({ otp, setOtp }: { otp: string; setOtp: (value: string) => void }) {
+  return (
+    <label className="block text-sm font-medium">
+      Authenticator code
+      <input
+        className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5 font-mono text-lg tracking-[0.35em]"
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]{6}"
+        value={otp}
+        onChange={(event) => setOtp(normaliseOtp(event.target.value))}
+        autoComplete="one-time-code"
+        placeholder="000000"
+        required
+      />
+    </label>
+  );
+}
+
+function SecurityError({ error }: { error: string | null }) {
+  if (!error) return null;
+  return (
+    <p role="alert" className="text-sm text-destructive">
+      {error}
+    </p>
+  );
+}
+
+function MfaButton({ loading, label }: { loading: boolean; label: string }) {
+  return (
+    <Button
+      className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+      disabled={loading}
+    >
+      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+      {loading ? "Verifying..." : label}
+    </Button>
   );
 }
