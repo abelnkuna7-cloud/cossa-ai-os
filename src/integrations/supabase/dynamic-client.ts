@@ -9,6 +9,7 @@ export type DynamicRow = Record<string, unknown>;
 
 export interface DynamicQueryError {
   message: string;
+  code?: string;
 }
 
 interface DynamicListResult<T> {
@@ -44,6 +45,7 @@ export interface DynamicQuery<T = DynamicRow> extends PromiseLike<DynamicListRes
   update(values: object): DynamicQuery<T>;
   delete(): DynamicQuery<T>;
   eq(column: string, value: unknown): DynamicQuery<T>;
+  neq(column: string, value: unknown): DynamicQuery<T>;
   in(column: string, values: readonly unknown[]): DynamicQuery<T>;
   not(column: string, operator: string, value: unknown): DynamicQuery<T>;
   order(column: string, options?: DynamicOrderOptions): DynamicQuery<T>;
@@ -74,6 +76,12 @@ interface DynamicStorageBucket {
 }
 
 export interface DynamicSupabaseClient {
+  auth: {
+    getUser: () => Promise<{
+      data: { user: { id: string } | null };
+      error: DynamicQueryError | null;
+    }>;
+  };
   from<T = DynamicRow>(table: string): DynamicQuery<T>;
   rpc<T = unknown>(
     functionName: string,

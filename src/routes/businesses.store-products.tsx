@@ -33,6 +33,19 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
 import {
+  buildDigitalProductAssistant,
+  getDigitalSubtypeOptions,
+  mergeDraftPreflightIssues,
+} from "@/lib/digital-product-intelligence-ui";
+import {
+  createEmptyDigitalProductProfile,
+  digitalProfileFromIntelligenceRow,
+  digitalProfileToIntelligencePayload,
+  type DigitalProductIntelligenceRow,
+  type DigitalProductProfile,
+  type DigitalProductSubtype,
+} from "@/lib/digital-product-intelligence";
+import {
   nextAvailableStoreSku,
   preflightSummary,
   runStoreProductPreflight,
@@ -223,6 +236,22 @@ const PRODUCT_TYPES: Array<{ value: ProductType; label: string }> = [
   { value: "dropshipping", label: "Dropshipping" },
 ];
 
+const DIGITAL_SUBTYPE_OPTIONS = getDigitalSubtypeOptions();
+
+const BOOKLIKE_DIGITAL_SUBTYPES = new Set<DigitalProductSubtype>([
+  "ebook_storybook",
+  "guide_manual",
+  "workbook",
+  "printable",
+]);
+
+const COURSE_DIGITAL_SUBTYPES = new Set<DigitalProductSubtype>([
+  "online_course",
+  "video_course",
+]);
+
+const SOFTWARE_DIGITAL_SUBTYPES = new Set<DigitalProductSubtype>(["software", "saas_access"]);
+
 const inputClass =
   "w-full rounded-xl border border-border/70 bg-background px-3 py-2.5 text-sm outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/10";
 
@@ -245,6 +274,19 @@ function formatBytes(value: number | null) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function toOptionalPositiveNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function splitList(value: string) {
+  const items = value
+    .split(/[\n,]+/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : undefined;
 }
 
 function defaultFulfilment(type: ProductType): FulfilmentModel {
@@ -360,6 +402,11 @@ function StoreProductManager() {
   const [editingDeliverableId, setEditingDeliverableId] = useState<string | null>(null);
   const [editingDeliverableLabel, setEditingDeliverableLabel] = useState("");
   const [reorderingDeliverables, setReorderingDeliverables] = useState(false);
+  const [digitalProfile, setDigitalProfile] = useState<DigitalProductProfile>(() =>
+    createEmptyDigitalProductProfile(),
+  );
+  const [persistedSellingPrice, setPersistedSellingPrice] = useState<number | null>(null);
+  const [loadingDigitalIntelligence, setLoadingDigitalIntelligence] = useState(false);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -390,6 +437,58 @@ function StoreProductManager() {
     };
   }, [deliverables]);
 
+  const digitalFileNames = useMemo(
+    () => [form.digital_file_name, ...deliverables.map((item) => item.file_name)].filter(Boolean),
+    [deliverables, form.digital_file_name],
+  );
+
+  const digitalAssistant = useMemo(
+    () =>
+      buildDigitalProductAssistant({
+        name: form.name,
+        category: form.category,
+        description: form.description,
+        sellingPrice: Number(form.price || 0),
+        persistedSellingPrice,
+        fileNames: digitalFileNames,
+        profile: digitalProfile,
+      }),
+    [
+      digitalFileNames,
+      digitalProfile,
+      form.category,
+      form.description,
+      form.name,
+      form.price,
+      persistedSellingPrice,
+    ],
+  );
+
+  const displayedPreflightIssues = useMemo(
+    () =>
+      preflight
+        ? mergeDraftPreflightIssues(preflight.issues, {
+            name: form.name,
+            category: form.category,
+            description: form.description,
+            sellingPrice: Number(form.price || 0),
+            persistedSellingPrice,
+            fileNames: digitalFileNames,
+            profile: digitalProfile,
+          })
+        : [],
+    [
+      digitalFileNames,
+      digitalProfile,
+      form.category,
+      form.description,
+      form.name,
+      form.price,
+      persistedSellingPrice,
+      preflight,
+    ],
+  );
+
   async function loadPortfolioIntelligence() {
     const { data, error } = await db.rpc("store_product_manager_intelligence");
     if (!error && data) setPortfolioIntel(data as PortfolioIntelligence);
@@ -413,10 +512,42 @@ function StoreProductManager() {
     setLoadingDeliverables(false);
   }
 
+  async function loadDigitalIntelligence(productId?: string) {
+    if (!productId) {
+      setDigitalProfile(createEmptyDigitalProductProfile());
+      return;
+    }
+
+    setLoadingDigitalIntelligence(true);
+    const { data, error } = await db
+      .from("store_digital_product_intelligence")
+      .select("*")
+      .eq("product_id", productId)
+      .maybeSingle();
+
+    if (error) {
+      toast.error(`Could not load digital product intelligence: ${error.message}`);
+      setDigitalProfile(createEmptyDigitalProductProfile());
+    } else {
+      setDigitalProfile(
+        digitalProfileFromIntelligenceRow((data ?? null) as DigitalProductIntelligenceRow | null),
+      );
+    }
+    setLoadingDigitalIntelligence(false);
+  }
+
   useEffect(() => { void loadProducts(); }, []);
 
   function update<K extends keyof ProductForm>(key: K, value: ProductForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+    setPreflight(null);
+  }
+
+  function updateDigitalProfile<K extends keyof DigitalProductProfile>(
+    key: K,
+    value: DigitalProductProfile[K],
+  ) {
+    setDigitalProfile((current) => ({ ...current, [key]: value }));
     setPreflight(null);
   }
 
@@ -426,15 +557,19 @@ function StoreProductManager() {
     setDeliverableUploadError(null);
     setPreflight(null);
     setEditingDeliverableId(null);
+    setDigitalProfile(createEmptyDigitalProductProfile());
+    setPersistedSellingPrice(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function editProduct(product: StoreProduct) {
     setForm(rowToForm(product));
+    const savedPrice = Number(product.price);
+    setPersistedSellingPrice(Number.isFinite(savedPrice) ? savedPrice : null);
     setDeliverableUploadError(null);
     setPreflight(null);
     setEditingDeliverableId(null);
-    void loadDeliverables(product.id);
+    void Promise.all([loadDeliverables(product.id), loadDigitalIntelligence(product.id)]);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -501,6 +636,26 @@ function StoreProductManager() {
     if (!organisationId) throw new Error("This product is missing its organisation link. Refresh the Product Manager and try again.");
     setForm((current) => ({ ...current, organisation_id: organisationId }));
     return organisationId;
+  }
+
+  async function persistDigitalIntelligence(productId: string, productOrganisationId?: string) {
+    const organisationId = productOrganisationId?.trim();
+    if (!organisationId) {
+      throw new Error("This product is missing its organisation link, so digital intelligence cannot be saved.");
+    }
+
+    const payload = digitalProfileToIntelligencePayload(digitalProfile, digitalFileNames);
+    const { error } = await db.from("store_digital_product_intelligence").upsert(
+      {
+        product_id: productId,
+        organisation_id: organisationId,
+        ...payload,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "product_id" },
+    );
+
+    if (error) throw new Error(`Digital product intelligence could not be saved: ${error.message}`);
   }
 
   async function uploadCustomerFiles(files: FileList | File[]) {
@@ -668,34 +823,81 @@ function StoreProductManager() {
     if (compareAt != null && compareAt < price) return toast.error("Compare-at price must be equal to or higher than the selling price.");
     if (status === "active" && readinessIssues.length > 0) return toast.error(`Complete before publishing: ${readinessIssues.join(", ")}.`);
     if (status === "active") { const result = await runPreflight(); if (!result?.ready) return; }
+
+    const isDigital = form.product_type === "digital";
+    const stagedStatus: ProductStatus = isDigital && !form.id && status === "active" ? "draft" : status;
     setSaving(true);
-    const payload = {
-      name, slug, sku: form.sku.trim() || null, product_type: form.product_type, fulfilment_model: form.fulfilment_model, status,
-      short_description: form.short_description.trim() || null, description: form.description.trim() || null, category: form.category.trim() || null,
-      brand: form.brand.trim() || null, supplier_name: form.supplier_name.trim() || null, supplier_product_ref: form.supplier_product_ref.trim() || null,
-      supplier_url: form.supplier_url.trim() || null, affiliate_url: form.affiliate_url.trim() || null, currency: "ZAR", cost_price: costPrice, price,
-      compare_at_price: compareAt, track_inventory: tracksInventory ? form.track_inventory : false,
-      stock_quantity: tracksInventory ? Math.max(0, Number(form.stock_quantity || 0)) : 0,
-      unlimited_stock: tracksInventory ? form.unlimited_stock : form.product_type !== "physical",
-      inventory_ownership: form.inventory_ownership, inventory_source_status: form.inventory_source_status,
-      inventory_source_reference: form.inventory_source_reference.trim() || null, featured: form.featured, image_urls: form.image_urls,
-      seo_title: form.seo_title.trim() || null, seo_description: form.seo_description.trim() || null,
-      digital_file_path: form.product_type === "digital" ? form.digital_file_path || null : null,
-      digital_file_name: form.product_type === "digital" ? form.digital_file_name || null : null,
-      digital_download_limit: form.product_type === "digital" ? toNullableNumber(form.digital_download_limit) : null,
-      digital_access_days: form.product_type === "digital" ? toNullableNumber(form.digital_access_days) : null,
-      updated_at: new Date().toISOString(),
-    };
-    const operation = form.id ? db.from("store_products").update(payload).eq("id", form.id).select("*").single() : db.from("store_products").insert(payload).select("*").single();
-    const { data, error } = await operation;
-    setSaving(false);
-    if (error) return toast.error(`Could not save product: ${error.message}`);
-    const saved = data as StoreProduct;
-    toast.success(status === "active" ? "Product published to Cossa Store." : "Product saved.");
-    setForm(rowToForm(saved));
-    setDeliverableUploadError(null);
-    if (saved.product_type === "digital") await loadDeliverables(saved.id);
-    await loadProducts();
+    let stagedProduct: StoreProduct | null = null;
+
+    try {
+      let intelligencePersisted = false;
+      if (isDigital && form.id && status === "active") {
+        const organisationId = await resolveOrganisationId(form.id);
+        await persistDigitalIntelligence(form.id, organisationId);
+        intelligencePersisted = true;
+      }
+
+      const payload = {
+        name, slug, sku: form.sku.trim() || null, product_type: form.product_type, fulfilment_model: form.fulfilment_model, status: stagedStatus,
+        short_description: form.short_description.trim() || null, description: form.description.trim() || null, category: form.category.trim() || null,
+        brand: form.brand.trim() || null, supplier_name: form.supplier_name.trim() || null, supplier_product_ref: form.supplier_product_ref.trim() || null,
+        supplier_url: form.supplier_url.trim() || null, affiliate_url: form.affiliate_url.trim() || null, currency: "ZAR", cost_price: costPrice, price,
+        compare_at_price: compareAt, track_inventory: tracksInventory ? form.track_inventory : false,
+        stock_quantity: tracksInventory ? Math.max(0, Number(form.stock_quantity || 0)) : 0,
+        unlimited_stock: tracksInventory ? form.unlimited_stock : form.product_type !== "physical",
+        inventory_ownership: form.inventory_ownership, inventory_source_status: form.inventory_source_status,
+        inventory_source_reference: form.inventory_source_reference.trim() || null, featured: form.featured, image_urls: form.image_urls,
+        seo_title: form.seo_title.trim() || null, seo_description: form.seo_description.trim() || null,
+        digital_file_path: isDigital ? form.digital_file_path || null : null,
+        digital_file_name: isDigital ? form.digital_file_name || null : null,
+        digital_download_limit: isDigital ? toNullableNumber(form.digital_download_limit) : null,
+        digital_access_days: isDigital ? toNullableNumber(form.digital_access_days) : null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const operation = form.id
+        ? db.from("store_products").update(payload).eq("id", form.id).select("*").single()
+        : db.from("store_products").insert(payload).select("*").single();
+      const { data, error } = await operation;
+      if (error) throw new Error(`Could not save product: ${error.message}`);
+      stagedProduct = data as StoreProduct;
+
+      if (isDigital && !intelligencePersisted) {
+        await persistDigitalIntelligence(stagedProduct.id, stagedProduct.organisation_id);
+      }
+
+      let saved = stagedProduct;
+      if (stagedStatus !== status) {
+        const { data: publishedData, error: publishError } = await db
+          .from("store_products")
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq("id", stagedProduct.id)
+          .select("*")
+          .single();
+        if (publishError) {
+          throw new Error(`Product and intelligence were saved as a draft, but publication was blocked: ${publishError.message}`);
+        }
+        saved = publishedData as StoreProduct;
+      }
+
+      toast.success(status === "active" ? "Product published to Cossa Store." : "Product saved.");
+      setForm(rowToForm(saved));
+      setPersistedSellingPrice(Number(saved.price));
+      setDeliverableUploadError(null);
+      if (saved.product_type === "digital") {
+        await Promise.all([loadDeliverables(saved.id), loadDigitalIntelligence(saved.id)]);
+      }
+      await loadProducts();
+    } catch (error) {
+      if (stagedProduct) {
+        setForm(rowToForm(stagedProduct));
+        setPersistedSellingPrice(Number(stagedProduct.price));
+        await loadProducts();
+      }
+      toast.error(error instanceof Error ? error.message : "Could not save product.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function archiveProduct(product: StoreProduct) {
@@ -758,6 +960,8 @@ function StoreProductManager() {
             {form.image_urls.length > 0 ? <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">{form.image_urls.map((url, index) => <div key={`${url}-${index}`} draggable onDragStart={() => setDraggingImageIndex(index)} onDragEnd={() => setDraggingImageIndex(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const from = draggingImageIndex; setDraggingImageIndex(null); if (from != null && from !== index) void moveImage(from, index); }} className={`relative overflow-hidden rounded-xl border bg-card ${draggingImageIndex === index ? "border-primary/70 opacity-70" : "border-border/60"}`}><img src={url} alt="" className="aspect-square w-full object-cover" /><div className="absolute left-2 top-2 flex items-center gap-1 rounded-lg bg-background/90 p-1 shadow"><GripVertical className="h-3.5 w-3.5 cursor-grab text-muted-foreground" /><span className="px-1 text-[10px] font-semibold">#{index + 1}</span></div><button type="button" className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 text-foreground shadow" onClick={() => update("image_urls", form.image_urls.filter((_, itemIndex) => itemIndex !== index))} aria-label="Remove image from product"><X className="h-3.5 w-3.5" /></button><div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-1"><div>{index === 0 ? <span className="rounded bg-background/90 px-2 py-1 text-[10px] font-medium">Main image</span> : null}</div><div className="flex gap-1"><button type="button" disabled={index === 0} onClick={() => void moveImage(index, index - 1)} className="rounded bg-background/90 p-1.5 shadow disabled:opacity-40" aria-label="Move image earlier"><ArrowUp className="h-3.5 w-3.5" /></button><button type="button" disabled={index === form.image_urls.length - 1} onClick={() => void moveImage(index, index + 1)} className="rounded bg-background/90 p-1.5 shadow disabled:opacity-40" aria-label="Move image later"><ArrowDown className="h-3.5 w-3.5" /></button></div></div></div>)}</div> : <div className="mt-4 rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">No Store image uploaded yet.</div>}
           </div>
 
+          {form.product_type === "digital" ? <DigitalProductIntelligencePanel profile={digitalProfile} assistant={digitalAssistant} loading={loadingDigitalIntelligence} onChange={updateDigitalProfile} /> : null}
+
           {form.product_type === "digital" ? <div className="mt-7 border-t border-border/60 pt-6"><div><h3 className="font-semibold">Digital customer package</h3><p className="mt-1 text-xs text-muted-foreground">Manage the primary ZIP and all extra customer PDFs/resources here. No need to leave Product Manager.</p></div><div className="mt-4 rounded-2xl border border-primary/20 bg-primary/5 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold">Primary secure ZIP / package</p><p className="mt-1 text-xs text-muted-foreground">Required for backward-compatible one-click delivery.</p></div><label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-primary/30 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/5"><Upload className="mr-1.5 h-4 w-4" />{uploadingDigital ? "Uploading…" : form.digital_file_path ? "Replace primary file" : "Upload primary file"}<input type="file" className="hidden" disabled={uploadingDigital} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadDigitalFile(file); event.currentTarget.value = ""; }} /></label></div>{form.digital_file_path ? <div className="mt-3 flex items-center gap-3 rounded-xl border border-primary/20 bg-background/60 p-3"><FileDown className="h-5 w-5 text-primary" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{form.digital_file_name || "Digital file"}</p><p className="truncate text-[11px] text-muted-foreground">Private storage: {form.digital_file_path}</p></div></div> : null}</div><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Download limit"><input className={inputClass} inputMode="numeric" value={form.digital_download_limit} onChange={(event) => update("digital_download_limit", event.target.value)} placeholder="5" /></Field><Field label="Access period (days)"><input className={inputClass} inputMode="numeric" value={form.digital_access_days} onChange={(event) => update("digital_access_days", event.target.value)} placeholder="30" /></Field></div><div className="mt-5 rounded-2xl border border-border/70 p-4"><div className="flex items-start gap-3"><FileText className="mt-0.5 h-5 w-5 text-primary" /><div><p className="text-sm font-semibold">Extra customer files</p><p className="mt-1 text-xs text-muted-foreground">Rename or drag files into the exact customer download order. Position #1 appears first.</p></div></div>{!form.id ? <div className="mt-4 rounded-xl border border-dashed border-warning/50 bg-warning/5 p-4 text-xs text-muted-foreground">Save this product as a draft once. Extra file upload will unlock here on the same screen.</div> : <><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Optional label" className="sm:col-span-2"><input className={inputClass} value={deliverableLabel} onChange={(event) => setDeliverableLabel(event.target.value)} placeholder="e.g. Complete Course PDF" /></Field><Toggle label="Mark first upload as primary deliverable" checked={makeDeliverablePrimary} onChange={setMakeDeliverablePrimary} /><Toggle label="Show to customer after confirmed payment" checked={customerVisible} onChange={setCustomerVisible} /></div><label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-primary/40 px-4 py-5 text-sm font-medium text-primary hover:bg-primary/5"><Upload className="mr-2 h-5 w-5" />{uploadingDeliverables ? "Uploading customer files…" : "Upload one or multiple customer files"}<input type="file" multiple className="hidden" disabled={uploadingDeliverables} accept=".zip,.pdf,.doc,.docx,.xlsx,.xls,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,application/zip,application/pdf" onChange={(event) => { const files = event.target.files ? Array.from(event.target.files) : []; event.currentTarget.value = ""; if (files.length) void uploadCustomerFiles(files); }} /></label>{deliverableUploadError ? <div className="mt-3 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">Upload failed: {deliverableUploadError}</div> : null}</>}
             <div className="mt-5 space-y-2">{loadingDeliverables ? <div className="rounded-xl border border-border/60 p-4 text-sm text-muted-foreground">Loading customer files…</div> : deliverables.length === 0 ? <div className="rounded-xl border border-dashed border-border p-5 text-center text-xs text-muted-foreground">No extra customer files attached yet.</div> : deliverables.map((item, index) => <article key={item.id} draggable={!reorderingDeliverables && editingDeliverableId !== item.id} onDragStart={() => setDraggingDeliverableId(item.id)} onDragEnd={() => setDraggingDeliverableId(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const from = deliverables.findIndex((candidate) => candidate.id === draggingDeliverableId); setDraggingDeliverableId(null); if (from >= 0 && from !== index) void moveDeliverable(from, index); }} className={`rounded-xl border bg-card/40 p-3 ${draggingDeliverableId === item.id ? "border-primary/70 opacity-70" : "border-border/60"}`}><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 gap-3"><div className="flex shrink-0 items-start gap-1 pt-0.5"><GripVertical className="h-5 w-5 cursor-grab text-muted-foreground" /><span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold">#{index + 1}</span></div><FileDown className="mt-0.5 h-5 w-5 shrink-0 text-primary" /><div className="min-w-0 flex-1">{editingDeliverableId === item.id ? <div className="flex flex-col gap-2 sm:flex-row"><input autoFocus className={`${inputClass} py-1.5`} value={editingDeliverableLabel} onChange={(event) => setEditingDeliverableLabel(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveDeliverableLabel(item); } if (event.key === "Escape") { setEditingDeliverableId(null); setEditingDeliverableLabel(""); } }} /><div className="flex gap-1"><Button size="sm" type="button" onClick={() => void saveDeliverableLabel(item)}><Check className="mr-1 h-3.5 w-3.5" /> Save</Button><Button size="sm" type="button" variant="outline" onClick={() => { setEditingDeliverableId(null); setEditingDeliverableLabel(""); }}><X className="mr-1 h-3.5 w-3.5" /> Cancel</Button></div></div> : <><div className="flex flex-wrap items-center gap-2"><p className="truncate text-sm font-semibold">{item.label}</p>{item.is_primary ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">Primary</span> : null}{item.is_customer_visible ? <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">Customer visible</span> : <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">Hidden</span>}</div><p className="mt-1 truncate text-xs text-muted-foreground">{item.file_name} · {formatBytes(item.file_size_bytes)}</p></>}</div></div><div className="flex flex-wrap gap-1.5">{editingDeliverableId !== item.id ? <Button size="sm" variant="outline" onClick={() => beginRenameDeliverable(item)}><Pencil className="mr-1 h-3.5 w-3.5" /> Rename</Button> : null}<Button size="sm" variant="outline" disabled={index === 0 || reorderingDeliverables} onClick={() => void moveDeliverable(index, index - 1)} aria-label="Move file earlier"><ArrowUp className="h-3.5 w-3.5" /></Button><Button size="sm" variant="outline" disabled={index === deliverables.length - 1 || reorderingDeliverables} onClick={() => void moveDeliverable(index, index + 1)} aria-label="Move file later"><ArrowDown className="h-3.5 w-3.5" /></Button>{!item.is_primary ? <Button size="sm" variant="outline" onClick={() => void setPrimaryDeliverable(item)}><Star className="mr-1 h-3.5 w-3.5" /> Primary</Button> : null}<Button size="sm" variant="outline" onClick={() => void toggleDeliverableVisibility(item)}>{item.is_customer_visible ? <EyeOff className="mr-1 h-3.5 w-3.5" /> : <Eye className="mr-1 h-3.5 w-3.5" />}{item.is_customer_visible ? "Hide" : "Show"}</Button><Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => void removeDeliverable(item)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Remove</Button></div></div></article>)}</div>
             </div><div className="mt-5 rounded-2xl border border-border/70 bg-muted/10 p-4"><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /><h4 className="font-semibold">Customer package intelligence</h4></div><div className="mt-3 grid gap-2 sm:grid-cols-2"><PackageCheck label="Primary ZIP attached" ok={Boolean(form.digital_file_path)} detail={form.digital_file_name || undefined} /><PackageCheck label={`${form.image_urls.length} Store image${form.image_urls.length === 1 ? "" : "s"} attached`} ok={form.image_urls.length > 0} /><PackageCheck label="Course PDF attached" ok={packageSignals.hasCoursePdf} optional /><PackageCheck label="START HERE attached" ok={packageSignals.hasStartHere} optional /><PackageCheck label="Workbook attached" ok={packageSignals.hasWorkbook} optional /><PackageCheck label={`${packageSignals.visibleFiles} customer-visible extra file${packageSignals.visibleFiles === 1 ? "" : "s"}`} ok={packageSignals.visibleFiles > 0} optional /></div></div></div> : null}
@@ -768,7 +972,7 @@ function StoreProductManager() {
 
           <div className="mt-7 border-t border-border/60 pt-6"><div className="flex items-center justify-between gap-3"><h3 className="font-semibold">Search & merchandising</h3><Toggle label="Featured product" checked={form.featured} onChange={(checked) => update("featured", checked)} /></div><div className="mt-4 grid gap-4"><Field label="SEO title"><input className={inputClass} value={form.seo_title} onChange={(event) => update("seo_title", event.target.value)} placeholder="Optional; defaults to product name" /></Field><Field label="SEO description"><textarea className={`${inputClass} min-h-24`} value={form.seo_description} onChange={(event) => update("seo_description", event.target.value)} placeholder="Short search-engine description" /></Field></div></div>
 
-          <section className={`mt-7 rounded-xl border p-4 ${readinessIssues.length || (preflight && !preflight.ready) ? "border-warning/50 bg-warning/5" : "border-primary/40 bg-primary/5"}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">Publication intelligence</h3><p className="mt-1 text-xs text-muted-foreground">Local checks plus the same server rules used by the production database.</p></div><Button type="button" size="sm" variant="outline" onClick={() => void runPreflight()} disabled={checkingPreflight}>{checkingPreflight ? <RefreshCw className="mr-1 h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="mr-1 h-3.5 w-3.5" />}Check now</Button></div>{readinessIssues.length ? <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">{readinessIssues.map((issue) => <li key={issue}>Missing {issue}</li>)}</ul> : <p className="mt-3 text-sm text-primary">Basic product checks passed.</p>}{preflight ? <div className="mt-4 rounded-xl border border-border/60 bg-background/50 p-3 text-sm"><div className="flex items-center gap-2">{preflight.ready ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <AlertTriangle className="h-4 w-4 text-warning" />}<strong>{preflight.ready ? "SAFE TO PUBLISH" : "HOLD — FIX ITEMS FIRST"}</strong></div>{preflight.issues.length ? <p className="mt-2 text-xs text-muted-foreground">Issues: {preflight.issues.join(", ")}</p> : null}{preflight.warnings.length ? <p className="mt-1 text-xs text-muted-foreground">Warnings: {preflight.warnings.join(" ")}</p> : null}{preflight.suggested_sku && preflight.suggested_sku !== form.sku ? <div className="mt-3 flex flex-wrap items-center gap-2"><span className="text-xs">Suggested SKU: <strong>{preflight.suggested_sku}</strong></span><Button type="button" size="sm" variant="outline" onClick={() => update("sku", preflight.suggested_sku || form.sku)}>Use suggested SKU</Button></div> : null}{form.product_type === "digital" ? <p className="mt-2 text-xs text-muted-foreground">Secure primary file: {preflight.digital_file_verified ? "Verified" : "Not verified"}</p> : null}</div> : null}</section>
+          <section className={`mt-7 rounded-xl border p-4 ${readinessIssues.length || (preflight && !preflight.ready) ? "border-warning/50 bg-warning/5" : "border-primary/40 bg-primary/5"}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">Publication intelligence</h3><p className="mt-1 text-xs text-muted-foreground">Local checks plus the same server rules used by the production database. Draft diagnostics never override the server publication gate.</p></div><Button type="button" size="sm" variant="outline" onClick={() => void runPreflight()} disabled={checkingPreflight}>{checkingPreflight ? <RefreshCw className="mr-1 h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="mr-1 h-3.5 w-3.5" />}Check now</Button></div>{readinessIssues.length ? <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">{readinessIssues.map((issue) => <li key={issue}>Missing {issue}</li>)}</ul> : <p className="mt-3 text-sm text-primary">Basic product checks passed.</p>}{preflight ? <div className="mt-4 rounded-xl border border-border/60 bg-background/50 p-3 text-sm"><div className="flex items-center gap-2">{preflight.ready ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <AlertTriangle className="h-4 w-4 text-warning" />}<strong>{preflight.ready ? "SAFE TO PUBLISH" : "HOLD — FIX ITEMS FIRST"}</strong></div>{displayedPreflightIssues.length ? <p className="mt-2 text-xs text-muted-foreground">Issues: {displayedPreflightIssues.join(", ")}</p> : null}{preflight.warnings.length ? <p className="mt-1 text-xs text-muted-foreground">Warnings: {preflight.warnings.join(" ")}</p> : null}{preflight.suggested_sku && preflight.suggested_sku !== form.sku ? <div className="mt-3 flex flex-wrap items-center gap-2"><span className="text-xs">Suggested SKU: <strong>{preflight.suggested_sku}</strong></span><Button type="button" size="sm" variant="outline" onClick={() => update("sku", preflight.suggested_sku || form.sku)}>Use suggested SKU</Button></div> : null}{form.product_type === "digital" ? <p className="mt-2 text-xs text-muted-foreground">Secure primary file: {preflight.digital_file_verified ? "Verified" : "Not verified"}</p> : null}</div> : null}</section>
 
           <div className="mt-7 flex flex-wrap gap-2 border-t border-border/60 pt-6"><Button variant="outline" onClick={() => void saveProduct("draft")} disabled={saving}><Save className="mr-1.5 h-4 w-4" /> {saving ? "Saving…" : "Save draft"}</Button><Button onClick={() => void saveProduct("active")} disabled={saving || checkingPreflight} className="bg-primary text-primary-foreground hover:bg-primary/90 gold-glow"><ExternalLink className="mr-1.5 h-4 w-4" /> Publish to Store</Button></div>
         </div>
@@ -776,6 +980,327 @@ function StoreProductManager() {
         <div className="glass-card h-fit p-5 sm:p-6"><div className="flex items-center justify-between gap-3"><div><h2 className="font-display text-xl font-semibold">Catalogue</h2><p className="mt-1 text-xs text-muted-foreground">{products.length} product{products.length === 1 ? "" : "s"} in the database.</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto] xl:grid-cols-1"><label className="relative block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input className={`${inputClass} pl-9`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search products…" /></label><select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | ProductStatus)}><option value="all">All statuses</option><option value="active">Active</option><option value="draft">Draft</option><option value="archived">Archived</option></select></div><div className="mt-4 space-y-3">{loading ? <div className="rounded-xl border border-border/60 p-5 text-sm text-muted-foreground">Loading catalogue…</div> : filtered.length === 0 ? <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No products match this view.</div> : filtered.map((product) => <article key={product.id} className="rounded-xl border border-border/60 bg-card/40 p-3"><div className="flex gap-3"><div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted/20">{product.image_urls?.[0] ? <img src={product.image_urls[0]} alt="" className="h-full w-full object-cover" /> : null}</div><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><h3 className="line-clamp-2 text-sm font-semibold">{product.name}</h3><p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">{product.product_type} · {product.status} · {product.inventory_ownership.replaceAll("_", " ")}</p></div><p className="shrink-0 text-sm font-semibold text-primary">R{Number(product.price).toFixed(2)}</p></div><p className="mt-1 truncate text-[11px] text-muted-foreground">{product.sku || product.slug}</p></div></div><div className="mt-3 flex flex-wrap gap-1.5"><Button size="sm" variant="outline" onClick={() => editProduct(product)}><Pencil className="mr-1 h-3.5 w-3.5" /> Edit</Button>{product.status !== "archived" ? <Button size="sm" variant="outline" onClick={() => void archiveProduct(product)}><Archive className="mr-1 h-3.5 w-3.5" /> Archive</Button> : null}{product.status !== "active" ? <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => void deleteProduct(product)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Delete</Button> : null}</div></article>)}</div></div>
       </section>
     </div>
+  );
+}
+
+function DigitalProductIntelligencePanel({
+  profile,
+  assistant,
+  loading,
+  onChange,
+}: {
+  profile: DigitalProductProfile;
+  assistant: ReturnType<typeof buildDigitalProductAssistant>;
+  loading: boolean;
+  onChange: <K extends keyof DigitalProductProfile>(
+    key: K,
+    value: DigitalProductProfile[K],
+  ) => void;
+}) {
+  const booklike = BOOKLIKE_DIGITAL_SUBTYPES.has(profile.subtype);
+  const course = COURSE_DIGITAL_SUBTYPES.has(profile.subtype);
+  const software = SOFTWARE_DIGITAL_SUBTYPES.has(profile.subtype);
+  const priceMessage =
+    assistant.sellingPriceState === "saved"
+      ? "Selling price is saved."
+      : assistant.sellingPriceState === "entered_unsaved"
+        ? "Selling price is entered — save the draft to persist it."
+        : "Selling price is genuinely missing.";
+
+  return (
+    <section className="mt-7 border-t border-border/60 pt-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="font-semibold">Digital product intelligence</h3>
+          <p className="mt-1 max-w-3xl text-xs text-muted-foreground">
+            Subtype-aware metadata and package readiness for digital products only. Record verified
+            facts; leave unknown values blank.
+          </p>
+        </div>
+        <div className="rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
+          Metadata readiness {assistant.metadataScore}%
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="mt-4 rounded-xl border border-border/60 p-4 text-sm text-muted-foreground">
+          Loading saved digital intelligence…
+        </div>
+      ) : (
+        <>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="Digital subtype">
+              <select
+                className={inputClass}
+                value={profile.subtype}
+                onChange={(event) =>
+                  onChange("subtype", event.target.value as DigitalProductSubtype)
+                }
+              >
+                {DIGITAL_SUBTYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div className="rounded-xl border border-border/60 bg-muted/10 p-3 text-xs">
+              <p className="font-semibold">Evidence-aware subtype suggestion</p>
+              <p className="mt-1 text-muted-foreground">
+                {assistant.proposedSubtype === "other"
+                  ? "No specific subtype can be supported by the current product text or file names."
+                  : `${assistant.proposedSubtypeLabel} — based on ${assistant.proposedSubtypeEvidence.join(", ") || "supplied evidence"}.`}
+              </p>
+              {assistant.proposedSubtype !== "other" &&
+              assistant.proposedSubtype !== profile.subtype ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => onChange("subtype", assistant.proposedSubtype)}
+                >
+                  Apply proposed subtype
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-border/60 bg-background/50 p-3 text-xs">
+            <p className="font-semibold">{priceMessage}</p>
+            <p className="mt-1 text-muted-foreground">
+              This explanation improves the R199-type draft diagnostic. It does not weaken or bypass
+              server preflight.
+            </p>
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="Creator / author / instructor (verified)">
+              <input
+                className={inputClass}
+                value={profile.creator ?? ""}
+                onChange={(event) => onChange("creator", event.target.value || undefined)}
+              />
+            </Field>
+            <Field label="Language (verified)">
+              <input
+                className={inputClass}
+                value={profile.language ?? ""}
+                onChange={(event) => onChange("language", event.target.value || undefined)}
+              />
+            </Field>
+            <Field label="Audience (verified)">
+              <input
+                className={inputClass}
+                value={profile.audience ?? ""}
+                onChange={(event) => onChange("audience", event.target.value || undefined)}
+                placeholder="e.g. South African small-business owners"
+              />
+            </Field>
+            <Field label="Included items (one per line or comma-separated)">
+              <textarea
+                className={`${inputClass} min-h-20`}
+                value={(profile.included_items ?? []).join("\n")}
+                onChange={(event) => onChange("included_items", splitList(event.target.value))}
+              />
+            </Field>
+          </div>
+
+          {booklike ? (
+            <div className="mt-4 grid gap-4 rounded-xl border border-border/60 p-4 sm:grid-cols-2">
+              <Field label="Publisher (verified)">
+                <input
+                  className={inputClass}
+                  value={profile.publisher ?? ""}
+                  onChange={(event) => onChange("publisher", event.target.value || undefined)}
+                />
+              </Field>
+              <Field label="Age range (verified)">
+                <input
+                  className={inputClass}
+                  value={profile.age_range ?? ""}
+                  onChange={(event) => onChange("age_range", event.target.value || undefined)}
+                />
+              </Field>
+              <Field label="Genre (verified)">
+                <input
+                  className={inputClass}
+                  value={profile.genre ?? ""}
+                  onChange={(event) => onChange("genre", event.target.value || undefined)}
+                />
+              </Field>
+              <Field label="Page count (verified)">
+                <input
+                  className={inputClass}
+                  inputMode="numeric"
+                  value={profile.page_count ?? ""}
+                  onChange={(event) =>
+                    onChange("page_count", toOptionalPositiveNumber(event.target.value))
+                  }
+                />
+              </Field>
+              <Field label="Edition (verified)">
+                <input
+                  className={inputClass}
+                  value={profile.edition ?? ""}
+                  onChange={(event) => onChange("edition", event.target.value || undefined)}
+                />
+              </Field>
+              <Field label="ISBN — only if supplied or independently verified">
+                <input
+                  className={inputClass}
+                  value={profile.isbn ?? ""}
+                  onChange={(event) => onChange("isbn", event.target.value || undefined)}
+                />
+              </Field>
+            </div>
+          ) : null}
+
+          {course ? (
+            <div className="mt-4 grid gap-4 rounded-xl border border-border/60 p-4 sm:grid-cols-2">
+              <Field label="Skill level (verified)">
+                <input
+                  className={inputClass}
+                  value={profile.skill_level ?? ""}
+                  onChange={(event) => onChange("skill_level", event.target.value || undefined)}
+                />
+              </Field>
+              <Field label="Duration in minutes (verified)">
+                <input
+                  className={inputClass}
+                  inputMode="numeric"
+                  value={profile.duration_minutes ?? ""}
+                  onChange={(event) =>
+                    onChange("duration_minutes", toOptionalPositiveNumber(event.target.value))
+                  }
+                />
+              </Field>
+              <Field label="Module count (verified)">
+                <input
+                  className={inputClass}
+                  inputMode="numeric"
+                  value={profile.module_count ?? ""}
+                  onChange={(event) =>
+                    onChange("module_count", toOptionalPositiveNumber(event.target.value))
+                  }
+                />
+              </Field>
+              <Field label="Lesson count (verified)">
+                <input
+                  className={inputClass}
+                  inputMode="numeric"
+                  value={profile.lesson_count ?? ""}
+                  onChange={(event) =>
+                    onChange("lesson_count", toOptionalPositiveNumber(event.target.value))
+                  }
+                />
+              </Field>
+              <Field label="Learning outcomes (one per line)" className="sm:col-span-2">
+                <textarea
+                  className={`${inputClass} min-h-24`}
+                  value={(profile.learning_outcomes ?? []).join("\n")}
+                  onChange={(event) => onChange("learning_outcomes", splitList(event.target.value))}
+                />
+              </Field>
+              <Field label="Prerequisites (one per line)" className="sm:col-span-2">
+                <textarea
+                  className={`${inputClass} min-h-20`}
+                  value={(profile.prerequisites ?? []).join("\n")}
+                  onChange={(event) => onChange("prerequisites", splitList(event.target.value))}
+                />
+              </Field>
+            </div>
+          ) : null}
+
+          {software ? (
+            <div className="mt-4 grid gap-4 rounded-xl border border-border/60 p-4 sm:grid-cols-2">
+              {profile.subtype === "software" ? (
+                <Field label="Version (verified)">
+                  <input
+                    className={inputClass}
+                    value={profile.version ?? ""}
+                    onChange={(event) => onChange("version", event.target.value || undefined)}
+                  />
+                </Field>
+              ) : null}
+              <Field label="Licence type (verified)">
+                <input
+                  className={inputClass}
+                  value={profile.licence_type ?? ""}
+                  onChange={(event) => onChange("licence_type", event.target.value || undefined)}
+                />
+              </Field>
+              <Field label="Licence duration in days — if applicable">
+                <input
+                  className={inputClass}
+                  inputMode="numeric"
+                  value={profile.licence_duration_days ?? ""}
+                  onChange={(event) =>
+                    onChange("licence_duration_days", toOptionalPositiveNumber(event.target.value))
+                  }
+                />
+              </Field>
+              <Field label="Supported platforms (one per line)" className="sm:col-span-2">
+                <textarea
+                  className={`${inputClass} min-h-20`}
+                  value={(profile.supported_platforms ?? []).join("\n")}
+                  onChange={(event) =>
+                    onChange("supported_platforms", splitList(event.target.value))
+                  }
+                />
+              </Field>
+              <Field label="System requirements (one per line)" className="sm:col-span-2">
+                <textarea
+                  className={`${inputClass} min-h-20`}
+                  value={(profile.system_requirements ?? []).join("\n")}
+                  onChange={(event) =>
+                    onChange("system_requirements", splitList(event.target.value))
+                  }
+                />
+              </Field>
+              <Field label="Support terms (verified)" className="sm:col-span-2">
+                <textarea
+                  className={`${inputClass} min-h-20`}
+                  value={profile.support_terms ?? ""}
+                  onChange={(event) => onChange("support_terms", event.target.value || undefined)}
+                />
+              </Field>
+            </div>
+          ) : null}
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="Themes / topics (one per line)">
+              <textarea
+                className={`${inputClass} min-h-20`}
+                value={(profile.themes ?? []).join("\n")}
+                onChange={(event) => onChange("themes", splitList(event.target.value))}
+              />
+            </Field>
+            <Field label="Evidence notes / source references">
+              <textarea
+                className={`${inputClass} min-h-20`}
+                value={(profile.evidence_notes ?? []).join("\n")}
+                onChange={(event) => onChange("evidence_notes", splitList(event.target.value))}
+                placeholder="Record where factual metadata was verified."
+              />
+            </Field>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-border/60 bg-muted/10 p-3 text-xs">
+            <p className="font-semibold">Readiness gaps</p>
+            <p className="mt-1 text-muted-foreground">
+              {assistant.missingMetadata.length > 0
+                ? assistant.missingMetadata.join(", ")
+                : "Subtype-specific metadata checks passed."}
+            </p>
+            <p className="mt-2 text-muted-foreground">
+              AI readiness is advisory. It cannot publish, order, pay, create credentials or approve a
+              consequential action.
+            </p>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

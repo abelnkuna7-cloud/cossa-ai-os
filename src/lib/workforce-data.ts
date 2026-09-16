@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { composeDigitalProductWorkforceProfiles } from "@/lib/workforce-digital-product-capabilities";
 
 /* -------------------------------------------------------------------------- */
 /* ORGANISATION                                                               */
@@ -271,7 +272,7 @@ const HIGH_RISK_ACTIONS = [
 /* DEFAULT WORKFORCE                                                          */
 /* -------------------------------------------------------------------------- */
 
-export const COSSA_GROWTH_WORKFORCE = [
+const BASE_COSSA_GROWTH_WORKFORCE = [
   {
     employee_key: "website-seo-monitor",
 
@@ -1520,6 +1521,10 @@ export const COSSA_GROWTH_WORKFORCE = [
     status: "active",
   },
 ] satisfies readonly WorkforceProfile[];
+
+export const COSSA_GROWTH_WORKFORCE = composeDigitalProductWorkforceProfiles(
+  BASE_COSSA_GROWTH_WORKFORCE,
+) satisfies readonly WorkforceProfile[];
 
 /* -------------------------------------------------------------------------- */
 /* SOURCE PROFILE INTEGRITY                                                   */

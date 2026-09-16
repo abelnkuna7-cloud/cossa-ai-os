@@ -2,6 +2,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Navigate } from "@tanstack/react-router";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
+
+const db = asDynamicSupabaseClient(supabase);
 
 function isInvalidStoredSession(message: string | undefined): boolean {
   return /jwt issued at future|jwt expired|invalid jwt|invalid token|refresh token/i.test(
@@ -29,8 +32,8 @@ async function verifyGrowthSession(candidate: Session | null): Promise<Session |
   // Authentication is not authorisation. Only active organisation members may
   // mount the private Growth workspace. Role-specific write permissions remain
   // enforced separately by RLS and server-side authorisation.
-  const { data: membership, error: membershipError } = await supabase
-    .from("organisation_members")
+  const { data: membership, error: membershipError } = await db
+    .from<{ user_id: string; status: string }>("organisation_members")
     .select("user_id,status")
     .eq("user_id", user.id)
     .eq("status", "active")

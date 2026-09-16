@@ -10,7 +10,10 @@ import {
 } from "@/components/brand/growth-brand";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { asDynamicSupabaseClient } from "@/integrations/supabase/dynamic-client";
 import { GROWTH_BRAND } from "@/lib/brand";
+
+const db = asDynamicSupabaseClient(supabase);
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -41,8 +44,8 @@ function LoginPage() {
   const [authenticated, setAuthenticated] = useState(false);
 
   async function requireGrowthMembership(userId: string) {
-    const { data, error: membershipError } = await supabase
-      .from("organisation_members")
+    const { data, error: membershipError } = await db
+      .from<{ role: string; status: string }>("organisation_members")
       .select("role,status")
       .eq("user_id", userId)
       .eq("status", "active")
