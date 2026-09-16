@@ -45,3 +45,5 @@ No extra production build attempts should be used until the branch is actually r
 When release-ready, merge once and verify the existing production routes rather than creating deployment-only commits.
 
 Production verification must include `/businesses/store-products` and `/ai/workforce`.
+
+If CI/build or mergeability fails, fix the branch; do not bypass checks by committing directly to main.
