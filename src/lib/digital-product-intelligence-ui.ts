@@ -35,3 +35,16 @@ export function buildDigitalProductAssistant(context: DigitalProductDraftContext
     ],
   };
 }
+
+export function mergeDraftPreflightIssues(
+  persistedIssues: string[],
+  context: DigitalProductDraftContext,
+) {
+  const assistant = buildDigitalProductAssistant(context);
+  return persistedIssues.map((issue) => {
+    if (issue.toLowerCase().includes("selling price") && assistant.sellingPriceState === "entered_unsaved") {
+      return "Selling price entered — save draft to persist it";
+    }
+    return issue;
+  });
+}
