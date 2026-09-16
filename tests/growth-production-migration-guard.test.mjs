@@ -22,6 +22,11 @@ function baselineRows() {
   return rows;
 }
 
+test("pins the CEO-confirmed production data baseline", () => {
+  assert.equal(RELEASE.storeProductsCount, 1892);
+  assert.equal(RELEASE.digitalDeliverablesCount, 67);
+});
+
 test("accepts only the complete 212-version reconstructed ledger", async () => {
   const file = tempFile("baseline.json", { migrations: baselineRows() });
   await main(["verify-list", "--phase", "baseline", "--file", file]);

@@ -54,7 +54,7 @@ Validation performs only these remote operations:
 5. Requires exactly one local-only version: `20260916070000`.
 6. Runs `supabase db push --dry-run --skip-vault` without `--include-all`, roles, or seeds.
 7. Requires the structured dry-run result to name exactly the target migration.
-8. Reads production counts through the Data API and requires the target table to be absent, `store_products` to be 1,895, and digital deliverables to be 67.
+8. Reads production counts through the Data API and requires the target table to be absent, `store_products` to be 1,892, and digital deliverables to be 67. The previous 1,895-product baseline was reduced by three products that the CEO confirmed were deliberately deleted through the existing Product Manager before validation; no digital deliverables were removed.
 
 `migration fetch` writes only the isolated runner filesystem. `migration list`, the Data API requests and `db push --dry-run` are read-only for this already-provisioned production ledger. Validation never runs a non-dry-run push.
 

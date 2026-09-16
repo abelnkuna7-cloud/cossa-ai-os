@@ -16,7 +16,7 @@ export const RELEASE = Object.freeze({
   expectedSha256: "5bdcf89f7b218b6c6d106ffeec2117b3741fb6337a521209d326b51676c63140",
   baselineCount: 212,
   baselineHead: "20260916011537",
-  storeProductsCount: 1895,
+  storeProductsCount: 1892,
   digitalDeliverablesCount: 67,
   cliVersion: "2.117.0",
 });
