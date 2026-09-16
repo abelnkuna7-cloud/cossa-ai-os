@@ -47,3 +47,5 @@ When release-ready, merge once and verify the existing production routes rather 
 Production verification must include `/businesses/store-products` and `/ai/workforce`.
 
 If CI/build or mergeability fails, fix the branch; do not bypass checks by committing directly to main.
+
+Branch head is advanced only after the additive implementation chain is internally consistent.
