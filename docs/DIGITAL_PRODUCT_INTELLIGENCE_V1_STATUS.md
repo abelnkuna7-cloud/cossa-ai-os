@@ -51,3 +51,5 @@ If CI/build or mergeability fails, fix the branch; do not bypass checks by commi
 Branch head is advanced only after the additive implementation chain is internally consistent.
 
 Current checkpoint includes executable helper and regression-test code, not only planning documentation.
+
+Release remains blocked until the user-facing route wiring is implemented and verified.
