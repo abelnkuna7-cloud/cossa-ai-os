@@ -17,7 +17,7 @@ export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ name: "robots", content: "noindex, nofollow" }] }),
 });
 
-type LoginStep = "credentials" | "enroll-mfa" | "challenge-mfa";
+type LoginStep = "credentials" | "enroll-mfa" | "choose-mfa" | "challenge-mfa";
 
 type MfaEnrollment = {
   factorId: string;
@@ -25,8 +25,18 @@ type MfaEnrollment = {
   secret: string;
 };
 
+type MfaFactorOption = {
+  id: string;
+  label: string;
+};
+
 function normaliseOtp(value: string): string {
   return value.replace(/\D/g, "").slice(0, 6);
+}
+
+function factorLabel(factor: unknown, index: number): string {
+  const candidate = factor as { friendly_name?: string; friendlyName?: string };
+  return candidate.friendly_name || candidate.friendlyName || `Authenticator ${index + 1}`;
 }
 
 function LoginPage() {
@@ -36,6 +46,7 @@ function LoginPage() {
   const [step, setStep] = useState<LoginStep>("credentials");
   const [enrollment, setEnrollment] = useState<MfaEnrollment | null>(null);
   const [factorId, setFactorId] = useState<string | null>(null);
+  const [factorOptions, setFactorOptions] = useState<MfaFactorOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -61,9 +72,6 @@ function LoginPage() {
   }
 
   async function prepareMfa(role: string) {
-    // The first enforcement target is privileged Growth access. Ordinary future
-    // members can be migrated to mandatory MFA separately after the two-admin
-    // recovery path has been independently tested.
     const privileged = role === "owner" || role === "admin";
     if (!privileged) {
       setAuthenticated(true);
@@ -81,14 +89,24 @@ function LoginPage() {
     const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
     if (factorsError) throw new Error("Unable to read multi-factor authentication status.");
 
-    const verifiedTotp = factors.totp.find((factor) => factor.status === "verified");
-    if (verifiedTotp) {
-      setFactorId(verifiedTotp.id);
+    const verifiedTotp = factors.totp.filter((factor) => factor.status === "verified");
+    if (verifiedTotp.length === 1) {
+      setFactorOptions([{ id: verifiedTotp[0].id, label: factorLabel(verifiedTotp[0], 0) }]);
+      setFactorId(verifiedTotp[0].id);
       setStep("challenge-mfa");
       return;
     }
 
-    // Remove stale unverified TOTP enrollments before creating a fresh setup.
+    if (verifiedTotp.length > 1) {
+      setFactorOptions(
+        verifiedTotp.map((factor, index) => ({ id: factor.id, label: factorLabel(factor, index) })),
+      );
+      setFactorId(null);
+      setOtp("");
+      setStep("choose-mfa");
+      return;
+    }
+
     for (const staleFactor of factors.totp.filter((factor) => factor.status !== "verified")) {
       await supabase.auth.mfa.unenroll({ factorId: staleFactor.id });
     }
@@ -133,6 +151,13 @@ function LoginPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function chooseMfaFactor(option: MfaFactorOption) {
+    setFactorId(option.id);
+    setOtp("");
+    setError(null);
+    setStep("challenge-mfa");
   }
 
   async function verifyMfa(event: React.FormEvent) {
@@ -242,6 +267,29 @@ function LoginPage() {
             </form>
           )}
 
+          {step === "choose-mfa" && (
+            <div className="mt-6 space-y-4">
+              <div className="rounded-xl border border-primary/25 bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
+                <span className="font-semibold text-foreground">Choose an authenticator.</span> Use any verified factor you still control. This is the recovery path if one device is lost.
+              </div>
+              <div className="space-y-2">
+                {factorOptions.map((option) => (
+                  <Button
+                    key={option.id}
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => chooseMfaFactor(option)}
+                  >
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+              <SecurityError error={error} />
+            </div>
+          )}
+
           {step === "enroll-mfa" && enrollment && (
             <form className="mt-6 space-y-4" onSubmit={verifyMfa}>
               <div className="rounded-xl border border-primary/25 bg-muted/20 p-4">
@@ -284,12 +332,28 @@ function LoginPage() {
             <form className="mt-6 space-y-4" onSubmit={verifyMfa}>
               <div className="rounded-xl border border-primary/25 bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
                 <span className="font-semibold text-foreground">MFA required.</span> Enter the current
-                6-digit code from the authenticator app linked to this Growth account.
+                6-digit code from the selected authenticator.
               </div>
 
               <OtpField otp={otp} setOtp={setOtp} />
               <SecurityError error={error} />
               <MfaButton loading={loading} label="Verify MFA and enter Growth" />
+              {factorOptions.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  disabled={loading}
+                  onClick={() => {
+                    setFactorId(null);
+                    setOtp("");
+                    setError(null);
+                    setStep("choose-mfa");
+                  }}
+                >
+                  Use another authenticator
+                </Button>
+              )}
             </form>
           )}
 
