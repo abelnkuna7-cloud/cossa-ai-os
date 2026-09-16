@@ -43,3 +43,5 @@ Deployment target remains the existing Growth production pipeline; do not create
 No extra production build attempts should be used until the branch is actually release-ready.
 
 When release-ready, merge once and verify the existing production routes rather than creating deployment-only commits.
+
+Production verification must include `/businesses/store-products` and `/ai/workforce`.
