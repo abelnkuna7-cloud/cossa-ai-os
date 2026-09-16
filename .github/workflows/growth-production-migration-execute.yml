@@ -36,11 +36,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: growth-production
+    outputs:
+      validation-run-attempt: ${{ steps.approved-validation.outputs.run-attempt }}
     env:
-      AUDIT_ROOT: ${{ runner.temp }}/growth-production-execution-preflight-${{ github.run_id }}-${{ github.run_attempt }}
-      RELEASE_ROOT: ${{ runner.temp }}/growth-production-release-${{ github.run_id }}-${{ github.run_attempt }}-preflight
+      AUDIT_ROOT: ${{ github.workspace }}/.growth-production-audit/execution-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+      RELEASE_ROOT: ${{ github.workspace }}/.growth-production-release/execution-preflight-${{ github.run_id }}-${{ github.run_attempt }}
       SOURCE_ROOT: ${{ github.workspace }}/source
-      VALIDATION_EVIDENCE: ${{ runner.temp }}/approved-validation-evidence
+      VALIDATION_EVIDENCE: ${{ github.workspace }}/.growth-production-validation-evidence
     steps:
       - name: Require explicit production confirmation
         env:
@@ -77,7 +79,8 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Verify protected GitHub Environment and validation run
+      - id: approved-validation
+        name: Verify protected GitHub Environment and validation run
         env:
           GH_TOKEN: ${{ github.token }}
           APPROVAL_GATE_MARKER: ${{ vars.GROWTH_PRODUCTION_APPROVAL_GATE }}
@@ -112,25 +115,30 @@ jobs:
             --branch-file "$AUDIT_ROOT/github-environment-branches.json"
           node scripts/growth-production-migration-guard.mjs verify-validation-run \
             --file "$AUDIT_ROOT/approved-validation-run.json" \
-            --run-id "$VALIDATION_RUN_ID"
+            --run-id "$VALIDATION_RUN_ID" \
+            --workflow-sha "$GITHUB_SHA"
+          run_attempt="$(node -e 'const fs = require("node:fs"); const run = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(String(run.run_attempt));' "$AUDIT_ROOT/approved-validation-run.json")"
+          echo "run-attempt=$run_attempt" >> "$GITHUB_OUTPUT"
 
       - name: Download approved validation evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          pattern: growth-production-migration-validation-*
+          name: growth-production-migration-validation-${{ inputs.validation_run_id }}-${{ steps.approved-validation.outputs.run-attempt }}
           path: ${{ env.VALIDATION_EVIDENCE }}
-          merge-multiple: true
           run-id: ${{ inputs.validation_run_id }}
           github-token: ${{ github.token }}
 
       - name: Verify approved validation evidence
         env:
           VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+          VALIDATION_RUN_ATTEMPT: ${{ steps.approved-validation.outputs.run-attempt }}
         run: |
           set -euo pipefail
           node scripts/growth-production-migration-guard.mjs verify-validation-evidence \
             --root "$VALIDATION_EVIDENCE" \
-            --run-id "$VALIDATION_RUN_ID"
+            --run-id "$VALIDATION_RUN_ID" \
+            --run-attempt "$VALIDATION_RUN_ATTEMPT" \
+            --workflow-sha "$GITHUB_SHA"
 
       - name: Verify environment-scoped credentials are present
         env:
@@ -160,6 +168,13 @@ jobs:
           audit-root: ${{ env.AUDIT_ROOT }}
           operation: execution-preflight
 
+      - name: Require exact approved production ledger
+        run: |
+          set -euo pipefail
+          node scripts/growth-production-migration-guard.mjs verify-ledger-equality \
+            --approved-file "$VALIDATION_EVIDENCE/migration-list-baseline.json" \
+            --current-file "$AUDIT_ROOT/migration-list-baseline.json"
+
       - name: Recheck production row counts without mutation
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -185,9 +200,10 @@ jobs:
     timeout-minutes: 30
     environment: growth-production
     env:
-      AUDIT_ROOT: ${{ runner.temp }}/growth-production-execution-${{ github.run_id }}-${{ github.run_attempt }}
-      RELEASE_ROOT: ${{ runner.temp }}/growth-production-release-${{ github.run_id }}-${{ github.run_attempt }}-apply
+      AUDIT_ROOT: ${{ github.workspace }}/.growth-production-audit/execution-${{ github.run_id }}-${{ github.run_attempt }}
+      RELEASE_ROOT: ${{ github.workspace }}/.growth-production-release/execution-${{ github.run_id }}-${{ github.run_attempt }}
       SOURCE_ROOT: ${{ github.workspace }}/source
+      VALIDATION_EVIDENCE: ${{ github.workspace }}/.growth-production-validation-evidence
       PROJECT_REF: nptyyzyokzgnwnyteeyi
       SUPABASE_TELEMETRY_DISABLED: "1"
     steps:
@@ -215,6 +231,26 @@ jobs:
           path: source
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Download the exact approved validation evidence again
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: growth-production-migration-validation-${{ inputs.validation_run_id }}-${{ needs.preflight.outputs.validation-run-attempt }}
+          path: ${{ env.VALIDATION_EVIDENCE }}
+          run-id: ${{ inputs.validation_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Reverify approved validation evidence
+        env:
+          VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+          VALIDATION_RUN_ATTEMPT: ${{ needs.preflight.outputs.validation-run-attempt }}
+        run: |
+          set -euo pipefail
+          node scripts/growth-production-migration-guard.mjs verify-validation-evidence \
+            --root "$VALIDATION_EVIDENCE" \
+            --run-id "$VALIDATION_RUN_ID" \
+            --run-attempt "$VALIDATION_RUN_ATTEMPT" \
+            --workflow-sha "$GITHUB_SHA"
 
       - name: Reverify protected GitHub Environment
         env:
@@ -255,6 +291,13 @@ jobs:
           release-root: ${{ env.RELEASE_ROOT }}
           audit-root: ${{ env.AUDIT_ROOT }}
           operation: execution-apply
+
+      - name: Require exact approved production ledger immediately before apply
+        run: |
+          set -euo pipefail
+          node scripts/growth-production-migration-guard.mjs verify-ledger-equality \
+            --approved-file "$VALIDATION_EVIDENCE/migration-list-baseline.json" \
+            --current-file "$AUDIT_ROOT/migration-list-baseline.json"
 
       - name: Capture final pre-deployment data state
         env:
@@ -328,4 +371,3 @@ jobs:
           path: ${{ env.AUDIT_ROOT }}
           if-no-files-found: error
           retention-days: 90
-

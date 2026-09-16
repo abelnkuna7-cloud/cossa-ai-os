@@ -79,7 +79,8 @@ function assertStaticMigration(sql) {
     /revoke execute on function public\.score_store_digital_product_readiness\(uuid\) from public, anon/i,
   ];
   for (const pattern of required) {
-    if (!pattern.test(sql)) fail(`Target migration is missing required safety statement: ${pattern}`);
+    if (!pattern.test(sql))
+      fail(`Target migration is missing required safety statement: ${pattern}`);
   }
 
   const destructive = [
@@ -100,7 +101,8 @@ function assertStaticMigration(sql) {
     /\bcluster\b/i,
   ];
   for (const pattern of nonTransactional) {
-    if (pattern.test(sql)) fail(`Target migration contains a pipeline-incompatible statement: ${pattern}`);
+    if (pattern.test(sql))
+      fail(`Target migration contains a pipeline-incompatible statement: ${pattern}`);
   }
 }
 
@@ -150,7 +152,9 @@ function verifyMigrationList(options) {
 
   if (phase === "baseline") {
     if (rows.length !== RELEASE.baselineCount || groups.matched.length !== RELEASE.baselineCount) {
-      fail(`Baseline must be ${RELEASE.baselineCount}/${RELEASE.baselineCount}; got ${groups.matched.length}/${rows.length}`);
+      fail(
+        `Baseline must be ${RELEASE.baselineCount}/${RELEASE.baselineCount}; got ${groups.matched.length}/${rows.length}`,
+      );
     }
     if (groups.localOnly.length || groups.remoteOnly.length) {
       fail("Fetched baseline does not exactly match the complete remote ledger");
@@ -159,7 +163,8 @@ function verifyMigrationList(options) {
     if (remoteVersions.at(-1) !== RELEASE.baselineHead) {
       fail(`Remote ledger head must be ${RELEASE.baselineHead}; got ${remoteVersions.at(-1)}`);
     }
-    if (remoteVersions.includes(RELEASE.targetVersion)) fail("Target migration is already recorded remotely");
+    if (remoteVersions.includes(RELEASE.targetVersion))
+      fail("Target migration is already recorded remotely");
     return;
   }
 
@@ -169,7 +174,9 @@ function verifyMigrationList(options) {
     }
     const pending = groups.localOnly.map((row) => row.local);
     if (pending.length !== 1 || pending[0] !== RELEASE.targetVersion) {
-      fail(`Exactly one local-only migration is required: ${RELEASE.targetVersion}; got ${pending.join(", ") || "none"}`);
+      fail(
+        `Exactly one local-only migration is required: ${RELEASE.targetVersion}; got ${pending.join(", ") || "none"}`,
+      );
     }
     return;
   }
@@ -177,15 +184,32 @@ function verifyMigrationList(options) {
   if (phase === "post") {
     const expected = RELEASE.baselineCount + 1;
     if (rows.length !== expected || groups.matched.length !== expected) {
-      fail(`Post-deployment ledger must be ${expected}/${expected}; got ${groups.matched.length}/${rows.length}`);
+      fail(
+        `Post-deployment ledger must be ${expected}/${expected}; got ${groups.matched.length}/${rows.length}`,
+      );
     }
-    if (groups.localOnly.length || groups.remoteOnly.length) fail("Post-deployment ledger is not reconciled");
+    if (groups.localOnly.length || groups.remoteOnly.length)
+      fail("Post-deployment ledger is not reconciled");
     const target = rows.find((row) => row.local === RELEASE.targetVersion);
-    if (!target || target.remote !== RELEASE.targetVersion) fail("Target migration is not recorded remotely");
+    if (!target || target.remote !== RELEASE.targetVersion)
+      fail("Target migration is not recorded remotely");
     return;
   }
 
   fail(`Unknown migration-list phase: ${phase}`);
+}
+
+function verifyLedgerEquality(options) {
+  const approvedFile = resolve(requireOption(options, "approved-file"));
+  const currentFile = resolve(requireOption(options, "current-file"));
+  verifyMigrationList({ phase: "baseline", file: approvedFile });
+  verifyMigrationList({ phase: "baseline", file: currentFile });
+
+  const approved = migrationRows(approvedFile).map((row) => row.local);
+  const current = migrationRows(currentFile).map((row) => row.local);
+  if (JSON.stringify(current) !== JSON.stringify(approved)) {
+    fail("Current production migration ledger differs from the approved validation baseline");
+  }
 }
 
 function verifyPushResult(options) {
@@ -194,26 +218,46 @@ function verifyPushResult(options) {
   const expectedDryRun = phase === "dry-run";
   if (phase !== "dry-run" && phase !== "apply") fail(`Unknown push phase: ${phase}`);
   if (payload.dryRun !== expectedDryRun) fail(`Unexpected dryRun=${payload.dryRun}`);
-  if (payload.upToDate !== false) fail("Push result must report exactly one pending/applied migration");
+  if (payload.upToDate !== false)
+    fail("Push result must report exactly one pending/applied migration");
   if (JSON.stringify(payload.migrations) !== JSON.stringify([RELEASE.targetFile])) {
     fail(`Push result must contain only ${RELEASE.targetFile}`);
   }
-  if (!Array.isArray(payload.roles) || payload.roles.length !== 0) fail("Roles must not be included");
-  if (!Array.isArray(payload.seeds) || payload.seeds.length !== 0) fail("Seeds must not be included");
+  if (!Array.isArray(payload.roles) || payload.roles.length !== 0)
+    fail("Roles must not be included");
+  if (!Array.isArray(payload.seeds) || payload.seeds.length !== 0)
+    fail("Seeds must not be included");
 }
 
 function verifyEnvironment(options) {
   const environment = readJson(resolve(requireOption(options, "environment-file")));
   const branches = readJson(resolve(requireOption(options, "branch-file")));
   if (environment.name !== RELEASE.environment) fail(`Expected Environment ${RELEASE.environment}`);
-  const reviewerRule = environment.protection_rules?.find((rule) => rule.type === "required_reviewers");
+  const reviewerRule = environment.protection_rules?.find(
+    (rule) => rule.type === "required_reviewers",
+  );
   if (!reviewerRule) fail("Growth production Environment has no required-reviewer protection rule");
-  const reviewers = (reviewerRule.reviewers ?? []).map((entry) => entry.reviewer?.login).filter(Boolean);
-  if (!reviewers.includes(RELEASE.reviewer)) {
-    fail(`Required reviewers must include ${RELEASE.reviewer}; got ${reviewers.join(", ") || "none"}`);
+  const reviewers = (reviewerRule.reviewers ?? [])
+    .map((entry) => entry.reviewer?.login)
+    .filter(Boolean);
+  if (reviewers.length !== 1 || reviewers[0] !== RELEASE.reviewer) {
+    fail(
+      `Required reviewers must be exactly ${RELEASE.reviewer}; got ${reviewers.join(", ") || "none"}`,
+    );
+  }
+  if (reviewerRule.prevent_self_review !== false) {
+    fail(
+      "Growth production Environment must allow the sole required reviewer to approve their own dispatch",
+    );
+  }
+  if (environment.can_admins_bypass !== false) {
+    fail("Growth production Environment must not allow administrator bypass");
   }
   if (environment.deployment_branch_policy?.custom_branch_policies !== true) {
     fail("Growth production Environment must use selected deployment branches");
+  }
+  if (environment.deployment_branch_policy?.protected_branches !== false) {
+    fail("Growth production Environment must use only its explicit custom branch policy");
   }
   const policies = branches.branch_policies ?? [];
   if (policies.length !== 1 || policies[0]?.name !== "main" || policies[0]?.type !== "branch") {
@@ -241,7 +285,9 @@ async function requestCount(table, serviceRoleKey) {
 async function tableStatus(table, apiKey, bearer = false) {
   const headers = { apikey: apiKey, Range: "0-0" };
   if (bearer && apiKey.split(".").length === 3) headers.Authorization = `Bearer ${apiKey}`;
-  const response = await fetch(`${RELEASE.projectUrl}/rest/v1/${table}?select=id&limit=1`, { headers });
+  const response = await fetch(`${RELEASE.projectUrl}/rest/v1/${table}?select=id&limit=1`, {
+    headers,
+  });
   await response.body?.cancel();
   return response.status;
 }
@@ -252,32 +298,59 @@ async function snapshotData(options) {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) fail("SUPABASE_SERVICE_ROLE_KEY is required");
   const storeProducts = await requestCount("store_products", serviceRoleKey);
-  const digitalDeliverables = await requestCount("store_product_digital_deliverables", serviceRoleKey);
+  const digitalDeliverables = await requestCount(
+    "store_product_digital_deliverables",
+    serviceRoleKey,
+  );
 
   if (phase === "pre") {
-    const targetStatus = await tableStatus("store_digital_product_intelligence", serviceRoleKey, true);
-    if (targetStatus !== 404) fail(`Target table must be absent before deployment; HTTP status was ${targetStatus}`);
-    if (storeProducts !== RELEASE.storeProductsCount || digitalDeliverables !== RELEASE.digitalDeliverablesCount) {
+    const targetStatus = await tableStatus(
+      "store_digital_product_intelligence",
+      serviceRoleKey,
+      true,
+    );
+    if (targetStatus !== 404)
+      fail(`Target table must be absent before deployment; HTTP status was ${targetStatus}`);
+    if (
+      storeProducts !== RELEASE.storeProductsCount ||
+      digitalDeliverables !== RELEASE.digitalDeliverablesCount
+    ) {
       fail(
         `Production counts drifted before deployment: store_products=${storeProducts}, deliverables=${digitalDeliverables}. Investigate; do not force counts.`,
       );
     }
-    writeJson(output, { phase, storeProducts, digitalDeliverables, targetTableHttpStatus: targetStatus });
+    writeJson(output, {
+      phase,
+      storeProducts,
+      digitalDeliverables,
+      targetTableHttpStatus: targetStatus,
+    });
     return;
   }
 
   if (phase === "post") {
     const before = readJson(resolve(requireOption(options, "before")));
-    const intelligenceRows = await requestCount("store_digital_product_intelligence", serviceRoleKey);
-    if (intelligenceRows !== 0) fail(`Intelligence table must initially contain 0 rows; got ${intelligenceRows}`);
-    if (storeProducts !== before.storeProducts || digitalDeliverables !== before.digitalDeliverables) {
+    const intelligenceRows = await requestCount(
+      "store_digital_product_intelligence",
+      serviceRoleKey,
+    );
+    if (intelligenceRows !== 0)
+      fail(`Intelligence table must initially contain 0 rows; got ${intelligenceRows}`);
+    if (
+      storeProducts !== before.storeProducts ||
+      digitalDeliverables !== before.digitalDeliverables
+    ) {
       fail(
         `Production counts changed during deployment: store_products ${before.storeProducts}->${storeProducts}, deliverables ${before.digitalDeliverables}->${digitalDeliverables}. Investigate without modifying data.`,
       );
     }
     const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
     if (!publishableKey) fail("SUPABASE_PUBLISHABLE_KEY is required");
-    const anonymousStatus = await tableStatus("store_digital_product_intelligence", publishableKey, false);
+    const anonymousStatus = await tableStatus(
+      "store_digital_product_intelligence",
+      publishableKey,
+      false,
+    );
     if (![401, 403].includes(anonymousStatus)) {
       fail(`Anonymous table access must be denied; HTTP status was ${anonymousStatus}`);
     }
@@ -296,8 +369,10 @@ async function snapshotData(options) {
 
 function verifyTypes(options) {
   const types = readFileSync(resolve(requireOption(options, "file")), "utf8");
-  if (!/store_digital_product_intelligence:\s*\{/m.test(types)) fail("Generated types do not contain the intelligence table");
-  if (!/score_store_digital_product_readiness:\s*\{/m.test(types)) fail("Generated types do not contain the readiness function");
+  if (!/store_digital_product_intelligence:\s*\{/m.test(types))
+    fail("Generated types do not contain the intelligence table");
+  if (!/score_store_digital_product_readiness:\s*\{/m.test(types))
+    fail("Generated types do not contain the readiness function");
   if (options.output) {
     writeJson(resolve(options.output), {
       tablePresent: true,
@@ -310,18 +385,36 @@ function verifyTypes(options) {
 function verifyValidationRun(options) {
   const run = readJson(resolve(requireOption(options, "file")));
   const expectedRunId = requireOption(options, "run-id");
+  const workflowSha = requireOption(options, "workflow-sha");
   if (String(run.id) !== expectedRunId) fail(`Validation run ID mismatch: ${run.id}`);
-  if (run.name !== "Validate Growth production migration") fail(`Unexpected validation workflow: ${run.name}`);
-  if (run.event !== "workflow_dispatch" || run.status !== "completed" || run.conclusion !== "success") {
+  if (run.name !== "Validate Growth production migration")
+    fail(`Unexpected validation workflow: ${run.name}`);
+  if (
+    run.event !== "workflow_dispatch" ||
+    run.status !== "completed" ||
+    run.conclusion !== "success"
+  ) {
     fail("Approved validation run must be a successful completed manual dispatch");
   }
-  if (run.repository?.full_name !== "abelnkuna7-cloud/cossa-ai-os") fail("Validation run belongs to the wrong repository");
-  if (run.head_branch !== "main") fail(`Validation run must execute from main; got ${run.head_branch}`);
+  if (run.repository?.full_name !== "abelnkuna7-cloud/cossa-ai-os")
+    fail("Validation run belongs to the wrong repository");
+  if (run.path !== ".github/workflows/growth-production-migration-validate.yml") {
+    fail(`Validation run used an unexpected workflow path: ${run.path ?? "missing"}`);
+  }
+  if (run.head_branch !== "main")
+    fail(`Validation run must execute from main; got ${run.head_branch}`);
+  if (run.head_sha !== workflowSha) {
+    fail(`Validation run must use infrastructure commit ${workflowSha}; got ${run.head_sha}`);
+  }
+  if (!Number.isInteger(run.run_attempt) || run.run_attempt < 1)
+    fail("Validation run has an invalid run attempt");
 }
 
 function verifyValidationEvidence(options) {
   const root = resolve(requireOption(options, "root"));
   const runId = requireOption(options, "run-id");
+  const runAttempt = requireOption(options, "run-attempt");
+  const workflowSha = requireOption(options, "workflow-sha");
   const metadata = readJson(join(root, "release-metadata.json"));
   if (
     metadata.projectRef !== RELEASE.projectRef ||
@@ -331,7 +424,9 @@ function verifyValidationEvidence(options) {
     metadata.expectedSha256 !== RELEASE.expectedSha256 ||
     metadata.supabaseCliVersion !== RELEASE.cliVersion ||
     metadata.operation !== "validation" ||
-    String(metadata.runId) !== runId
+    String(metadata.runId) !== runId ||
+    String(metadata.runAttempt) !== runAttempt ||
+    metadata.workflowSha !== workflowSha
   ) {
     fail("Validation artifact metadata does not match the approved release");
   }
@@ -351,7 +446,8 @@ function verifyValidationEvidence(options) {
 function writeMetadata(options) {
   const output = resolve(requireOption(options, "output"));
   const cliVersion = requireOption(options, "cli-version");
-  if (cliVersion !== RELEASE.cliVersion) fail(`Supabase CLI must be ${RELEASE.cliVersion}; got ${cliVersion}`);
+  if (cliVersion !== RELEASE.cliVersion)
+    fail(`Supabase CLI must be ${RELEASE.cliVersion}; got ${cliVersion}`);
   writeJson(output, {
     projectRef: RELEASE.projectRef,
     environment: RELEASE.environment,
@@ -402,6 +498,9 @@ export async function main(argv = process.argv.slice(2)) {
       break;
     case "verify-list":
       verifyMigrationList(options);
+      break;
+    case "verify-ledger-equality":
+      verifyLedgerEquality(options);
       break;
     case "verify-push":
       verifyPushResult(options);

@@ -29,8 +29,8 @@ jobs:
     timeout-minutes: 30
     environment: growth-production
     env:
-      AUDIT_ROOT: ${{ runner.temp }}/growth-production-validation-${{ github.run_id }}-${{ github.run_attempt }}
-      RELEASE_ROOT: ${{ runner.temp }}/growth-production-release-${{ github.run_id }}-${{ github.run_attempt }}-validate
+      AUDIT_ROOT: ${{ github.workspace }}/.growth-production-audit/validation-${{ github.run_id }}-${{ github.run_attempt }}
+      RELEASE_ROOT: ${{ github.workspace }}/.growth-production-release/validation-${{ github.run_id }}-${{ github.run_attempt }}
       SOURCE_ROOT: ${{ github.workspace }}/source
     steps:
       - name: Check out reviewed infrastructure commit
@@ -131,4 +131,3 @@ jobs:
           path: ${{ env.AUDIT_ROOT }}
           if-no-files-found: error
           retention-days: 30
-

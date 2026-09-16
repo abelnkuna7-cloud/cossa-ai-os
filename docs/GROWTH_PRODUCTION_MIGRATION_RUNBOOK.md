@@ -4,16 +4,16 @@ This release-specific mechanism deploys one migration to the existing Growth pro
 
 ## Immutable release identity
 
-| Item | Required value |
-| --- | --- |
-| Repository | `abelnkuna7-cloud/cossa-ai-os` |
-| Supabase project | `cossa-growth` |
-| Project ref | `nptyyzyokzgnwnyteeyi` |
-| Product Manager source commit | `84cda377cfaa54bee3e675d9c0e7ee1e2bd99823` |
-| Migration | `20260916070000_add_digital_product_intelligence.sql` |
-| SHA-256 | `5bdcf89f7b218b6c6d106ffeec2117b3741fb6337a521209d326b51676c63140` |
-| Supabase CLI | `2.117.0` |
-| Expected production ledger | 212 versions; head `20260916011537` |
+| Item                          | Required value                                                     |
+| ----------------------------- | ------------------------------------------------------------------ |
+| Repository                    | `abelnkuna7-cloud/cossa-ai-os`                                     |
+| Supabase project              | `cossa-growth`                                                     |
+| Project ref                   | `nptyyzyokzgnwnyteeyi`                                             |
+| Product Manager source commit | `84cda377cfaa54bee3e675d9c0e7ee1e2bd99823`                         |
+| Migration                     | `20260916070000_add_digital_product_intelligence.sql`              |
+| SHA-256                       | `5bdcf89f7b218b6c6d106ffeec2117b3741fb6337a521209d326b51676c63140` |
+| Supabase CLI                  | `2.117.0`                                                          |
+| Expected production ledger    | 212 versions; head `20260916011537`                                |
 
 The workflows reject any different commit, hash, migration version, ledger count, or ledger head.
 
@@ -39,7 +39,7 @@ Do not put any credential in workflow inputs, repository files, logs, or artifac
 
 ### 1. Static checks
 
-`Check Growth migration infrastructure` runs without production credentials. It verifies the guard tests, immutable source/hash, pinned CLI version and required CLI flags. Every external action is referenced by a full commit SHA.
+`Check Growth migration infrastructure` runs without production credentials. It verifies the guard tests, immutable source/hash, pinned CLI version, required CLI flags and all workflow expressions with a SHA-256-verified actionlint binary. It fails closed unless the required reviewer, disabled administrator bypass and `main`-only Environment branch policy are present. Every external action is referenced by a full commit SHA.
 
 ### 2. Read-only validation dispatch
 
@@ -67,6 +67,8 @@ Do not dispatch execution without CEO approval. `Execute Growth production migra
 - the successful validation run ID;
 - the same source commit and expected SHA-256;
 - exact confirmation text `APPLY 20260916070000 TO nptyyzyokzgnwnyteeyi`.
+
+The execution workflow accepts only the exact artifact from the successful validation run attempt and requires the validation and execution dispatches to use the same infrastructure commit. It compares every migration version in each newly reconstructed baseline with that artifact during both execution preflight and the apply job. If `main` or any production migration-history version moves after validation, validation must be rerun; evidence from a different workflow commit or retry attempt is rejected.
 
 The execution workflow has two `growth-production` jobs:
 
@@ -109,4 +111,3 @@ The target migration is additive. On an unchanged database it will:
 It does not update or delete `store_products`, digital deliverables, Workforce data, payment data, supplier data, publication state, Vault values or migration-history rows other than recording the one successfully applied target version.
 
 If production counts or the migration ledger differ from the immutable validation baseline, stop and investigate legitimate concurrent activity. Never repair history or modify production data merely to make a gate pass.
-
