@@ -17,3 +17,6 @@ If R199 is entered in an unsaved draft while persisted price is absent, show `en
 
 ## Regression
 Physical, affiliate, POD and dropshipping remain existing top-level types and must not inherit digital-only requirements.
+
+## Production rule
+Do not merge until the existing Product Manager route actually consumes these helpers and the existing workforce runtime actually composes the capability additions. Helper modules alone are not a completed customer-facing upgrade.
