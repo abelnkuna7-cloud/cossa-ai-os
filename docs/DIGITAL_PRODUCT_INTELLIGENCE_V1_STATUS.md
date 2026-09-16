@@ -37,3 +37,5 @@ Do not mark READY based on documentation or helper modules; verify user-visible 
 No production merge has been authorized before those technical gates pass.
 
 This upgrade must remain compatible with the existing secure multi-file digital customer package.
+
+Deployment target remains the existing Growth production pipeline; do not create a separate app or project.
