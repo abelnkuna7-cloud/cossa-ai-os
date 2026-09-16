@@ -49,3 +49,5 @@ Production verification must include `/businesses/store-products` and `/ai/workf
 If CI/build or mergeability fails, fix the branch; do not bypass checks by committing directly to main.
 
 Branch head is advanced only after the additive implementation chain is internally consistent.
+
+Current checkpoint includes executable helper and regression-test code, not only planning documentation.
