@@ -29,3 +29,5 @@ Rollback principle: application changes remain branch/commit reversible; databas
 Current branch remains intentionally non-production until live Product Manager and Workforce wiring is complete.
 
 Next implementation target: existing `src/routes/businesses.store-products.tsx` and existing workforce runtime definitions; extend in place, do not replace.
+
+PR remains draft until build/test and integration gates are satisfied.
