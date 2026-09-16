@@ -41,3 +41,5 @@ This upgrade must remain compatible with the existing secure multi-file digital 
 Deployment target remains the existing Growth production pipeline; do not create a separate app or project.
 
 No extra production build attempts should be used until the branch is actually release-ready.
+
+When release-ready, merge once and verify the existing production routes rather than creating deployment-only commits.
