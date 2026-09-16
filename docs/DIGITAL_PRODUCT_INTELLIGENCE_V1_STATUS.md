@@ -17,3 +17,5 @@ Still required before production:
 - verify PR mergeability and migration path
 
 No production deployment should occur before these gates pass. This status file exists to prevent a helper-only implementation from being mistaken for a finished production feature.
+
+Safety invariant: no existing product type, product row, deliverable, worker, publication control or production data is removed by this upgrade.
