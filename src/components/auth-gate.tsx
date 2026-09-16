@@ -9,6 +9,43 @@ function isInvalidStoredSession(message: string | undefined): boolean {
   );
 }
 
+async function verifyGrowthSession(candidate: Session | null): Promise<Session | null> {
+  if (!candidate) return null;
+
+  // Browser storage alone is not trusted. Confirm the token with Supabase Auth.
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser(candidate.access_token);
+
+  if (!user) {
+    // Clear only the stale local browser session. Do not revoke sessions on other devices.
+    if (isInvalidStoredSession(userError?.message)) {
+      await supabase.auth.signOut({ scope: "local" });
+    }
+    return null;
+  }
+
+  // Authentication is not authorisation. Only active organisation members may
+  // mount the private Growth workspace. Role-specific write permissions remain
+  // enforced separately by RLS and server-side authorisation.
+  const { data: membership, error: membershipError } = await supabase
+    .from("organisation_members")
+    .select("user_id,status")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (membershipError || !membership) return null;
+
+  // Growth is a private internal operating system. Every workspace session must
+  // have completed MFA before protected screens and their data requests mount.
+  const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aalError || aal.currentLevel !== "aal2") return null;
+
+  return candidate;
+}
+
 export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
@@ -20,30 +57,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
         data: { session: storedSession },
       } = await supabase.auth.getSession();
 
-      if (!storedSession) {
-        if (active) setSession(null);
-        return;
-      }
-
-      // getSession() reads the browser cache. Confirm its token with Auth before
-      // allowing protected views to start their parallel database requests.
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser(storedSession.access_token);
-
-      if (!user) {
-        // Keep recovery local to this browser. Do not revoke a valid session on
-        // another device when a stale or future-issued local token is detected.
-        if (isInvalidStoredSession(error?.message)) {
-          await supabase.auth.signOut({ scope: "local" });
-        }
-
-        if (active) setSession(null);
-        return;
-      }
-
-      if (active) setSession(storedSession);
+      const verified = await verifyGrowthSession(storedSession);
+      if (active) setSession(verified);
     }
 
     void restoreVerifiedSession().catch(() => {
@@ -51,11 +66,22 @@ export function AuthGate({ children }: { children: ReactNode }) {
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      // INITIAL_SESSION is the same unverified browser-cache value handled above.
-      // Do not let it mount protected screens before restoreVerifiedSession finishes.
+      // INITIAL_SESSION is the same browser-cache value verified above.
       if (event === "INITIAL_SESSION") return;
-      if (active) setSession(nextSession);
+
+      // Supabase recommends avoiding awaited client calls directly inside this
+      // callback. Defer the verification work to prevent auth callback deadlocks.
+      window.setTimeout(() => {
+        void verifyGrowthSession(nextSession)
+          .then((verified) => {
+            if (active) setSession(verified);
+          })
+          .catch(() => {
+            if (active) setSession(null);
+          });
+      }, 0);
     });
+
     return () => {
       active = false;
       listener.subscription.unsubscribe();
@@ -69,6 +95,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </div>
     );
   }
+
   if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
