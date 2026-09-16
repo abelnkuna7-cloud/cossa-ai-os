@@ -1,0 +1,126 @@
+name: Growth production migration gate
+description: Reconstruct the complete production ledger in an isolated workspace and prove one pending migration.
+
+inputs:
+  source-commit:
+    description: Immutable source commit containing the target migration.
+    required: true
+  expected-sha256:
+    description: Expected SHA-256 of the target migration.
+    required: true
+  source-root:
+    description: Checkout directory for the immutable source commit.
+    required: true
+  release-root:
+    description: Fresh isolated directory used for the reconstructed bundle.
+    required: true
+  audit-root:
+    description: Directory for redacted audit evidence.
+    required: true
+  operation:
+    description: Audit operation name.
+    required: true
+
+outputs:
+  release-root:
+    description: Isolated release bundle directory.
+    value: ${{ steps.gate.outputs.release-root }}
+  audit-root:
+    description: Redacted audit evidence directory.
+    value: ${{ steps.gate.outputs.audit-root }}
+
+runs:
+  using: composite
+  steps:
+    - id: gate
+      name: Reconstruct and prove the isolated release bundle
+      shell: bash
+      env:
+        SOURCE_COMMIT: ${{ inputs.source-commit }}
+        EXPECTED_SHA256: ${{ inputs.expected-sha256 }}
+        SOURCE_ROOT: ${{ inputs.source-root }}
+        RELEASE_ROOT: ${{ inputs.release-root }}
+        AUDIT_ROOT: ${{ inputs.audit-root }}
+        OPERATION: ${{ inputs.operation }}
+        PROJECT_REF: nptyyzyokzgnwnyteeyi
+        TARGET_FILE: 20260916070000_add_digital_product_intelligence.sql
+        GUARD_SCRIPT: ${{ github.action_path }}/../../../scripts/growth-production-migration-guard.mjs
+        SUPABASE_TELEMETRY_DISABLED: "1"
+      run: |
+        set -euo pipefail
+
+        if [[ -e "$RELEASE_ROOT" ]]; then
+          echo "Isolated release directory already exists; refusing reuse." >&2
+          exit 1
+        fi
+        mkdir -p "$RELEASE_ROOT/supabase/migrations" "$AUDIT_ROOT"
+
+        cli_version="$(supabase --version)"
+        if [[ "$cli_version" != "2.117.0" ]]; then
+          echo "Supabase CLI must be 2.117.0; got $cli_version" >&2
+          exit 1
+        fi
+        printf '%s\n' "$cli_version" > "$AUDIT_ROOT/supabase-cli-version.txt"
+        printf '%s\n' "$SOURCE_COMMIT" > "$AUDIT_ROOT/source-commit.txt"
+
+        node "$GUARD_SCRIPT" verify-source \
+          --source-commit "$SOURCE_COMMIT" \
+          --expected-sha256 "$EXPECTED_SHA256" \
+          --source-root "$SOURCE_ROOT" \
+          --hash-output "$AUDIT_ROOT/target-sha256.txt"
+
+        supabase migration fetch \
+          --linked \
+          --project-ref "$PROJECT_REF" \
+          --workdir "$RELEASE_ROOT" \
+          --yes \
+          --output-format json \
+          > "$AUDIT_ROOT/migration-fetch.json"
+
+        supabase migration list \
+          --linked \
+          --project-ref "$PROJECT_REF" \
+          --workdir "$RELEASE_ROOT" \
+          --output-format json \
+          > "$AUDIT_ROOT/migration-list-baseline.json"
+        node "$GUARD_SCRIPT" verify-list \
+          --phase baseline \
+          --file "$AUDIT_ROOT/migration-list-baseline.json"
+
+        cp -- "$SOURCE_ROOT/supabase/migrations/$TARGET_FILE" \
+          "$RELEASE_ROOT/supabase/migrations/$TARGET_FILE"
+
+        supabase migration list \
+          --linked \
+          --project-ref "$PROJECT_REF" \
+          --workdir "$RELEASE_ROOT" \
+          --output-format json \
+          > "$AUDIT_ROOT/migration-list-release.json"
+        node "$GUARD_SCRIPT" verify-list \
+          --phase release \
+          --file "$AUDIT_ROOT/migration-list-release.json"
+
+        supabase db push \
+          --linked \
+          --project-ref "$PROJECT_REF" \
+          --workdir "$RELEASE_ROOT" \
+          --skip-vault \
+          --dry-run \
+          --yes \
+          --output-format json \
+          > "$AUDIT_ROOT/db-push-dry-run.json"
+        node "$GUARD_SCRIPT" verify-push \
+          --phase dry-run \
+          --file "$AUDIT_ROOT/db-push-dry-run.json"
+
+        node "$GUARD_SCRIPT" metadata \
+          --output "$AUDIT_ROOT/release-metadata.json" \
+          --cli-version "$cli_version" \
+          --workflow-sha "$GITHUB_SHA" \
+          --run-id "$GITHUB_RUN_ID" \
+          --run-attempt "$GITHUB_RUN_ATTEMPT" \
+          --operation "$OPERATION"
+
+        echo "release-root=$RELEASE_ROOT" >> "$GITHUB_OUTPUT"
+        echo "audit-root=$AUDIT_ROOT" >> "$GITHUB_OUTPUT"
+

@@ -1,0 +1,75 @@
+name: Check Growth migration infrastructure
+
+on:
+  pull_request:
+    paths:
+      - .github/actions/growth-production-migration-gate/**
+      - .github/workflows/growth-production-migration-*.yml
+      - docs/GROWTH_PRODUCTION_MIGRATION_RUNBOOK.md
+      - scripts/growth-production-migration-guard.mjs
+      - tests/growth-production-migration-guard.test.mjs
+  push:
+    branches:
+      - infrastructure/growth-production-migration-v1
+    paths:
+      - .github/actions/growth-production-migration-gate/**
+      - .github/workflows/growth-production-migration-*.yml
+      - docs/GROWTH_PRODUCTION_MIGRATION_RUNBOOK.md
+      - scripts/growth-production-migration-guard.mjs
+      - tests/growth-production-migration-guard.test.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    name: Static safety checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out infrastructure source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.14.0
+
+      - name: Set up pinned Supabase CLI
+        uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1
+        with:
+          version: 2.117.0
+
+      - name: Check out immutable Product Manager source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: 84cda377cfaa54bee3e675d9c0e7ee1e2bd99823
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run migration guard tests
+        run: node --test tests/growth-production-migration-guard.test.mjs
+
+      - name: Verify immutable migration source and hash
+        run: |
+          set -euo pipefail
+          node scripts/growth-production-migration-guard.mjs verify-source \
+            --source-commit 84cda377cfaa54bee3e675d9c0e7ee1e2bd99823 \
+            --expected-sha256 5bdcf89f7b218b6c6d106ffeec2117b3741fb6337a521209d326b51676c63140 \
+            --source-root source \
+            --hash-output "$RUNNER_TEMP/target-sha256.txt"
+
+      - name: Verify pinned CLI surface
+        run: |
+          set -euo pipefail
+          [[ "$(supabase --version)" == "2.117.0" ]]
+          supabase migration fetch --help | grep -F -- "--project-ref"
+          supabase migration list --help | grep -F -- "--output-format"
+          supabase db push --help | grep -F -- "--dry-run"
+          supabase db push --help | grep -F -- "--skip-vault"
+

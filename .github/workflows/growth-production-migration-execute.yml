@@ -1,0 +1,331 @@
+name: Execute Growth production migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      validation_run_id:
+        description: Successful Validate Growth production migration workflow run ID
+        required: true
+        type: string
+      source_commit:
+        description: Immutable source commit containing the approved migration
+        required: true
+        default: 84cda377cfaa54bee3e675d9c0e7ee1e2bd99823
+        type: string
+      expected_sha256:
+        description: Approved SHA-256 for the migration file
+        required: true
+        default: 5bdcf89f7b218b6c6d106ffeec2117b3741fb6337a521209d326b51676c63140
+        type: string
+      confirmation:
+        description: Type APPLY 20260916070000 TO nptyyzyokzgnwnyteeyi
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: growth-production-migration-nptyyzyokzgnwnyteeyi
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Revalidate approved release without mutation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: growth-production
+    env:
+      AUDIT_ROOT: ${{ runner.temp }}/growth-production-execution-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+      RELEASE_ROOT: ${{ runner.temp }}/growth-production-release-${{ github.run_id }}-${{ github.run_attempt }}-preflight
+      SOURCE_ROOT: ${{ github.workspace }}/source
+      VALIDATION_EVIDENCE: ${{ runner.temp }}/approved-validation-evidence
+    steps:
+      - name: Require explicit production confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRMATION" != "APPLY 20260916070000 TO nptyyzyokzgnwnyteeyi" ]]; then
+            echo "Production confirmation text did not match." >&2
+            exit 1
+          fi
+
+      - name: Check out reviewed infrastructure commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.14.0
+
+      - name: Set up pinned Supabase CLI
+        uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1
+        with:
+          version: 2.117.0
+
+      - name: Check out immutable Product Manager source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.source_commit }}
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify protected GitHub Environment and validation run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVAL_GATE_MARKER: ${{ vars.GROWTH_PRODUCTION_APPROVAL_GATE }}
+          VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$AUDIT_ROOT"
+          if [[ "$APPROVAL_GATE_MARKER" != "required-reviewer-v1" ]]; then
+            echo "Growth production Environment marker is missing or invalid." >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/environments/growth-production" \
+            > "$AUDIT_ROOT/github-environment.json"
+          curl --fail --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/environments/growth-production/deployment-branch-policies" \
+            > "$AUDIT_ROOT/github-environment-branches.json"
+          curl --fail --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATION_RUN_ID" \
+            > "$AUDIT_ROOT/approved-validation-run.json"
+          node scripts/growth-production-migration-guard.mjs verify-environment \
+            --environment-file "$AUDIT_ROOT/github-environment.json" \
+            --branch-file "$AUDIT_ROOT/github-environment-branches.json"
+          node scripts/growth-production-migration-guard.mjs verify-validation-run \
+            --file "$AUDIT_ROOT/approved-validation-run.json" \
+            --run-id "$VALIDATION_RUN_ID"
+
+      - name: Download approved validation evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: growth-production-migration-validation-*
+          path: ${{ env.VALIDATION_EVIDENCE }}
+          merge-multiple: true
+          run-id: ${{ inputs.validation_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify approved validation evidence
+        env:
+          VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+        run: |
+          set -euo pipefail
+          node scripts/growth-production-migration-guard.mjs verify-validation-evidence \
+            --root "$VALIDATION_EVIDENCE" \
+            --run-id "$VALIDATION_RUN_ID"
+
+      - name: Verify environment-scoped credentials are present
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_SERVICE_ROLE_KEY SUPABASE_PUBLISHABLE_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Required Growth production Environment secret is missing: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Reconstruct ledger and prove the dry-run again
+        uses: ./.github/actions/growth-production-migration-gate
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        with:
+          source-commit: ${{ inputs.source_commit }}
+          expected-sha256: ${{ inputs.expected_sha256 }}
+          source-root: ${{ env.SOURCE_ROOT }}
+          release-root: ${{ env.RELEASE_ROOT }}
+          audit-root: ${{ env.AUDIT_ROOT }}
+          operation: execution-preflight
+
+      - name: Recheck production row counts without mutation
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/growth-production-migration-guard.mjs snapshot-data \
+            --phase pre \
+            --output "$AUDIT_ROOT/production-data-before.json"
+
+      - name: Upload redacted execution preflight evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: growth-production-migration-execution-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.AUDIT_ROOT }}
+          if-no-files-found: error
+          retention-days: 30
+
+  apply:
+    name: Apply one proven migration and verify
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: growth-production
+    env:
+      AUDIT_ROOT: ${{ runner.temp }}/growth-production-execution-${{ github.run_id }}-${{ github.run_attempt }}
+      RELEASE_ROOT: ${{ runner.temp }}/growth-production-release-${{ github.run_id }}-${{ github.run_attempt }}-apply
+      SOURCE_ROOT: ${{ github.workspace }}/source
+      PROJECT_REF: nptyyzyokzgnwnyteeyi
+      SUPABASE_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out reviewed infrastructure commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.14.0
+
+      - name: Set up pinned Supabase CLI
+        uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1
+        with:
+          version: 2.117.0
+
+      - name: Check out immutable Product Manager source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.source_commit }}
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Reverify protected GitHub Environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVAL_GATE_MARKER: ${{ vars.GROWTH_PRODUCTION_APPROVAL_GATE }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$AUDIT_ROOT"
+          if [[ "$APPROVAL_GATE_MARKER" != "required-reviewer-v1" ]]; then
+            echo "Growth production Environment marker is missing or invalid." >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/environments/growth-production" \
+            > "$AUDIT_ROOT/github-environment.json"
+          curl --fail --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/environments/growth-production/deployment-branch-policies" \
+            > "$AUDIT_ROOT/github-environment-branches.json"
+          node scripts/growth-production-migration-guard.mjs verify-environment \
+            --environment-file "$AUDIT_ROOT/github-environment.json" \
+            --branch-file "$AUDIT_ROOT/github-environment-branches.json"
+
+      - name: Reconstruct and prove the release bundle immediately before apply
+        uses: ./.github/actions/growth-production-migration-gate
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        with:
+          source-commit: ${{ inputs.source_commit }}
+          expected-sha256: ${{ inputs.expected_sha256 }}
+          source-root: ${{ env.SOURCE_ROOT }}
+          release-root: ${{ env.RELEASE_ROOT }}
+          audit-root: ${{ env.AUDIT_ROOT }}
+          operation: execution-apply
+
+      - name: Capture final pre-deployment data state
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/growth-production-migration-guard.mjs snapshot-data \
+            --phase pre \
+            --output "$AUDIT_ROOT/production-data-before.json"
+
+      - name: Apply only the proven target migration
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          supabase db push \
+            --linked \
+            --project-ref "$PROJECT_REF" \
+            --workdir "$RELEASE_ROOT" \
+            --skip-vault \
+            --yes \
+            --output-format json \
+            > "$AUDIT_ROOT/db-push-apply.json"
+          node scripts/growth-production-migration-guard.mjs verify-push \
+            --phase apply \
+            --file "$AUDIT_ROOT/db-push-apply.json"
+
+      - name: Verify remote ledger and generated schema types
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          supabase migration list \
+            --linked \
+            --project-ref "$PROJECT_REF" \
+            --workdir "$RELEASE_ROOT" \
+            --output-format json \
+            > "$AUDIT_ROOT/migration-list-post.json"
+          node scripts/growth-production-migration-guard.mjs verify-list \
+            --phase post \
+            --file "$AUDIT_ROOT/migration-list-post.json"
+          supabase gen types --project-id "$PROJECT_REF" --schema public \
+            > "$RUNNER_TEMP/growth-production-post-types.ts"
+          node scripts/growth-production-migration-guard.mjs verify-types \
+            --file "$RUNNER_TEMP/growth-production-post-types.ts" \
+            --output "$AUDIT_ROOT/schema-types-proof.json"
+
+      - name: Verify data preservation and anonymous denial
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/growth-production-migration-guard.mjs snapshot-data \
+            --phase post \
+            --before "$AUDIT_ROOT/production-data-before.json" \
+            --output "$AUDIT_ROOT/production-data-after.json"
+          node scripts/growth-production-migration-guard.mjs post-proof \
+            --list-file "$AUDIT_ROOT/migration-list-post.json" \
+            --snapshot-file "$AUDIT_ROOT/production-data-after.json" \
+            --types-proof-file "$AUDIT_ROOT/schema-types-proof.json" \
+            --output "$AUDIT_ROOT/post-deployment-proof.json"
+
+      - name: Upload redacted execution evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: growth-production-migration-execution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.AUDIT_ROOT }}
+          if-no-files-found: error
+          retention-days: 90
+
