@@ -53,3 +53,5 @@ Branch head is advanced only after the additive implementation chain is internal
 Current checkpoint includes executable helper and regression-test code, not only planning documentation.
 
 Release remains blocked until the user-facing route wiring is implemented and verified.
+
+Do not apply the database migration independently of the matching application release.
