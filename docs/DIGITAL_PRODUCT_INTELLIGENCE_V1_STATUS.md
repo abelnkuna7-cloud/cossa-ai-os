@@ -33,3 +33,5 @@ Next implementation target: existing `src/routes/businesses.store-products.tsx` 
 PR remains draft until build/test and integration gates are satisfied.
 
 Do not mark READY based on documentation or helper modules; verify user-visible Product Manager behavior.
+
+No production merge has been authorized before those technical gates pass.
