@@ -21,3 +21,5 @@ No production deployment should occur before these gates pass. This status file 
 Safety invariant: no existing product type, product row, deliverable, worker, publication control or production data is removed by this upgrade.
 
 CEO instruction: continue the implementation through the gates above and push only after verification; do not bypass a failed gate merely to deploy faster.
+
+Target acceptance product: the existing Cossa Store children's storybook/eBook scenario, followed by representative course and software drafts.
