@@ -55,3 +55,5 @@ Current checkpoint includes executable helper and regression-test code, not only
 Release remains blocked until the user-facing route wiring is implemented and verified.
 
 Do not apply the database migration independently of the matching application release.
+
+End of checkpoint.
